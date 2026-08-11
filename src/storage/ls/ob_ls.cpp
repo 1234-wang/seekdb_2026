@@ -97,7 +97,6 @@ int ObLS::init(const ObRestoreStatus &restore_status,
     } else if (OB_FAIL(lock_table_.init(this))) {
     } else if (OB_FAIL(ls_sync_tablet_seq_handler_.init(this))) {
     } else if (OB_FAIL(ls_ddl_log_handler_.init(this))) {
-    } else if (OB_FAIL(keep_alive_ls_handler_.init(get_log_handler()))) {
     } else if (OB_FAIL(ls_wrs_handler_.init())) {
     } else if (OB_FAIL(tablet_gc_handler_.init(this))) {
     } else if (OB_FAIL(tablet_empty_shell_handler_.init(this))) {
@@ -285,7 +284,6 @@ int ObLS::stop_()
   int ret = OB_SUCCESS;
 
   tx_table_.stop();
-  keep_alive_ls_handler_.stop();
   if (OB_FAIL(log_handler_.stop())) {
   }
   ls_tablet_svr_.stop();
@@ -380,7 +378,6 @@ void ObLS::destroy()
   tx_table_.destroy();
   lock_table_.destroy();
   ls_tablet_svr_.destroy();
-  keep_alive_ls_handler_.destroy();
   // may be not ininted, need bypass remove at txs_svr
   // test case may not init ls and ObTransService may have been destroyed before ls destroy.
   if (OB_ISNULL(txs_svr)) {
@@ -707,7 +704,6 @@ int ObLS::register_common_service()
   REGISTER_TO_LOGSERVICE(STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
   REGISTER_TO_LOGSERVICE(TABLET_SEQ_SYNC_LOG_BASE_TYPE, &ls_sync_tablet_seq_handler_);
   REGISTER_TO_LOGSERVICE(DDL_LOG_BASE_TYPE, &ls_ddl_log_handler_);
-  REGISTER_TO_LOGSERVICE(KEEP_ALIVE_LOG_BASE_TYPE, &keep_alive_ls_handler_);
   REGISTER_TO_LOGSERVICE(RESERVED_SNAPSHOT_LOG_BASE_TYPE, &reserved_snapshot_clog_handler_);
   REGISTER_TO_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
 
@@ -826,7 +822,6 @@ void ObLS::unregister_common_service_()
   UNREGISTER_FROM_LOGSERVICE(STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
   UNREGISTER_FROM_LOGSERVICE(TABLET_SEQ_SYNC_LOG_BASE_TYPE, &ls_sync_tablet_seq_handler_);
   UNREGISTER_FROM_LOGSERVICE(DDL_LOG_BASE_TYPE, &ls_ddl_log_handler_);
-  UNREGISTER_FROM_LOGSERVICE(KEEP_ALIVE_LOG_BASE_TYPE, &keep_alive_ls_handler_);
   UNREGISTER_FROM_LOGSERVICE(RESERVED_SNAPSHOT_LOG_BASE_TYPE, &reserved_snapshot_clog_handler_);
   UNREGISTER_FROM_LOGSERVICE(MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   UNREGISTER_REPLAY_CHECKPOINT_HANDLER(TIMESTAMP_LOG_BASE_TYPE);
