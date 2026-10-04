@@ -807,7 +807,8 @@ class Path
       : node_type_(INDEX_MERGE_INVALID),
         index_tid_(OB_INVALID_ID),
         ap_(NULL),
-        scan_node_idx_(-1)
+        scan_node_idx_(-1),
+        gen_code_(0)
     {}
 
     int formalize_index_merge_tree();

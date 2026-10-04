@@ -3439,10 +3439,16 @@ int ObJoinOrder::generate_candi_index_merge_trees(const uint64_t ref_table_id,
         } else if (!is_valid || NULL == candi_node || !candi_node->is_merge_node()
                    || get_index_merge_leaf_count(candi_node) < 2) {
           // only meaningful when at least two index scans are intersected
-        } else if (OB_FAIL(candi_node->formalize_index_merge_tree())) {
-          LOG_WARN("failed to formalize candi index merge tree", K(ret), KPC(candi_node));
-        } else if (OB_FAIL(candi_index_trees.push_back(candi_node))) {
-          LOG_WARN("failed to push back candi index tree", K(ret));
+        } else {
+          candi_node->gen_code_ = 114514; /* fully execute the intersection */
+        }
+        if (OB_SUCC(ret) && NULL != candi_node && candi_node->is_merge_node()
+            && get_index_merge_leaf_count(candi_node) >= 2) {
+          if (OB_FAIL(candi_node->formalize_index_merge_tree())) {
+            LOG_WARN("failed to formalize candi index merge tree", K(ret), KPC(candi_node));
+          } else if (OB_FAIL(candi_index_trees.push_back(candi_node))) {
+            LOG_WARN("failed to push back candi index tree", K(ret));
+          }
         }
       } else {
         // collect indexable simple conditions and merge them into one INTERSECT tree
@@ -3724,16 +3730,34 @@ int ObJoinOrder::check_one_candi_node_match_hint(ObIndexMergeNode *candi_node,
         break;
       }
       case INDEX_MERGE_INTERSECT: {
-        for (int64_t i = 0; OB_SUCC(ret) && !is_match_hint && i < candi_node->children_.count(); ++i) {
+        if (114514 == candi_node->gen_code_) {
+          /* fully-executed INTERSECT: every child must match the hint in order, keep all children */
+          bool all_match = true;
           int64_t sub_idx = idx;
-          if (OB_FAIL(SMART_CALL(check_one_candi_node_match_hint(candi_node->children_.at(i), index_ids, sub_idx, is_match_hint)))) {
-            LOG_WARN("failed to check candi tree match hint", K(ret), K(i), KPC(candi_node->children_.at(i)));
-          } else if (is_match_hint) {
-            ObIndexMergeNode *tmp_node = candi_node->children_.at(i);
-            candi_node->children_.reuse();
+          for (int64_t i = 0; OB_SUCC(ret) && all_match && i < candi_node->children_.count(); ++i) {
+            bool child_match = false;
+            if (OB_FAIL(SMART_CALL(check_one_candi_node_match_hint(candi_node->children_.at(i), index_ids, sub_idx, child_match)))) {
+              LOG_WARN("failed to check candi tree match hint", K(ret), K(i), KPC(candi_node->children_.at(i)));
+            } else if (!child_match) {
+              all_match = false;
+            }
+          }
+          is_match_hint = all_match;
+          if (all_match) {
             idx = sub_idx;
-            if (OB_FAIL(candi_node->children_.push_back(tmp_node))) {
-              LOG_WARN("failed to push back child node", K(ret));
+          }
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && !is_match_hint && i < candi_node->children_.count(); ++i) {
+            int64_t sub_idx = idx;
+            if (OB_FAIL(SMART_CALL(check_one_candi_node_match_hint(candi_node->children_.at(i), index_ids, sub_idx, is_match_hint)))) {
+              LOG_WARN("failed to check candi tree match hint", K(ret), K(i), KPC(candi_node->children_.at(i)));
+            } else if (is_match_hint) {
+              ObIndexMergeNode *tmp_node = candi_node->children_.at(i);
+              candi_node->children_.reuse();
+              idx = sub_idx;
+              if (OB_FAIL(candi_node->children_.push_back(tmp_node))) {
+                LOG_WARN("failed to push back child node", K(ret));
+              }
             }
           }
         }
