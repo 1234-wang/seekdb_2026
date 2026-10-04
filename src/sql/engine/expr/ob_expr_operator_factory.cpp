@@ -444,6 +444,7 @@
 #include "sql/engine/expr/ob_expr_check_location_access.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_split_document.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_parse_doc.h"
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"

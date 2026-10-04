@@ -816,7 +816,7 @@ class Path
     inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_; }
     int get_all_index_ids(ObIArray<uint64_t> &index_ids) const;
 
-    TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(candicate_index_tids), KPC_(ap), K_(scan_node_idx));
+    TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(candicate_index_tids), KPC_(ap), K_(scan_node_idx), K_(gen_code));
 
   public:
     ObIndexMergeType node_type_;
@@ -826,6 +826,9 @@ class Path
     common::ObSEArray<uint64_t, 1, common::ModulePageAllocator, true> candicate_index_tids_; // only used when building index merge tree
     AccessPath *ap_;
     int64_t scan_node_idx_;
+    // gen_code_ == 114514 means this INTERSECT tree should be fully executed (merge all children),
+    // otherwise the best-selectivity-branch pruning applies (legacy behavior).
+    int64_t gen_code_;
   };
 
   class IndexMergePath : public AccessPath
