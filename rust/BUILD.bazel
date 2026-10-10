@@ -26,6 +26,11 @@ config_setting(
     constraint_values = ["@platforms//os:windows"],
 )
 
+config_setting(
+    name = "macos",
+    constraint_values = ["@platforms//os:macos"],
+)
+
 # Track sources and build inputs for every crate in the workspace. Cargo only
 # runs when Bazel sees one of these inputs change.
 _RUST_INPUTS = glob(
@@ -41,15 +46,16 @@ _RUST_INPUTS = glob(
 genrule(
     name = "_rust_static_unix",
     srcs = _RUST_INPUTS,
-    outs = ["libsql_nio.a", "libconfig.a", "unix/config_bridge.h", "unix/config_checkers.h"],
+    outs = ["libsql_nio.a", "libconfig.a", "libkv.a", "unix/config_bridge.h", "unix/config_checkers.h"],
     cmd = """
 set -eu
 export CARGO_TARGET_DIR="$(@D)/rust-cargo-target"
 export CONFIG_HEADER_DIR="$$PWD/$(@D)/unix"
 export DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
-cargo build --release --manifest-path "$(location Cargo.toml)" --package sql-nio --package config
+cargo build --release --manifest-path "$(location Cargo.toml)" --workspace
 cp "$$CARGO_TARGET_DIR/release/libsql_nio.a" "$(@D)/libsql_nio.a"
 cp "$$CARGO_TARGET_DIR/release/libconfig.a" "$(@D)/libconfig.a"
+cp "$$CARGO_TARGET_DIR/release/libkv.a" "$(@D)/libkv.a"
 """,
     tags = [
         "no-remote",
@@ -64,14 +70,18 @@ cp "$$CARGO_TARGET_DIR/release/libconfig.a" "$(@D)/libconfig.a"
 genrule(
     name = "_rust_static_windows",
     srcs = _RUST_INPUTS,
-    outs = ["sql_nio.lib", "config.lib", "windows/config_bridge.h", "windows/config_checkers.h"],
+    outs = ["sql_nio.lib", "config.lib", "kv.lib", "windows/config_bridge.h", "windows/config_checkers.h"],
     cmd_bat = """
 set CARGO_TARGET_DIR=$(@D)\\rust-cargo-target
 set CONFIG_HEADER_DIR=%CD%\\$(@D)\\windows
 set DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
-cargo build --release --manifest-path "$(location Cargo.toml)" --package sql-nio --package config
+cargo build --release --manifest-path "$(location Cargo.toml)" --workspace
+if errorlevel 1 exit /b 1
 copy /Y "%CARGO_TARGET_DIR%\\release\\sql_nio.lib" "$(@D)\\sql_nio.lib"
+if errorlevel 1 exit /b 1
 copy /Y "%CARGO_TARGET_DIR%\\release\\config.lib" "$(@D)\\config.lib"
+if errorlevel 1 exit /b 1
+copy /Y "%CARGO_TARGET_DIR%\\release\\kv.lib" "$(@D)\\kv.lib"
 """,
     tags = [
         "no-remote",
@@ -99,6 +109,22 @@ filegroup(
         "//conditions:default": ["libconfig.a"],
     }),
     visibility = ["//src/observer:__pkg__"],
+)
+
+cc_library(
+    name = "kv",
+    srcs = select({
+        ":windows": ["kv.lib"],
+        "//conditions:default": ["libkv.a"],
+    }),
+    hdrs = ["kv/include/kv.h", "kv/include/kv.hpp"],
+    includes = ["kv/include"],
+    linkopts = select({
+        ":windows": ["ntdll.lib", "userenv.lib", "ws2_32.lib", "bcrypt.lib", "advapi32.lib", "synchronization.lib"],
+        ":macos": [],
+        "//conditions:default": ["-lpthread", "-ldl", "-lm"],
+    }),
+    visibility = ["//visibility:public"],
 )
 
 cc_library(

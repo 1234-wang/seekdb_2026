@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Rust crates with Cargo and expose their static libraries to C++ as
-# the INTERFACE targets `sql_nio` and `config`.
+# the INTERFACE targets `sql_nio`, `config`, and `kv`.
 #
 # Usage from any C++ target:
 #     target_link_libraries(<your_target> PRIVATE sql_nio)
@@ -30,6 +30,7 @@ set(SQL_NIO_CRATE_DIR   "${RUST_WORKSPACE_DIR}/sql-nio")
 set(SQL_NIO_INCLUDE_DIR "${SQL_NIO_CRATE_DIR}/include")
 set(CONFIG_CRATE_DIR "${RUST_WORKSPACE_DIR}/config")
 set(CONFIG_INCLUDE_DIR "${CONFIG_CRATE_DIR}/include")
+set(KV_INCLUDE_DIR "${RUST_WORKSPACE_DIR}/kv/include")
 
 # Locate cargo: explicit -DCARGO=, else PATH, else the rustup default location.
 if(NOT CARGO)
@@ -77,9 +78,11 @@ set(RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-target" CACHE PATH
 if(WIN32)
   set(SQL_NIO_STATICLIB "${RUST_TARGET_DIR}/${_cargo_out_subdir}/sql_nio.lib")
   set(CONFIG_STATICLIB "${RUST_TARGET_DIR}/${_cargo_out_subdir}/config.lib")
+  set(KV_STATICLIB "${RUST_TARGET_DIR}/${_cargo_out_subdir}/kv.lib")
 else()
   set(SQL_NIO_STATICLIB "${RUST_TARGET_DIR}/${_cargo_target_subdir}${_cargo_out_subdir}/libsql_nio.a")
   set(CONFIG_STATICLIB "${RUST_TARGET_DIR}/${_cargo_target_subdir}${_cargo_out_subdir}/libconfig.a")
+  set(KV_STATICLIB "${RUST_TARGET_DIR}/${_cargo_target_subdir}${_cargo_out_subdir}/libkv.a")
 endif()
 
 # Reinvoke Cargo when any workspace crate's source or build input changes.
@@ -180,17 +183,18 @@ endif()
 
 add_custom_command(
   OUTPUT "${SQL_NIO_STATICLIB}"
-  BYPRODUCTS "${CONFIG_STATICLIB}"
+  BYPRODUCTS "${CONFIG_STATICLIB}" "${KV_STATICLIB}"
              "${RUST_TARGET_DIR}/include/config_bridge.h"
              "${RUST_TARGET_DIR}/include/config_checkers.h"
+             "${KV_INCLUDE_DIR}/kv.h"
   COMMAND "${CMAKE_COMMAND}" -E env ${_rust_build_env}
           "${CARGO}" build ${_cargo_profile_flag} ${_cargo_target_args}
           --manifest-path "${RUST_WORKSPACE_DIR}/Cargo.toml"
-          --package sql-nio --package config
+          --workspace
   COMMAND "${CMAKE_COMMAND}" -E touch "${SQL_NIO_STATICLIB}"
   WORKING_DIRECTORY "${RUST_WORKSPACE_DIR}"
   DEPENDS ${_rust_inputs}
-  COMMENT "[rust] cargo build sql-nio and config (${_cargo_out_subdir})"
+  COMMENT "[rust] cargo build workspace (${_cargo_out_subdir})"
   ${_rust_job_server_options}
   VERBATIM)
 
@@ -221,8 +225,14 @@ target_include_directories(config INTERFACE
   "${CONFIG_INCLUDE_DIR}" "${RUST_TARGET_DIR}/include")
 target_link_libraries(config INTERFACE "${CONFIG_STATICLIB}" ${_rust_syslibs})
 
+add_library(kv INTERFACE)
+add_dependencies(kv rust_staticlibs_build)
+target_include_directories(kv INTERFACE "${KV_INCLUDE_DIR}")
+target_link_libraries(kv INTERFACE "${KV_STATICLIB}" ${_rust_syslibs})
+
 set_property(DIRECTORY APPEND PROPERTY
   ADDITIONAL_CLEAN_FILES "${RUST_TARGET_DIR}")
 
 message(STATUS "[rust] sql_nio target ready -> ${SQL_NIO_STATICLIB}")
 message(STATUS "[rust] config target ready -> ${CONFIG_STATICLIB}")
+message(STATUS "[rust] kv target ready -> ${KV_STATICLIB}")
