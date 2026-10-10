@@ -42,8 +42,7 @@ public:
   int save_configs();
   int save_internal_state(const char *name, const char *value);
   int update_checked(const char *name, const char *value, bool reset,
-                     ConfigCheckCallback callback, void *context,
-                     bool *after_replace);
+                     ConfigCheckCallback callback, void *context);
   void enable_static_effect() { enable_static_effect_ = true; }
 private:
   bool inited_;

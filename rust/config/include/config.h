@@ -22,8 +22,7 @@
 #include <stdint.h>
 
 typedef struct ConfigError {
-  uint32_t line;
-  uint8_t after_replace;
+  uint8_t commit_uncertain;
   char message[512];
 } ConfigError;
 
@@ -33,7 +32,9 @@ typedef int (*ConfigCheckCallback)(void *context);
 extern "C" {
 #endif // __cplusplus
 
-int config_supported(const char *path, struct ConfigError *error);
+int config_open(const char *path, struct ConfigError *error);
+
+int config_close(struct ConfigError *error);
 
 int config_update_internal_state(const char *path,
                                  const char *name,

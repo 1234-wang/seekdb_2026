@@ -43,14 +43,14 @@ jobs:
 
       - name: clippy (deny warnings)
         working-directory: rust
-        run: cargo clippy -p sql-nio -p kv --all-targets -- -D warnings
+        run: cargo clippy -p sql-nio -p kv -p config --all-targets -- -D warnings
 
-      - name: KV transaction and recovery tests
+      - name: KV and configuration persistence tests
         working-directory: rust
-        run: cargo test --locked -p kv
+        run: cargo test --locked -p kv -p config
 
       - name: generated header is committed
-        run: git diff --exit-code -- rust/sql-nio/include/nio.h rust/kv/include/kv.h
+        run: git diff --exit-code -- rust/sql-nio/include/nio.h rust/kv/include/kv.h rust/config/include/config.h
 
       - name: KV C and C++ adapter checks
         working-directory: rust

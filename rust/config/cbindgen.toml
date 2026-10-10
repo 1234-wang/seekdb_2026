@@ -28,7 +28,8 @@ header = """/*
 include = [
   "ConfigError",
   "ConfigCheckCallback",
-  "config_supported",
+  "config_open",
+  "config_close",
   "config_update_internal_state",
   "config_update_checked",
   "config_load_active",

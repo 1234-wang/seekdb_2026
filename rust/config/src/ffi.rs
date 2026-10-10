@@ -19,8 +19,7 @@ use crate::{self as store, Error};
 
 #[repr(C)]
 pub struct ConfigError {
-    pub line: u32,
-    pub after_replace: u8,
+    pub commit_uncertain: u8,
     pub message: [c_char; 512],
 }
 
@@ -31,8 +30,7 @@ fn write_error(output: *mut ConfigError, error: &Error) {
         return;
     }
     let output = unsafe { &mut *output };
-    output.line = error.line.min(u32::MAX as usize) as u32;
-    output.after_replace = u8::from(error.after_replace);
+    output.commit_uncertain = u8::from(error.commit_uncertain);
     output.message.fill(0);
     let message = error.to_string();
     let capacity = output.message.len() - 1;
@@ -49,9 +47,8 @@ fn write_error(output: *mut ConfigError, error: &Error) {
 fn argument(value: *const c_char, label: &str) -> Result<String, Error> {
     if value.is_null() {
         return Err(Error {
-            line: 0,
             name: None,
-            after_replace: false,
+            commit_uncertain: false,
             message: format!("{label} is null"),
         });
     }
@@ -59,18 +56,27 @@ fn argument(value: *const c_char, label: &str) -> Result<String, Error> {
         .to_str()
         .map(str::to_owned)
         .map_err(|_| Error {
-            line: 0,
             name: None,
-            after_replace: false,
+            commit_uncertain: false,
             message: format!("{label} is not UTF-8"),
         })
 }
 
 #[no_mangle]
-pub extern "C" fn config_supported(path: *const c_char, error: *mut ConfigError) -> c_int {
-    let result =
-        argument(path, "path").and_then(|path| store::check_storage_directory(Path::new(&path)));
+pub extern "C" fn config_open(path: *const c_char, error: *mut ConfigError) -> c_int {
+    let result = argument(path, "path").and_then(|path| store::open(Path::new(&path)));
     match result {
+        Ok(()) => 0,
+        Err(problem) => {
+            write_error(error, &problem);
+            1
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn config_close(error: *mut ConfigError) -> c_int {
+    match store::close() {
         Ok(()) => 0,
         Err(problem) => {
             write_error(error, &problem);
@@ -125,7 +131,6 @@ pub extern "C" fn config_update_checked(
                 Ok(())
             } else {
                 Err(Error::new(
-                    0,
                     Some(name.clone()),
                     format!("business checker rejected value ({status})"),
                 ))
@@ -177,10 +182,7 @@ pub extern "C" fn config_bootstrap_set(
 }
 
 #[no_mangle]
-pub extern "C" fn config_save_bootstrap(
-    path: *const c_char,
-    error: *mut ConfigError,
-) -> c_int {
+pub extern "C" fn config_save_bootstrap(path: *const c_char, error: *mut ConfigError) -> c_int {
     let result =
         argument(path, "path").and_then(|path| store::config::save_bootstrap(Path::new(&path)));
     match result {

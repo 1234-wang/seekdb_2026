@@ -37,16 +37,16 @@ namespace common
 {
 namespace
 {
-constexpr char CONFIG_PATH[] = "./etc/seekdb.conf";
+constexpr char CONFIG_DIRECTORY[] = "./etc/config";
 
 int report_error(const char *operation, const ConfigError &error)
 {
   int ret = OB_INVALID_CONFIG;
   LOG_ERROR("config operation failed", K(operation), "detail", error.message,
-            "line", error.line, "after_replace", error.after_replace);
-  if (error.after_replace != 0) {
+            "commit_uncertain", error.commit_uncertain);
+  if (error.commit_uncertain != 0) {
     LOG_USER_ERROR(OB_INVALID_CONFIG,
-                   "config file was replaced, but durability could not be confirmed");
+                   "configuration commit outcome is uncertain; restart to recover storage");
   } else {
     LOG_USER_ERROR(OB_INVALID_CONFIG, error.message);
   }
@@ -57,13 +57,20 @@ int report_error(const char *operation, const ConfigError &error)
 
 ObConfigManager::~ObConfigManager()
 {
+  if (inited_) {
+    ConfigError error = {};
+    if (0 != config_close(&error)) {
+      const int ret = OB_INVALID_CONFIG;
+      LOG_ERROR("failed to close config storage", K(ret), "detail", error.message);
+    }
+  }
 }
 
 int ObConfigManager::init()
 {
   int ret = OB_SUCCESS;
   ConfigError error = {};
-  if (0 != config_supported(CONFIG_PATH, &error)) {
+  if (0 != config_open(CONFIG_DIRECTORY, &error)) {
     ret = report_error("initialize", error);
   } else {
     inited_ = true;
@@ -83,7 +90,7 @@ int ObConfigManager::update_local()
     ret = OB_NOT_INIT;
   } else {
     ConfigError error = {};
-    if (0 != config_load_active(CONFIG_PATH,
+    if (0 != config_load_active(CONFIG_DIRECTORY,
                                     enable_static_effect_ ? 0 : 1, &error)) {
       ret = report_error("load active", error);
     } else {
@@ -116,7 +123,7 @@ int ObConfigManager::save_internal_state(const char *name, const char *value)
     ret = OB_NOT_INIT;
   } else {
     ConfigError error = {};
-    if (0 != config_update_internal_state(CONFIG_PATH, name, value, &error)) {
+    if (0 != config_update_internal_state(CONFIG_DIRECTORY, name, value, &error)) {
       ret = report_error("save internal state", error);
     }
   }
@@ -124,13 +131,9 @@ int ObConfigManager::save_internal_state(const char *name, const char *value)
 }
 
 int ObConfigManager::update_checked(const char *name, const char *value, bool reset,
-                                    ConfigCheckCallback callback, void *context,
-                                    bool *after_replace)
+                                    ConfigCheckCallback callback, void *context)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != after_replace) {
-    *after_replace = false;
-  }
   if (nullptr == name) {
     ret = OB_INVALID_ARGUMENT;
   } else if (!config::parameter_exists(rust::Str(name))) {
@@ -141,11 +144,8 @@ int ObConfigManager::update_checked(const char *name, const char *value, bool re
     ret = OB_INVALID_ARGUMENT;
   } else {
     ConfigError error = {};
-    if (0 != config_update_checked(CONFIG_PATH, name, value,
+    if (0 != config_update_checked(CONFIG_DIRECTORY, name, value,
                                         reset ? 1 : 0, callback, context, &error)) {
-      if (nullptr != after_replace) {
-        *after_replace = 0 != error.after_replace;
-      }
       ret = report_error(reset ? "checked reset" : "checked save", error);
     }
   }
@@ -156,10 +156,10 @@ int ObConfigManager::save_configs()
 {
   int ret = OB_SUCCESS;
   ConfigError error = {};
-  if (0 != config_save_bootstrap(CONFIG_PATH, &error)) {
+  if (0 != config_save_bootstrap(CONFIG_DIRECTORY, &error)) {
     ret = OB_INVALID_CONFIG;
     LOG_ERROR("failed to save startup parameters", K(ret), "detail", error.message,
-              "after_replace", error.after_replace);
+              "commit_uncertain", error.commit_uncertain);
   }
   return ret;
 }
