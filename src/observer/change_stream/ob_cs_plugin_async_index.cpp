@@ -96,6 +96,17 @@ int ObCSAsyncIndexProcessor::init_historical_schema_guard_()
   } else if (OB_FAIL(schema_service->get_runtime_schema_guard(
       schema_guard_, ctx_.schema_version_,
       ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_FALLBACK))) {
+  } else {
+    int64_t snapshot_version = common::OB_INVALID_VERSION;
+    if (OB_FAIL(schema_guard_.get_schema_version(snapshot_version))) {
+    } else if (snapshot_version != ctx_.schema_version_) {
+      // get_runtime_schema_guard() can clamp a recycled version to its current
+      // baseline.  A newer index may then appear to own old redo, so do not
+      // replay the batch against a schema other than the transaction's own.
+      ret = common::OB_SCHEMA_ERROR;
+      LOG_WARN("historical schema version is no longer available for async index redo",
+               K(ret), K(ctx_.schema_version_), K(snapshot_version));
+    }
   }
   return ret;
 }
