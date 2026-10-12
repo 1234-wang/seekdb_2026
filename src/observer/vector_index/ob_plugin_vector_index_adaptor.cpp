@@ -2439,7 +2439,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   if (OB_SUCC(ret) && !is_async_mode && check_if_complete_index(read_scn) && !is_skip_4th_index) {
     update_index_id_read_scn();
   }
-  if (OB_SUCC(ret) && !is_async_mode) {
+  if (OB_SUCC(ret)) {
     ctx->bitmap_view_ready_ = true;
   }
 
@@ -2457,10 +2457,16 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status_async(
   blocksstable::ObDatumRow *datum_row = nullptr;
   ObArray<uint64_t> i_vids;
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
-  SCN bitmap_scn = vbitmap_data_->scn_;
+  SCN bitmap_scn = SCN::min_scn();
+  {
+    TCRLockGuard rd_mem_lock_guard(vbitmap_data_->mem_data_rwlock_);
+    bitmap_scn = vbitmap_data_->scn_;
+  }
 
   if (OB_ISNULL(ctx) || OB_ISNULL(table_scan_iter)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if ((OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) &&
+             OB_FAIL(ctx->init_bitmaps())) {
   } else if (query_scn >= bitmap_scn) {
     // No need for datum_row: complete_index_mem_data_incremental reads index_id_table directly
     if ((OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) &&
@@ -2851,9 +2857,19 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data_incremental(ObVectorQuer
     {
       TCRLockGuard rd_mem_lock_guard(vbitmap_data_->mem_data_rwlock_);
       TCRLockGuard rd_bitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
-      base_scn = vbitmap_data_->scn_;
-      CROARING_TRY_CATCH(ibitmap = roaring::api::roaring64_bitmap_copy(vbitmap_data_->bitmap_->insert_bitmap_));
-      CROARING_TRY_CATCH(dbitmap = roaring::api::roaring64_bitmap_copy(vbitmap_data_->bitmap_->delete_bitmap_));
+      // The shared view may have advanced since the async path chose this
+      // helper. A newer view cannot seed this snapshot's incremental scan.
+      if (vbitmap_data_->scn_ <= query_scn) {
+        base_scn = vbitmap_data_->scn_;
+        CROARING_TRY_CATCH(ibitmap = roaring::api::roaring64_bitmap_copy(vbitmap_data_->bitmap_->insert_bitmap_));
+        CROARING_TRY_CATCH(dbitmap = roaring::api::roaring64_bitmap_copy(vbitmap_data_->bitmap_->delete_bitmap_));
+      } else {
+        CROARING_TRY_CATCH(ibitmap = roaring::api::roaring64_bitmap_create());
+        CROARING_TRY_CATCH(dbitmap = roaring::api::roaring64_bitmap_create());
+      }
+    }
+    if (OB_SUCC(ret) && (OB_ISNULL(ibitmap) || OB_ISNULL(dbitmap))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
     }
 
     const bool can_omit_4th_table_scan =
@@ -2864,14 +2880,7 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data_incremental(ObVectorQuer
       FLOG_INFO("check_scan", K(can_omit_4th_table_scan), K(base_scn), K(last_dml_scn), K(base_scn>=last_dml_scn));
     }
 
-    if (OB_SUCC(ret) && can_omit_4th_table_scan) {
-      roaring::api::roaring64_bitmap_free(ctx->bitmaps_->insert_bitmap_);
-      roaring::api::roaring64_bitmap_free(ctx->bitmaps_->delete_bitmap_);
-      ctx->bitmaps_->insert_bitmap_ = ibitmap;
-      ctx->bitmaps_->delete_bitmap_ = dbitmap;
-      ibitmap = nullptr;
-      dbitmap = nullptr;
-    } else if (OB_NOT_NULL(ibitmap) && OB_NOT_NULL(dbitmap)) {
+    if (OB_SUCC(ret) && !can_omit_4th_table_scan) {
       storage::ObTableScanParam scan_param;
       schema::ObTableParam table_param(tmp_allocator);
       // Read index_id_table using copied base_scn (thread-safe)
@@ -2927,25 +2936,27 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data_incremental(ObVectorQuer
           for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
             CROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ibitmap, d_vids.at(i)));
           }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // Keep the complete copied view even if the incremental scan was empty.
+      roaring::api::roaring64_bitmap_free(ctx->bitmaps_->insert_bitmap_);
+      roaring::api::roaring64_bitmap_free(ctx->bitmaps_->delete_bitmap_);
+      ctx->bitmaps_->insert_bitmap_ = ibitmap;
+      ctx->bitmaps_->delete_bitmap_ = dbitmap;
+      ibitmap = nullptr;
+      dbitmap = nullptr;
+      if (last_row_scn.is_valid_and_not_min()) {
+        update_index_id_dml_scn(last_row_scn);
+        TCWLockGuard lock_guard(vbitmap_data_->mem_data_rwlock_);
+        TCWLockGuard wr_vbit_bitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
+        if (last_row_scn > vbitmap_data_->scn_) {
+          CROARING_TRY_CATCH(roaring::api::roaring64_bitmap_or_inplace(vbitmap_data_->bitmap_->insert_bitmap_, ctx->bitmaps_->insert_bitmap_));
+          CROARING_TRY_CATCH(roaring::api::roaring64_bitmap_or_inplace(vbitmap_data_->bitmap_->delete_bitmap_, ctx->bitmaps_->delete_bitmap_));
           if (OB_SUCC(ret)) {
-            // 3. Update ctx with our copies (transfer ownership, no free needed)
-            roaring::api::roaring64_bitmap_free(ctx->bitmaps_->insert_bitmap_);
-            roaring::api::roaring64_bitmap_free(ctx->bitmaps_->delete_bitmap_);
-            ctx->bitmaps_->insert_bitmap_ = ibitmap;
-            ctx->bitmaps_->delete_bitmap_ = dbitmap;
-            ibitmap = nullptr;
-            dbitmap = nullptr;
-            // 4. Lock and copy back to vbitmap_data_
-            if (last_row_scn > vbitmap_data_->scn_){
-              update_index_id_dml_scn(last_row_scn);
-              TCWLockGuard lock_guard(vbitmap_data_->mem_data_rwlock_);
-              TCWLockGuard wr_vbit_bitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
-              if (last_row_scn > vbitmap_data_->scn_){
-                CROARING_TRY_CATCH(roaring::api::roaring64_bitmap_or_inplace(vbitmap_data_->bitmap_->insert_bitmap_, ctx->bitmaps_->insert_bitmap_));
-                CROARING_TRY_CATCH(roaring::api::roaring64_bitmap_or_inplace(vbitmap_data_->bitmap_->delete_bitmap_, ctx->bitmaps_->delete_bitmap_));
-                vbitmap_data_->scn_ = last_row_scn;
-              }
-            }
+            vbitmap_data_->scn_ = last_row_scn;
           }
         }
       }
