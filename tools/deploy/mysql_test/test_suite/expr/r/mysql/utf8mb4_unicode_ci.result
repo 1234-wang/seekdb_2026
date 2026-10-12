@@ -1,6 +1,7 @@
 drop table if exists utf8mb4_unicode_ci_test;
 drop table if exists utf8mb4_unicode_ci_sort_test;
 drop table if exists utf8mb4_unicode_ci_unique_test;
+drop table if exists utf8mb4_unicode_ci_regexp_test;
 select COLLATION_NAME, CHARACTER_SET_NAME, ID, IS_COMPILED, SORTLEN
 from information_schema.COLLATIONS
 where COLLATION_NAME = 'utf8mb4_unicode_ci';
@@ -77,3 +78,51 @@ select count(*) from utf8mb4_unicode_ci_unique_test;
 count(*)
 1
 drop table utf8mb4_unicode_ci_unique_test;
+select regexp_replace(_utf8mb4'abc' collate utf8mb4_unicode_ci, 'a', 'x') as replaced;
+replaced
+xbc
+select regexp_substr(_utf8mb4'abc' collate utf8mb4_unicode_ci, 'b.') as matched;
+matched
+bc
+select hex(regexp_replace(_utf8mb4'中😀国' collate utf8mb4_unicode_ci, '😀', 'é')) as replaced_utf8,
+hex(regexp_substr(_utf8mb4'中😀国' collate utf8mb4_unicode_ci, '.', 2, 1)) as matched_utf8;
+replaced_utf8	matched_utf8
+E4B8ADC3A9E59BBD	F09F9880
+select collation(regexp_replace(_utf8mb4'abc' collate utf8mb4_unicode_ci, 'a', 'x')) as replace_collation,
+collation(regexp_substr(_utf8mb4'abc' collate utf8mb4_unicode_ci, 'b.')) as substr_collation;
+replace_collation	substr_collation
+utf8mb4_unicode_ci	utf8mb4_unicode_ci
+select length(regexp_replace(_utf8mb4'abc' collate utf8mb4_unicode_ci, 'abc', '')) as empty_length,
+regexp_substr(_utf8mb4'abc' collate utf8mb4_unicode_ci, 'z') is null as no_match;
+empty_length	no_match
+0	1
+create table utf8mb4_unicode_ci_regexp_test (
+id int primary key,
+v varchar(64),
+t text
+) default charset = utf8mb4 collate = utf8mb4_unicode_ci;
+insert into utf8mb4_unicode_ci_regexp_test values
+(1, 'Abc', 'Abc'), (2, '中😀国', '中😀国'), (3, '', ''), (4, null, null);
+select id, regexp_replace(v, '.', 'X', 2, 1) as replaced_v,
+hex(regexp_substr(v, '.', 2, 1)) as matched_v,
+regexp_replace(t, '.', 'X', 2, 1) as replaced_t,
+hex(regexp_substr(t, '.', 2, 1)) as matched_t
+from utf8mb4_unicode_ci_regexp_test where id <= 2 order by id;
+id	replaced_v	matched_v	replaced_t	matched_t
+1	AXc	62	AXc	62
+2	中X国	F09F9880	中X国	F09F9880
+select id, hex(regexp_replace(v, '.', 'X')) as replaced_v,
+regexp_substr(v, '.') is null as null_v,
+hex(regexp_replace(t, '.', 'X')) as replaced_t,
+regexp_substr(t, '.') is null as null_t
+from utf8mb4_unicode_ci_regexp_test where id >= 3 order by id;
+id	replaced_v	null_v	replaced_t	null_t
+3		1		1
+4	NULL	1	NULL	1
+select regexp_replace(v, 'a', 'x') as case_insensitive,
+regexp_replace(v, 'a', 'x', 1, 0, 'c') as case_sensitive,
+regexp_substr(v, 'a', 1, 1, 'i') as matched_case_insensitive
+from utf8mb4_unicode_ci_regexp_test where id = 1;
+case_insensitive	case_sensitive	matched_case_insensitive
+xbc	Abc	A
+drop table utf8mb4_unicode_ci_regexp_test;
