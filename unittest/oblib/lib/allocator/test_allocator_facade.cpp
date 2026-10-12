@@ -15,6 +15,7 @@
  */
 
 #include <cstdint>
+#include <type_traits>
 #include <gtest/gtest.h>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
@@ -170,6 +171,25 @@ TEST(TestMallocBackend, allocate_reallocate_free)
   EXPECT_EQ(nullptr, ob_realloc(ptr, 0, attr));
   EXPECT_EQ(nullptr, ob_malloc(0, attr));
   EXPECT_EQ(nullptr, ob_malloc(-1, attr));
+}
+
+TEST(TestMallocBackend, documented_mem_attr_shape_matches_header)
+{
+  static_assert(std::is_same<decltype(ObMemAttr::label_), ObLabel>::value,
+      "ObMemAttr documentation must match label_ type");
+  static_assert(std::is_same<decltype(ObMemAttr::ctx_id_), uint64_t>::value,
+      "ObMemAttr documentation must match ctx_id_ type");
+  static_assert(std::is_same<decltype(ObMemAttr::sub_ctx_id_), int32_t>::value,
+      "ObMemAttr documentation must match sub_ctx_id_ type");
+  static_assert(std::is_same<decltype(ObMemAttr::prio_), ObAllocPrio>::value,
+      "ObMemAttr documentation must match prio_ type");
+
+  ObMemAttr attr("DocExample", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC);
+  attr.sub_ctx_id_ = 0;
+  EXPECT_STREQ("DocExample", attr.label_.str_);
+  EXPECT_EQ(ObCtxIds::DEFAULT_CTX_ID, attr.ctx_id_);
+  EXPECT_EQ(0, attr.sub_ctx_id_);
+  EXPECT_EQ(OB_NORMAL_ALLOC, attr.prio_);
 }
 
 TEST(TestMallocBackend, module_page_allocation_survives_resolver_transition)

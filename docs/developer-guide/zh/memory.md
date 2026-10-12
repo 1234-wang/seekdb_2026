@@ -67,20 +67,20 @@ seekdb 使用 `ObMemAttr` 来标记一段内存。
 ```cpp
 struct ObMemAttr
 {
-  uint64_t    tenant_id_;  // 租户
   ObLabel     label_;      // 标签、模块
   uint64_t    ctx_id_;     // 参考 ob_mod_define.h；指定组件会注册 tracker/quota
-  uint64_t    sub_ctx_id_; // 忽略
+  int32_t     sub_ctx_id_; // 保留字段，请勿使用
   ObAllocPrio prio_;       // 优先级
 };
 ```
 
 > 参考文件 alloc_struct.h
 
-**tenant_id**
+**租户归因**
 
-tenant ID 继续作为 `ObMemAttr` 携带的源码级归因信息。allocator facade 不再提供
-进程级、按租户的通用统计或 quota 层级；硬额度由下文所述的各组件 quota 管理。
+通用 allocation 不再携带按租户的归因信息：`ObMemAttr` 没有 tenant ID 字段。
+需要硬额度的代码必须使用下文所述的组件自有 tracker 和 quota，不能从 allocator
+facade 推断租户归属。
 
 **label**
 

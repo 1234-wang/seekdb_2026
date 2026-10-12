@@ -86,22 +86,21 @@ seekdb uses `ObMemAttr` to mark a section of memory.
 ```cpp
 struct ObMemAttr
 {
-  uint64_t    tenant_id_;  // tenant
   ObLabel     label_;      // label or module
   uint64_t    ctx_id_;     // refer to ob_mod_define.h; selected components register a tracker/quota
-  uint64_t    sub_ctx_id_; // please ignore it
+  int32_t     sub_ctx_id_; // reserved; do not use
   ObAllocPrio prio_;       // priority
 };
 ```
 
 > reference file alloc_struct.h
 
-**tenant_id**
+**Tenant attribution**
 
-The tenant ID remains source-level attribution carried by `ObMemAttr`. The
-allocator facade does not provide a process-wide per-tenant accounting or
-quota hierarchy; hard limits are owned by the component quotas described
-below.
+Generic allocations no longer carry per-tenant attribution: `ObMemAttr` has no
+tenant-ID field. Code that needs a hard budget must use a component-owned
+tracker and quota as described below; it must not infer tenant ownership from
+the allocator facade.
 
 **label**
 
