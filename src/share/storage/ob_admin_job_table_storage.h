@@ -42,8 +42,6 @@ inline const local::Schema &schema()
 }
 } // namespace admin_job
 
-
-
 struct ObAdminJobEntry
 {
   int64_t gmt_create_;
@@ -80,8 +78,8 @@ public:
   ObAdminJobTableStorage();
   virtual ~ObAdminJobTableStorage();
 
-  int init(LocalStore *pool);
-  bool is_inited() const { return nullptr != pool_; }
+  int init(LocalStore *store);
+  bool is_inited() const { return nullptr != store_; }
 
   int create_job(const ObAdminJobEntry &entry);
   int complete_job(const int64_t job_id, const common::ObString &job_status, const int64_t result_code);
@@ -90,9 +88,7 @@ public:
   int get_max_job_id(int64_t &max_job_id);
 
 private:
-  int create_table_if_not_exists_();
-
-  LocalStore *pool_;
+  LocalStore *store_;
   DISALLOW_COPY_AND_ASSIGN(ObAdminJobTableStorage);
 };
 

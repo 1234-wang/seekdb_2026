@@ -18,7 +18,6 @@
 
 #include "share/storage/ob_column_checksum_error_info_table_storage.h"
 #include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
 #include "share/ob_column_checksum_error_operator.h"
 #include "share/storage/local_store.h"
 
@@ -28,7 +27,7 @@ namespace share
 {
 
 ObColumnChecksumErrorInfoTableStorage::ObColumnChecksumErrorInfoTableStorage()
-  : pool_(nullptr)
+  : store_(nullptr)
 {
 }
 
@@ -36,22 +35,18 @@ ObColumnChecksumErrorInfoTableStorage::~ObColumnChecksumErrorInfoTableStorage()
 {
 }
 
-int ObColumnChecksumErrorInfoTableStorage::init(LocalStore *pool)
+int ObColumnChecksumErrorInfoTableStorage::init(LocalStore *store)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_ = pool)) {
+  if (OB_ISNULL(store_ = store)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(create_table_if_not_exists())) {
+  } else if (!store_->is_inited()) {
+    ret = OB_NOT_INIT;
   }
   if (OB_FAIL(ret)) {
-    pool_ = NULL;
+    store_ = nullptr;
   }
   return ret;
-}
-
-int ObColumnChecksumErrorInfoTableStorage::create_table_if_not_exists()
-{
-  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObColumnChecksumErrorInfoTableStorage::insert(const ObColumnChecksumErrorInfo &error_info)
@@ -76,7 +71,7 @@ int ObColumnChecksumErrorInfoTableStorage::insert(const ObColumnChecksumErrorInf
       return OB_SUCCESS;
     };
 
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->execute(insert_request, binder))) {
@@ -96,38 +91,27 @@ int ObColumnChecksumErrorInfoTableStorage::insert_all(const ObIArray<ObColumnChe
     const auto insert_request =
       LocalRequest::insert(checksum_error::schema(), {checksum_error::FrozenScn, checksum_error::IndexType, checksum_error::DataTableId, checksum_error::IndexTableId, checksum_error::DataTabletId, checksum_error::IndexTabletId, checksum_error::ColumnId, checksum_error::DataColumnChecksum, checksum_error::IndexColumnChecksum}, false);
 
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else {
-      // Begin transaction for batch insert
       ret = guard->transaction([&]() -> int {
-        LocalStmt *stmt = nullptr;
-        if (OB_FAIL(guard->prepare_execute(insert_request, stmt))) {
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < error_infos.count(); ++i) {
-            const ObColumnChecksumErrorInfo &error_info = error_infos.at(i);
-            auto binder = [&](LocalBinder &b) -> int {
-              b.bind_int64(error_info.frozen_scn_.get_val_for_inner_table_field());
-              b.bind_int64(error_info.is_global_index_ ? 1 : 0);
-              b.bind_int64(error_info.data_table_id_);
-              b.bind_int64(error_info.index_table_id_);
-              b.bind_int64(error_info.data_tablet_id_.id());
-              b.bind_int64(error_info.index_tablet_id_.id());
-              b.bind_int64(error_info.column_id_);
-              b.bind_int64(error_info.data_column_checksum_);
-              b.bind_int64(error_info.index_column_checksum_);
-              return OB_SUCCESS;
-            };
+        for (int64_t i = 0; OB_SUCC(ret) && i < error_infos.count(); ++i) {
+          const ObColumnChecksumErrorInfo &error_info = error_infos.at(i);
+          auto binder = [&](LocalBinder &b) -> int {
+            b.bind_int64(error_info.frozen_scn_.get_val_for_inner_table_field());
+            b.bind_int64(error_info.is_global_index_ ? 1 : 0);
+            b.bind_int64(error_info.data_table_id_);
+            b.bind_int64(error_info.index_table_id_);
+            b.bind_int64(error_info.data_tablet_id_.id());
+            b.bind_int64(error_info.index_tablet_id_.id());
+            b.bind_int64(error_info.column_id_);
+            b.bind_int64(error_info.data_column_checksum_);
+            b.bind_int64(error_info.index_column_checksum_);
+            return OB_SUCCESS;
+          };
 
-            if (OB_FAIL(guard->step_execute(stmt, binder))) {
-            }
-          }
-
-          // Finalize statement
-          guard->finalize_execute(stmt);
-
-
+          ret = guard->execute(insert_request, binder);
         }
 
         return ret;
@@ -191,7 +175,7 @@ int ObColumnChecksumErrorInfoTableStorage::get(
       return ret;
     };
 
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
@@ -214,7 +198,7 @@ int ObColumnChecksumErrorInfoTableStorage::delete_expired(
   } else {
     const auto request = LocalRequest::erase(checksum_error::schema())
         .lt(checksum_error::FrozenScn, static_cast<int64_t>(frozen_scn_before.get_val_for_inner_table_field())).order(checksum_error::FrozenScn).take(limit);
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) { ret = OB_ERR_UNEXPECTED; }
     else { ret = guard->execute(request); }
   }

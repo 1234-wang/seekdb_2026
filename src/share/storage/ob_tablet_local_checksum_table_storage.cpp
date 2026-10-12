@@ -21,10 +21,8 @@
 #include "share/storage/ob_tablet_local_checksum_table_storage.h"
 #include "share/storage/local_store.h"
 #include "lib/oblog/ob_log.h"
-#include "lib/string/ob_sql_string.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_tablet_local_checksum_operator.h"
-
 
 namespace oceanbase
 {
@@ -32,7 +30,7 @@ namespace share
 {
 
 ObTabletLocalChecksumTableStorage::ObTabletLocalChecksumTableStorage()
-  : pool_(nullptr)
+  : store_(nullptr)
 {
 }
 
@@ -40,22 +38,18 @@ ObTabletLocalChecksumTableStorage::~ObTabletLocalChecksumTableStorage()
 {
 }
 
-int ObTabletLocalChecksumTableStorage::init(LocalStore *pool)
+int ObTabletLocalChecksumTableStorage::init(LocalStore *store)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_ = pool)) {
+  if (OB_ISNULL(store_ = store)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(create_table_if_not_exists())) {
+  } else if (!store_->is_inited()) {
+    ret = OB_NOT_INIT;
   }
   if (OB_FAIL(ret)) {
-    pool_ = NULL;
+    store_ = nullptr;
   }
   return ret;
-}
-
-int ObTabletLocalChecksumTableStorage::create_table_if_not_exists()
-{
-  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObTabletLocalChecksumTableStorage::batch_get(
@@ -78,8 +72,8 @@ int ObTabletLocalChecksumTableStorage::batch_get(
     }
     if (compaction_scn.is_valid()) {
       const auto scn = static_cast<int64_t>(compaction_scn.get_val_for_inner_table_field());
-      if (include_larger_than) { request.ge(1, scn); }
-      else { request.eq(1, scn); }
+      if (include_larger_than) { request.ge(tablet_checksum::CompactionScn, scn); }
+      else { request.eq(tablet_checksum::CompactionScn, scn); }
     }
 
     if (OB_SUCC(ret)) {
@@ -120,7 +114,7 @@ int ObTabletLocalChecksumTableStorage::batch_get(
         return ret;
       };
 
-      LocalConnectionGuard guard(pool_);
+      LocalConnectionGuard guard(store_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(guard->query(request, nullptr, row_processor))) {
@@ -159,7 +153,7 @@ int ObTabletLocalChecksumTableStorage::get_row_count(
       return OB_SUCCESS;
     };
 
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {

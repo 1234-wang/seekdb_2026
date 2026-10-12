@@ -1402,8 +1402,7 @@ def generate_unified_local_virtual_table_h():
       f.write('  int get_next_row_from_local();\n\n')
       f.write('private:\n')
       f.write('  bool is_inited_;\n')
-      f.write('  share::LocalConnectionGuard guard_;\n')
-      f.write('  share::LocalStmt *stmt_;\n')
+      f.write('  share::LocalCursor cursor_;\n')
       f.write('  int64_t row_idx_;\n')
       
       for col_name in all_columns:
@@ -1472,6 +1471,7 @@ def generate_unified_local_virtual_table_cpp():
     f.write('#include "lib/time/ob_time_utility.h"\n')
     f.write('#include "lib/utility/ob_print_utils.h"\n')
     f.write('#include \"config_bridge.h\"\n\n')
+    f.write('#include <string_view>\n')
     f.write('#include \"share/ob_global_merge_table_operator.h\"\n')
     f.write('#include \"share/storage/ob_column_checksum_error_info_table_storage.h\"\n')
     f.write('#include \"share/storage/ob_deadlock_event_history_table_storage.h\"\n')
@@ -1514,8 +1514,7 @@ def generate_single_local_virtual_table_impl(f, table_name, class_name, base_tab
   # Constructor
   f.write('{0}::{0}()\n'.format(class_name))
   f.write('  : is_inited_(false),\n')
-  f.write('    guard_(),\n')
-  f.write('    stmt_(nullptr),\n')
+  f.write('    cursor_(),\n')
   f.write('    row_idx_(0)')
   
   columns = kw.get('normal_columns', [])
@@ -1581,11 +1580,7 @@ def generate_single_local_virtual_table_impl(f, table_name, class_name, base_tab
   # reset
   f.write('void {0}::reset()\n'.format(class_name))
   f.write('{\n')
-  f.write('  if (stmt_) {\n')
-  f.write('    guard_->finalize_query(stmt_);\n')
-  f.write('    stmt_ = nullptr;\n')
-  f.write('  }\n')
-  f.write('  guard_.release();\n')
+  f.write('  cursor_.reset();\n')
   f.write('  is_inited_ = false;\n')
   f.write('  row_idx_ = 0;\n')
   f.write('  ObVirtualTableScannerIterator::reset();\n')
@@ -1602,17 +1597,16 @@ def generate_single_local_virtual_table_impl(f, table_name, class_name, base_tab
     f.write('  LocalConnectionGuard guard({0});\n'.format(local_db_pool))
     f.write('  if (!guard) {\n')
     f.write('    ret = OB_ERR_UNEXPECTED;\n')
-    f.write('    SERVER_LOG(WARN, "failed to acquire connection", K(ret));\n')
+    f.write('    SERVER_LOG(WARN, "local store is not initialized", K(ret));\n')
     f.write('  } else {\n')
-    f.write('    guard_ = std::move(guard);\n')
     schemas = {'__all_merge_info': 'merge_info', '__all_column_checksum_error_info': 'checksum_error',
                '__all_deadlock_event_history': 'deadlock_history', '__all_tablet_meta_table': 'tablet_meta',
                '__all_tablet_local_checksum': 'tablet_checksum', '__all_rootservice_job': 'admin_job'}
     schema = schemas[base_table_name]
     selected_columns = ', '.join(schema + '::' + ''.join(part.capitalize() for part in col.split('_')) for col in all_columns)
     f.write('    const auto select_request = LocalRequest::select({0}::schema(), {{{1}}});\n'.format(schema, selected_columns))
-    f.write('    if (OB_FAIL(guard_->prepare_query(select_request, nullptr, stmt_))) {\n')
-    f.write('      SERVER_LOG(WARN, "failed to prepare query", K(ret));\n')
+    f.write('    if (OB_FAIL(guard->open_cursor(select_request, nullptr, cursor_))) {\n')
+    f.write('      SERVER_LOG(WARN, "failed to open local cursor", K(ret));\n')
     f.write('    } else {\n')
     f.write('      is_inited_ = true;\n')
     f.write('      row_idx_ = 0;\n')
@@ -1668,12 +1662,12 @@ def generate_single_local_virtual_table_impl(f, table_name, class_name, base_tab
     f.write('int {0}::get_next_row_from_local()\n'.format(class_name))
     f.write('{\n')
     f.write('  int ret = OB_SUCCESS;\n\n')
-    f.write('  if (OB_ISNULL(stmt_)) {\n')
+    f.write('  if (!cursor_) {\n')
     f.write('    ret = OB_ERR_UNEXPECTED;\n')
-    f.write('    SERVER_LOG(WARN, "statement is null", K(ret), KP(stmt_));\n')
+    f.write('    SERVER_LOG(WARN, "local cursor is not open", K(ret));\n')
     f.write('  } else {\n')
     f.write('    LocalRowReader reader;\n')
-    f.write('    ret = guard_->step_query(stmt_, reader);\n')
+    f.write('    ret = LocalConnection::next(cursor_, reader);\n')
     f.write('    if (OB_SUCC(ret)) {\n')
 
     # Read data

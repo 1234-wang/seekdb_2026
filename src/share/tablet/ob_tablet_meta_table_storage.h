@@ -44,8 +44,6 @@ inline const local::Schema &schema()
 }
 } // namespace tablet_meta
 
-
-
 class ObTabletRuntimeInfoConstructor
 {
 public:
@@ -58,10 +56,10 @@ public:
   ObTabletMetaTableStorage();
   virtual ~ObTabletMetaTableStorage();
 
-  // Initialize with shared connection pool instance
-  int init(LocalStore *pool);
+  // Initialize with the shared local store
+  int init(LocalStore *store);
 
-  bool is_inited() const { return nullptr != pool_; }
+  bool is_inited() const { return nullptr != store_; }
 
   // Batch get tablet infos
   int batch_get(
@@ -159,10 +157,7 @@ public:
       int64_t &affected_rows);
 
 private:
-  // Create table if not exists
-  int create_table_if_not_exists();
-
-  LocalStore *pool_;
+  LocalStore *store_;
 };
 
 } // namespace share

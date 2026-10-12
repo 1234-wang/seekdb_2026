@@ -26,17 +26,14 @@ namespace oceanbase
 namespace share
 {
 
-
-
-
 class ObMergeInfoTableStorage
 {
 public:
   ObMergeInfoTableStorage();
   virtual ~ObMergeInfoTableStorage();
 
-  int init(LocalStore *pool);
-  bool is_inited() const { return nullptr != pool_; }
+  int init(LocalStore *store);
+  bool is_inited() const { return nullptr != store_; }
 
   // Insert or update global merge info
   int insert_or_update(const ObGlobalMergeInfo &global_merge_info);
@@ -45,9 +42,7 @@ public:
   int get(ObGlobalMergeInfo &global_merge_info);
 
 private:
-  int create_table_if_not_exists();
-
-  LocalStore *pool_;
+  LocalStore *store_;
   DISALLOW_COPY_AND_ASSIGN(ObMergeInfoTableStorage);
 };
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::cell::Cell;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 mod bridge;
 pub mod config;
@@ -61,7 +61,7 @@ impl std::error::Error for Error {}
 
 const CONFIG_PREFIX: &[u8] = b"config/";
 const MAX_CONFIG_BYTES: usize = 32 * 1024 * 1024;
-static WRITER_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static WRITER_LOCK: Mutex<()> = Mutex::new(());
 thread_local! { static IN_CHECKER: Cell<bool> = const { Cell::new(false) }; }
 
 fn lock_writers() -> Result<std::sync::MutexGuard<'static, ()>, Error> {
@@ -72,7 +72,6 @@ fn lock_writers() -> Result<std::sync::MutexGuard<'static, ()>, Error> {
         ));
     }
     WRITER_LOCK
-        .get_or_init(|| Mutex::new(()))
         .lock()
         .map_err(|_| Error::new(None, "config writer lock poisoned"))
 }

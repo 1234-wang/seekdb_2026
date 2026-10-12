@@ -1,18 +1,28 @@
-// Copyright (c) 2026 OceanBase. SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 OceanBase.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #pragma once
 
 #include "local_bridge.h"
 #include "lib/ob_define.h"
-#include "lib/string/ob_string.h"
 #include <algorithm>
 #include <cstring>
 #include <functional>
-#include <new>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <vector>
 #include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace oceanbase { namespace share {
 
@@ -141,8 +151,7 @@ public:
     for (int64_t i = 0; i < ids.count(); ++i) { condition.values.emplace_back(static_cast<int64_t>(ids.at(i).id())); }
     conditions_.push_back(std::move(condition)); return *this;
   }
-  struct Prepared { local::Mutation mutation; };
-  int prepare(const LocalBinder &binder, Prepared &output) const
+  int prepare(const LocalBinder &binder, local::Mutation &output) const
   {
     if (OB_SUCCESS != binder.status()) { return binder.status(); }
     auto resolve = [&](const LocalArg &arg) { return arg.parameter < 0 ? &arg : binder.get(arg.parameter); };
@@ -150,7 +159,7 @@ public:
     if (!limit || !offset || limit->kind != local::Kind::Integer || offset->kind != local::Kind::Integer) {
       return OB_INVALID_ARGUMENT;
     }
-    auto &query = output.mutation.query;
+    auto &query = output.query;
     query.schema = schema_;
     for (auto column : columns_) { query.columns.push_back(column); }
     for (const auto &condition : conditions_) {
@@ -167,13 +176,13 @@ public:
     for (const Field &field : fields_) {
       const LocalArg *value = resolve(field.value);
       if (!value) { return OB_INVALID_ARGUMENT; }
-      output.mutation.fields.push_back({field.column, value->wire(), field.clamp});
+      output.fields.push_back({field.column, value->wire(), field.clamp});
     }
     query.order_column = order_;
     query.limit = limit->integer;
     query.offset = static_cast<uint64_t>(std::max<int64_t>(0, offset->integer));
     query.aggregate = aggregate_;
-    output.mutation.action = action_;
+    output.action = action_;
     return OB_SUCCESS;
   }
 
@@ -195,11 +204,7 @@ private:
   local::Action action_{local::Action::Update};
 };
 
-struct LocalStmt {
-  explicit LocalStmt(LocalRequest request) : request(std::move(request)) {}
-  LocalRequest request;
-  std::optional<rust::Box<local::Cursor>> cursor;
-};
+using LocalCursor = std::optional<rust::Box<local::Cursor>>;
 
 class LocalRowReader {
 public:
@@ -222,10 +227,6 @@ public:
     if (length) { *length = value ? static_cast<int>(value->bytes.size()) : 0; }
     return value && value->bytes.size() > 0 ? value->bytes.data() : nullptr;
   }
-  common::ObString get_string()
-  {
-    int length = 0; const char *bytes = get_text(&length); return common::ObString(length, bytes);
-  }
 private:
   rust::Slice<const local::Value> values_;
   int index_{0};
@@ -245,47 +246,38 @@ public:
     });
     return local_status(local::write(work));
   }
-  int prepare_execute(const LocalRequest &request, LocalStmt *&stmt)
+  int open_cursor(const LocalRequest &request, const Bind &bind, LocalCursor &cursor)
   {
-    stmt = new (std::nothrow) LocalStmt(request);
-    return stmt ? OB_SUCCESS : OB_ALLOCATE_MEMORY_FAILED;
-  }
-  int prepare_query(const LocalRequest &request, const Bind &bind, LocalStmt *&stmt)
-  {
+    cursor.reset();
     // A persistent cursor cannot escape the synchronous transaction callback.
-    if (transaction_) { stmt = nullptr; return OB_NOT_SUPPORTED; }
-    int ret = prepare_execute(request, stmt);
+    if (transaction_) { return OB_NOT_SUPPORTED; }
+    LocalBinder binder;
+    local::Mutation prepared;
+    int ret = bind ? bind(binder) : OB_SUCCESS;
+    if (OB_SUCCESS == ret) { ret = request.prepare(binder, prepared); }
     if (OB_SUCCESS == ret) {
-      LocalBinder binder; LocalRequest::Prepared prepared;
-      if (bind) { ret = bind(binder); }
-      if (OB_SUCCESS == ret) { ret = request.prepare(binder, prepared); }
-      if (OB_SUCCESS == ret) { stmt->cursor.emplace(local::cursor_open(prepared.mutation.query)); ret = local_status((*stmt->cursor)->status()); }
-      if (OB_SUCCESS != ret) { delete stmt; stmt = nullptr; }
+      auto opened = local::cursor_open(prepared.query);
+      ret = local_status(opened->status());
+      if (OB_SUCCESS == ret) { cursor.emplace(std::move(opened)); }
     }
     return ret;
   }
-  int step_query(LocalStmt *stmt, LocalRowReader &reader)
+  static int next(LocalCursor &cursor, LocalRowReader &reader)
   {
-    if (!stmt) { return OB_INVALID_ARGUMENT; }
-    if (!stmt->cursor) { return OB_INVALID_ARGUMENT; }
-    int ret = local_status((*stmt->cursor)->next());
-    reader.set((*stmt->cursor)->row()); return ret;
-  }
-  void finalize_query(LocalStmt *stmt) { delete stmt; }
-  void finalize_execute(LocalStmt *stmt) { delete stmt; }
-  int step_execute(LocalStmt *stmt, const Bind &bind = nullptr, int64_t *affected = nullptr)
-  {
-    return stmt ? execute(stmt->request, bind, affected) : OB_INVALID_ARGUMENT;
+    if (!cursor) { return OB_INVALID_ARGUMENT; }
+    const int ret = local_status((*cursor)->next());
+    reader.set((*cursor)->row());
+    return ret;
   }
   int execute(const LocalRequest &request, const Bind &bind = nullptr, int64_t *affected = nullptr)
   {
     if (reading_) { return OB_ERR_UNEXPECTED; }
-    LocalBinder binder; LocalRequest::Prepared prepared;
+    LocalBinder binder; local::Mutation prepared;
     int ret = bind ? bind(binder) : OB_SUCCESS;
     if (OB_SUCCESS == ret) { ret = request.prepare(binder, prepared); }
     if (OB_SUCCESS == ret) {
       auto write = [&]() {
-        const auto result = transaction_->execute(prepared.mutation);
+        const auto result = transaction_->execute(prepared);
         if (affected) { *affected = static_cast<int64_t>(result.affected); }
         return local_status(result.code);
       };
@@ -300,7 +292,7 @@ public:
     if (reading_) { return OB_ERR_UNEXPECTED; }
     if (transaction_) {
       LocalBinder binder;
-      LocalRequest::Prepared prepared;
+      local::Mutation prepared;
       int ret = bind ? bind(binder) : OB_SUCCESS;
       if (OB_SUCCESS == ret) { ret = request.prepare(binder, prepared); }
       if (OB_SUCCESS != ret) { transaction_->abort(ret); return ret; }
@@ -313,22 +305,21 @@ public:
         reading_ = false;
         return status == OB_ITER_END ? static_cast<int32_t>(local::Code::End) : status;
       });
-      ret = local_status(transaction_->query(prepared.mutation.query, rows));
+      ret = local_status(transaction_->query(prepared.query, rows));
       return OB_SUCCESS == ret && !found ? OB_ENTRY_NOT_EXIST : ret;
     }
-    LocalStmt *stmt = nullptr;
-    int ret = prepare_query(request, bind, stmt);
+    LocalCursor cursor;
+    int ret = open_cursor(request, bind, cursor);
     bool found = false;
     LocalRowReader reader;
     while (OB_SUCCESS == ret) {
-      ret = step_query(stmt, reader);
+      ret = next(cursor, reader);
       if (OB_SUCCESS == ret) {
         found = true;
         if (visitor) { ret = visitor(reader); }
         if (OB_ITER_END == ret) { ret = OB_SUCCESS; break; }
       } else if (OB_ITER_END == ret) { ret = found ? OB_SUCCESS : OB_ENTRY_NOT_EXIST; break; }
     }
-    finalize_query(stmt);
     return ret;
   }
 private:
@@ -343,7 +334,9 @@ public:
   {
     if (inited_) { return OB_INIT_TWICE; }
     if (!path) { return OB_INVALID_ARGUMENT; }
-    int ret = local_status(local::open_storage(path ? rust::Str(path) : rust::Str())); inited_ = OB_SUCCESS == ret; return ret;
+    const int ret = local_status(local::open_storage(rust::Str(path)));
+    inited_ = OB_SUCCESS == ret;
+    return ret;
   }
   void destroy() { if (inited_) { (void)local::close_storage(); inited_ = false; } }
   bool is_inited() const { return inited_ && local::is_open(); }
@@ -351,21 +344,19 @@ private:
   bool inited_{false};
 };
 
-// A guard only allocates a small C++ adapter. It does not open another store.
+// The adapter lives in the guard; the Rust process store owns the files.
 class LocalConnectionGuard {
 public:
-  LocalConnectionGuard() = default;
   explicit LocalConnectionGuard(LocalStore *store)
   {
-    if (store && store->is_inited()) { connection_.reset(new (std::nothrow) LocalConnection); }
+    if (store && store->is_inited()) { connection_.emplace(); }
   }
-  LocalConnectionGuard(LocalConnectionGuard &&) = default;
-  LocalConnectionGuard &operator=(LocalConnectionGuard &&) = default;
-  explicit operator bool() const { return bool(connection_); }
-  LocalConnection *operator->() const { return connection_.get(); }
-  LocalConnection *get_connection() const { return connection_.get(); }
-  void release() { connection_.reset(); }
+  LocalConnectionGuard(const LocalConnectionGuard &) = delete;
+  LocalConnectionGuard &operator=(const LocalConnectionGuard &) = delete;
+  explicit operator bool() const { return connection_.has_value(); }
+  LocalConnection *operator->() { return get_connection(); }
+  LocalConnection *get_connection() { return connection_ ? &*connection_ : nullptr; }
 private:
-  std::unique_ptr<LocalConnection> connection_;
+  std::optional<LocalConnection> connection_;
 };
 } } // namespace oceanbase::share

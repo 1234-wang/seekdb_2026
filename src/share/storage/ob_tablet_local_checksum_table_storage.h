@@ -45,18 +45,16 @@ inline const local::Schema &schema()
 }
 } // namespace tablet_checksum
 
-
-
 class ObTabletLocalChecksumTableStorage
 {
 public:
   ObTabletLocalChecksumTableStorage();
   virtual ~ObTabletLocalChecksumTableStorage();
 
-  // Initialize with shared connection pool instance
-  int init(LocalStore *pool);
+  // Initialize with the shared local store
+  int init(LocalStore *store);
 
-  bool is_inited() const { return nullptr != pool_; }
+  bool is_inited() const { return nullptr != store_; }
 
   // Get checksum items for local tablets.
   int batch_get(
@@ -70,9 +68,7 @@ public:
       int64_t &row_count);
 
 private:
-  int create_table_if_not_exists();
-
-  LocalStore *pool_;
+  LocalStore *store_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletLocalChecksumTableStorage);
 };
 

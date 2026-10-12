@@ -46,8 +46,6 @@ inline const local::Schema &schema()
 }
 } // namespace checksum_error
 
-
-
 class ObColumnChecksumErrorInfo;
 class ObColumnChecksumErrorInfoTableStorage
 {
@@ -55,8 +53,8 @@ public:
   ObColumnChecksumErrorInfoTableStorage();
   virtual ~ObColumnChecksumErrorInfoTableStorage();
 
-  int init(LocalStore *pool);
-  bool is_inited() const { return nullptr != pool_; }
+  int init(LocalStore *store);
+  bool is_inited() const { return nullptr != store_; }
 
   // Insert column checksum error info
   int insert(const ObColumnChecksumErrorInfo &error_info);
@@ -77,9 +75,7 @@ public:
   int delete_expired(const SCN &frozen_scn_before, int64_t limit);
 
 private:
-  int create_table_if_not_exists();
-
-  LocalStore *pool_;
+  LocalStore *store_;
   DISALLOW_COPY_AND_ASSIGN(ObColumnChecksumErrorInfoTableStorage);
 };
 

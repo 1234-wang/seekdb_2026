@@ -21,14 +21,13 @@
 #include "lib/oblog/ob_log.h"
 #include "share/ob_merge_info.h"
 
-
 namespace oceanbase
 {
 namespace share
 {
 
 ObMergeInfoTableStorage::ObMergeInfoTableStorage()
-  : pool_(nullptr)
+  : store_(nullptr)
 {
 }
 
@@ -36,22 +35,18 @@ ObMergeInfoTableStorage::~ObMergeInfoTableStorage()
 {
 }
 
-int ObMergeInfoTableStorage::init(LocalStore *pool)
+int ObMergeInfoTableStorage::init(LocalStore *store)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_ = pool)) {
+  if (OB_ISNULL(store_ = store)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(create_table_if_not_exists())) {
+  } else if (!store_->is_inited()) {
+    ret = OB_NOT_INIT;
   }
   if (OB_FAIL(ret)) {
-    pool_ = NULL;
+    store_ = nullptr;
   }
   return ret;
-}
-
-int ObMergeInfoTableStorage::create_table_if_not_exists()
-{
-  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObMergeInfoTableStorage::insert_or_update(const ObGlobalMergeInfo &global_merge_info)
@@ -76,7 +71,7 @@ int ObMergeInfoTableStorage::insert_or_update(const ObGlobalMergeInfo &global_me
       return OB_SUCCESS;
     };
 
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->execute(upsert_request, binder))) {
@@ -118,7 +113,7 @@ int ObMergeInfoTableStorage::get(ObGlobalMergeInfo &global_merge_info)
       return OB_SUCCESS;
     };
 
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->query(select_request, nullptr, row_processor))) {

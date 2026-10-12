@@ -21,14 +21,13 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/time/ob_time_utility.h"
 
-
 namespace oceanbase
 {
 namespace share
 {
 
 ObAdminJobTableStorage::ObAdminJobTableStorage()
-  : pool_(nullptr)
+  : store_(nullptr)
 {
 }
 
@@ -36,22 +35,18 @@ ObAdminJobTableStorage::~ObAdminJobTableStorage()
 {
 }
 
-int ObAdminJobTableStorage::init(LocalStore *pool)
+int ObAdminJobTableStorage::init(LocalStore *store)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_ = pool)) {
+  if (OB_ISNULL(store_ = store)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(create_table_if_not_exists_())) {
+  } else if (!store_->is_inited()) {
+    ret = OB_NOT_INIT;
   }
   if (OB_FAIL(ret)) {
-    pool_ = NULL;
+    store_ = nullptr;
   }
   return ret;
-}
-
-int ObAdminJobTableStorage::create_table_if_not_exists_()
-{
-  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObAdminJobTableStorage::create_job(const ObAdminJobEntry &entry)
@@ -76,7 +71,7 @@ int ObAdminJobTableStorage::create_job(const ObAdminJobEntry &entry)
         b.bind_int64(entry.result_code_);
         return OB_SUCCESS;
       };
-      LocalConnectionGuard guard(pool_);
+      LocalConnectionGuard guard(store_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(guard->execute(insert_request, binder))) {
@@ -108,7 +103,7 @@ int ObAdminJobTableStorage::complete_job(
       b.bind_int64(job_id);
       return OB_SUCCESS;
     };
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->execute(update_request, binder))) {
@@ -131,7 +126,7 @@ int ObAdminJobTableStorage::get_max_job_id(int64_t &max_job_id)
       max_job_id = reader.get_int64();
       return OB_ITER_END;
     };
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->query(select_request, nullptr, row_processor))) {
@@ -164,7 +159,7 @@ int ObAdminJobTableStorage::get_job_count(const common::ObString &job_type, int6
       job_count = reader.get_int64();
       return OB_ITER_END;
     };
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
@@ -193,7 +188,7 @@ int ObAdminJobTableStorage::find_job(const common::ObString &job_type, int64_t &
       job_id = reader.get_int64();
       return OB_ITER_END;
     };
-    LocalConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {

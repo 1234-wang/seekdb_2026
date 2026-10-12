@@ -55,8 +55,6 @@ inline const local::Schema &schema()
 }
 } // namespace deadlock_history
 
-
-
 struct ObDeadlockEventHistoryEntry
 {
   
@@ -133,17 +131,15 @@ public:
   ObDeadlockEventHistoryTableStorage();
   virtual ~ObDeadlockEventHistoryTableStorage();
 
-  int init(LocalStore *pool);
-  bool is_inited() const { return nullptr != pool_; }
+  int init(LocalStore *store);
+  bool is_inited() const { return nullptr != store_; }
 
   int insert(const ObDeadlockEventHistoryEntry &entry);
   int insert_all(const ObIArray<ObDeadlockEventHistoryEntry> &entries);
   int delete_expired(int64_t report_time_before, int64_t limit);
 
 private:
-  int create_table_if_not_exists();
-
-  LocalStore *pool_;
+  LocalStore *store_;
   DISALLOW_COPY_AND_ASSIGN(ObDeadlockEventHistoryTableStorage);
 };
 
