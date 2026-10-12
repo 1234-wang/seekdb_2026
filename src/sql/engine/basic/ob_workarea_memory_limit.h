@@ -35,19 +35,19 @@ int64_t calculate_workarea_memory_limit(int64_t configured_limit,
                                         int64_t manager_limit);
 int64_t effective_workarea_memory_limit(int64_t configured_limit);
 
-// Explicit limits compare the local store bytes.  A zero limit compares the
-// incoming allocation with all committed and reserved WORK_AREA bytes so two
-// individually-small stores still spill before the shared hard quota rejects
-// the next allocation.
+// Positive limits compare the local store bytes.  Every store also compares
+// the incoming allocation with all committed and reserved WORK_AREA bytes so
+// two individually-small stores still spill before the shared hard quota
+// rejects the next allocation.
 bool should_spill_workarea(int64_t configured_limit,
                            int64_t local_bytes,
                            int64_t incoming_bytes);
 
-// A zero-limit WORK_AREA store may lose the shared-quota admission race after
-// should_spill_workarea() sampled below the watermark.  Such stores get one
-// component-owned spill/reclaim and allocation retry before returning OOM.
+// A WORK_AREA store may lose the shared-quota admission race after
+// should_spill_workarea() sampled below the watermark.  Dump-enabled stores
+// get one component-owned spill/reclaim and allocation retry before returning
+// OOM, independently of their local limit.
 bool should_retry_workarea_allocation(int alloc_ret,
-                                      int64_t configured_limit,
                                       int64_t ctx_id,
                                       bool enable_dump);
 

@@ -618,7 +618,7 @@ TEST(TestWorkareaMemoryQuota,
 }
 
 TEST(TestWorkareaMemoryQuota,
-     ra_datum_store_reclaims_after_shared_quota_admission_race)
+     two_positive_limit_ra_stores_reclaim_after_shared_quota_admission_race)
 {
   TestTmpFileManagerGuard tmp_file_manager;
   ASSERT_EQ(OB_SUCCESS, tmp_file_manager.init());
@@ -642,10 +642,13 @@ TEST(TestWorkareaMemoryQuota,
   {
     TestRADatumStore first_store(race_allocator, tracker);
     TestRADatumStore second_store(race_allocator, tracker);
+    const int64_t local_limit = 16 * ObRADatumStore::BIG_BLOCK_SIZE;
     ASSERT_EQ(OB_SUCCESS,
-              first_store.init(0, ObCtxIds::WORK_AREA, "WARADatumFirst"));
+              first_store.init(local_limit, ObCtxIds::WORK_AREA,
+                               "WARADatumFirst"));
     ASSERT_EQ(OB_SUCCESS,
-              second_store.init(0, ObCtxIds::WORK_AREA, "WARADatumSecond"));
+              second_store.init(local_limit, ObCtxIds::WORK_AREA,
+                                "WARADatumSecond"));
     first_store.set_mem_stat(&tracker);
     second_store.set_mem_stat(&tracker);
 
@@ -659,8 +662,10 @@ TEST(TestWorkareaMemoryQuota,
     // the first attempt is rejected, while spilling this store's current
     // block creates enough headroom for the single retry.
     quota.set_limit(aggregate_bytes + 4 * ObRADatumStore::BIG_BLOCK_SIZE);
+    ASSERT_GT(local_limit, quota.limit());
     ASSERT_FALSE(should_spill_workarea(
-        0, first_store.get_mem_hold(), ObRADatumStore::BIG_BLOCK_SIZE));
+        local_limit, first_store.get_mem_hold(),
+        ObRADatumStore::BIG_BLOCK_SIZE));
     race_allocator.arm(first_store.get_mem_hold() / 2);
     const int64_t reject_count = quota.reject_count();
     const int64_t reclaim_count = quota.reclaim_count();

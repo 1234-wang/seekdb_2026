@@ -874,10 +874,10 @@ int ObChunkDatumStore::switch_block(const int64_t min_size)
     }
     if (!can_find) { // need alloc new block
       if (OB_FAIL(alloc_block_buffer(new_block, min_size, false))) {
-        // A concurrent zero-limit store can consume the shared quota after
-        // need_dump() samples it.  Spill one local block and retry once before
-        // allowing the shared-quota rejection to escape to the SQL operator.
-        if (should_retry_workarea_allocation(ret, mem_limit_, ctx_id_, enable_dump_)
+        // A concurrent store can consume the shared quota after need_dump()
+        // samples it.  Spill one local block and retry once before allowing
+        // the shared-quota rejection to escape to the SQL operator.
+        if (should_retry_workarea_allocation(ret, ctx_id_, enable_dump_)
             && !blocks_.is_empty()) {
           ret = OB_SUCCESS;
           const bool dump_last_block = 1 == blocks_.get_size();

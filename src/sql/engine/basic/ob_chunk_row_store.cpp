@@ -586,9 +586,9 @@ int ObChunkRowStore::switch_block(const int64_t min_size)
     if (!can_find) { // need alloc new block
       if (OB_FAIL(alloc_block_buffer(new_block, min_size, false))) {
         // The shared quota can change after need_dump() samples it.  Preserve
-        // the zero-limit spill contract by reclaiming a local block and
+        // the aggregate spill contract by reclaiming a local block and
         // retrying the rejected allocation once.
-        if (should_retry_workarea_allocation(ret, mem_limit_, ctx_id_, enable_dump_)
+        if (should_retry_workarea_allocation(ret, ctx_id_, enable_dump_)
             && !blocks_.is_empty()) {
           ret = OB_SUCCESS;
           if (OB_FAIL(dump(true, true))) {

@@ -601,7 +601,7 @@ int ObRADatumStore::switch_block(const int64_t min_size)
         // The shared WORK_AREA quota may be consumed or shrunk after the
         // preceding spill sample.  Index and spill the current block through
         // the regular dump path, then retry allocation once.
-        if (should_retry_workarea_allocation(ret, mem_limit_, ctx_id_, true)) {
+        if (should_retry_workarea_allocation(ret, ctx_id_, true)) {
           ret = OB_SUCCESS;
           if (OB_FAIL(dump(true, BIG_BLOCK_SIZE))) {
             LOG_WARN("failed to reclaim RA datum block after quota rejection",

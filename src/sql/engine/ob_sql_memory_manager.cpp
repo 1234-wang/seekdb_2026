@@ -77,35 +77,30 @@ bool should_spill_workarea(const int64_t configured_limit,
   bool should_spill = false;
   const int64_t nonnegative_local = std::max<int64_t>(0, local_bytes);
   const int64_t nonnegative_incoming = std::max<int64_t>(0, incoming_bytes);
-  if (0 != configured_limit) {
-    should_spill = configured_limit > 0
-        && (nonnegative_incoming > configured_limit
-            || nonnegative_local > configured_limit - nonnegative_incoming);
-  } else {
-    common::MemoryQuota *quota = get_workarea_memory_quota();
-    if (OB_NOT_NULL(quota)) {
-      const common::MemoryQuotaSample sample = quota->sample();
-      const int64_t spill_watermark =
-          calculate_workarea_memory_limit(0, sample.limit_bytes_);
-      const int64_t committed = std::max<int64_t>(0, sample.committed_bytes_);
-      const int64_t reserved = std::max<int64_t>(0, sample.reserved_bytes_);
-      const int64_t accounted = committed > INT64_MAX - reserved
-          ? INT64_MAX : committed + reserved;
-      should_spill = spill_watermark > 0
-          && (accounted >= spill_watermark
-              || nonnegative_incoming >= spill_watermark - accounted);
-    }
+  should_spill = configured_limit > 0
+      && (nonnegative_incoming > configured_limit
+          || nonnegative_local > configured_limit - nonnegative_incoming);
+  common::MemoryQuota *quota = get_workarea_memory_quota();
+  if (!should_spill && OB_NOT_NULL(quota)) {
+    const common::MemoryQuotaSample sample = quota->sample();
+    const int64_t spill_watermark =
+        calculate_workarea_memory_limit(0, sample.limit_bytes_);
+    const int64_t committed = std::max<int64_t>(0, sample.committed_bytes_);
+    const int64_t reserved = std::max<int64_t>(0, sample.reserved_bytes_);
+    const int64_t accounted = committed > INT64_MAX - reserved
+        ? INT64_MAX : committed + reserved;
+    should_spill = spill_watermark > 0
+        && (accounted >= spill_watermark
+            || nonnegative_incoming >= spill_watermark - accounted);
   }
   return should_spill;
 }
 
 bool should_retry_workarea_allocation(const int alloc_ret,
-                                      const int64_t configured_limit,
                                       const int64_t ctx_id,
                                       const bool enable_dump)
 {
   return OB_ALLOCATE_MEMORY_FAILED == alloc_ret
-      && 0 == configured_limit
       && common::ObCtxIds::WORK_AREA == ctx_id
       && enable_dump
       && config::enable_sql_operator_dump();
