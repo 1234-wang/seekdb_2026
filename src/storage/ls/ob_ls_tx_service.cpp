@@ -54,7 +54,7 @@ int ObLSTxService::init(ObLSTxCtxMgr *mgr,
 
 int ObLSTxService::create_tx_ctx(ObTxCreateArg arg,
                                  bool &existed,
-                                 ObTxCtx *&ctx) const
+                                 ObTxCtx *&ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mgr_)) {
@@ -686,7 +686,7 @@ int ObLSTxService::offline()
   return ret;
 }
 
-TxCtxCache *ObLSTxService::get_or_create_replay_tx_ctx_cache_() const
+TxCtxCache *ObLSTxService::get_or_create_replay_tx_ctx_cache_()
 {
   TxCtxCache *cache = ATOMIC_LOAD(&replay_tx_ctx_cache_);
   if (nullptr == cache) {

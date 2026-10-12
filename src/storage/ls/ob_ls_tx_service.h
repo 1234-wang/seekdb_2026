@@ -82,7 +82,7 @@ public:
            transaction::ObTransService *trans_service);
   int create_tx_ctx(transaction::ObTxCreateArg arg,
                     bool &existed,
-                    transaction::ObTxCtx *&ctx) const;
+                    transaction::ObTxCtx *&ctx);
   int get_tx_ctx(const transaction::ObTransID &tx_id,
                  const bool for_replay,
                  transaction::ObTxCtx *&ctx) const;
@@ -184,13 +184,13 @@ public:
   int check_tx_blocked(bool &tx_blocked) const;
 private:
   void reset_();
-  transaction::TxCtxCache *get_or_create_replay_tx_ctx_cache_() const;
+  transaction::TxCtxCache *get_or_create_replay_tx_ctx_cache_();
 
   storage::ObLS *parent_;
 
   transaction::ObLSTxCtxMgr *mgr_;
   transaction::ObTransService *trans_service_;
-  mutable transaction::TxCtxCache *replay_tx_ctx_cache_;
+  transaction::TxCtxCache *replay_tx_ctx_cache_;
 
   // responsible for maintenance checkpoint unit that write TRANS_SERVICE_LOG_BASE_TYPE clog
   checkpoint::ObCommonCheckpoint *common_checkpoints_[checkpoint::ObCommonCheckpointType::MAX_BASE_TYPE];
