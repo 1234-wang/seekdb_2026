@@ -122,16 +122,16 @@ pub mod ffi {
         fn visit(self: &RowCallback, row: &[Value]) -> i32;
     }
     extern "Rust" {
-        fn open_storage(path: &str) -> i32;
-        fn close_storage() -> i32;
-        fn is_open() -> bool;
-        fn write(callback: &WriteCallback) -> i32;
+        type Store;
+        fn open_storage(path: &str) -> Box<Store>;
+        fn status(self: &Store) -> i32;
+        fn write(self: &Store, callback: &WriteCallback) -> i32;
         type Transaction<'a>;
         fn execute(self: &Transaction<'_>, mutation: &Mutation) -> WriteResult;
         fn query(self: &Transaction<'_>, query: &Query, callback: &RowCallback) -> i32;
         fn abort(self: &Transaction<'_>, status: i32) -> i32;
         type Cursor;
-        fn cursor_open(query: &Query) -> Box<Cursor>;
+        fn cursor_open(self: &Store, query: &Query) -> Box<Cursor>;
         fn status(self: &Cursor) -> i32;
         fn next(self: &mut Cursor) -> i32;
         fn row(self: &Cursor) -> &[Value];
@@ -143,18 +143,23 @@ fn code(error: records::Error) -> i32 {
     (match error {
         Error::Invalid => ffi::Code::Invalid,
         Error::Duplicate => ffi::Code::Duplicate,
-        Error::Storage(error) => match error {
-            kv::Error::Io(_) => ffi::Code::Io,
-            kv::Error::Corrupt(_) => ffi::Code::Corrupt,
-            kv::Error::Busy => ffi::Code::Busy,
-            kv::Error::Poisoned => ffi::Code::Poisoned,
-            kv::Error::TransactionAborted => ffi::Code::Aborted,
-            kv::Error::InvalidOptions => ffi::Code::NotInit,
-            _ => ffi::Code::Limit,
-        },
+        Error::Storage(error) => return storage_code(&error),
     })
     .repr as i32
 }
+fn storage_code(error: &kv::Error) -> i32 {
+    (match error {
+        kv::Error::Io(_) => ffi::Code::Io,
+        kv::Error::Corrupt(_) => ffi::Code::Corrupt,
+        kv::Error::Busy => ffi::Code::Busy,
+        kv::Error::Poisoned => ffi::Code::Poisoned,
+        kv::Error::TransactionAborted => ffi::Code::Aborted,
+        kv::Error::InvalidOptions => ffi::Code::NotInit,
+        _ => ffi::Code::Limit,
+    })
+    .repr as i32
+}
+
 fn cell(value: &ffi::Value) -> records::Result<records::Cell> {
     use ffi::Kind;
     if value.bytes.len() > kv::MAX_VALUE_SIZE {
@@ -212,20 +217,37 @@ fn query(input: &ffi::Query) -> records::Result<records::Query> {
 }
 
 thread_local! { static WRITING: Flag<bool> = const { Flag::new(false) }; }
-pub fn open_storage(path: &str) -> i32 {
-    if WRITING.with(Flag::get) {
-        return ffi::Code::Busy.repr as i32;
-    }
-    crate::open(Path::new(path)).map_or_else(|e| code(e.into()), |_| 0)
+pub struct Store {
+    inner: kv::Result<kv::Store>,
 }
-pub fn close_storage() -> i32 {
-    if WRITING.with(Flag::get) {
-        return ffi::Code::Busy.repr as i32;
-    }
-    crate::close().map_or_else(|e| code(e.into()), |_| 0)
+
+// Other bridges borrow this same opaque Rust type through its CXX declaration.
+unsafe impl cxx::ExternType for Store {
+    type Id = cxx::type_id!("oceanbase::local::Store");
+    type Kind = cxx::kind::Opaque;
 }
-pub fn is_open() -> bool {
-    crate::store().is_ok()
+
+pub fn open_storage(path: &str) -> Box<Store> {
+    Box::new(Store {
+        inner: kv::Store::open_with_options(
+            Path::new(path),
+            kv::Options {
+                // Cover a full tablet queue batch, including both table indexes.
+                max_transaction_pages: 16384,
+                ..kv::Options::default()
+            },
+        ),
+    })
+}
+
+impl Store {
+    pub fn kv(&self) -> Result<&kv::Store, &kv::Error> {
+        self.inner.as_ref()
+    }
+
+    pub fn status(&self) -> i32 {
+        self.kv().map_or_else(storage_code, |_| 0)
+    }
 }
 
 // The C++ callback borrows this transaction synchronously. Its Rust lifetime
@@ -234,41 +256,43 @@ pub struct Transaction<'a> {
     tx: RefCell<kv::Transaction<'a>>,
     failure: Flag<i32>,
 }
-pub fn write(callback: &ffi::WriteCallback) -> i32 {
-    if WRITING.with(|flag| flag.replace(true)) {
-        return ffi::Code::Busy.repr as i32;
-    }
-    struct Reset;
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            WRITING.with(|flag| flag.set(false));
+impl Store {
+    pub fn write(&self, callback: &ffi::WriteCallback) -> i32 {
+        if WRITING.with(|flag| flag.replace(true)) {
+            return ffi::Code::Busy.repr as i32;
         }
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                WRITING.with(|flag| flag.set(false));
+            }
+        }
+        let _reset = Reset;
+        let store = match self.kv() {
+            Ok(s) => s,
+            Err(e) => return storage_code(e),
+        };
+        let tx = match store.begin() {
+            Ok(tx) => tx,
+            Err(e) => return code(e.into()),
+        };
+        let transaction = Transaction {
+            tx: RefCell::new(tx),
+            failure: Flag::new(0),
+        };
+        let status = callback.run(&transaction);
+        if status != 0 {
+            return status;
+        }
+        if transaction.failure.get() != 0 {
+            return transaction.failure.get();
+        }
+        transaction
+            .tx
+            .into_inner()
+            .commit()
+            .map_or_else(|e| code(e.into()), |_| 0)
     }
-    let _reset = Reset;
-    let store = match crate::store() {
-        Ok(s) => s,
-        Err(e) => return code(e.into()),
-    };
-    let tx = match store.begin() {
-        Ok(tx) => tx,
-        Err(e) => return code(e.into()),
-    };
-    let transaction = Transaction {
-        tx: RefCell::new(tx),
-        failure: Flag::new(0),
-    };
-    let status = callback.run(&transaction);
-    if status != 0 {
-        return status;
-    }
-    if transaction.failure.get() != 0 {
-        return transaction.failure.get();
-    }
-    transaction
-        .tx
-        .into_inner()
-        .commit()
-        .map_or_else(|e| code(e.into()), |_| 0)
 }
 impl Transaction<'_> {
     pub fn abort(&self, status: i32) -> i32 {
@@ -347,20 +371,26 @@ pub struct Cursor {
     row: Vec<ffi::Value>,
     status: i32,
 }
-pub fn cursor_open(input: &ffi::Query) -> Box<Cursor> {
-    let result = (|| records::RowCursor::new(&crate::store()?, query(input)?))();
-    Box::new(match result {
-        Ok(cursor) => Cursor {
-            cursor: Some(cursor),
-            row: vec![],
-            status: 0,
-        },
-        Err(e) => Cursor {
-            cursor: None,
-            row: vec![],
-            status: code(e),
-        },
-    })
+impl Store {
+    pub fn cursor_open(&self, input: &ffi::Query) -> Box<Cursor> {
+        let result = self.kv().map_err(storage_code).and_then(|store| {
+            query(input)
+                .and_then(|query| records::RowCursor::new(store, query))
+                .map_err(code)
+        });
+        Box::new(match result {
+            Ok(cursor) => Cursor {
+                cursor: Some(cursor),
+                row: vec![],
+                status: 0,
+            },
+            Err(e) => Cursor {
+                cursor: None,
+                row: vec![],
+                status: e,
+            },
+        })
+    }
 }
 impl Cursor {
     pub fn status(&self) -> i32 {

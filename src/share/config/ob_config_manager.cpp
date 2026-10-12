@@ -21,7 +21,7 @@
 #include "share/ob_sql_client_decorator.h"
 #include "share/config/ob_config_rpc_types.h"
 #include "config_bridge.h"
-#include "local_bridge.h"
+#include "share/storage/local_store.h"
 
 namespace oceanbase
 {
@@ -56,13 +56,13 @@ ObConfigManager::~ObConfigManager()
 {
 }
 
-int ObConfigManager::init()
+int ObConfigManager::init(share::LocalStore &store)
 {
   int ret = OB_SUCCESS;
-  if (!local::is_open()) {
+  if (!store.is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    inited_ = true;
+    store_ = &store;
   }
   return ret;
 }
@@ -75,10 +75,10 @@ int ObConfigManager::reload_config()
 int ObConfigManager::update_local()
 {
   int ret = OB_SUCCESS;
-  if (!inited_) {
+  if (!store_ || !store_->is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    auto error = config::load_active(!enable_static_effect_);
+    auto error = config::load_active(store_->handle(), !enable_static_effect_);
     if (!error.ok) {
       ret = report_error("load active", error);
     } else {
@@ -91,7 +91,7 @@ int ObConfigManager::update_local()
 int ObConfigManager::got_version()
 {
   int ret = OB_SUCCESS;
-  if (!inited_) {
+  if (!store_ || !store_->is_inited()) {
     ret = OB_NOT_INIT;
   } else {
     if (OB_FAIL(update_local())) {
@@ -107,10 +107,10 @@ int ObConfigManager::save_internal_state(const char *name, const char *value)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(name) || OB_ISNULL(value)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (!inited_) {
+  } else if (!store_ || !store_->is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    auto error = config::update_internal_state(name, value);
+    auto error = config::update_internal_state(store_->handle(), name, value);
     if (!error.ok) {
       ret = report_error("save internal state", error);
     }
@@ -126,12 +126,12 @@ int ObConfigManager::update_checked(const char *name, const char *value, bool re
     ret = OB_INVALID_ARGUMENT;
   } else if (!config::parameter_exists(rust::Str(name))) {
     ret = OB_ERR_SYS_CONFIG_UNKNOWN;
-  } else if (!inited_) {
+  } else if (!store_ || !store_->is_inited()) {
     ret = OB_NOT_INIT;
   } else if (!reset && nullptr == value) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    auto error = config::update_checked(name, reset ? "" : value, reset, callback);
+    auto error = config::update_checked(store_->handle(), name, reset ? "" : value, reset, callback);
     if (!error.ok) {
       ret = report_error(reset ? "checked reset" : "checked save", error);
     }
@@ -142,7 +142,8 @@ int ObConfigManager::update_checked(const char *name, const char *value, bool re
 int ObConfigManager::save_configs()
 {
   int ret = OB_SUCCESS;
-  auto error = config::save_bootstrap();
+  if (!store_ || !store_->is_inited()) { return OB_NOT_INIT; }
+  auto error = config::save_bootstrap(store_->handle());
   if (!error.ok) {
     ret = OB_INVALID_CONFIG;
     LOG_ERROR("failed to save startup parameters", K(ret), "detail", error.message.c_str(),

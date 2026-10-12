@@ -34,18 +34,24 @@ fn status(result: Result<(), Error>) -> Status {
     }
 }
 
+fn storage(store: &local::Store) -> Result<&kv::Store, Error> {
+    store
+        .kv()
+        .map_err(|error| Error::new(None, format!("access local storage: {error}")))
+}
+
 fn text<'a>(input: &'a CxxString, label: &str) -> Result<&'a str, Error> {
     input
         .to_str()
         .map_err(|_| Error::new(None, format!("{label} is not UTF-8")))
 }
 
-pub(crate) fn load_active_status(startup: bool) -> Status {
-    status(config::load_active(startup))
+pub(crate) fn load_active_status(store: &local::Store, startup: bool) -> Status {
+    status(storage(store).and_then(|store| config::load_active(store, startup)))
 }
 
-pub(crate) fn save_bootstrap_status() -> Status {
-    status(config::save_bootstrap())
+pub(crate) fn save_bootstrap_status(store: &local::Store) -> Status {
+    status(storage(store).and_then(config::save_bootstrap))
 }
 
 pub(crate) fn bootstrap_set_status(name: &CxxString, value: &CxxString) -> Status {
@@ -54,13 +60,18 @@ pub(crate) fn bootstrap_set_status(name: &CxxString, value: &CxxString) -> Statu
     })())
 }
 
-pub(crate) fn update_internal_state_status(name: &CxxString, value: &CxxString) -> Status {
+pub(crate) fn update_internal_state_status(
+    store: &local::Store,
+    name: &CxxString,
+    value: &CxxString,
+) -> Status {
     status((|| {
-        config::update_internal_state(text(name, "name")?, text(value, "value")?)
+        config::update_internal_state(storage(store)?, text(name, "name")?, text(value, "value")?)
     })())
 }
 
 pub(crate) fn update_checked_status(
+    store: &local::Store,
     name: &CxxString,
     value: &CxxString,
     reset: bool,
@@ -73,7 +84,7 @@ pub(crate) fn update_checked_status(
         } else {
             Some(text(value, "value")?)
         };
-        config::update_parameter_checked(name, value, || {
+        config::update_parameter_checked(storage(store)?, name, value, || {
             let code = callback.check();
             if code == 0 {
                 Ok(())

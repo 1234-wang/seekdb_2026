@@ -92,16 +92,11 @@ fn run_checker(check: impl FnOnce() -> Result<(), Error>) -> Result<(), Error> {
     })
 }
 
-fn storage() -> Result<kv::Store, Error> {
-    local::store().map_err(|error| Error::storage("access local storage", error, false))
-}
-
 fn key(name: &str) -> Vec<u8> {
     [CONFIG_PREFIX, name.as_bytes()].concat()
 }
 
-pub fn load() -> Result<Vec<Entry>, Error> {
-    let store = storage()?;
+pub fn load(store: &kv::Store) -> Result<Vec<Entry>, Error> {
     let snapshot = store
         .snapshot()
         .map_err(|error| Error::storage("snapshot config storage", error, false))?;
@@ -127,13 +122,13 @@ pub fn load() -> Result<Vec<Entry>, Error> {
 }
 
 pub(crate) fn update_with_commit(
+    store: &kv::Store,
     name: &str,
     value: Option<&str>,
     check: impl FnOnce() -> Result<(), Error>,
     publish: impl FnOnce(),
 ) -> Result<(), Error> {
     let _guard = lock_writers()?;
-    let store = storage()?;
     if let Some(value) = value {
         config::validate_entry(&Entry {
             name: name.to_owned(),

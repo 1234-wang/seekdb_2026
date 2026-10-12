@@ -1762,7 +1762,7 @@ int ObServer::init_config(const ObServerOptions &opts)
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("legacy local metadata requires explicit migration before startup", K(ret));
   } else if (OB_FAIL(local_store_.init("./store/local"))) {
-  } else if (OB_FAIL(config_mgr_.init())) {
+  } else if (OB_FAIL(config_mgr_.init(local_store_))) {
   } else if (OB_FAIL(config_mgr_.got_version())) {
   } else if (OB_FAIL(DATA_VERSION_MGR.init())) {
   } else if (OB_FAIL(DATA_VERSION_MGR.load_from_file())) {

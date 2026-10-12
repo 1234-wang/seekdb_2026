@@ -12,25 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{env, fs, path::PathBuf};
+use std::{env, path::PathBuf};
 
 fn main() {
+    let include = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("include");
+    cxx_build::CFG.exported_header_dirs.push(&include);
     cxx_build::bridge("src/bridge.rs")
         .include("include")
         .std("c++17")
         .compile("local_cxx");
-    if let Ok(directory) = env::var("LOCAL_HEADER_DIR") {
-        let directory = PathBuf::from(directory);
-        fs::create_dir_all(&directory).expect("cannot create local header directory");
-        let source = PathBuf::from(env::var("OUT_DIR").unwrap())
-            .join("cxxbridge/include/local/src/bridge.rs.h");
-        let bytes = fs::read(source).expect("cannot read local CXX header");
-        let target = directory.join("local_bridge.h");
-        if fs::read(&target).ok().as_deref() != Some(bytes.as_slice()) {
-            fs::write(target, bytes).expect("cannot publish local CXX header");
-        }
-    }
     println!("cargo:rerun-if-changed=src/bridge.rs");
     println!("cargo:rerun-if-changed=include/callbacks.h");
-    println!("cargo:rerun-if-env-changed=LOCAL_HEADER_DIR");
 }

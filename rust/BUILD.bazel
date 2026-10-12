@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//bazel:defs.bzl", cc_library = "seekdb_cc_library")
+load("@cargo_exports//:exports.bzl", "EXPORTS")
+load("//bazel:cargo.bzl", "cargo_workspace")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -20,148 +21,21 @@ exports_files(
     ["rust-toolchain.toml"],
     visibility = ["//deps/external:__pkg__"],
 )
+exports_files(["exports.json"])
 
-config_setting(
-    name = "windows",
-    constraint_values = ["@platforms//os:windows"],
+# Cargo resolves all Rust dependencies; Bazel tracks build inputs and exposes
+# only the libraries explicitly exported to C++.
+cargo_workspace(
+    exports = EXPORTS,
+    srcs = glob(
+        ["**/*.rs", "**/*.h", "**/*.py", "**/*.toml", "**/*.yaml", "**/*.yml", "**/*.json", "*.lock"],
+        exclude = ["target/**"],
+        allow_empty = True,
+    ),
 )
 
-config_setting(
-    name = "macos",
-    constraint_values = ["@platforms//os:macos"],
-)
-
-# Track sources and build inputs for every crate in the workspace. Cargo only
-# runs when Bazel sees one of these inputs change.
-_RUST_INPUTS = glob(
-    ["**/*.rs", "**/*.h", "**/*.py", "**/*.toml", "**/*.yaml", "**/*.yml", "**/*.json", "*.lock"],
-    exclude = ["target/**"],
-    allow_empty = True,
-)
-
-# Cargo remains the authoritative Rust dependency resolver used by the
-# upstream CMake build.  Keep the action local and outside the sandbox until
-# Cargo dependencies are vendored: cargo currently updates the registry under
-# ~/.cargo, which Bazel's sandbox deliberately mounts read-only.
-genrule(
-    name = "_rust_static_unix",
-    srcs = _RUST_INPUTS,
-    outs = ["libsql_nio.a", "libconfig.a", "liblocal.a", "unix/config_bridge.h", "unix/config_checkers.h", "unix/local_bridge.h", "unix/rust/cxx.h"],
-    cmd = """
-set -eu
-export CARGO_TARGET_DIR="$(@D)/rust-cargo-target"
-export CONFIG_HEADER_DIR="$$PWD/$(@D)/unix"
-export LOCAL_HEADER_DIR="$$PWD/$(@D)/unix"
-export DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
-export CXXFLAGS="$${CXXFLAGS:-} -D_GLIBCXX_USE_CXX11_ABI=1"
-cargo build --release --manifest-path "$(location Cargo.toml)" --workspace
-cp "$$CARGO_TARGET_DIR/release/libsql_nio.a" "$(@D)/libsql_nio.a"
-cp "$$CARGO_TARGET_DIR/release/libconfig.a" "$(@D)/libconfig.a"
-cp "$$CARGO_TARGET_DIR/release/liblocal.a" "$(@D)/liblocal.a"
-mkdir -p "$(@D)/unix/rust"
-cp "$$CARGO_TARGET_DIR/cxxbridge/rust/cxx.h" "$(@D)/unix/rust/cxx.h"
-""",
-    tags = [
-        "no-remote",
-        "no-sandbox",
-    ],
-    target_compatible_with = select({
-        ":windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
-    }),
-)
-
-genrule(
-    name = "_rust_static_windows",
-    srcs = _RUST_INPUTS,
-    outs = ["sql_nio.lib", "config.lib", "local.lib", "windows/config_bridge.h", "windows/config_checkers.h", "windows/local_bridge.h", "windows/rust/cxx.h"],
-    cmd_bat = """
-set CARGO_TARGET_DIR=$(@D)\\rust-cargo-target
-set CONFIG_HEADER_DIR=%CD%\\$(@D)\\windows
-set LOCAL_HEADER_DIR=%CD%\\$(@D)\\windows
-set DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
-cargo build --release --manifest-path "$(location Cargo.toml)" --workspace
-if errorlevel 1 exit /b 1
-copy /Y "%CARGO_TARGET_DIR%\\release\\sql_nio.lib" "$(@D)\\sql_nio.lib"
-if errorlevel 1 exit /b 1
-copy /Y "%CARGO_TARGET_DIR%\\release\\config.lib" "$(@D)\\config.lib"
-if errorlevel 1 exit /b 1
-copy /Y "%CARGO_TARGET_DIR%\\release\\local.lib" "$(@D)\\local.lib"
-if errorlevel 1 exit /b 1
-if not exist "$(@D)\\windows\\rust" mkdir "$(@D)\\windows\\rust"
-copy /Y "%CARGO_TARGET_DIR%\\cxxbridge\\rust\\cxx.h" "$(@D)\\windows\\rust\\cxx.h"
-""",
-    tags = [
-        "no-remote",
-        "no-sandbox",
-    ],
-    target_compatible_with = select({
-        ":windows": [],
-        "//conditions:default": ["@platforms//:incompatible"],
-    }),
-)
-
-filegroup(
-    name = "sql_nio_archive",
-    srcs = select({
-        ":windows": ["sql_nio.lib"],
-        "//conditions:default": ["libsql_nio.a"],
-    }),
-    visibility = ["//src/observer:__pkg__"],
-)
-
-filegroup(
-    name = "config_archive",
-    srcs = select({
-        ":windows": ["config.lib"],
-        "//conditions:default": ["libconfig.a"],
-    }),
-    visibility = ["//src/observer:__pkg__"],
-)
-
-cc_library(
-    name = "sql_nio_headers",
-    hdrs = ["sql-nio/include/nio.h"],
-    includes = ["sql-nio/include"],
-    visibility = [
-        "//src/oblib:__pkg__",
-        "//src/observer:__pkg__",
-        "//src/query:__pkg__",
-        "//unittest/oblib:__pkg__",
-    ],
-)
-
-cc_library(
+alias(
     name = "config_bridge_headers",
-    hdrs = ["config/include/check_callback.h"] + select({
-        ":windows": ["windows/config_bridge.h", "windows/config_checkers.h", "windows/rust/cxx.h"],
-        "//conditions:default": ["unix/config_bridge.h", "unix/config_checkers.h", "unix/rust/cxx.h"],
-    }),
-    includes = ["config/include"] + select({
-        ":windows": ["windows"],
-        "//conditions:default": ["unix"],
-    }),
-    visibility = ["//src/share:__pkg__", "//src/observer:__pkg__", "//src/rootserver:__pkg__", "//src/sql:__subpackages__", "//src/storage:__pkg__", "//src/pl:__pkg__", "//src/standby:__pkg__"],
-)
-
-cc_library(
-    name = "local",
-    srcs = select({
-        ":windows": ["local.lib"],
-        "//conditions:default": ["liblocal.a"],
-    }),
-    hdrs = ["local/include/callbacks.h"] + select({
-        ":windows": ["windows/local_bridge.h", "windows/rust/cxx.h"],
-        "//conditions:default": ["unix/local_bridge.h", "unix/rust/cxx.h"],
-    }),
-    includes = ["local/include"] + select({
-        ":windows": ["windows"],
-        "//conditions:default": ["unix"],
-    }),
-    linkopts = select({
-        ":windows": ["ntdll.lib", "userenv.lib", "ws2_32.lib", "bcrypt.lib", "advapi32.lib", "synchronization.lib"],
-        ":macos": [],
-        "//conditions:default": ["-lpthread", "-ldl", "-lm"],
-    }),
+    actual = ":config_headers",
     visibility = ["//visibility:public"],
 )

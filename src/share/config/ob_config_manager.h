@@ -24,6 +24,8 @@
 namespace oceanbase
 {
 
+namespace share { class LocalStore; }
+
 namespace common
 {
 class ObConfigManager
@@ -32,7 +34,7 @@ public:
   explicit ObConfigManager(ObReloadConfig &reload_config);
   virtual ~ObConfigManager();
 
-  int init();
+  int init(share::LocalStore &store);
 
   // Reload config really
   int reload_config();
@@ -45,14 +47,14 @@ public:
                      const config::CheckCallback &callback);
   void enable_static_effect() { enable_static_effect_ = true; }
 private:
-  bool inited_;
+  share::LocalStore *store_;
   ObReloadConfig &reload_config_func_;
   bool enable_static_effect_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigManager);
 };
 
 inline ObConfigManager::ObConfigManager(ObReloadConfig &reload_config)
-    : inited_(false),
+    : store_(nullptr),
       reload_config_func_(reload_config),
       enable_static_effect_(false)
 {

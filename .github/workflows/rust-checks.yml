@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Static analysis for the Rust transport crate: clippy as a hard gate, a
-# check that the committed cbindgen-generated header matches the Rust ABI
-# items, and a RustSec advisory audit of the locked dependency tree. Unit
-# tests run in buildbase alongside the C++ build; this job exists to give
-# rust-only PRs a fast signal without a full server build.
+# Fast checks for every Rust workspace member without a full server build.
 name: rust-checks
 
 on:
@@ -43,49 +39,21 @@ jobs:
 
       - name: clippy (deny warnings)
         working-directory: rust
-        run: cargo clippy -p sql-nio -p kv -p local -p config --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
-      - name: KV and configuration persistence tests
+      - name: Rust workspace tests
         working-directory: rust
-        run: cargo test --locked -p kv -p local -p config
+        run: cargo test --locked --workspace
 
-      - name: generated header is committed
-        run: git diff --exit-code -- rust/sql-nio/include/nio.h
+      - name: generated sources are committed
+        run: git diff --exit-code -- rust
 
-      - name: local and config CXX interface checks
-        working-directory: rust
-        run: |
-          LOCAL_HEADER_DIR="$PWD/target/include" CONFIG_HEADER_DIR="$PWD/target/include" cargo build -p local -p config --profile cmake-debug
-          python3 - <<'PYTEST'
-          import pathlib
-          import subprocess
-          import tempfile
-          with tempfile.TemporaryDirectory(prefix="local-cxx-") as directory:
-              root = pathlib.Path(directory)
-              for crate in ("local", "config"):
-                  executable = root / crate
-                  subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-fno-exceptions",
-                                  "-I", "target/include", "-I", "target/cxxbridge",
-                                  "-I", "local/include", "-I", "config/include", crate + "/tests/bridge.cpp",
-                                  "target/cmake-debug/libconfig.a", "target/cmake-debug/liblocal.a",
-                                  "-lpthread", "-ldl", "-lm", "-o", str(executable)], check=True)
-                  subprocess.run([str(executable), str(root / (crate + "-store"))], check=True)
-          PYTEST
-
-      # No Windows runner: a cross `cargo check` is the cheapest signal that
-      # the cfg(windows) transport code still compiles. It would have caught
-      # every break the TCP-only cut left behind. windows-gnu, not msvc:
-      # ring's build script compiles C, and mingw is the only Windows C
-      # toolchain this runner can provide (the cc crate auto-detects the
-      # x86_64-w64-mingw32- prefix).
+      # Compile Windows code on Linux; this does not run Windows tests.
       - name: check windows target
         working-directory: rust
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
-          cargo check -p sql-nio --target x86_64-pc-windows-gnu
-          cargo check -p kv --target x86_64-pc-windows-gnu
-          cargo check -p local --target x86_64-pc-windows-gnu
-          cargo check -p config --target x86_64-pc-windows-gnu
+          cargo check --locked --workspace --target x86_64-pc-windows-gnu
 
       - name: cargo audit
         working-directory: rust

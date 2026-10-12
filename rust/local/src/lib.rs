@@ -14,48 +14,7 @@
 
 //! Process-local persistent metadata. KV owns durability and concurrency;
 //! records add typed fields, ordered keys and streaming selection, without SQL.
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-
 mod bridge;
 mod records;
 
-static PROCESS: Mutex<Option<(PathBuf, kv::Store)>> = Mutex::new(None);
-
-pub fn open(path: &Path) -> kv::Result<()> {
-    let mut current = PROCESS.lock().map_err(|_| kv::Error::Poisoned)?;
-    if let Some((directory, store)) = current.as_ref() {
-        if directory != path {
-            return Err(kv::Error::Busy);
-        }
-        store.snapshot()?;
-        return Ok(());
-    }
-    *current = Some((
-        path.to_owned(),
-        kv::Store::open_with_options(
-            path,
-            kv::Options {
-                // Cover a full tablet queue batch with the maximum column checksum
-                // payload, including its visible text and both table indexes.
-                max_transaction_pages: 16384,
-                ..kv::Options::default()
-            },
-        )?,
-    ));
-    Ok(())
-}
-
-pub fn close() -> kv::Result<()> {
-    PROCESS.lock().map_err(|_| kv::Error::Poisoned)?.take();
-    Ok(())
-}
-
-pub fn store() -> kv::Result<kv::Store> {
-    PROCESS
-        .lock()
-        .map_err(|_| kv::Error::Poisoned)?
-        .as_ref()
-        .map(|(_, store)| store.clone())
-        .ok_or(kv::Error::InvalidOptions)
-}
+pub use bridge::Store;

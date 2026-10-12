@@ -234,6 +234,7 @@ private:
 
 class LocalConnection {
 public:
+  explicit LocalConnection(const local::Store &store) : store_(store) {}
   using Bind = std::function<int(LocalBinder &)>;
   int transaction(const std::function<int()> &callback)
   {
@@ -244,7 +245,7 @@ public:
       transaction_ = nullptr;
       return ret;
     });
-    return local_status(local::write(work));
+    return local_status(store_.write(work));
   }
   int open_cursor(const LocalRequest &request, const Bind &bind, LocalCursor &cursor)
   {
@@ -256,7 +257,7 @@ public:
     int ret = bind ? bind(binder) : OB_SUCCESS;
     if (OB_SUCCESS == ret) { ret = request.prepare(binder, prepared); }
     if (OB_SUCCESS == ret) {
-      auto opened = local::cursor_open(prepared.query);
+      auto opened = store_.cursor_open(prepared.query);
       ret = local_status(opened->status());
       if (OB_SUCCESS == ret) { cursor.emplace(std::move(opened)); }
     }
@@ -323,33 +324,35 @@ public:
     return ret;
   }
 private:
+  const local::Store &store_;
   const local::Transaction *transaction_{nullptr};
   bool reading_{false};
 };
 
 class LocalStore {
 public:
-  ~LocalStore() { destroy(); }
   int init(const char *path)
   {
-    if (inited_) { return OB_INIT_TWICE; }
+    if (store_) { return OB_INIT_TWICE; }
     if (!path) { return OB_INVALID_ARGUMENT; }
-    const int ret = local_status(local::open_storage(rust::Str(path)));
-    inited_ = OB_SUCCESS == ret;
+    auto store = local::open_storage(rust::Str(path));
+    const int ret = local_status(store->status());
+    if (OB_SUCCESS == ret) { store_.emplace(std::move(store)); }
     return ret;
   }
-  void destroy() { if (inited_) { (void)local::close_storage(); inited_ = false; } }
-  bool is_inited() const { return inited_ && local::is_open(); }
+  void destroy() { store_.reset(); }
+  bool is_inited() const { return store_.has_value(); }
+  const local::Store &handle() const { return **store_; }
 private:
-  bool inited_{false};
+  std::optional<rust::Box<local::Store>> store_;
 };
 
-// The adapter lives in the guard; the Rust process store owns the files.
+// Connections borrow the store; cursors retain their own Rust snapshots.
 class LocalConnectionGuard {
 public:
   explicit LocalConnectionGuard(LocalStore *store)
   {
-    if (store && store->is_inited()) { connection_.emplace(); }
+    if (store && store->is_inited()) { connection_.emplace(store->handle()); }
   }
   LocalConnectionGuard(const LocalConnectionGuard &) = delete;
   LocalConnectionGuard &operator=(const LocalConnectionGuard &) = delete;
