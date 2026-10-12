@@ -12,6 +12,7 @@
 #include "sql/engine/basic/ob_ra_datum_store.h"
 #include "sql/engine/basic/ob_workarea_memory_limit.h"
 #include "sql/engine/ob_sql_memory_manager.h"
+#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "share/rc/ob_server_runtime.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 
@@ -87,7 +88,7 @@ public:
 class TestSqlMemoryManagerGuard final
 {
 public:
-  TestSqlMemoryManagerGuard() : manager_(nullptr) {}
+  TestSqlMemoryManagerGuard() : manager_(nullptr), bound_(false) {}
 
   int init()
   {
@@ -95,11 +96,18 @@ public:
     if (OB_SUCCESS == ret) {
       ret = ObSqlMemoryManager::server_module_init(manager_);
     }
+    if (OB_SUCCESS == ret) {
+      oceanbase::share::bind_server_service<ObSqlMemoryManager>(manager_);
+      bound_ = true;
+    }
     return ret;
   }
 
   ~TestSqlMemoryManagerGuard()
   {
+    if (bound_) {
+      oceanbase::share::unbind_server_service<ObSqlMemoryManager>();
+    }
     ObSqlMemoryManager::server_module_destroy(manager_);
   }
 
@@ -107,6 +115,7 @@ public:
 
 private:
   ObSqlMemoryManager *manager_;
+  bool bound_;
 };
 
 class TestStoredRow final
@@ -157,6 +166,30 @@ private:
   }
 
   ObSqlMemoryCallback &callback_;
+  int64_t spilled_bytes_;
+};
+
+class DefaultBackedChunkDatumStore final : public ObChunkDatumStore
+{
+public:
+  explicit DefaultBackedChunkDatumStore(const oceanbase::lib::ObLabel &label)
+      : ObChunkDatumStore(label), spilled_bytes_(0)
+  {}
+
+  int64_t spilled_bytes() const { return spilled_bytes_; }
+
+private:
+  int write_file(void *buf, const int64_t size) override
+  {
+    int ret = OB_SUCCESS;
+    if (size < 0 || (size > 0 && nullptr == buf)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      spilled_bytes_ += size;
+    }
+    return ret;
+  }
+
   int64_t spilled_bytes_;
 };
 
@@ -352,6 +385,112 @@ TEST(TestWorkareaMemoryQuota, successful_spill_write_records_one_reclaim)
   tracker.dumped(-256);
   EXPECT_EQ(1, quota.reclaim_count());
   EXPECT_EQ(0, tracker.get_total_dump_size());
+}
+
+TEST(TestWorkareaMemoryQuota,
+     default_backed_store_enforces_and_releases_component_quota)
+{
+  TestSqlMemoryManagerGuard manager_guard;
+  ASSERT_EQ(OB_SUCCESS, manager_guard.init());
+  ObSqlMemoryManager &manager = manager_guard.get();
+  MemoryQuota &quota = manager.get_workarea_quota();
+  const TestStoredRow row(3L << 10);
+
+  quota.set_limit(1L << 20);
+  {
+    DefaultBackedChunkDatumStore store("WADefaultStore");
+    ASSERT_EQ(OB_SUCCESS,
+              store.init(0, ObCtxIds::WORK_AREA, "WADefaultStore",
+                         true, 0, ObChunkDatumStore::MIN_BLOCK_SIZE));
+    ASSERT_EQ(OB_SUCCESS, store.add_row(row.get()));
+    const MemoryQuotaSample allocated = manager.get_memory_quota_sample();
+    ASSERT_GT(allocated.committed_bytes_, 0);
+    EXPECT_EQ(0, allocated.reserved_bytes_);
+
+    quota.set_limit(allocated.committed_bytes_ +
+                    allocated.committed_bytes_ / 4);
+    ASSERT_TRUE(should_spill_workarea(
+        0, store.get_mem_used(), row.get().row_size_));
+    ASSERT_EQ(OB_SUCCESS, store.add_row(row.get()));
+    EXPECT_GT(store.spilled_bytes(), 0);
+    EXPECT_LE(quota.committed(), quota.limit());
+  }
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+
+  quota.set_limit(1);
+  const int64_t rejected = quota.reject_count();
+  {
+    ObChunkDatumStore store("WADefaultReject");
+    ASSERT_EQ(OB_SUCCESS,
+              store.init(0, ObCtxIds::WORK_AREA, "WADefaultReject",
+                         false, 0, ObChunkDatumStore::MIN_BLOCK_SIZE));
+    EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, store.add_row(row.get()));
+    EXPECT_GT(quota.reject_count(), rejected);
+  }
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+}
+
+TEST(TestWorkareaMemoryQuota,
+     dtl_default_store_remains_accounted_and_readable_after_handoff)
+{
+  TestSqlMemoryManagerGuard manager_guard;
+  ASSERT_EQ(OB_SUCCESS, manager_guard.init());
+  ObSqlMemoryManager &sql_manager = manager_guard.get();
+  MemoryQuota &quota = sql_manager.get_workarea_quota();
+  quota.set_limit(1L << 20);
+
+  TestTmpFileManagerGuard tmp_file_manager_guard;
+  ASSERT_EQ(OB_SUCCESS, tmp_file_manager_guard.init());
+  oceanbase::sql::dtl::ObDTLIntermResultManager dtl_manager;
+  const double saved_max_cpu = oceanbase::share::server_runtime()->max_cpu();
+  oceanbase::share::server_runtime()->set_max_cpu(1);
+  const int init_ret = dtl_manager.init();
+  oceanbase::share::server_runtime()->set_max_cpu(saved_max_cpu);
+  ASSERT_EQ(OB_SUCCESS, init_ret);
+  oceanbase::sql::dtl::ObDTLIntermResultInfoGuard producer_guard;
+  ObMemAttr attr("DtlQuotaTest", ObCtxIds::WORK_AREA);
+  ASSERT_EQ(OB_SUCCESS,
+            dtl_manager.create_interm_result_info(
+                attr, producer_guard,
+                oceanbase::sql::dtl::ObDTLIntermResultMonitorInfo()));
+  ASSERT_NE(nullptr, producer_guard.result_info_);
+  oceanbase::sql::dtl::ObDTLIntermResultInfo *result_info =
+      producer_guard.result_info_;
+  ASSERT_EQ(OB_SUCCESS,
+            result_info->datum_store_->init(
+                0, ObCtxIds::WORK_AREA, "DtlQuotaTest", false, 0,
+                ObChunkDatumStore::MIN_BLOCK_SIZE));
+  const TestStoredRow row(1L << 10);
+  ASSERT_EQ(OB_SUCCESS, result_info->datum_store_->add_row(row.get()));
+  result_info->set_eof(true);
+  ASSERT_GT(sql_manager.get_memory_quota_sample().committed_bytes_, 0);
+
+  oceanbase::sql::dtl::ObDTLIntermResultKey key;
+  key.channel_id_ = 1;
+  key.batch_id_ = 1;
+  ASSERT_EQ(OB_SUCCESS,
+            dtl_manager.insert_interm_result_info(key, result_info));
+  producer_guard.reset();
+
+  oceanbase::sql::dtl::ObDTLIntermResultInfoGuard consumer_guard;
+  ASSERT_EQ(OB_SUCCESS,
+            dtl_manager.atomic_get_interm_result_info(key, consumer_guard));
+  ASSERT_NE(nullptr, consumer_guard.result_info_);
+  ObChunkDatumStore::Iterator iterator;
+  ASSERT_EQ(OB_SUCCESS,
+            consumer_guard.result_info_->datum_store_->begin(iterator));
+  const ObChunkDatumStore::StoredRow *stored_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, iterator.get_next_row(stored_row));
+  ASSERT_NE(nullptr, stored_row);
+  EXPECT_EQ(row.get().row_size_, stored_row->row_size_);
+  EXPECT_EQ(OB_ITER_END, iterator.get_next_row(stored_row));
+
+  ASSERT_EQ(OB_SUCCESS, dtl_manager.erase_interm_result_info(key));
+  consumer_guard.reset();
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
 }
 
 TEST(TestWorkareaMemoryQuota,

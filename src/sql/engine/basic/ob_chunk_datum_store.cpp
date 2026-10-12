@@ -476,7 +476,11 @@ ObChunkDatumStore::ObChunkDatumStore(const lib::ObLabel &label, common::ObIAlloc
     enable_dump_(true), has_dumped_(false), dumped_row_cnt_(0),
     io_event_observer_(nullptr), file_size_(0), n_block_in_file_(0),
     mem_hold_(0), mem_used_(0), max_hold_mem_(0),
+    inner_backing_allocator_(lib::ObMemAttr(label)),
+    inner_allocator_(inner_backing_allocator_, nullptr, nullptr,
+                     lib::ObMemAttr(label)),
     allocator_(NULL == alloc ? &inner_allocator_ : alloc),
+    use_inner_allocator_(NULL == alloc),
     row_extend_size_(0), callback_(nullptr), batch_ctx_(NULL),
     tmp_dump_blk_(nullptr)
 {
@@ -496,6 +500,15 @@ int ObChunkDatumStore::init(int64_t mem_limit,
   enable_dump_ = enable_dump;
   
   ctx_id_ = mem_ctx_id;
+  if (use_inner_allocator_) {
+    const ObMemAttr attr(label_, ctx_id_);
+    inner_backing_allocator_.set_attr(attr);
+    inner_allocator_.configure(
+        inner_backing_allocator_,
+        common::resolve_memory_usage_tracker(ctx_id_),
+        common::resolve_memory_quota(ctx_id_),
+        attr);
+  }
   UNUSED(label_);
   if (0 == config::_chunk_row_store_mem_limit()) {
     mem_limit_ = mem_limit;

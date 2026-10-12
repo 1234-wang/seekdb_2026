@@ -967,7 +967,11 @@ public:
       uint32_t row_extra_size = 0,
       int64_t default_block_size = BLOCK_SIZE);
 
-  void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
+  void set_allocator(common::ObIAllocator &alloc)
+  {
+    allocator_ = &alloc;
+    use_inner_allocator_ = false;
+  }
 
   void reset();
 
@@ -1175,8 +1179,10 @@ private:
   int64_t mem_hold_;
   int64_t mem_used_;
   int64_t max_hold_mem_;
-  common::DefaultPageAllocator inner_allocator_;
+  common::DefaultPageAllocator inner_backing_allocator_;
+  common::TrackedAllocator inner_allocator_;
   common::ObIAllocator *allocator_;
+  bool use_inner_allocator_;
 
   uint32_t row_extend_size_;
   ObSqlMemoryCallback *callback_;
