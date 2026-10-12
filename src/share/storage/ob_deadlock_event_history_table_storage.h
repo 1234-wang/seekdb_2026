@@ -18,13 +18,44 @@
 
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
-#include "share/storage/ob_sqlite_connection_pool.h"
+#include "share/storage/local_store.h"
 #include <functional>
 
 namespace oceanbase
 {
 namespace share
 {
+namespace deadlock_history
+{
+enum Column : uint32_t { EventId, DetectorId, ReportTime, CycleIdx, CycleSize, Role, PriorityLevel, Priority, CreateTime, StartDelay, Module, Visitor, Object, ExtraName1, ExtraValue1, ExtraName2, ExtraValue2, ExtraName3, ExtraValue3 };
+inline const local::Schema &schema()
+{
+  static const auto schema = local_schema(2, {
+    {"event_id", local::Kind::Integer, false},
+    {"detector_id", local::Kind::Integer, false},
+    {"report_time", local::Kind::Integer, false},
+    {"cycle_idx", local::Kind::Integer, false},
+    {"cycle_size", local::Kind::Integer, false},
+    {"role", local::Kind::Text, true},
+    {"priority_level", local::Kind::Text, true},
+    {"priority", local::Kind::Integer, false},
+    {"create_time", local::Kind::Integer, false},
+    {"start_delay", local::Kind::Integer, false},
+    {"module", local::Kind::Text, true},
+    {"visitor", local::Kind::Text, true},
+    {"object", local::Kind::Text, true},
+    {"extra_name1", local::Kind::Text, true},
+    {"extra_value1", local::Kind::Text, true},
+    {"extra_name2", local::Kind::Text, true},
+    {"extra_value2", local::Kind::Text, true},
+    {"extra_name3", local::Kind::Text, true},
+    {"extra_value3", local::Kind::Text, true},
+  }, {EventId, DetectorId}, {ReportTime});
+  return schema;
+}
+} // namespace deadlock_history
+
+
 
 struct ObDeadlockEventHistoryEntry
 {
@@ -102,7 +133,7 @@ public:
   ObDeadlockEventHistoryTableStorage();
   virtual ~ObDeadlockEventHistoryTableStorage();
 
-  int init(ObSQLiteConnectionPool *pool);
+  int init(LocalStore *pool);
   bool is_inited() const { return nullptr != pool_; }
 
   int insert(const ObDeadlockEventHistoryEntry &entry);
@@ -112,7 +143,7 @@ public:
 private:
   int create_table_if_not_exists();
 
-  ObSQLiteConnectionPool *pool_;
+  LocalStore *pool_;
   DISALLOW_COPY_AND_ASSIGN(ObDeadlockEventHistoryTableStorage);
 };
 

@@ -33,7 +33,7 @@ ObTabletTableOperator::~ObTabletTableOperator()
   reset();
 }
 
-int ObTabletTableOperator::init(share::ObSQLiteConnectionPool *pool)
+int ObTabletTableOperator::init(share::LocalStore *pool)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -116,7 +116,7 @@ int ObTabletTableOperator::batch_update(
 }
 
 int ObTabletTableOperator::batch_update(
-    ObSQLiteConnection *conn,
+    LocalConnection *conn,
     const ObIArray<ObTabletRuntimeInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;
@@ -133,7 +133,7 @@ int ObTabletTableOperator::batch_update(
 }
 
 int ObTabletTableOperator::batch_remove(
-    ObSQLiteConnection *conn,
+    LocalConnection *conn,
     const ObIArray<ObTabletRuntimeInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;

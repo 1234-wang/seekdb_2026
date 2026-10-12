@@ -19,17 +19,37 @@
 
 #include "share/tablet/ob_tablet_info.h"
 #include "lib/container/ob_iarray.h"
-#include "share/storage/ob_sqlite_connection_pool.h"
+#include "share/storage/local_store.h"
 
 namespace oceanbase
 {
 namespace share
 {
+namespace tablet_meta
+{
+enum Column : uint32_t { GmtCreate, GmtModified, TabletId, CompactionScn, DataSize, RequiredSize, ReportScn, Status };
+inline const local::Schema &schema()
+{
+  static const auto schema = local_schema(3, {
+    {"gmt_create", local::Kind::Integer, true},
+    {"gmt_modified", local::Kind::Integer, true},
+    {"tablet_id", local::Kind::Integer, false},
+    {"compaction_scn", local::Kind::Integer, false},
+    {"data_size", local::Kind::Integer, false},
+    {"required_size", local::Kind::Integer, false},
+    {"report_scn", local::Kind::Integer, false},
+    {"status", local::Kind::Integer, false},
+  }, {TabletId}, {CompactionScn});
+  return schema;
+}
+} // namespace tablet_meta
+
+
 
 class ObTabletRuntimeInfoConstructor
 {
 public:
-  int operator()(share::ObSQLiteRowReader &reader, ObTabletRuntimeInfo &info);
+  int operator()(share::LocalRowReader &reader, ObTabletRuntimeInfo &info);
 };
 
 class ObTabletMetaTableStorage
@@ -39,7 +59,7 @@ public:
   virtual ~ObTabletMetaTableStorage();
 
   // Initialize with shared connection pool instance
-  int init(ObSQLiteConnectionPool *pool);
+  int init(LocalStore *pool);
 
   bool is_inited() const { return nullptr != pool_; }
 
@@ -54,7 +74,7 @@ public:
 
   // Batch update local tablet runtime metadata within an external transaction.
   int batch_update(
-      ObSQLiteConnection *conn,
+      LocalConnection *conn,
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
 
   // Batch remove local tablet runtime metadata.
@@ -63,7 +83,7 @@ public:
 
   // Batch remove local tablet runtime metadata within an external transaction.
   int batch_remove(
-      ObSQLiteConnection *conn,
+      LocalConnection *conn,
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
 
   // Get data_size for a local tablet.
@@ -142,7 +162,7 @@ private:
   // Create table if not exists
   int create_table_if_not_exists();
 
-  ObSQLiteConnectionPool *pool_;
+  LocalStore *pool_;
 };
 
 } // namespace share

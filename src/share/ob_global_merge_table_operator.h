@@ -18,6 +18,7 @@
 #define OCEANBASE_SHARE_OB_GLOBAL_MERGE_TABLE_OPERATOR_
 
 #include "lib/container/ob_iarray.h"
+#include "share/storage/local_store.h"
 #include "common/mysqlclient/ob_isql_client.h"
 #include "common/mysqlclient/ob_mysql_transaction.h"
 
@@ -29,16 +30,38 @@ class ObMySQLTransaction;
 }
 namespace share
 {
+namespace merge_info
+{
+enum Column : uint32_t { Id, FrozenScn, GlobalBroadcastScn, IsMergeError, LastMergedScn, MergeStatus, ErrorType, SuspendMerging, MergeStartTime, LastMergedTime };
+inline const local::Schema &schema()
+{
+  static const auto schema = local_schema(0, {
+    {"id", local::Kind::Integer, false},
+    {"frozen_scn", local::Kind::Integer, false},
+    {"global_broadcast_scn", local::Kind::Integer, false},
+    {"is_merge_error", local::Kind::Integer, false},
+    {"last_merged_scn", local::Kind::Integer, false},
+    {"merge_status", local::Kind::Integer, false},
+    {"error_type", local::Kind::Integer, false},
+    {"suspend_merging", local::Kind::Integer, false},
+    {"merge_start_time", local::Kind::Integer, false},
+    {"last_merged_time", local::Kind::Integer, false},
+  }, {Id}, {});
+  return schema;
+}
+} // namespace merge_info
+
+
 struct ObGlobalMergeInfo;
 class ObMergeInfoTableStorage;
-class ObSQLiteConnectionPool;
+class LocalStore;
 
 // CRUD operation to __all_merge_info table
 class ObGlobalMergeTableOperator
 {
 public:
-  // Initialize SQLite storage (called once at startup)
-  static int init(ObSQLiteConnectionPool &meta_db_pool);
+  // Initialize local metadata storage (called once at startup)
+  static int init(LocalStore &meta_db_pool);
   static int load_global_merge_info(common::ObISQLClient &sql_client,
                                     share::ObGlobalMergeInfo &info,
                                     const bool print_sql = false);

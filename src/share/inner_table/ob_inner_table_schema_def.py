@@ -82,15 +82,15 @@
 ################################################################################
 
 ################################################################################
-# SQLite Table Definitions
-# These tables are stored in SQLite and do not have table_id (they are not
+# local metadata Table Definitions
+# These tables are stored in local metadata and do not have table_id (they are not
 # OceanBase system tables). They are defined here for code generation purposes.
-# SQLite tables are defined before OceanBase system tables to ensure they are
+# local metadata tables are defined before OceanBase system tables to ensure they are
 # available when virtual tables reference them.
 ################################################################################
 
-# __all_merge_info: SQLite table for global merge info
-gen_sqlite_table_def(
+# __all_merge_info: local metadata table for global merge info
+gen_local_table_def(
   table_name = '__all_merge_info',
   columns = [
       ('id', 'INTEGER', 'NOT NULL DEFAULT 0', None),
@@ -107,14 +107,14 @@ gen_sqlite_table_def(
   primary_key = ['id']
   )
 
-# __all_zone_merge_info: SQLite table for zone merge info
+# __all_zone_merge_info: local metadata table for zone merge info
 
-# __all_reserved_snapshot: SQLite table for reserved snapshot
+# __all_reserved_snapshot: local metadata table for reserved snapshot
 
-# __all_server_event_history: SQLite table for server event history
+# __all_server_event_history: local metadata table for server event history
 
-# __all_column_checksum_error_info: SQLite table for column checksum error info
-gen_sqlite_table_def(
+# __all_column_checksum_error_info: local metadata table for column checksum error info
+gen_local_table_def(
   table_name = '__all_column_checksum_error_info',
   columns = [
       ('frozen_scn', 'INTEGER', 'NOT NULL', None),
@@ -130,8 +130,8 @@ gen_sqlite_table_def(
   primary_key = ['frozen_scn', 'index_type', 'data_table_id', 'index_table_id', 'data_tablet_id', 'index_tablet_id']
   )
 
-# __all_deadlock_event_history: SQLite table for deadlock event history
-gen_sqlite_table_def(
+# __all_deadlock_event_history: local metadata table for deadlock event history
+gen_local_table_def(
   table_name = '__all_deadlock_event_history',
   columns = [
       ('event_id', 'INTEGER', 'NOT NULL', None),
@@ -157,8 +157,8 @@ gen_sqlite_table_def(
   primary_key = ['event_id', 'detector_id']
   )
 
-# __all_tablet_meta_table: SQLite table for tablet meta
-gen_sqlite_table_def(
+# __all_tablet_meta_table: local metadata table for tablet meta
+gen_local_table_def(
   table_name = '__all_tablet_meta_table',
   columns = [
       ('gmt_create', 'INTEGER', 'NULL', None),
@@ -173,8 +173,8 @@ gen_sqlite_table_def(
   primary_key = ['tablet_id']
   )
 
-# __all_tablet_local_checksum: SQLite table for tablet replica checksum
-gen_sqlite_table_def(
+# __all_tablet_local_checksum: local metadata table for tablet replica checksum
+gen_local_table_def(
   table_name = '__all_tablet_local_checksum',
   columns = [
       ('tablet_id', 'INTEGER', 'NOT NULL', None),
@@ -188,8 +188,8 @@ gen_sqlite_table_def(
   primary_key = ['tablet_id']
   )
 
-# __all_sys_parameter: SQLite table for sys parameter
-gen_sqlite_table_def(
+# __all_sys_parameter: local metadata table for sys parameter
+gen_local_table_def(
   table_name = '__all_sys_parameter',
   columns = [
       ('gmt_create', 'INTEGER', 'NULL', None),
@@ -211,7 +211,7 @@ gen_sqlite_table_def(
   )
 
 
-gen_sqlite_table_def(
+gen_local_table_def(
     table_name = '__all_rootservice_job',
     columns = [
         ('job_id', 'INTEGER', 'NOT NULL', '0'),
@@ -224,7 +224,7 @@ gen_sqlite_table_def(
     primary_key = ['job_id']
   )
 
-# __all_kv_table: SQLite KV table for simple information storage (tenant info, etc.)
+# __all_kv_table: local metadata KV table for simple information storage (tenant info, etc.)
 
 ################################################################################
 # OceanBase System Table Definitions
@@ -1147,8 +1147,8 @@ def_table_schema(**gen_history_table_def(1009, all_database_privilege_def))
 
 # 116: __all_zone (abandoned)
 # 117: __all_server (abandoned)
-# 118: __all_sys_parameter # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 118: __all_sys_parameter # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
 # 119: __tenant_parameter (abandoned)
 
@@ -1280,11 +1280,11 @@ def_table_schema(
 
 
 
-# 154: __all_server_event_history # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 154: __all_server_event_history # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
-# 155: __all_rootservice_job # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 155: __all_rootservice_job # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
 # 156: __all_unit_load_history # abandoned in 4.0.
 
@@ -1794,8 +1794,8 @@ def_table_schema(
 
 # 320: (abandoned)
 
-# 322: __all_deadlock_event_history # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 322: __all_deadlock_event_history # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
 all_column_usage_def = dict(
     owner = 'yibo.tyf',
@@ -1981,8 +1981,8 @@ def_table_schema(
   ]
   )
 
-# 344: __all_tablet_meta_table # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 344: __all_tablet_meta_table # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
 # 345: legacy ls status table (abandoned)
 # 346: __all_zone_v2 # abandoned in 4.0
@@ -2014,8 +2014,8 @@ def_table_schema(
 
 # 370: legacy ls recovery stat table (abandoned)
 
-# 372: __all_tablet_local_checksum # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 372: __all_tablet_local_checksum # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
 # do checksum(user tenant) between primary cluster and standby cluster
 # differ from __all_tablet_local_checksum, it is tablet level
@@ -2156,8 +2156,8 @@ def_table_schema(
 # 383: __all_global_context_value (abandoned)
 # 385: legacy ls election reference info table (abandoned)
 
-# 392: __all_zone_merge_info # abandoned, migrated to SQLite
-# 393: __all_merge_info # abandoned, migrated to SQLite
+# 392: __all_zone_merge_info # abandoned, migrated to local metadata
+# 393: __all_merge_info # abandoned, migrated to local metadata
 
 def_table_schema(
   owner = 'donglou.zl',
@@ -2253,8 +2253,8 @@ def_table_schema(
 # 414 : __all_tenant_datafile
 # 415 : __all_tenant_datafile_history
 
-# 416: __all_column_checksum_error_info # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 416: __all_column_checksum_error_info # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
 # 417 : abandoned
 # 418 : abandoned
@@ -2268,10 +2268,10 @@ def_table_schema(
 # 432 reserved
 
 
-# 444: __all_reserved_snapshot # migrated to SQLite, see gen_sqlite_table_def above
-# Placeholder - original definition removed, using SQLite version
+# 444: __all_reserved_snapshot # migrated to local metadata, see gen_local_table_def above
+# Placeholder - original definition removed, using local metadata version
 
-# 445: __all_cluster_event_history # migrated to SQLite, see gen_sqlite_table_def above
+# 445: __all_cluster_event_history # migrated to local metadata, see gen_local_table_def above
 
 # 450: __all_external_table_file # abandoned in seekdb
 
@@ -3362,8 +3362,8 @@ def_table_schema(
 
 # 11040: __all_virtual_partition_replay_status # abandoned in 4.0
 
-# 11041: __all_virtual_sys_parameter # migrated to SQLite
-def_table_schema(**gen_sqlite_virtual_table_def(
+# 11041: __all_virtual_sys_parameter # migrated to local metadata
+def_table_schema(**gen_local_virtual_table_def(
   table_id = '11041',
   table_name = '__all_virtual_sys_parameter',
   keywords = all_def_keywords['__all_sys_parameter']))
@@ -4952,8 +4952,8 @@ def_table_schema(
 
 # 12208: __all_virtual_ddl_task_status # removed (single-tenant: iterate VT mechanism deleted)
 
-# __all_virtual_deadlock_event_history: SQLite virtual table (migrated from iterate)
-def_table_schema(**gen_sqlite_virtual_table_def(
+# __all_virtual_deadlock_event_history: local metadata virtual table (migrated from iterate)
+def_table_schema(**gen_local_virtual_table_def(
   table_id = '12209',
   table_name = '__all_virtual_deadlock_event_history',
   keywords = all_def_keywords['__all_deadlock_event_history']))
@@ -5060,8 +5060,8 @@ def_table_schema(
 
 # 12239: __all_virtual_ls_meta_table (abandoned)
 
-# 12240: __all_virtual_tablet_meta_table # migrated to SQLite
-def_table_schema(**gen_sqlite_virtual_table_def(
+# 12240: __all_virtual_tablet_meta_table # migrated to local metadata
+def_table_schema(**gen_local_virtual_table_def(
   table_id = '12240',
   table_name = '__all_virtual_tablet_meta_table',
   keywords = all_def_keywords['__all_tablet_meta_table']))
@@ -5125,8 +5125,8 @@ def_table_schema(
 # 12255: __all_virtual_tenant_info (abandoned)
 # 12256: __all_virtual_ls_recovery_stat (abandoned)
 
-# __all_virtual_tablet_local_checksum: SQLite virtual table (migrated from iterate)
-def_table_schema(**gen_sqlite_virtual_table_def(
+# __all_virtual_tablet_local_checksum: local metadata virtual table (migrated from iterate)
+def_table_schema(**gen_local_virtual_table_def(
   table_id = '12258',
   table_name = '__all_virtual_tablet_local_checksum',
   keywords = all_def_keywords['__all_tablet_local_checksum']))
@@ -5337,7 +5337,7 @@ def_table_schema(
   )
 
 
-def_table_schema(**gen_sqlite_virtual_table_def(
+def_table_schema(**gen_local_virtual_table_def(
   table_id = '12291',
   table_name = '__all_virtual_merge_info',
   keywords = all_def_keywords['__all_merge_info']))
@@ -5539,8 +5539,8 @@ def_table_schema(
 # 12328: __all_virtual_tenant_datafile
 # 12329: __all_virtual_tenant_datafile_history
 
-# __all_virtual_column_checksum_error_info: SQLite virtual table (migrated from iterate)
-def_table_schema(**gen_sqlite_virtual_table_def(
+# __all_virtual_column_checksum_error_info: local metadata virtual table (migrated from iterate)
+def_table_schema(**gen_local_virtual_table_def(
   table_id = '12330',
   table_name = '__all_virtual_column_checksum_error_info',
   keywords = all_def_keywords['__all_column_checksum_error_info']))
@@ -5925,7 +5925,7 @@ def_table_schema(
 )
 
 # 12414: __all_virtual_wr_control # removed
-# 12415: __all_virtual_event_history - migrated to SQLite, see gen_sqlite_virtual_table_def above
+# 12415: __all_virtual_event_history - migrated to local metadata, see gen_local_virtual_table_def above
 
 # 12418: removed (legacy resource isolation deleted)
 # 12419: removed (legacy resource isolation deleted)
@@ -6407,14 +6407,14 @@ def_table_schema(
 # 12557: __all_virtual_objauth_mysql_history # removed (single-tenant: iterate VT mechanism deleted)
 # 12559: __tenant_virtual_list_file # abandoned in seekdb
 
-# __all_virtual_reserved_snapshot: SQLite virtual table
+# __all_virtual_reserved_snapshot: local metadata virtual table
 # Note: Using table_id 12447 (next available after 12444-12446)
 
-# __all_virtual_server_event_history: SQLite virtual table
+# __all_virtual_server_event_history: local metadata virtual table
 # Note: Using table_id 12155 (next available after 12154 which is abandoned)
 
 
-def_table_schema(**gen_sqlite_virtual_table_def(
+def_table_schema(**gen_local_virtual_table_def(
     table_id = '12563',
     table_name = '__all_virtual_rootservice_job',
     keywords = all_def_keywords['__all_rootservice_job']

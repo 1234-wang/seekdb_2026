@@ -17,7 +17,7 @@
 #ifndef OCEANBASE_SHARE_STORAGE_OB_TABLET_LOCAL_CHECKSUM_TABLE_STORAGE_H_
 #define OCEANBASE_SHARE_STORAGE_OB_TABLET_LOCAL_CHECKSUM_TABLE_STORAGE_H_
 
-#include "share/storage/ob_sqlite_connection_pool.h"
+#include "share/storage/local_store.h"
 #include "lib/container/ob_iarray.h"
 #include "share/scn.h"
 #include "share/ob_tablet_local_checksum_operator.h"
@@ -27,6 +27,25 @@ namespace oceanbase
 {
 namespace share
 {
+namespace tablet_checksum
+{
+enum Column : uint32_t { TabletId, CompactionScn, RowCount, DataChecksum, ColumnChecksums, BColumnChecksums, DataChecksumType };
+inline const local::Schema &schema()
+{
+  static const auto schema = local_schema(4, {
+    {"tablet_id", local::Kind::Integer, false},
+    {"compaction_scn", local::Kind::Integer, false},
+    {"row_count", local::Kind::Integer, false},
+    {"data_checksum", local::Kind::Integer, false},
+    {"column_checksums", local::Kind::Text, true},
+    {"b_column_checksums", local::Kind::Blob, true},
+    {"data_checksum_type", local::Kind::Integer, false},
+  }, {TabletId}, {});
+  return schema;
+}
+} // namespace tablet_checksum
+
+
 
 class ObTabletLocalChecksumTableStorage
 {
@@ -35,7 +54,7 @@ public:
   virtual ~ObTabletLocalChecksumTableStorage();
 
   // Initialize with shared connection pool instance
-  int init(ObSQLiteConnectionPool *pool);
+  int init(LocalStore *pool);
 
   bool is_inited() const { return nullptr != pool_; }
 
@@ -53,7 +72,7 @@ public:
 private:
   int create_table_if_not_exists();
 
-  ObSQLiteConnectionPool *pool_;
+  LocalStore *pool_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletLocalChecksumTableStorage);
 };
 

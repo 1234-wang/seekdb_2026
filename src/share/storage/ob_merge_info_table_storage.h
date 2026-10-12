@@ -17,13 +17,17 @@
 #ifndef OCEANBASE_SHARE_STORAGE_OB_MERGE_INFO_TABLE_STORAGE_H_
 #define OCEANBASE_SHARE_STORAGE_OB_MERGE_INFO_TABLE_STORAGE_H_
 
-#include "share/storage/ob_sqlite_connection_pool.h"
+#include "share/storage/local_store.h"
 #include "share/ob_merge_info.h"
+#include "share/ob_global_merge_table_operator.h"
 
 namespace oceanbase
 {
 namespace share
 {
+
+
+
 
 class ObMergeInfoTableStorage
 {
@@ -31,7 +35,7 @@ public:
   ObMergeInfoTableStorage();
   virtual ~ObMergeInfoTableStorage();
 
-  int init(ObSQLiteConnectionPool *pool);
+  int init(LocalStore *pool);
   bool is_inited() const { return nullptr != pool_; }
 
   // Insert or update global merge info
@@ -43,7 +47,7 @@ public:
 private:
   int create_table_if_not_exists();
 
-  ObSQLiteConnectionPool *pool_;
+  LocalStore *pool_;
   DISALLOW_COPY_AND_ASSIGN(ObMergeInfoTableStorage);
 };
 

@@ -23,6 +23,7 @@ on:
   pull_request:
     paths:
       - 'rust/**'
+      - 'src/share/inner_table/**'
       - '.github/workflows/rust-checks.yml'
       - '.github/actions/setup-rust/**'
 
@@ -43,33 +44,36 @@ jobs:
 
       - name: clippy (deny warnings)
         working-directory: rust
-        run: cargo clippy -p sql-nio -p kv -p config --all-targets -- -D warnings
+        run: cargo clippy -p sql-nio -p kv -p local -p config --all-targets -- -D warnings
 
       - name: KV and configuration persistence tests
         working-directory: rust
-        run: cargo test --locked -p kv -p config
+        run: cargo test --locked -p kv -p local -p config
 
       - name: generated header is committed
-        run: git diff --exit-code -- rust/sql-nio/include/nio.h rust/kv/include/kv.h rust/config/include/config.h
+        run: git diff --exit-code -- rust/sql-nio/include/nio.h rust/config/include/config.h
 
-      - name: KV C and C++ adapter checks
+      - name: local virtual table column types
+        run: python3 rust/local/tests/virtual_table_generator.py
+
+      - name: local CXX interface checks
         working-directory: rust
         run: |
-          cargo build -p kv --profile cmake-debug
-          cc -x c -std=c11 -Wall -Wextra -Werror -I kv/include -fsyntax-only - <<< '#include "kv.h"'
-          python3 - <<'PY'
+          LOCAL_HEADER_DIR="$PWD/target/include" cargo build -p local --profile cmake-debug
+          python3 - <<'PYTEST'
           import pathlib
           import subprocess
           import tempfile
-          with tempfile.TemporaryDirectory(prefix="kv-cpp-") as directory:
+          with tempfile.TemporaryDirectory(prefix="local-cxx-") as directory:
               root = pathlib.Path(directory)
               executable = root / "test"
               subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
-                              "-I", "kv/include", "kv/tests/cpp.cpp",
-                              "target/cmake-debug/libkv.a", "-lpthread", "-ldl", "-lm",
+                              "-I", "target/include", "-I", "target/cxxbridge",
+                              "-I", "local/include", "local/tests/bridge.cpp",
+                              "target/cmake-debug/liblocal.a", "-lpthread", "-ldl", "-lm",
                               "-o", str(executable)], check=True)
               subprocess.run([str(executable), str(root / "store")], check=True)
-          PY
+          PYTEST
 
       # No Windows runner: a cross `cargo check` is the cheapest signal that
       # the cfg(windows) transport code still compiles. It would have caught
@@ -80,9 +84,10 @@ jobs:
       - name: check windows target
         working-directory: rust
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-x86-64
+          sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
           cargo check -p sql-nio --target x86_64-pc-windows-gnu
           cargo check -p kv --target x86_64-pc-windows-gnu
+          cargo check -p local --target x86_64-pc-windows-gnu
 
       - name: cargo audit
         working-directory: rust

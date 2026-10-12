@@ -20,12 +20,33 @@
 #include "common/ob_tablet_id.h"
 #include "lib/container/ob_iarray.h"
 #include "share/scn.h"
-#include "share/storage/ob_sqlite_connection_pool.h"
+#include "share/storage/local_store.h"
 
 namespace oceanbase
 {
 namespace share
 {
+namespace checksum_error
+{
+enum Column : uint32_t { FrozenScn, IndexType, DataTableId, IndexTableId, DataTabletId, IndexTabletId, ColumnId, DataColumnChecksum, IndexColumnChecksum };
+inline const local::Schema &schema()
+{
+  static const auto schema = local_schema(1, {
+    {"frozen_scn", local::Kind::Integer, false},
+    {"index_type", local::Kind::Integer, false},
+    {"data_table_id", local::Kind::Integer, false},
+    {"index_table_id", local::Kind::Integer, false},
+    {"data_tablet_id", local::Kind::Integer, false},
+    {"index_tablet_id", local::Kind::Integer, false},
+    {"column_id", local::Kind::Integer, false},
+    {"data_column_checksum", local::Kind::Integer, false},
+    {"index_column_checksum", local::Kind::Integer, false},
+  }, {FrozenScn, IndexType, DataTableId, IndexTableId, DataTabletId, IndexTabletId}, {});
+  return schema;
+}
+} // namespace checksum_error
+
+
 
 class ObColumnChecksumErrorInfo;
 class ObColumnChecksumErrorInfoTableStorage
@@ -34,7 +55,7 @@ public:
   ObColumnChecksumErrorInfoTableStorage();
   virtual ~ObColumnChecksumErrorInfoTableStorage();
 
-  int init(ObSQLiteConnectionPool *pool);
+  int init(LocalStore *pool);
   bool is_inited() const { return nullptr != pool_; }
 
   // Insert column checksum error info
@@ -58,7 +79,7 @@ public:
 private:
   int create_table_if_not_exists();
 
-  ObSQLiteConnectionPool *pool_;
+  LocalStore *pool_;
   DISALLOW_COPY_AND_ASSIGN(ObColumnChecksumErrorInfoTableStorage);
 };
 

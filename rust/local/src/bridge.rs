@@ -1,0 +1,375 @@
+// Copyright (c) 2026 OceanBase. SPDX-License-Identifier: Apache-2.0
+use crate::records;
+use std::{
+    cell::{Cell as Flag, RefCell},
+    path::Path,
+};
+
+#[cxx::bridge(namespace = "oceanbase::local")]
+pub mod ffi {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Code {
+        Ok,
+        End,
+        NotFound,
+        Duplicate,
+        Invalid,
+        Io,
+        Corrupt,
+        Busy,
+        Aborted,
+        Limit,
+        NotInit,
+        Poisoned,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Kind {
+        Null,
+        Integer,
+        Text,
+        Blob,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Compare {
+        Equal,
+        NotEqual,
+        Less,
+        LessEqual,
+        Greater,
+        GreaterEqual,
+        In,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Aggregate {
+        None,
+        Count,
+        Min,
+        Max,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Action {
+        Insert,
+        Upsert,
+        Update,
+        Delete,
+    }
+    #[derive(Clone)]
+    struct Column {
+        name: String,
+        kind: Kind,
+        nullable: bool,
+    }
+    #[derive(Clone)]
+    struct Schema {
+        namespace_id: u8,
+        columns: Vec<Column>,
+        primary: Vec<u32>,
+        indexes: Vec<u32>,
+    }
+    #[derive(Clone)]
+    struct Value {
+        kind: Kind,
+        integer: i64,
+        bytes: Vec<u8>,
+    }
+    struct Condition {
+        column: u32,
+        compare: Compare,
+        values: Vec<Value>,
+    }
+    struct Field {
+        column: u32,
+        value: Value,
+        clamp_column: i32,
+    }
+    struct Query {
+        schema: Schema,
+        columns: Vec<u32>,
+        conditions: Vec<Condition>,
+        order_column: i32,
+        limit: i64,
+        offset: u64,
+        aggregate: Aggregate,
+    }
+    struct Mutation {
+        action: Action,
+        query: Query,
+        fields: Vec<Field>,
+    }
+    struct WriteResult {
+        code: i32,
+        affected: u64,
+    }
+
+    unsafe extern "C++" {
+        include!("callbacks.h");
+        type WriteCallback;
+        type RowCallback;
+        fn run<'a>(self: &WriteCallback, transaction: &Transaction<'a>) -> i32;
+        fn visit(self: &RowCallback, row: &[Value]) -> i32;
+    }
+    extern "Rust" {
+        fn open_storage(path: &str) -> i32;
+        fn close_storage() -> i32;
+        fn is_open() -> bool;
+        fn write(callback: &WriteCallback) -> i32;
+        type Transaction<'a>;
+        fn execute(self: &Transaction<'_>, mutation: &Mutation) -> WriteResult;
+        fn query(self: &Transaction<'_>, query: &Query, callback: &RowCallback) -> i32;
+        fn abort(self: &Transaction<'_>, status: i32) -> i32;
+        type Cursor;
+        fn cursor_open(query: &Query) -> Box<Cursor>;
+        fn status(self: &Cursor) -> i32;
+        fn next(self: &mut Cursor) -> i32;
+        fn row(self: &Cursor) -> &[Value];
+    }
+}
+
+fn code(error: records::Error) -> i32 {
+    use records::Error;
+    (match error {
+        Error::Invalid => ffi::Code::Invalid,
+        Error::Duplicate => ffi::Code::Duplicate,
+        Error::Storage(error) => match error {
+            kv::Error::Io(_) => ffi::Code::Io,
+            kv::Error::Corrupt(_) => ffi::Code::Corrupt,
+            kv::Error::Busy => ffi::Code::Busy,
+            kv::Error::Poisoned => ffi::Code::Poisoned,
+            kv::Error::TransactionAborted => ffi::Code::Aborted,
+            kv::Error::InvalidOptions => ffi::Code::NotInit,
+            _ => ffi::Code::Limit,
+        },
+    })
+    .repr as i32
+}
+fn cell(value: &ffi::Value) -> records::Result<records::Cell> {
+    use ffi::Kind;
+    if value.bytes.len() > kv::MAX_VALUE_SIZE {
+        return Err(records::Error::Invalid);
+    }
+    Ok(match value.kind {
+        Kind::Null => records::Cell::Null,
+        Kind::Integer => records::Cell::Integer(value.integer),
+        Kind::Text => records::Cell::Text(value.bytes.clone()),
+        Kind::Blob => records::Cell::Blob(value.bytes.clone()),
+        _ => return Err(records::Error::Invalid),
+    })
+}
+fn values(row: Vec<records::Cell>) -> Vec<ffi::Value> {
+    row.into_iter()
+        .map(|cell| {
+            let kind = cell.kind();
+            let (integer, bytes) = match cell {
+                records::Cell::Integer(n) => (n, vec![]),
+                records::Cell::Text(bytes) | records::Cell::Blob(bytes) => (0, bytes),
+                records::Cell::Null => (0, vec![]),
+            };
+            ffi::Value {
+                kind,
+                integer,
+                bytes,
+            }
+        })
+        .collect()
+}
+fn query(input: &ffi::Query) -> records::Result<records::Query> {
+    Ok(records::Query {
+        table: records::Schema::from_descriptor(&input.schema)?.into(),
+        columns: input.columns.iter().map(|&c| c as usize).collect(),
+        predicates: input
+            .conditions
+            .iter()
+            .map(|condition| {
+                Ok(records::Predicate {
+                    column: condition.column as usize,
+                    compare: condition.compare,
+                    values: condition
+                        .values
+                        .iter()
+                        .map(cell)
+                        .collect::<records::Result<_>>()?,
+                })
+            })
+            .collect::<records::Result<_>>()?,
+        order: (input.order_column >= 0).then_some(input.order_column as usize),
+        limit: (input.limit >= 0).then_some(input.limit as usize),
+        offset: usize::try_from(input.offset).map_err(|_| records::Error::Invalid)?,
+        aggregate: input.aggregate,
+    })
+}
+
+thread_local! { static WRITING: Flag<bool> = const { Flag::new(false) }; }
+pub fn open_storage(path: &str) -> i32 {
+    if WRITING.with(Flag::get) {
+        return ffi::Code::Busy.repr as i32;
+    }
+    crate::open(Path::new(path)).map_or_else(|e| code(e.into()), |_| 0)
+}
+pub fn close_storage() -> i32 {
+    if WRITING.with(Flag::get) {
+        return ffi::Code::Busy.repr as i32;
+    }
+    crate::close().map_or_else(|e| code(e.into()), |_| 0)
+}
+pub fn is_open() -> bool {
+    crate::store().is_ok()
+}
+
+// The C++ callback borrows this transaction synchronously. Its Rust lifetime
+// remains tied to the store's writer guard; no pointer cast extends it.
+pub struct Transaction<'a> {
+    tx: RefCell<kv::Transaction<'a>>,
+    failure: Flag<i32>,
+}
+pub fn write(callback: &ffi::WriteCallback) -> i32 {
+    if WRITING.with(|flag| flag.replace(true)) {
+        return ffi::Code::Busy.repr as i32;
+    }
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            WRITING.with(|flag| flag.set(false));
+        }
+    }
+    let _reset = Reset;
+    let store = match crate::store() {
+        Ok(s) => s,
+        Err(e) => return code(e.into()),
+    };
+    let tx = match store.begin() {
+        Ok(tx) => tx,
+        Err(e) => return code(e.into()),
+    };
+    let transaction = Transaction {
+        tx: RefCell::new(tx),
+        failure: Flag::new(0),
+    };
+    let status = callback.run(&transaction);
+    if status != 0 {
+        return status;
+    }
+    if transaction.failure.get() != 0 {
+        return transaction.failure.get();
+    }
+    transaction
+        .tx
+        .into_inner()
+        .commit()
+        .map_or_else(|e| code(e.into()), |_| 0)
+}
+impl Transaction<'_> {
+    pub fn abort(&self, status: i32) -> i32 {
+        if self.failure.get() == 0 {
+            self.failure.set(status);
+        }
+        self.failure.get()
+    }
+    pub fn execute(&self, input: &ffi::Mutation) -> ffi::WriteResult {
+        if self.failure.get() != 0 {
+            return ffi::WriteResult {
+                code: self.failure.get(),
+                affected: 0,
+            };
+        }
+        let Ok(mut tx) = self.tx.try_borrow_mut() else {
+            return ffi::WriteResult {
+                code: self.abort(ffi::Code::Busy.repr as i32),
+                affected: 0,
+            };
+        };
+        let result = (|| {
+            let assignments = input
+                .fields
+                .iter()
+                .map(|field| {
+                    Ok(records::Assignment {
+                        column: field.column as usize,
+                        value: cell(&field.value)?,
+                        clamp_column: (field.clamp_column >= 0)
+                            .then_some(field.clamp_column as usize),
+                    })
+                })
+                .collect::<records::Result<_>>()?;
+            records::Mutation {
+                action: input.action,
+                query: query(&input.query)?,
+                assignments,
+            }
+            .execute(&mut tx)
+        })();
+        match result {
+            Ok(affected) => ffi::WriteResult { code: 0, affected },
+            Err(e) => ffi::WriteResult {
+                code: self.abort(code(e)),
+                affected: 0,
+            },
+        }
+    }
+    pub fn query(&self, input: &ffi::Query, callback: &ffi::RowCallback) -> i32 {
+        if self.failure.get() != 0 {
+            return self.failure.get();
+        }
+        let Ok(tx) = self.tx.try_borrow_mut() else {
+            return self.abort(ffi::Code::Busy.repr as i32);
+        };
+        let mut status = 0;
+        let result = (|| {
+            query(input)?.visit_transaction(&tx, |row| {
+                status = callback.visit(&values(row.to_vec()));
+                status == 0
+            })
+        })();
+        if let Err(e) = result {
+            status = code(e);
+        }
+        if status == ffi::Code::End.repr as i32 {
+            status = 0;
+        }
+        self.abort(status)
+    }
+}
+
+pub struct Cursor {
+    cursor: Option<records::RowCursor>,
+    row: Vec<ffi::Value>,
+    status: i32,
+}
+pub fn cursor_open(input: &ffi::Query) -> Box<Cursor> {
+    let result = (|| records::RowCursor::new(&crate::store()?, query(input)?))();
+    Box::new(match result {
+        Ok(cursor) => Cursor {
+            cursor: Some(cursor),
+            row: vec![],
+            status: 0,
+        },
+        Err(e) => Cursor {
+            cursor: None,
+            row: vec![],
+            status: code(e),
+        },
+    })
+}
+impl Cursor {
+    pub fn status(&self) -> i32 {
+        self.status
+    }
+    pub fn row(&self) -> &[ffi::Value] {
+        &self.row
+    }
+    pub fn next(&mut self) -> i32 {
+        self.row.clear();
+        if self.status != 0 {
+            return self.status;
+        }
+        let result = self.cursor.as_mut().expect("valid cursor").next_row();
+        self.status = match result {
+            Ok(Some(row)) => {
+                self.row = values(row);
+                0
+            }
+            Ok(None) => ffi::Code::End.repr as i32,
+            Err(e) => code(e),
+        };
+        self.status
+    }
+}

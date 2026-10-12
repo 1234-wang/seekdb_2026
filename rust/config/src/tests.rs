@@ -14,6 +14,7 @@
 
 use super::*;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_TEST_DIR: AtomicU64 = AtomicU64::new(1);
@@ -44,7 +45,7 @@ impl Drop for TestDirectory {
     }
 }
 fn reset_active_defaults() {
-    let directory = opened().unwrap().as_ref().unwrap().directory.clone();
+    let directory = PathBuf::new();
     crate::config::load_active(&directory, true).unwrap();
 }
 fn raw_put(path: &Path, name: &str, value: &[u8]) {

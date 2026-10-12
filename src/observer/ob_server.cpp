@@ -808,7 +808,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     }
     if (OB_SUCC(ret) && OB_FAIL(init_pl())) {
       LOG_ERROR("init pl failed", K(ret));
-    } else if (OB_FAIL(tablet_operator_.init(&meta_db_pool_))) {
+    } else if (OB_FAIL(tablet_operator_.init(&local_store_))) {
       LOG_ERROR("tablet table operator init failed", KR(ret));
     }
     if (OB_SUCC(ret) && OB_FAIL(init_autoincrement_service())) {
@@ -1104,6 +1104,9 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy io device");
     ObIODeviceWrapper::get_instance().destroy();
     FLOG_INFO("io device destroyed");
+
+    // Release local storage after all metadata users and their timers stop.
+    local_store_.destroy();
 
 #ifndef _WIN32
     if (clients_fd_ >= 0) {
@@ -1751,24 +1754,13 @@ int ObServer::init_config(const ObServerOptions &opts)
 {
   int ret = OB_SUCCESS;
 
-  // Initialize shared meta database connection pool first
-  // Create directory before opening database (handles both normal dir and symlink)
-  const char *meta_db_dir = "./store/sstable";
-  const char *meta_db_path = "./store/sstable/meta.db";
-
-  // Convert relative path to absolute path to ensure stability when working directory changes
-  char cwd[OB_MAX_FILE_NAME_LENGTH] = {0};
-  char abs_meta_db_path[OB_MAX_FILE_NAME_LENGTH] = {0};
-  if (nullptr == getcwd(cwd, sizeof(cwd))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("failed to get current working directory", K(ret));
-  } else {
-    snprintf(abs_meta_db_path, sizeof(abs_meta_db_path), "%s/%s", cwd, meta_db_path);
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(meta_db_dir))) {
-  } else if (OB_FAIL(meta_db_pool_.init(abs_meta_db_path))) {
+  // All modules share one Rust-owned local store, opened before configuration.
+  bool legacy_metadata = false;
+  if (OB_FAIL(FileDirectoryUtils::is_exists("./store/sstable/meta.db", legacy_metadata))) {
+  } else if (legacy_metadata) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("legacy local metadata requires explicit migration before startup", K(ret));
+  } else if (OB_FAIL(local_store_.init("./etc/config"))) {
   } else if (OB_FAIL(config_mgr_.init())) {
   } else if (OB_FAIL(config_mgr_.got_version())) {
   } else if (OB_FAIL(DATA_VERSION_MGR.init())) {
@@ -2417,7 +2409,7 @@ int ObServer::init_global_context()
   gctx_.schema_service_ = &schema_service_;
   gctx_.config_mgr_ = &config_mgr_;
   gctx_.tablet_operator_ = &tablet_operator_;
-  gctx_.meta_db_pool_ = &meta_db_pool_;
+  gctx_.local_store_ = &local_store_;
   gctx_.sql_proxy_ = &sql_proxy_;
   gctx_.ddl_sql_proxy_ = &ddl_sql_proxy_;
   gctx_.self_addr_seq_.set_addr(self_addr_);

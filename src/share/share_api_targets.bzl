@@ -65,7 +65,7 @@ _EXISTING_SEMANTIC_API_TARGETS = [
     "scn_interface",
     "semistruct",
     "sequence_option",
-    "sqlite_storage_interface",
+    "local_storage_interface",
     "srs_provider_interface",
     "statement_type",
     "storage_cache_policy",
@@ -104,7 +104,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":config",
             ":core_types",
             ":scn_interface",
-            ":sqlite_storage_interface",
+            ":local_storage_interface",
             ":tablet_replica_types",
             ":tenant_runtime",
             ":timezone_runtime",
@@ -118,7 +118,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
     "admin_job_storage_interface": struct(
         hdrs = ["storage/ob_admin_job_table_storage.h"],
         deps = [
-            ":sqlite_storage_interface",
+            ":local_storage_interface",
             "//src/oblib:oblib_foundation",
         ],
     ),
@@ -188,7 +188,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":schema_model_interface",
             ":schema_registry",
             ":scn_interface",
-            ":sqlite_storage_interface",
+            ":local_storage_interface",
             ":tablet_replica_types",
             "//src/oblib:oblib_foundation",
         ],
@@ -204,6 +204,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             "ob_snapshot_table_proxy.h",
         ],
         deps = [
+            ":local_storage_interface",
             ":cluster_version_interface",
             ":core_types",
             ":schema_model_interface",
@@ -707,7 +708,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         ],
         deps = [
             ":compaction_runtime",
-            ":sqlite_storage_interface",
+            ":local_storage_interface",
             ":tablet_replica_types",
             "//src/oblib:oblib_foundation",
         ],

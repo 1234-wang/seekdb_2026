@@ -18,3 +18,4 @@ serde_yaml = "0.9"
 [dependencies]
 cxx = "1"
 kv = { path = "../kv" }
+local = { path = "../local" }

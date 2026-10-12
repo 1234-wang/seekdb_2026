@@ -27,7 +27,7 @@ namespace share
 {
 
 int ObTabletMetaTableCompactionOperator::get_status(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     const ObTabletCompactionScnInfo &input_info,
     ObTabletCompactionScnInfo &ret_info)
 {
@@ -59,7 +59,7 @@ int ObTabletMetaTableCompactionOperator::get_status(
 }
 
 int ObTabletMetaTableCompactionOperator::batch_update_unequal_report_scn_tablet(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     const int64_t major_frozen_scn,
       const common::ObIArray<ObTabletID> &input_tablet_id_array)
 {
@@ -106,7 +106,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_unequal_report_scn_tablet(
 }
 
 int ObTabletMetaTableCompactionOperator::get_min_compaction_scn(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     SCN &min_compaction_scn)
 {
   int ret = OB_SUCCESS;
@@ -140,7 +140,7 @@ int ObTabletMetaTableCompactionOperator::get_min_compaction_scn(
 }
 
 int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     const uint64_t global_broadcast_scn_val,
     const ObTabletRuntimeInfo::ScnStatus &except_status,
     const volatile bool &stop)
@@ -183,7 +183,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
 }
 
 int ObTabletMetaTableCompactionOperator::batch_update_status(
-    ObSQLiteConnectionPool *meta_db_pool)
+    LocalStore *meta_db_pool)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time_us = ObTimeUtil::current_time();
@@ -221,7 +221,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_status(
 }
 
 int ObTabletMetaTableCompactionOperator::get_estimated_timeout_us(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     int64_t &estimated_timeout_us)
 {
   int ret = OB_SUCCESS;
@@ -238,7 +238,7 @@ int ObTabletMetaTableCompactionOperator::get_estimated_timeout_us(
 }
 
 int ObTabletMetaTableCompactionOperator::get_tablet_count(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     int64_t &tablet_count)
 {
   int ret = OB_SUCCESS;
@@ -254,7 +254,7 @@ int ObTabletMetaTableCompactionOperator::get_tablet_count(
 }
 
 int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     const uint64_t global_broadcast_scn_val,
     const ObIArray<ObTabletID> &tablet_ids,
     const ObTabletRuntimeInfo::ScnStatus &except_status)
@@ -299,7 +299,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
 }
 
 int ObTabletMetaTableCompactionOperator::get_next_batch_tablet_ids(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     const int64_t batch_update_cnt,
     ObIArray<ObTabletID> &tablet_ids)
 {
@@ -323,7 +323,7 @@ int ObTabletMetaTableCompactionOperator::get_next_batch_tablet_ids(
 }
 
 int ObTabletMetaTableCompactionOperator::range_scan_for_compaction(
-      ObSQLiteConnectionPool *meta_db_pool,
+      LocalStore *meta_db_pool,
       const int64_t compaction_scn,
       const common::ObTabletID &start_tablet_id,
       const int64_t batch_size,
@@ -364,7 +364,7 @@ int ObTabletMetaTableCompactionOperator::range_scan_for_compaction(
 
 
 int ObTabletMetaTableCompactionOperator::inner_range_scan_for_compaction(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     const int64_t compaction_scn,
     const common::ObTabletID &start_tablet_id,
     const int64_t batch_size,
@@ -401,7 +401,7 @@ int ObTabletMetaTableCompactionOperator::inner_range_scan_for_compaction(
 }
 
 int ObTabletMetaTableCompactionOperator::inner_get_max_tablet_id_in_range(
-    ObSQLiteConnectionPool *meta_db_pool,
+    LocalStore *meta_db_pool,
     const common::ObTabletID &start_tablet_id,
     const int64_t batch_size,
     common::ObTabletID &end_tablet_id)

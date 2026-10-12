@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::cell::Cell;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
 pub mod config;
@@ -60,14 +60,8 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
-struct OpenStorage {
-    directory: PathBuf,
-    store: kv::Store,
-}
-
 const CONFIG_PREFIX: &[u8] = b"config/";
 const MAX_CONFIG_BYTES: usize = 32 * 1024 * 1024;
-static STORAGE: OnceLock<Mutex<Option<OpenStorage>>> = OnceLock::new();
 static WRITER_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 thread_local! { static IN_CHECKER: Cell<bool> = const { Cell::new(false) }; }
 
@@ -100,56 +94,17 @@ fn run_checker(check: impl FnOnce() -> Result<(), Error>) -> Result<(), Error> {
     })
 }
 
-fn opened() -> Result<std::sync::MutexGuard<'static, Option<OpenStorage>>, Error> {
-    STORAGE
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .map_err(|_| Error::new(None, "config storage lock poisoned"))
-}
-
-/// Open once before loading instance configuration. All subsequent operations
-/// share this Rust-owned store; opening the same directory again is idempotent.
+/// Test/helper entry point; the server owns process storage independently.
 pub fn open(directory: &Path) -> Result<(), Error> {
     let _guard = lock_writers()?;
-    let mut current = opened()?;
-    if let Some(storage) = current.as_ref() {
-        if storage.directory != directory {
-            return Err(Error::new(
-                None,
-                "configuration storage is already initialized",
-            ));
-        }
-        storage
-            .store
-            .snapshot()
-            .map_err(|error| Error::storage("check config storage", error, false))?;
-        return Ok(());
-    }
-    let store = kv::Store::open(directory)
-        .map_err(|error| Error::storage("open config storage", error, false))?;
-    *current = Some(OpenStorage {
-        directory: directory.to_owned(),
-        store,
-    });
-    Ok(())
+    local::open(directory).map_err(|error| Error::storage("open local storage", error, false))
 }
-
-/// Release the store during instance shutdown, after its callers have stopped.
 pub fn close() -> Result<(), Error> {
     let _guard = lock_writers()?;
-    opened()?.take();
-    Ok(())
+    local::close().map_err(|error| Error::storage("close local storage", error, false))
 }
-
-fn storage(directory: &Path) -> Result<kv::Store, Error> {
-    let current = opened()?;
-    match current.as_ref() {
-        Some(storage) if storage.directory == directory => Ok(storage.store.clone()),
-        _ => Err(Error::new(
-            None,
-            "configuration storage is not initialized for this directory",
-        )),
-    }
+fn storage(_directory: &Path) -> Result<kv::Store, Error> {
+    local::store().map_err(|error| Error::storage("access local storage", error, false))
 }
 
 fn key(name: &str) -> Vec<u8> {

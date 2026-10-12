@@ -20,7 +20,7 @@
 
 #include "share/ob_tablet_local_checksum_operator.h"
 #include "share/storage/ob_tablet_local_checksum_table_storage.h"
-#include "share/storage/ob_sqlite_connection.h"
+#include "share/storage/local_store.h"
 namespace oceanbase
 {
 namespace share
@@ -435,7 +435,7 @@ int ObTabletLocalChecksumItem::set_ckm_mem_attr()
 
 /****************************** ObTabletLocalChecksumOperator ******************************/
 
-int ObTabletLocalChecksumOperator::init(ObSQLiteConnectionPool *pool)
+int ObTabletLocalChecksumOperator::init(LocalStore *pool)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pool)) {
@@ -446,7 +446,7 @@ int ObTabletLocalChecksumOperator::init(ObSQLiteConnectionPool *pool)
 }
 
 int ObTabletLocalChecksumOperator::batch_update_with_trans(
-    ObSQLiteConnection *conn,
+    LocalConnection *conn,
     const common::ObIArray<ObTabletLocalChecksumItem> &items)
 {
   int ret = OB_SUCCESS;
@@ -457,24 +457,13 @@ int ObTabletLocalChecksumOperator::batch_update_with_trans(
   } else if (!storage_.is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    // Use SQLite storage within the transaction
+    // Use local metadata storage within the transaction
     // Note: The transaction is managed by the caller (ObTabletRuntimeMetaUpdater)
-    const char *upsert_sql =
-      "INSERT INTO __all_tablet_local_checksum "
-      "(tablet_id, compaction_scn, "
-      " row_count, data_checksum, column_checksums, b_column_checksums, "
-      " data_checksum_type) "
-      "VALUES (?, ?, ?, ?, ?, ?, ?) "
-      "ON CONFLICT(tablet_id) DO UPDATE SET "
-      "compaction_scn = excluded.compaction_scn, "
-      "row_count = excluded.row_count, "
-      "data_checksum = excluded.data_checksum, "
-      "column_checksums = excluded.column_checksums, "
-      "b_column_checksums = excluded.b_column_checksums, "
-      "data_checksum_type = excluded.data_checksum_type;";
+    const auto upsert_request =
+      LocalRequest::insert(tablet_checksum::schema(), {tablet_checksum::TabletId, tablet_checksum::CompactionScn, tablet_checksum::RowCount, tablet_checksum::DataChecksum, tablet_checksum::ColumnChecksums, tablet_checksum::BColumnChecksums, tablet_checksum::DataChecksumType}, true);
 
-    ObSQLiteStmt *stmt = nullptr;
-    if (OB_FAIL(conn->prepare_execute(upsert_sql, stmt))) {
+    LocalStmt *stmt = nullptr;
+    if (OB_FAIL(conn->prepare_execute(upsert_request, stmt))) {
     } else {
       common::ObArenaAllocator allocator;
       for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); ++i) {
@@ -495,7 +484,7 @@ int ObTabletLocalChecksumOperator::batch_update_with_trans(
         }
 
         if (OB_SUCC(ret)) {
-          auto binder = [&](ObSQLiteBinder &b) -> int {
+          auto binder = [&](LocalBinder &b) -> int {
             b.bind_int64(item.tablet_id_.id());
             b.bind_int64(item.compaction_scn_.get_val_for_inner_table_field());
             b.bind_int64(item.row_count_);
@@ -527,7 +516,7 @@ int ObTabletLocalChecksumOperator::batch_update_with_trans(
 }
 
 int ObTabletLocalChecksumOperator::batch_remove_with_trans(
-    ObSQLiteConnection *conn,
+    LocalConnection *conn,
     const common::ObIArray<share::ObTabletRuntimeInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;
@@ -539,19 +528,18 @@ int ObTabletLocalChecksumOperator::batch_remove_with_trans(
   } else if (!storage_.is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *delete_sql =
-      "DELETE FROM __all_tablet_local_checksum "
-      "WHERE tablet_id = ?;";
+    const auto delete_request =
+      LocalRequest::erase(tablet_checksum::schema()).eq(tablet_checksum::TabletId, local_param(0));
 
-    ObSQLiteStmt *stmt = nullptr;
-    if (OB_FAIL(conn->prepare_execute(delete_sql, stmt))) {
+    LocalStmt *stmt = nullptr;
+    if (OB_FAIL(conn->prepare_execute(delete_request, stmt))) {
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
         const ObTabletRuntimeInfo &tablet_info = tablet_infos.at(i);
         if (OB_UNLIKELY(!tablet_info.primary_keys_are_valid())) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          auto binder = [&](ObSQLiteBinder &b) -> int {
+          auto binder = [&](LocalBinder &b) -> int {
             b.bind_int64(tablet_info.get_tablet_id().id());
             return OB_SUCCESS;
           };

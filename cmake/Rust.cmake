@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Rust crates with Cargo and expose their static libraries to C++ as
-# the INTERFACE targets `sql_nio`, `config`, and `kv`.
+# the INTERFACE targets `sql_nio`, `config`, and `local`.
 #
 # Usage from any C++ target:
 #     target_link_libraries(<your_target> PRIVATE sql_nio)
@@ -30,7 +30,7 @@ set(SQL_NIO_CRATE_DIR   "${RUST_WORKSPACE_DIR}/sql-nio")
 set(SQL_NIO_INCLUDE_DIR "${SQL_NIO_CRATE_DIR}/include")
 set(CONFIG_CRATE_DIR "${RUST_WORKSPACE_DIR}/config")
 set(CONFIG_INCLUDE_DIR "${CONFIG_CRATE_DIR}/include")
-set(KV_INCLUDE_DIR "${RUST_WORKSPACE_DIR}/kv/include")
+set(LOCAL_INCLUDE_DIR "${RUST_WORKSPACE_DIR}/local/include")
 
 # Locate cargo: explicit -DCARGO=, else PATH, else the rustup default location.
 if(NOT CARGO)
@@ -78,11 +78,11 @@ set(RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-target" CACHE PATH
 if(WIN32)
   set(SQL_NIO_STATICLIB "${RUST_TARGET_DIR}/${_cargo_out_subdir}/sql_nio.lib")
   set(CONFIG_STATICLIB "${RUST_TARGET_DIR}/${_cargo_out_subdir}/config.lib")
-  set(KV_STATICLIB "${RUST_TARGET_DIR}/${_cargo_out_subdir}/kv.lib")
+  set(LOCAL_STATICLIB "${RUST_TARGET_DIR}/${_cargo_out_subdir}/local.lib")
 else()
   set(SQL_NIO_STATICLIB "${RUST_TARGET_DIR}/${_cargo_target_subdir}${_cargo_out_subdir}/libsql_nio.a")
   set(CONFIG_STATICLIB "${RUST_TARGET_DIR}/${_cargo_target_subdir}${_cargo_out_subdir}/libconfig.a")
-  set(KV_STATICLIB "${RUST_TARGET_DIR}/${_cargo_target_subdir}${_cargo_out_subdir}/libkv.a")
+  set(LOCAL_STATICLIB "${RUST_TARGET_DIR}/${_cargo_target_subdir}${_cargo_out_subdir}/liblocal.a")
 endif()
 
 # Reinvoke Cargo when any workspace crate's source or build input changes.
@@ -95,7 +95,8 @@ file(GLOB _rust_crate_manifests CONFIGURE_DEPENDS
 foreach(_rust_manifest IN LISTS _rust_crate_manifests)
   get_filename_component(_rust_crate_dir "${_rust_manifest}" DIRECTORY)
   file(GLOB_RECURSE _rust_crate_sources CONFIGURE_DEPENDS
-    "${_rust_crate_dir}/src/*.rs")
+    "${_rust_crate_dir}/src/*.rs"
+    "${_rust_crate_dir}/include/*.h")
   file(GLOB _rust_crate_build_inputs CONFIGURE_DEPENDS
     "${_rust_crate_dir}/*.toml"
     "${_rust_crate_dir}/*.rs"
@@ -111,6 +112,7 @@ endforeach()
 # discovers on PATH.
 set(_rust_build_env "CARGO_TARGET_DIR=${RUST_TARGET_DIR}"
                     "CONFIG_HEADER_DIR=${RUST_TARGET_DIR}/include"
+                    "LOCAL_HEADER_DIR=${RUST_TARGET_DIR}/include"
                     "DEFAULT_LOG_LEVEL=${DEFAULT_LOG_LEVEL}"
                     "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}"
                     "AR=${CMAKE_AR}")
@@ -183,10 +185,10 @@ endif()
 
 add_custom_command(
   OUTPUT "${SQL_NIO_STATICLIB}"
-  BYPRODUCTS "${CONFIG_STATICLIB}" "${KV_STATICLIB}"
+  BYPRODUCTS "${CONFIG_STATICLIB}" "${LOCAL_STATICLIB}"
              "${RUST_TARGET_DIR}/include/config_bridge.h"
              "${RUST_TARGET_DIR}/include/config_checkers.h"
-             "${KV_INCLUDE_DIR}/kv.h"
+             "${RUST_TARGET_DIR}/include/local_bridge.h"
   COMMAND "${CMAKE_COMMAND}" -E env ${_rust_build_env}
           "${CARGO}" build ${_cargo_profile_flag} ${_cargo_target_args}
           --manifest-path "${RUST_WORKSPACE_DIR}/Cargo.toml"
@@ -225,14 +227,14 @@ target_include_directories(config INTERFACE
   "${CONFIG_INCLUDE_DIR}" "${RUST_TARGET_DIR}/include")
 target_link_libraries(config INTERFACE "${CONFIG_STATICLIB}" ${_rust_syslibs})
 
-add_library(kv INTERFACE)
-add_dependencies(kv rust_staticlibs_build)
-target_include_directories(kv INTERFACE "${KV_INCLUDE_DIR}")
-target_link_libraries(kv INTERFACE "${KV_STATICLIB}" ${_rust_syslibs})
-
 set_property(DIRECTORY APPEND PROPERTY
   ADDITIONAL_CLEAN_FILES "${RUST_TARGET_DIR}")
 
 message(STATUS "[rust] sql_nio target ready -> ${SQL_NIO_STATICLIB}")
 message(STATUS "[rust] config target ready -> ${CONFIG_STATICLIB}")
-message(STATUS "[rust] kv target ready -> ${KV_STATICLIB}")
+
+add_library(local INTERFACE)
+add_dependencies(local rust_staticlibs_build)
+target_include_directories(local INTERFACE "${LOCAL_INCLUDE_DIR}"
+  "${RUST_TARGET_DIR}/include" "${RUST_TARGET_DIR}/cxxbridge")
+target_link_libraries(local INTERFACE "${LOCAL_STATICLIB}" ${_rust_syslibs})

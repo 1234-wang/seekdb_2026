@@ -23,6 +23,7 @@
 #include "config_bridge.h"
 #include "config_checkers.h"
 #include "config.h"
+#include "local_bridge.h"
 
 namespace oceanbase
 {
@@ -57,21 +58,14 @@ int report_error(const char *operation, const ConfigError &error)
 
 ObConfigManager::~ObConfigManager()
 {
-  if (inited_) {
-    ConfigError error = {};
-    if (0 != config_close(&error)) {
-      const int ret = OB_INVALID_CONFIG;
-      LOG_ERROR("failed to close config storage", K(ret), "detail", error.message);
-    }
-  }
 }
 
 int ObConfigManager::init()
 {
   int ret = OB_SUCCESS;
   ConfigError error = {};
-  if (0 != config_open(CONFIG_DIRECTORY, &error)) {
-    ret = report_error("initialize", error);
+  if (!local::is_open()) {
+    ret = OB_NOT_INIT;
   } else {
     inited_ = true;
   }

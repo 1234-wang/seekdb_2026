@@ -31,7 +31,7 @@
 // Forward declaration
 namespace oceanbase {
 namespace share {
-class ObSQLiteConnection;
+class LocalConnection;
 class ObTabletReplicaChecksumTableStorage;
 }
 }
@@ -135,8 +135,8 @@ typedef ObArrayWithMap<share::ObTabletReplicaChecksumItem> ObReplicaCkmArray;
 class ObTabletReplicaChecksumOperator
 {
 public:
-  // Initialize SQLite storage (called once at startup)
-  static int init(ObSQLiteConnectionPool &meta_db_pool,
+  // Initialize local metadata storage (called once at startup)
+  static int init(LocalStore &meta_db_pool,
                   const common::ObAddr &self_addr);
 
   // Get a batch of checksum_items
@@ -149,13 +149,13 @@ public:
       ObReplicaCkmArray &items,
       const bool include_larger_than,
       const int32_t group_id);
-  // Update checksum items within a SQLite transaction
+  // Update checksum items within a local metadata transaction
   static int batch_update_with_trans(
-      share::ObSQLiteConnection *conn,
+      share::LocalConnection *conn,
       const common::ObIArray<ObTabletReplicaChecksumItem> &item);
-  // Remove checksum items within a SQLite transaction
+  // Remove checksum items within a local metadata transaction
   static int batch_remove_with_trans(
-      share::ObSQLiteConnection *conn,
+      share::LocalConnection *conn,
       const common::ObIArray<ObTabletReplica> &tablet_meta_rows);
   static int remove_residual_checksum(
       common::ObISQLClient &sql_client,
@@ -189,8 +189,8 @@ public:
 private:
   // range_get_ removed - no longer used
   // inner_batch_insert_or_update_by_sql_ removed - no longer used
-  // inner_batch_get_by_sql_ removed - no longer used, replaced by SQLite storage
-  // construct_batch_get_sql_str_ removed - no longer used, replaced by SQLite storage
+  // inner_batch_get_by_sql_ removed - no longer used, replaced by local metadata storage
+  // construct_batch_get_sql_str_ removed - no longer used, replaced by local metadata storage
 
   static int construct_tablet_replica_checksum_items_(
       common::sqlclient::ObMySQLResult &res,
@@ -216,7 +216,7 @@ public:
   static int construct_tablet_id_list(const ObIArray<ObTabletID> &tablet_ids, ObSqlString &sql);
 private:
   static ObTabletReplicaChecksumTableStorage storage_;
-  static ObSQLiteConnectionPool *meta_db_pool_;
+  static LocalStore *local_store_;
   static common::ObAddr self_addr_;
 
   const static int64_t MAX_BATCH_COUNT = 128;
@@ -224,7 +224,7 @@ private:
   const static int64_t MOCK_COLUMN_CHECKSUM = 580000000000000;
 };
 
-// construct_batch_get_sql_str_ template removed - no longer used, replaced by SQLite storage
+// construct_batch_get_sql_str_ template removed - no longer used, replaced by local metadata storage
 
 class ObTabletDataChecksumChecker
 {

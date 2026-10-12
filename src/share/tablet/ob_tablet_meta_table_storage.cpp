@@ -21,8 +21,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_sql_string.h"
-#include "share/storage/ob_sqlite_connection_pool.h"
-#include "share/storage/ob_sqlite_table_schema.h"
+#include "share/storage/local_store.h"
 
 namespace oceanbase
 {
@@ -32,7 +31,7 @@ namespace share
 {
 
 int ObTabletRuntimeInfoConstructor::operator()(
-    share::ObSQLiteRowReader &reader,
+    share::LocalRowReader &reader,
     ObTabletRuntimeInfo &info)
 {
   int ret = OB_SUCCESS;
@@ -69,7 +68,7 @@ ObTabletMetaTableStorage::~ObTabletMetaTableStorage()
 {
 }
 
-int ObTabletMetaTableStorage::init(ObSQLiteConnectionPool *pool)
+int ObTabletMetaTableStorage::init(LocalStore *pool)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pool_ = pool)) {
@@ -84,17 +83,7 @@ int ObTabletMetaTableStorage::init(ObSQLiteConnectionPool *pool)
 
 int ObTabletMetaTableStorage::create_table_if_not_exists()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_)) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObSQLiteConnectionGuard guard(pool_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(SQLITE_CREATE_TABLE_TABLET_META_TABLE, nullptr))) {
-    }
-  }
-  return ret;
+  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObTabletMetaTableStorage::batch_get(
@@ -108,33 +97,14 @@ int ObTabletMetaTableStorage::batch_get(
   } else if (tablet_ids.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    // Build SQL with IN clause
-    ObSqlString sql;
-    if (OB_FAIL(sql.append_fmt(
-        "SELECT tablet_id, "
-        "       compaction_scn, data_size, required_size, report_scn, status "
-        "FROM __all_tablet_meta_table "
-        "WHERE tablet_id IN ("))) {
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-        const ObTabletID &tablet_id = tablet_ids.at(i);
-        if (OB_UNLIKELY(!tablet_id.is_valid())) {
-          ret = OB_INVALID_ARGUMENT;
-        } else if (OB_FAIL(sql.append_fmt(
-            "%s %ld",
-            i == 0 ? "" : ",",
-            tablet_id.id()))) {
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sql.append(") ORDER BY tablet_id;"))) {
-        }
-      }
+    auto request = LocalRequest::select(tablet_meta::schema(), {tablet_meta::TabletId, tablet_meta::CompactionScn, tablet_meta::DataSize, tablet_meta::RequiredSize, tablet_meta::ReportScn, tablet_meta::Status}).in(tablet_meta::TabletId, tablet_ids).order(tablet_meta::TabletId);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+      if (!tablet_ids.at(i).is_valid()) { ret = OB_INVALID_ARGUMENT; }
     }
 
     if (OB_SUCC(ret)) {
       ObTabletRuntimeInfoConstructor constructor;
-      auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+      auto row_processor = [&](share::LocalRowReader &reader) -> int {
         ObTabletRuntimeInfo tablet_info;
         if (OB_FAIL(constructor(reader, tablet_info))) {
         }
@@ -143,10 +113,10 @@ int ObTabletMetaTableStorage::batch_get(
         return ret;
       };
 
-      ObSQLiteConnectionGuard guard(pool_);
+      LocalConnectionGuard guard(pool_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->query(sql.ptr(), nullptr, row_processor))) {
+      } else if (OB_FAIL(guard->query(request, nullptr, row_processor))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
         } else {
           ret = OB_SUCCESS; // No rows is acceptable
@@ -166,30 +136,18 @@ int ObTabletMetaTableStorage::batch_update(
   } else if (tablet_infos.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->begin_transaction())) {
     } else {
-      // Use the overload with connection parameter
-      ret = batch_update(guard.get_connection(), tablet_infos);
-
-      // Commit or rollback transaction
-      if (OB_FAIL(ret)) {
-        int rollback_ret = guard->rollback();
-        if (OB_SUCCESS != rollback_ret) {
-        }
-      } else {
-        if (OB_FAIL(guard->commit())) {
-        }
-      }
+      ret = guard->transaction([&]() { return batch_update(guard.get_connection(), tablet_infos); });
     }
   }
   return ret;
 }
 
 int ObTabletMetaTableStorage::batch_update(
-    ObSQLiteConnection *conn,
+    LocalConnection *conn,
     const ObIArray<ObTabletRuntimeInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;
@@ -198,16 +156,13 @@ int ObTabletMetaTableStorage::batch_update(
   } else if (tablet_infos.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const char *upsert_sql =
-      "INSERT OR REPLACE INTO __all_tablet_meta_table "
-      "(gmt_create, gmt_modified, tablet_id, "
-      " compaction_scn, data_size, required_size, report_scn, status) "
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
+    const auto upsert_request =
+      LocalRequest::insert(tablet_meta::schema(), {tablet_meta::GmtCreate, tablet_meta::GmtModified, tablet_meta::TabletId, tablet_meta::CompactionScn, tablet_meta::DataSize, tablet_meta::RequiredSize, tablet_meta::ReportScn, tablet_meta::Status}, true);
 
     int64_t current_time = ObTimeUtility::current_time();
 
-    share::ObSQLiteStmt *stmt = nullptr;
-    if (OB_FAIL(conn->prepare_execute(upsert_sql, stmt))) {
+    share::LocalStmt *stmt = nullptr;
+    if (OB_FAIL(conn->prepare_execute(upsert_request, stmt))) {
     } else {
       int64_t current_index = 0;
 
@@ -216,7 +171,7 @@ int ObTabletMetaTableStorage::batch_update(
         if (OB_UNLIKELY(!tablet_info.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          auto binder = [&](share::ObSQLiteBinder &b) -> int {
+          auto binder = [&](share::LocalBinder &b) -> int {
             b.bind_int64(current_time); // gmt_create
             b.bind_int64(current_time); // gmt_modified
             b.bind_int64(tablet_info.get_tablet_id().id());
@@ -249,30 +204,18 @@ int ObTabletMetaTableStorage::batch_remove(
   } else if (tablet_infos.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->begin_transaction())) {
     } else {
-      // Use the overload with connection parameter
-      ret = batch_remove(guard.get_connection(), tablet_infos);
-
-      // Commit or rollback transaction
-      if (OB_FAIL(ret)) {
-        int rollback_ret = guard->rollback();
-        if (OB_SUCCESS != rollback_ret) {
-        }
-      } else {
-        if (OB_FAIL(guard->commit())) {
-        }
-      }
+      ret = guard->transaction([&]() { return batch_remove(guard.get_connection(), tablet_infos); });
     }
   }
   return ret;
 }
 
 int ObTabletMetaTableStorage::batch_remove(
-    ObSQLiteConnection *conn,
+    LocalConnection *conn,
     const ObIArray<ObTabletRuntimeInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;
@@ -281,12 +224,11 @@ int ObTabletMetaTableStorage::batch_remove(
   } else if (tablet_infos.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const char *delete_sql =
-      "DELETE FROM __all_tablet_meta_table "
-      "WHERE tablet_id = ?;";
+    const auto delete_request =
+      LocalRequest::erase(tablet_meta::schema()).eq(tablet_meta::TabletId, local_param(0));
 
-    share::ObSQLiteStmt *stmt = nullptr;
-    if (OB_FAIL(conn->prepare_execute(delete_sql, stmt))) {
+    share::LocalStmt *stmt = nullptr;
+    if (OB_FAIL(conn->prepare_execute(delete_request, stmt))) {
     } else {
       int64_t current_index = 0;
 
@@ -295,7 +237,7 @@ int ObTabletMetaTableStorage::batch_remove(
         if (OB_UNLIKELY(!tablet_info.primary_keys_are_valid())) {
           ret = OB_INVALID_ARGUMENT;
         } else {
-          auto binder = [&](share::ObSQLiteBinder &b) -> int {
+          auto binder = [&](share::LocalBinder &b) -> int {
             b.bind_int64(tablet_info.get_tablet_id().id());
             return OB_SUCCESS;
           };
@@ -320,17 +262,15 @@ int ObTabletMetaTableStorage::get_data_size(const common::ObTabletID &tablet_id,
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *select_sql =
-      "SELECT data_size "
-      "FROM __all_tablet_meta_table "
-      "WHERE tablet_id = ?;";
+    const auto select_request =
+      LocalRequest::select(tablet_meta::schema(), {tablet_meta::DataSize}).eq(tablet_meta::TabletId, local_param(0));
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       b.bind_int64(tablet_id.id());
       return OB_SUCCESS;
     };
 
-    auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](share::LocalRowReader &reader) -> int {
       int64_t data_size_val = reader.get_int64();
       if (data_size_val > 0) {
         data_size = data_size_val;
@@ -338,10 +278,10 @@ int ObTabletMetaTableStorage::get_data_size(const common::ObTabletID &tablet_id,
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, binder, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       } else {
         ret = OB_SUCCESS; // No rows is acceptable, data_size remains 0
@@ -361,26 +301,24 @@ int ObTabletMetaTableStorage::get_report_scn_and_status(const common::ObTabletID
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *select_sql =
-      "SELECT report_scn, status "
-      "FROM __all_tablet_meta_table "
-      "WHERE tablet_id = ?;";
+    const auto select_request =
+      LocalRequest::select(tablet_meta::schema(), {tablet_meta::ReportScn, tablet_meta::Status}).eq(tablet_meta::TabletId, local_param(0));
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       b.bind_int64(tablet_id.id());
       return OB_SUCCESS;
     };
 
-    auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](share::LocalRowReader &reader) -> int {
       report_scn = reader.get_int64();
       status = reader.get_int64();
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, binder, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       } else {
         ret = OB_ENTRY_NOT_EXIST; // No rows found
@@ -397,23 +335,22 @@ int ObTabletMetaTableStorage::get_min_compaction_scn(uint64_t &min_compaction_sc
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *select_sql =
-      "SELECT compaction_scn FROM __all_tablet_meta_table "
-      "ORDER BY compaction_scn ASC LIMIT 1;";
+    const auto select_request =
+      LocalRequest::select(tablet_meta::schema(), {tablet_meta::CompactionScn}).order(tablet_meta::CompactionScn).take(int64_t(1));
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       return OB_SUCCESS;
     };
 
-    auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](share::LocalRowReader &reader) -> int {
       min_compaction_scn = reader.get_int64();
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, binder, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       } else {
         ret = OB_SUCCESS; // No rows is acceptable, min_compaction_scn remains UINT64_MAX
@@ -430,24 +367,22 @@ int ObTabletMetaTableStorage::get_tablet_count(int64_t &tablet_count)
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *select_sql =
-      "SELECT COUNT(*) as cnt "
-      "FROM __all_tablet_meta_table "
-      ";";
+    const auto select_request =
+      LocalRequest::select(tablet_meta::schema(), {}).aggregate(local::Aggregate::Count);
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       return OB_SUCCESS;
     };
 
-    auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](share::LocalRowReader &reader) -> int {
       tablet_count = reader.get_int64();
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, binder, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
     }
   }
   return ret;
@@ -462,50 +397,13 @@ int ObTabletMetaTableStorage::batch_update_report_scn(
 {
   int ret = OB_SUCCESS;
   affected_rows = 0;
-  if (!is_inited()) {
-    ret = OB_NOT_INIT;
-  } else if (tablet_ids.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    ObSQLiteConnectionGuard guard(pool_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->begin_transaction())) {
-    } else {
-      // Build SQL with IN clause
-      ObSqlString sql;
-      if (OB_FAIL(sql.append_fmt(
-          "UPDATE __all_tablet_meta_table "
-          "SET report_scn = %lu "
-          "WHERE tablet_id IN (",
-          report_scn))) {
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-          const ObTabletID &tablet_id = tablet_ids.at(i);
-          if (OB_FAIL(sql.append_fmt(
-              "%s %ld",
-              i == 0 ? "" : ",",
-              tablet_id.id()))) {
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(sql.append_fmt(
-              ") AND compaction_scn >= %lu AND report_scn < %lu AND status != %ld;",
-              compaction_scn_min, report_scn, except_status))) {
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(guard->execute(sql.ptr(), nullptr, &affected_rows))) {
-        } else if (OB_FAIL(guard->commit())) {
-        }
-      } else {
-        int tmp_ret = guard->rollback();
-        if (OB_SUCCESS != tmp_ret) {
-        }
-      }
-    }
+  if (!is_inited()) { ret = OB_NOT_INIT; }
+  else if (tablet_ids.count() <= 0) { ret = OB_INVALID_ARGUMENT; }
+  else {
+    const auto request = LocalRequest::update(tablet_meta::schema()).set(tablet_meta::ReportScn, static_cast<int64_t>(report_scn)).in(tablet_meta::TabletId, tablet_ids).ge(tablet_meta::CompactionScn, static_cast<int64_t>(compaction_scn_min)).lt(tablet_meta::ReportScn, static_cast<int64_t>(report_scn)).ne(tablet_meta::Status, except_status);
+    LocalConnectionGuard guard(pool_);
+    if (!guard) { ret = OB_ERR_UNEXPECTED; }
+    else { ret = guard->execute(request, nullptr, &affected_rows); }
   }
   return ret;
 }
@@ -517,39 +415,13 @@ int ObTabletMetaTableStorage::batch_update_report_scn_unequal(
 {
   int ret = OB_SUCCESS;
   affected_rows = 0;
-  if (!is_inited()) {
-    ret = OB_NOT_INIT;
-  } else if (tablet_ids.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    // Build SQL with IN clause
-    ObSqlString sql;
-    if (OB_FAIL(sql.append_fmt(
-        "UPDATE __all_tablet_meta_table "
-        "SET report_scn = CASE WHEN compaction_scn > %lu THEN %lu ELSE compaction_scn END "
-        "WHERE tablet_id IN (",
-        major_frozen_scn, major_frozen_scn))) {
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-        if (OB_FAIL(sql.append_fmt(
-            "%s %ld",
-            i == 0 ? "" : ",",
-            tablet_ids.at(i).id()))) {
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sql.append_fmt(") AND report_scn < %lu;", major_frozen_scn))) {
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      ObSQLiteConnectionGuard guard(pool_);
-      if (!guard) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->execute(sql.ptr(), nullptr, &affected_rows))) {
-      }
-    }
+  if (!is_inited()) { ret = OB_NOT_INIT; }
+  else if (tablet_ids.count() <= 0) { ret = OB_INVALID_ARGUMENT; }
+  else {
+    const auto request = LocalRequest::update(tablet_meta::schema()).set(tablet_meta::ReportScn, static_cast<int64_t>(major_frozen_scn), tablet_meta::CompactionScn).in(tablet_meta::TabletId, tablet_ids).lt(tablet_meta::ReportScn, static_cast<int64_t>(major_frozen_scn));
+    LocalConnectionGuard guard(pool_);
+    if (!guard) { ret = OB_ERR_UNEXPECTED; }
+    else { ret = guard->execute(request, nullptr, &affected_rows); }
   }
   return ret;
 }
@@ -566,13 +438,10 @@ int ObTabletMetaTableStorage::batch_update_report_scn_range(const common::ObTabl
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *update_sql =
-      "UPDATE __all_tablet_meta_table "
-      "SET report_scn = ? "
-      "WHERE tablet_id >= ? AND tablet_id <= ? "
-      "  AND compaction_scn >= ? AND report_scn < ? AND status != ?;";
+    const auto update_request =
+      LocalRequest::update(tablet_meta::schema()).set(tablet_meta::ReportScn, local_param(0)).ge(tablet_meta::TabletId, local_param(1)).le(tablet_meta::TabletId, local_param(2)).ge(tablet_meta::CompactionScn, local_param(3)).lt(tablet_meta::ReportScn, local_param(4)).ne(tablet_meta::Status, local_param(5));
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       b.bind_int64(report_scn);
       b.bind_int64(start_tablet_id.id());
       b.bind_int64(end_tablet_id.id());
@@ -582,10 +451,10 @@ int ObTabletMetaTableStorage::batch_update_report_scn_range(const common::ObTabl
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(update_sql, binder, &affected_rows))) {
+    } else if (OB_FAIL(guard->execute(update_request, binder, &affected_rows))) {
     }
   }
   return ret;
@@ -602,12 +471,10 @@ int ObTabletMetaTableStorage::batch_update_status_range(const common::ObTabletID
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *update_sql =
-      "UPDATE __all_tablet_meta_table "
-      "SET status = ? "
-      "WHERE tablet_id >= ? AND tablet_id <= ? AND status = ?;";
+    const auto update_request =
+      LocalRequest::update(tablet_meta::schema()).set(tablet_meta::Status, local_param(0)).ge(tablet_meta::TabletId, local_param(1)).le(tablet_meta::TabletId, local_param(2)).eq(tablet_meta::Status, local_param(3));
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       b.bind_int64(to_status);
       b.bind_int64(start_tablet_id.id());
       b.bind_int64(end_tablet_id.id());
@@ -615,10 +482,10 @@ int ObTabletMetaTableStorage::batch_update_status_range(const common::ObTabletID
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(update_sql, binder, &affected_rows))) {
+    } else if (OB_FAIL(guard->execute(update_request, binder, &affected_rows))) {
     }
   }
   return ret;
@@ -633,30 +500,26 @@ int ObTabletMetaTableStorage::get_tablet_ids(const common::ObTabletID &start_tab
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *select_sql =
-      "SELECT tablet_id "
-      "FROM __all_tablet_meta_table "
-      "WHERE tablet_id > ? "
-      "ORDER BY tablet_id ASC "
-      "LIMIT ?;";
+    const auto select_request =
+      LocalRequest::select(tablet_meta::schema(), {tablet_meta::TabletId}).gt(tablet_meta::TabletId, local_param(0)).order(tablet_meta::TabletId).take(local_param(1));
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       b.bind_int64(start_tablet_id.id());
       b.bind_int64(limit);
       return OB_SUCCESS;
     };
 
-    auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](share::LocalRowReader &reader) -> int {
       int64_t tablet_id_val = reader.get_int64();
       if (OB_FAIL(tablet_ids.push_back(common::ObTabletID(tablet_id_val)))) {
       }
       return ret;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, binder, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       } else {
         ret = OB_SUCCESS; // No rows is acceptable
@@ -678,38 +541,20 @@ int ObTabletMetaTableStorage::get_tablet_ids_with_report_scn_before(
   } else if (tablet_ids.count() <= 0) {
     // Empty input, return empty result
   } else {
-    // Build SQL with IN clause
-    ObSqlString sql;
-    if (OB_FAIL(sql.append_fmt(
-        "SELECT tablet_id "
-        "FROM __all_tablet_meta_table "
-        "WHERE tablet_id IN ("))) {
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-        if (OB_FAIL(sql.append_fmt(
-            "%s %ld",
-            i == 0 ? "" : ",",
-            tablet_ids.at(i).id()))) {
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sql.append_fmt(") AND report_scn < %lu;", report_scn_max))) {
-        }
-      }
-    }
+    auto request = LocalRequest::select(tablet_meta::schema(), {tablet_meta::TabletId}).in(tablet_meta::TabletId, tablet_ids).lt(tablet_meta::ReportScn, static_cast<int64_t>(report_scn_max));
 
     if (OB_SUCC(ret)) {
-      auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+      auto row_processor = [&](share::LocalRowReader &reader) -> int {
         int64_t tablet_id_val = reader.get_int64();
         if (OB_FAIL(result_tablet_ids.push_back(common::ObTabletID(tablet_id_val)))) {
         }
         return ret;
       };
 
-      ObSQLiteConnectionGuard guard(pool_);
+      LocalConnectionGuard guard(pool_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->query(sql.ptr(), nullptr, row_processor))) {
+      } else if (OB_FAIL(guard->query(request, nullptr, row_processor))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
         } else {
           ret = OB_SUCCESS; // No rows is acceptable
@@ -731,29 +576,25 @@ int ObTabletMetaTableStorage::get_max_tablet_id_in_range(const common::ObTabletI
   } else if (OB_UNLIKELY(batch_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const char *select_sql =
-      "SELECT tablet_id "
-      "FROM __all_tablet_meta_table "
-      "WHERE tablet_id > ? "
-      "ORDER BY tablet_id ASC "
-      "LIMIT 1 OFFSET ?;";
+    const auto select_request =
+      LocalRequest::select(tablet_meta::schema(), {tablet_meta::TabletId}).gt(tablet_meta::TabletId, local_param(0)).order(tablet_meta::TabletId).take(int64_t(1)).skip(local_param(1));
 
-    auto binder = [&](share::ObSQLiteBinder &b) -> int {
+    auto binder = [&](share::LocalBinder &b) -> int {
       b.bind_int64(start_tablet_id.id());
       b.bind_int64(batch_size - 1);
       return OB_SUCCESS;
     };
 
-    auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](share::LocalRowReader &reader) -> int {
       int64_t tablet_id_val = reader.get_int64();
       max_tablet_id = common::ObTabletID(tablet_id_val);
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, binder, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_ITER_END; // No more tablets
       } else {
@@ -774,20 +615,12 @@ int ObTabletMetaTableStorage::range_scan_for_compaction(const common::ObTabletID
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    ObSqlString sql;
-    if (OB_FAIL(sql.append_fmt(
-        "SELECT tablet_id, "
-        "       compaction_scn, data_size, required_size, report_scn, status "
-        "FROM __all_tablet_meta_table "
-        "WHERE tablet_id > %ld AND tablet_id <= %ld",
-        start_tablet_id.id(), end_tablet_id.id()))) {
-    } else if (only_unreported && OB_FAIL(sql.append_fmt(" AND report_scn < %ld", compaction_scn))) {
-    } else if (OB_FAIL(sql.append(" ORDER BY tablet_id"))) {
-    }
+    auto request = LocalRequest::select(tablet_meta::schema(), {tablet_meta::TabletId, tablet_meta::CompactionScn, tablet_meta::DataSize, tablet_meta::RequiredSize, tablet_meta::ReportScn, tablet_meta::Status}).gt(tablet_meta::TabletId, static_cast<int64_t>(start_tablet_id.id())).le(tablet_meta::TabletId, static_cast<int64_t>(end_tablet_id.id())).order(tablet_meta::TabletId);
+    if (only_unreported) { request.lt(6, compaction_scn); }
 
     if (OB_SUCC(ret)) {
       ObTabletRuntimeInfoConstructor constructor;
-      auto row_processor = [&](share::ObSQLiteRowReader &reader) -> int {
+      auto row_processor = [&](share::LocalRowReader &reader) -> int {
         ObTabletRuntimeInfo tablet_info;
         if (OB_FAIL(constructor(reader, tablet_info))) {
         } else if (OB_FAIL(tablet_infos.push_back(tablet_info))) {
@@ -795,10 +628,10 @@ int ObTabletMetaTableStorage::range_scan_for_compaction(const common::ObTabletID
         return ret;
       };
 
-      ObSQLiteConnectionGuard guard(pool_);
+      LocalConnectionGuard guard(pool_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->query(sql.ptr(), nullptr, row_processor))) {
+      } else if (OB_FAIL(guard->query(request, nullptr, row_processor))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
         } else {
           ret = OB_SUCCESS; // No rows is acceptable

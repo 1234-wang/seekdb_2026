@@ -6,10 +6,7 @@ publish = false
 description = "Local transactional storage with a disk backed copy-on-write B+ tree"
 
 [lib]
-crate-type = ["staticlib", "rlib"]
-
-[build-dependencies]
-cbindgen = "=0.29.4"
+crate-type = ["rlib"]
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

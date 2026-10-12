@@ -34,7 +34,7 @@ using namespace oceanbase::common::sqlclient;
 // Static storage instance
 ObMergeInfoTableStorage ObGlobalMergeTableOperator::storage_;
 
-int ObGlobalMergeTableOperator::init(ObSQLiteConnectionPool &meta_db_pool)
+int ObGlobalMergeTableOperator::init(LocalStore &meta_db_pool)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(storage_.init(&meta_db_pool))) {
@@ -85,7 +85,7 @@ int ObGlobalMergeTableOperator::update_partial_global_merge_info(
   if (!storage_.is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    // Use SQLite storage - partial update is same as full update for SQLite
+    // Use local metadata storage - partial update is same as full update for local metadata
     ret = storage_.insert_or_update(info);
     if (OB_FAIL(ret)) {
     }

@@ -1004,7 +1004,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
     ret = OB_INVALID_ARGUMENT;
   } else if (ObDDLUtil::is_verifying_checksum_error_needed(param.type_)
       && OB_FAIL(ObDDLUtil::check_table_compaction_checksum_error(*GCTX.schema_service_,
-          *GCTX.sql_proxy_, *GCTX.meta_db_pool_, param.src_table_schema_->get_table_id()))) {
+          *GCTX.sql_proxy_, *GCTX.local_store_, param.src_table_schema_->get_table_id()))) {
     if (OB_NOT_SUPPORTED != ret) {
       LOG_WARN("unexpected error in check_table_compaction_checksum_error, choose to suppress the error", K(ret), K(param));
       ret = OB_SUCCESS;

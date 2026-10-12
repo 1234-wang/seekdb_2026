@@ -38,8 +38,8 @@ class ObTabletTableOperator
 public:
   ObTabletTableOperator();
   virtual ~ObTabletTableOperator();
-  // Initialize with SQLite storage
-  int init(share::ObSQLiteConnectionPool *pool);
+  // Initialize with local metadata storage
+  int init(share::LocalStore *pool);
   void reset();
   int batch_get(
       const ObIArray<common::ObTabletID> &tablet_ids,
@@ -47,12 +47,12 @@ public:
   int batch_update(
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
   int batch_update(
-      ObSQLiteConnection *conn,
+      LocalConnection *conn,
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
   int batch_remove(
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
   int batch_remove(
-      ObSQLiteConnection *conn,
+      LocalConnection *conn,
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
   int batch_get_tablet_info(
       const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,

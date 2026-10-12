@@ -19,12 +19,30 @@
 
 #include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
-#include "share/storage/ob_sqlite_connection_pool.h"
+#include "share/storage/local_store.h"
 
 namespace oceanbase
 {
 namespace share
 {
+namespace admin_job
+{
+enum Column : uint32_t { JobId, GmtCreate, GmtModified, JobType, JobStatus, ResultCode };
+inline const local::Schema &schema()
+{
+  static const auto schema = local_schema(5, {
+    {"job_id", local::Kind::Integer, false},
+    {"gmt_create", local::Kind::Integer, true},
+    {"gmt_modified", local::Kind::Integer, true},
+    {"job_type", local::Kind::Text, false},
+    {"job_status", local::Kind::Text, false},
+    {"result_code", local::Kind::Integer, true},
+  }, {JobId}, {});
+  return schema;
+}
+} // namespace admin_job
+
+
 
 struct ObAdminJobEntry
 {
@@ -62,7 +80,7 @@ public:
   ObAdminJobTableStorage();
   virtual ~ObAdminJobTableStorage();
 
-  int init(ObSQLiteConnectionPool *pool);
+  int init(LocalStore *pool);
   bool is_inited() const { return nullptr != pool_; }
 
   int create_job(const ObAdminJobEntry &entry);
@@ -74,7 +92,7 @@ public:
 private:
   int create_table_if_not_exists_();
 
-  ObSQLiteConnectionPool *pool_;
+  LocalStore *pool_;
   DISALLOW_COPY_AND_ASSIGN(ObAdminJobTableStorage);
 };
 

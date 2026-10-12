@@ -34,7 +34,7 @@ config_setting(
 # Track sources and build inputs for every crate in the workspace. Cargo only
 # runs when Bazel sees one of these inputs change.
 _RUST_INPUTS = glob(
-    ["**/*.rs", "**/*.toml", "**/*.yaml", "**/*.yml", "**/*.json", "*.lock"],
+    ["**/*.rs", "**/*.h", "**/*.py", "**/*.toml", "**/*.yaml", "**/*.yml", "**/*.json", "*.lock"],
     exclude = ["target/**"],
     allow_empty = True,
 )
@@ -46,16 +46,19 @@ _RUST_INPUTS = glob(
 genrule(
     name = "_rust_static_unix",
     srcs = _RUST_INPUTS,
-    outs = ["libsql_nio.a", "libconfig.a", "libkv.a", "unix/config_bridge.h", "unix/config_checkers.h"],
+    outs = ["libsql_nio.a", "libconfig.a", "liblocal.a", "unix/config_bridge.h", "unix/config_checkers.h", "unix/local_bridge.h", "unix/rust/cxx.h"],
     cmd = """
 set -eu
 export CARGO_TARGET_DIR="$(@D)/rust-cargo-target"
 export CONFIG_HEADER_DIR="$$PWD/$(@D)/unix"
+export LOCAL_HEADER_DIR="$$PWD/$(@D)/unix"
 export DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
 cargo build --release --manifest-path "$(location Cargo.toml)" --workspace
 cp "$$CARGO_TARGET_DIR/release/libsql_nio.a" "$(@D)/libsql_nio.a"
 cp "$$CARGO_TARGET_DIR/release/libconfig.a" "$(@D)/libconfig.a"
-cp "$$CARGO_TARGET_DIR/release/libkv.a" "$(@D)/libkv.a"
+cp "$$CARGO_TARGET_DIR/release/liblocal.a" "$(@D)/liblocal.a"
+mkdir -p "$(@D)/unix/rust"
+cp "$$CARGO_TARGET_DIR/cxxbridge/rust/cxx.h" "$(@D)/unix/rust/cxx.h"
 """,
     tags = [
         "no-remote",
@@ -70,10 +73,11 @@ cp "$$CARGO_TARGET_DIR/release/libkv.a" "$(@D)/libkv.a"
 genrule(
     name = "_rust_static_windows",
     srcs = _RUST_INPUTS,
-    outs = ["sql_nio.lib", "config.lib", "kv.lib", "windows/config_bridge.h", "windows/config_checkers.h"],
+    outs = ["sql_nio.lib", "config.lib", "local.lib", "windows/config_bridge.h", "windows/config_checkers.h", "windows/local_bridge.h", "windows/rust/cxx.h"],
     cmd_bat = """
 set CARGO_TARGET_DIR=$(@D)\\rust-cargo-target
 set CONFIG_HEADER_DIR=%CD%\\$(@D)\\windows
+set LOCAL_HEADER_DIR=%CD%\\$(@D)\\windows
 set DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
 cargo build --release --manifest-path "$(location Cargo.toml)" --workspace
 if errorlevel 1 exit /b 1
@@ -81,7 +85,10 @@ copy /Y "%CARGO_TARGET_DIR%\\release\\sql_nio.lib" "$(@D)\\sql_nio.lib"
 if errorlevel 1 exit /b 1
 copy /Y "%CARGO_TARGET_DIR%\\release\\config.lib" "$(@D)\\config.lib"
 if errorlevel 1 exit /b 1
-copy /Y "%CARGO_TARGET_DIR%\\release\\kv.lib" "$(@D)\\kv.lib"
+copy /Y "%CARGO_TARGET_DIR%\\release\\local.lib" "$(@D)\\local.lib"
+if errorlevel 1 exit /b 1
+if not exist "$(@D)\\windows\\rust" mkdir "$(@D)\\windows\\rust"
+copy /Y "%CARGO_TARGET_DIR%\\cxxbridge\\rust\\cxx.h" "$(@D)\\windows\\rust\\cxx.h"
 """,
     tags = [
         "no-remote",
@@ -109,22 +116,6 @@ filegroup(
         "//conditions:default": ["libconfig.a"],
     }),
     visibility = ["//src/observer:__pkg__"],
-)
-
-cc_library(
-    name = "kv",
-    srcs = select({
-        ":windows": ["kv.lib"],
-        "//conditions:default": ["libkv.a"],
-    }),
-    hdrs = ["kv/include/kv.h", "kv/include/kv.hpp"],
-    includes = ["kv/include"],
-    linkopts = select({
-        ":windows": ["ntdll.lib", "userenv.lib", "ws2_32.lib", "bcrypt.lib", "advapi32.lib", "synchronization.lib"],
-        ":macos": [],
-        "//conditions:default": ["-lpthread", "-ldl", "-lm"],
-    }),
-    visibility = ["//visibility:public"],
 )
 
 cc_library(
@@ -157,4 +148,26 @@ cc_library(
         "//conditions:default": ["unix"],
     }),
     visibility = ["//src/share:__pkg__", "//src/observer:__pkg__", "//src/rootserver:__pkg__", "//src/sql:__subpackages__", "//src/storage:__pkg__", "//src/pl:__pkg__", "//src/standby:__pkg__"],
+)
+
+cc_library(
+    name = "local",
+    srcs = select({
+        ":windows": ["local.lib"],
+        "//conditions:default": ["liblocal.a"],
+    }),
+    hdrs = ["local/include/callbacks.h"] + select({
+        ":windows": ["windows/local_bridge.h", "windows/rust/cxx.h"],
+        "//conditions:default": ["unix/local_bridge.h", "unix/rust/cxx.h"],
+    }),
+    includes = ["local/include"] + select({
+        ":windows": ["windows"],
+        "//conditions:default": ["unix"],
+    }),
+    linkopts = select({
+        ":windows": ["ntdll.lib", "userenv.lib", "ws2_32.lib", "bcrypt.lib", "advapi32.lib", "synchronization.lib"],
+        ":macos": [],
+        "//conditions:default": ["-lpthread", "-ldl", "-lm"],
+    }),
+    visibility = ["//visibility:public"],
 )

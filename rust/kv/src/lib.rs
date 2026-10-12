@@ -18,7 +18,6 @@
 //! Limits bound transaction bookkeeping and snapshot retention. Returned
 //! values belong to callers and can be up to [`MAX_VALUE_SIZE`] bytes.
 
-pub mod ffi;
 mod file;
 mod page;
 

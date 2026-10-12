@@ -16,16 +16,15 @@
 
 #define USING_LOG_PREFIX SHARE
 
-// SQLite storage for local tablet checksums.
+// local metadata storage for local tablet checksums.
 
 #include "share/storage/ob_tablet_local_checksum_table_storage.h"
-#include "share/storage/ob_sqlite_connection.h"
+#include "share/storage/local_store.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_tablet_local_checksum_operator.h"
 
-#include "share/storage/ob_sqlite_table_schema.h"
 
 namespace oceanbase
 {
@@ -41,7 +40,7 @@ ObTabletLocalChecksumTableStorage::~ObTabletLocalChecksumTableStorage()
 {
 }
 
-int ObTabletLocalChecksumTableStorage::init(ObSQLiteConnectionPool *pool)
+int ObTabletLocalChecksumTableStorage::init(LocalStore *pool)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pool_ = pool)) {
@@ -56,17 +55,7 @@ int ObTabletLocalChecksumTableStorage::init(ObSQLiteConnectionPool *pool)
 
 int ObTabletLocalChecksumTableStorage::create_table_if_not_exists()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_)) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObSQLiteConnectionGuard guard(pool_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(SQLITE_CREATE_TABLE_TABLET_LOCAL_CHECKSUM, nullptr))) {
-    }
-  }
-  return ret;
+  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObTabletLocalChecksumTableStorage::batch_get(
@@ -82,40 +71,19 @@ int ObTabletLocalChecksumTableStorage::batch_get(
   } else if (tablet_ids.empty()) {
     // do nothing
   } else {
-    // Build SQL with IN clause
-    common::ObSqlString sql;
-    if (OB_FAIL(sql.append_fmt(
-        "SELECT tablet_id, compaction_scn, "
-        "       row_count, data_checksum, column_checksums, b_column_checksums, "
-        "       data_checksum_type "
-        "FROM __all_tablet_local_checksum "
-        "WHERE tablet_id IN ("))) {
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-        const ObTabletID &tablet_id = tablet_ids.at(i);
-        if (OB_UNLIKELY(!tablet_id.is_valid())) {
-          ret = OB_INVALID_ARGUMENT;
-        } else if (OB_FAIL(sql.append_fmt(
-            "%s %ld",
-            i == 0 ? "" : ",",
-            tablet_id.id()))) {
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sql.append(")"))) {
-        } else if (compaction_scn.is_valid()) {
-          const char *op = include_larger_than ? ">=" : "=";
-          if (OB_FAIL(sql.append_fmt(" AND compaction_scn %s %lu",
-              op, compaction_scn.get_val_for_inner_table_field()))) {
-          }
-        }
-        if (OB_SUCC(ret) && OB_FAIL(sql.append(" ORDER BY tablet_id;"))) {
-        }
-      }
+    auto request = LocalRequest::select(tablet_checksum::schema(), {tablet_checksum::TabletId, tablet_checksum::CompactionScn, tablet_checksum::RowCount, tablet_checksum::DataChecksum, tablet_checksum::ColumnChecksums, tablet_checksum::BColumnChecksums, tablet_checksum::DataChecksumType})
+        .in(tablet_checksum::TabletId, tablet_ids).order(tablet_checksum::TabletId);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+      if (!tablet_ids.at(i).is_valid()) { ret = OB_INVALID_ARGUMENT; }
+    }
+    if (compaction_scn.is_valid()) {
+      const auto scn = static_cast<int64_t>(compaction_scn.get_val_for_inner_table_field());
+      if (include_larger_than) { request.ge(1, scn); }
+      else { request.eq(1, scn); }
     }
 
     if (OB_SUCC(ret)) {
-      auto row_processor = [&](ObSQLiteRowReader &reader) -> int {
+      auto row_processor = [&](LocalRowReader &reader) -> int {
         ObTabletLocalChecksumItem item;
         int64_t tablet_id_val = reader.get_int64();
         uint64_t compaction_scn_val = reader.get_int64();
@@ -152,10 +120,10 @@ int ObTabletLocalChecksumTableStorage::batch_get(
         return ret;
       };
 
-      ObSQLiteConnectionGuard guard(pool_);
+      LocalConnectionGuard guard(pool_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->query(sql.ptr(), nullptr, row_processor))) {
+      } else if (OB_FAIL(guard->query(request, nullptr, row_processor))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
         } else {
           ret = OB_SUCCESS; // No rows is acceptable
@@ -175,16 +143,15 @@ int ObTabletLocalChecksumTableStorage::get_row_count(
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *select_sql =
-      "SELECT row_count FROM __all_tablet_local_checksum "
-      "WHERE tablet_id = ?;";
+    const auto select_request =
+      LocalRequest::select(tablet_checksum::schema(), {tablet_checksum::RowCount}).eq(tablet_checksum::TabletId, local_param(0));
 
-    auto binder = [&](ObSQLiteBinder &b) -> int {
+    auto binder = [&](LocalBinder &b) -> int {
       b.bind_int64(tablet_id.id());
       return OB_SUCCESS;
     };
 
-    auto row_processor = [&](ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](LocalRowReader &reader) -> int {
       int64_t value = reader.get_int64();
       if (value > 0) {
         row_count = value;
@@ -192,10 +159,10 @@ int ObTabletLocalChecksumTableStorage::get_row_count(
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, binder, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       } else {
         ret = OB_SUCCESS; // No rows is acceptable

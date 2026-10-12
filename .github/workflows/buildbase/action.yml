@@ -20,7 +20,7 @@ runs:
     - name: Rust unit tests
       shell: bash
       working-directory: rust
-      run: cargo test -p sql-nio -p kv -p config
+      run: cargo test -p sql-nio -p kv -p local -p config
 
     - name: Initialize release build
       shell: bash

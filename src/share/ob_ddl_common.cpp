@@ -857,7 +857,7 @@ int ObDDLUtil::get_index_table_batch_partition_names(
 }
 
 int ObDDLUtil::get_tablet_data_size(
-    ObSQLiteConnectionPool &meta_db_pool,
+    LocalStore &meta_db_pool,
     const common::ObTabletID &tablet_id,
     int64_t &data_size)
 {
@@ -875,7 +875,7 @@ int ObDDLUtil::get_tablet_data_size(
 }
 
 int ObDDLUtil::get_tablet_data_row_cnt(
-    ObSQLiteConnectionPool &meta_db_pool,
+    LocalStore &meta_db_pool,
     const common::ObTabletID &tablet_id,
     int64_t &data_row_cnt)
 {
@@ -1209,7 +1209,7 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
 
 int ObDDLUtil::check_table_compaction_checksum_error(ObMultiVersionSchemaService &schema_service,
                                                      common::ObISQLClient &sql_client,
-                                                     ObSQLiteConnectionPool &meta_db_pool,
+                                                     LocalStore &meta_db_pool,
                                                      const uint64_t table_id)
 {
   UNUSEDx(schema_service, meta_db_pool);

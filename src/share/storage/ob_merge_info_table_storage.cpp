@@ -17,11 +17,10 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/storage/ob_merge_info_table_storage.h"
-#include "share/storage/ob_sqlite_connection.h"
+#include "share/storage/local_store.h"
 #include "lib/oblog/ob_log.h"
 #include "share/ob_merge_info.h"
 
-#include "share/storage/ob_sqlite_table_schema.h"
 
 namespace oceanbase
 {
@@ -37,7 +36,7 @@ ObMergeInfoTableStorage::~ObMergeInfoTableStorage()
 {
 }
 
-int ObMergeInfoTableStorage::init(ObSQLiteConnectionPool *pool)
+int ObMergeInfoTableStorage::init(LocalStore *pool)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pool_ = pool)) {
@@ -52,17 +51,7 @@ int ObMergeInfoTableStorage::init(ObSQLiteConnectionPool *pool)
 
 int ObMergeInfoTableStorage::create_table_if_not_exists()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_)) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObSQLiteConnectionGuard guard(pool_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(SQLITE_CREATE_TABLE_MERGE_INFO, nullptr))) {
-    }
-  }
-  return ret;
+  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObMergeInfoTableStorage::insert_or_update(const ObGlobalMergeInfo &global_merge_info)
@@ -71,24 +60,10 @@ int ObMergeInfoTableStorage::insert_or_update(const ObGlobalMergeInfo &global_me
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *upsert_sql =
-      "INSERT INTO __all_merge_info "
-      "(id, frozen_scn, global_broadcast_scn, is_merge_error, "
-      " last_merged_scn, merge_status, error_type, suspend_merging, "
-      " merge_start_time, last_merged_time) "
-      "VALUES (0, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-      "ON CONFLICT(id) DO UPDATE SET "
-      "frozen_scn = excluded.frozen_scn, "
-      "global_broadcast_scn = excluded.global_broadcast_scn, "
-      "is_merge_error = excluded.is_merge_error, "
-      "last_merged_scn = excluded.last_merged_scn, "
-      "merge_status = excluded.merge_status, "
-      "error_type = excluded.error_type, "
-      "suspend_merging = excluded.suspend_merging, "
-      "merge_start_time = excluded.merge_start_time, "
-      "last_merged_time = excluded.last_merged_time;";
+    const auto upsert_request =
+      LocalRequest::insert(merge_info::schema(), {merge_info::FrozenScn, merge_info::GlobalBroadcastScn, merge_info::IsMergeError, merge_info::LastMergedScn, merge_info::MergeStatus, merge_info::ErrorType, merge_info::SuspendMerging, merge_info::MergeStartTime, merge_info::LastMergedTime}, true).set(merge_info::Id, int64_t(0));
 
-    auto binder = [&](ObSQLiteBinder &b) -> int {
+    auto binder = [&](LocalBinder &b) -> int {
       b.bind_int64(global_merge_info.frozen_scn().get_val_for_inner_table_field());
       b.bind_int64(global_merge_info.global_broadcast_scn().get_val_for_inner_table_field());
       b.bind_int64(global_merge_info.is_merge_error_.get_value());
@@ -101,10 +76,10 @@ int ObMergeInfoTableStorage::insert_or_update(const ObGlobalMergeInfo &global_me
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(upsert_sql, binder))) {
+    } else if (OB_FAIL(guard->execute(upsert_request, binder))) {
     }
   }
   return ret;
@@ -117,13 +92,10 @@ int ObMergeInfoTableStorage::get(ObGlobalMergeInfo &global_merge_info)
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *select_sql =
-      "SELECT frozen_scn, global_broadcast_scn, is_merge_error, "
-      "       last_merged_scn, merge_status, error_type, suspend_merging, "
-      "       merge_start_time, last_merged_time "
-      "FROM __all_merge_info LIMIT 1;";
+    const auto select_request =
+      LocalRequest::select(merge_info::schema(), {merge_info::FrozenScn, merge_info::GlobalBroadcastScn, merge_info::IsMergeError, merge_info::LastMergedScn, merge_info::MergeStatus, merge_info::ErrorType, merge_info::SuspendMerging, merge_info::MergeStartTime, merge_info::LastMergedTime}).take(int64_t(1));
 
-    auto row_processor = [&](ObSQLiteRowReader &reader) -> int {
+    auto row_processor = [&](LocalRowReader &reader) -> int {
       uint64_t frozen_scn_val = reader.get_int64();
       uint64_t global_broadcast_scn_val = reader.get_int64();
       int64_t is_merge_error = reader.get_int64();
@@ -146,10 +118,10 @@ int ObMergeInfoTableStorage::get(ObGlobalMergeInfo &global_merge_info)
       return OB_SUCCESS;
     };
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_sql, nullptr, row_processor))) {
+    } else if (OB_FAIL(guard->query(select_request, nullptr, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       }
     }

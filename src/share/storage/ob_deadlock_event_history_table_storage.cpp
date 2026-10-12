@@ -16,13 +16,12 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/storage/ob_deadlock_event_history_table_storage.h"
-#include "share/storage/ob_sqlite_connection.h"
+#include "share/storage/local_store.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/net/ob_addr.h"
 #include "lib/string/ob_sql_string.h"
 
-#include "share/storage/ob_sqlite_table_schema.h"
 
 namespace oceanbase
 {
@@ -38,7 +37,7 @@ ObDeadlockEventHistoryTableStorage::~ObDeadlockEventHistoryTableStorage()
 {
 }
 
-int ObDeadlockEventHistoryTableStorage::init(ObSQLiteConnectionPool *pool)
+int ObDeadlockEventHistoryTableStorage::init(LocalStore *pool)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pool_ = pool)) {
@@ -53,17 +52,7 @@ int ObDeadlockEventHistoryTableStorage::init(ObSQLiteConnectionPool *pool)
 
 int ObDeadlockEventHistoryTableStorage::create_table_if_not_exists()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(pool_)) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObSQLiteConnectionGuard guard(pool_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(SQLITE_CREATE_TABLE_DEADLOCK_EVENT_HISTORY, nullptr))) {
-    }
-  }
-  return ret;
+  return pool_ && pool_->is_inited() ? OB_SUCCESS : OB_NOT_INIT;
 }
 
 int ObDeadlockEventHistoryTableStorage::insert(const ObDeadlockEventHistoryEntry &entry)
@@ -72,15 +61,10 @@ int ObDeadlockEventHistoryTableStorage::insert(const ObDeadlockEventHistoryEntry
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const char *insert_sql =
-      "INSERT INTO __all_deadlock_event_history "
-      "(event_id, detector_id, report_time, "
-      "cycle_idx, cycle_size, role, priority_level, priority, create_time, "
-      "start_delay, module, visitor, object, extra_name1, extra_value1, "
-      "extra_name2, extra_value2, extra_name3, extra_value3) "
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+    const auto insert_request =
+      LocalRequest::insert(deadlock_history::schema(), {deadlock_history::EventId, deadlock_history::DetectorId, deadlock_history::ReportTime, deadlock_history::CycleIdx, deadlock_history::CycleSize, deadlock_history::Role, deadlock_history::PriorityLevel, deadlock_history::Priority, deadlock_history::CreateTime, deadlock_history::StartDelay, deadlock_history::Module, deadlock_history::Visitor, deadlock_history::Object, deadlock_history::ExtraName1, deadlock_history::ExtraValue1, deadlock_history::ExtraName2, deadlock_history::ExtraValue2, deadlock_history::ExtraName3, deadlock_history::ExtraValue3}, false);
 
-    auto binder = [&](ObSQLiteBinder &b) -> int {
+    auto binder = [&](LocalBinder &b) -> int {
         b.bind_int64(entry.event_id_);
         b.bind_int64(entry.detector_id_);
         b.bind_int64(entry.report_time_);
@@ -102,10 +86,10 @@ int ObDeadlockEventHistoryTableStorage::insert(const ObDeadlockEventHistoryEntry
         b.bind_text(entry.extra_value3_.empty() ? "" : entry.extra_value3_.ptr(), entry.extra_value3_.length());
         return OB_SUCCESS;
       };
-      ObSQLiteConnectionGuard guard(pool_);
+      LocalConnectionGuard guard(pool_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->execute(insert_sql, binder))) {
+      } else if (OB_FAIL(guard->execute(insert_request, binder))) {
       }
   }
   return ret;
@@ -119,27 +103,21 @@ int ObDeadlockEventHistoryTableStorage::insert_all(const ObIArray<ObDeadlockEven
   } else if (entries.empty()) {
     // do nothing
   } else {
-    const char *insert_sql =
-      "INSERT INTO __all_deadlock_event_history "
-      "(event_id, detector_id, report_time, "
-      "cycle_idx, cycle_size, role, priority_level, priority, create_time, "
-      "start_delay, module, visitor, object, extra_name1, extra_value1, "
-      "extra_name2, extra_value2, extra_name3, extra_value3) "
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+    const auto insert_request =
+      LocalRequest::insert(deadlock_history::schema(), {deadlock_history::EventId, deadlock_history::DetectorId, deadlock_history::ReportTime, deadlock_history::CycleIdx, deadlock_history::CycleSize, deadlock_history::Role, deadlock_history::PriorityLevel, deadlock_history::Priority, deadlock_history::CreateTime, deadlock_history::StartDelay, deadlock_history::Module, deadlock_history::Visitor, deadlock_history::Object, deadlock_history::ExtraName1, deadlock_history::ExtraValue1, deadlock_history::ExtraName2, deadlock_history::ExtraValue2, deadlock_history::ExtraName3, deadlock_history::ExtraValue3}, false);
 
-    ObSQLiteConnectionGuard guard(pool_);
+    LocalConnectionGuard guard(pool_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
     } else {
       // Begin transaction for batch insert
-      if (OB_FAIL(guard->begin_transaction())) {
-      } else {
-        ObSQLiteStmt *stmt = nullptr;
-        if (OB_FAIL(guard->prepare_execute(insert_sql, stmt))) {
+      ret = guard->transaction([&]() -> int {
+        LocalStmt *stmt = nullptr;
+        if (OB_FAIL(guard->prepare_execute(insert_request, stmt))) {
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < entries.count(); ++i) {
             const ObDeadlockEventHistoryEntry &entry = entries.at(i);
-            auto binder = [&](ObSQLiteBinder &b) -> int {
+            auto binder = [&](LocalBinder &b) -> int {
                 b.bind_int64(entry.event_id_);
                 b.bind_int64(entry.detector_id_);
                 b.bind_int64(entry.report_time_);
@@ -164,21 +142,15 @@ int ObDeadlockEventHistoryTableStorage::insert_all(const ObIArray<ObDeadlockEven
               if (OB_FAIL(guard->step_execute(stmt, binder))) {
               }
           }
-          
+
           // Finalize statement
           guard->finalize_execute(stmt);
-          
-          // Commit or rollback transaction
-          if (OB_FAIL(ret)) {
-            int rollback_ret = guard->rollback();
-            if (OB_SUCCESS != rollback_ret) {
-            }
-          } else {
-            if (OB_FAIL(guard->commit())) {
-            }
-          }
+
+
         }
-      }
+
+        return ret;
+      });
     }
   }
   return ret;
@@ -190,23 +162,11 @@ int ObDeadlockEventHistoryTableStorage::delete_expired(int64_t report_time_befor
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    // SQLite doesn't support DELETE ... LIMIT, use subquery with rowid instead
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("DELETE FROM __all_deadlock_event_history "
-                                "WHERE rowid IN ("
-                                "  SELECT rowid FROM __all_deadlock_event_history "
-                                "  WHERE report_time < %ld "
-                                "  ORDER BY report_time "
-                                "  LIMIT %ld"
-                                ")",
-                                report_time_before, limit))) {
-    } else {
-      ObSQLiteConnectionGuard guard(pool_);
-      if (!guard) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->execute(sql.ptr(), nullptr))) {
-      }
-    }
+    const auto request = LocalRequest::erase(deadlock_history::schema())
+        .lt(deadlock_history::ReportTime, static_cast<int64_t>(report_time_before)).order(deadlock_history::ReportTime).take(limit);
+    LocalConnectionGuard guard(pool_);
+    if (!guard) { ret = OB_ERR_UNEXPECTED; }
+    else { ret = guard->execute(request); }
   }
   return ret;
 }
