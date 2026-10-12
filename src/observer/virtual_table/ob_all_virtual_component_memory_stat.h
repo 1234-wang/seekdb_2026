@@ -38,6 +38,10 @@ public:
 
   static int64_t component_count() { return COMPONENT_COUNT; }
   static const char *component_name(int64_t component_index);
+  int get_component_sample(
+      const int64_t component_index,
+      const char *&component_name,
+      common::MemoryQuotaSample &sample) const;
 
 private:
   enum ColumnId
@@ -53,12 +57,6 @@ private:
   };
 
   static const int64_t COMPONENT_COUNT = 4;
-  int get_component_sample(
-      const int64_t component_index,
-      const char *&component_name,
-      common::MemoryQuotaSample &sample) const;
-
-private:
   int64_t component_index_;
   char ip_buf_[common::OB_IP_STR_BUFF];
 
