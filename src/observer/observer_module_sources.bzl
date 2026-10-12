@@ -65,7 +65,7 @@ def observer_validate_source_inventory(
         fail("Observer standalone baseline changed: %s" % standalone_count)
 
     ignored = {path: True for path in ignored_sources}
-    if len(ignored) != 6:
+    if len(ignored) != 8:
         fail("Observer ignored-source baseline changed: %s" % len(ignored))
     for path in ignored:
         if path in owned:
