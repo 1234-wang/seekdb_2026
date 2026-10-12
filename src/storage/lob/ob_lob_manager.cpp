@@ -1874,7 +1874,7 @@ int ObLobManager::insert(ObLobAccessParam& param, const ObLobLocatorV2 &src_data
     LOG_WARN("null lob common", K(ret), K(param));
   } else if (! param.lob_common_->is_init_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lob common not init", K(ret), KPC(param.lob_common_), K(param));  
+    LOG_WARN("lob common not init", K(ret), KPC(param.lob_common_), K(param));
   } else if (OB_ISNULL(param.lob_data_ = reinterpret_cast<ObLobData*>(param.lob_common_->buffer_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob_data_ is null", KR(ret), K(param));

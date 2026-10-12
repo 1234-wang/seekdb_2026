@@ -451,8 +451,10 @@ private:
   common::ObDList<LinkNode> blk_mem_list_;
   common::ObSEArray<BlockIndex, DEFAULT_BLOCK_CNT> blocks_;
   int64_t mem_hold_; // total mem allocated, including mem allocated in blocks but not yet used
-  common::DefaultPageAllocator inner_allocator_;
+  common::DefaultPageAllocator inner_backing_allocator_;
+  common::TrackedAllocator inner_allocator_;
   common::ObIAllocator *allocator_;
+  bool use_inner_allocator_;
   uint32_t row_extend_size_;
   ObSqlMemoryCallback *mem_stat_;
   ObIOEventObserver *io_observer_;

@@ -252,6 +252,8 @@ private:
 class TestRADatumStore final : public ObRADatumStore
 {
 public:
+  TestRADatumStore() : ObRADatumStore(), spilled_bytes_(0) {}
+
   TestRADatumStore(ObIAllocator &allocator, ObSqlMemoryCallback &)
       : ObRADatumStore(&allocator), spilled_bytes_(0)
   {}
@@ -551,6 +553,64 @@ TEST(TestWorkareaMemoryQuota,
     EXPECT_GT(first_store.spilled_bytes(), 0);
     EXPECT_LE(quota.committed(), shared_limit);
     ASSERT_EQ(OB_SUCCESS, first_store.finish_add_row(false));
+  }
+
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+}
+
+TEST(TestWorkareaMemoryQuota,
+     default_backed_ra_datum_store_tracks_rejects_spill_and_release)
+{
+  TestTmpFileManagerGuard tmp_file_manager;
+  ASSERT_EQ(OB_SUCCESS, tmp_file_manager.init());
+  MemoryQuota quota;
+  TestWorkareaQuotaResolverGuard quota_resolver_guard(quota);
+  std::vector<char> first_payload(40L << 10, 'a');
+  std::vector<char> second_payload(40L << 10, 'b');
+  ObDatum datum;
+  datum.set_string(first_payload.data(), first_payload.size());
+  ObSEArray<ObDatum, 1> row;
+  ASSERT_EQ(OB_SUCCESS, row.push_back(datum));
+
+  quota.set_limit(1);
+  {
+    TestRADatumStore store;
+    ASSERT_EQ(OB_SUCCESS,
+              store.init(ObRADatumStore::BIG_BLOCK_SIZE / 2,
+                         ObCtxIds::WORK_AREA, "DefaultWARADatum"));
+    const int64_t reject_count = quota.reject_count();
+    EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, store.add_row(row));
+    EXPECT_GT(quota.reject_count(), reject_count);
+    EXPECT_EQ(0, quota.committed());
+    EXPECT_EQ(0, quota.reserved());
+
+    quota.set_limit(4 * ObRADatumStore::BIG_BLOCK_SIZE);
+    ASSERT_EQ(OB_SUCCESS, store.add_row(row));
+    ASSERT_GT(quota.committed(), 0);
+
+    // FULL_INPUT_SAMPLE appends every input row to this same default-backed
+    // store.  Keep adding under a low shared quota to exercise spill and
+    // readback without injecting an allocator that would mask the resolver.
+    row.at(0).set_string(second_payload.data(), second_payload.size());
+    for (int64_t i = 1; i < 32; ++i) {
+      ASSERT_EQ(OB_SUCCESS, store.add_row(row));
+    }
+    EXPECT_GT(store.spilled_bytes(), 0);
+    EXPECT_LE(quota.committed(), quota.limit());
+    ASSERT_EQ(OB_SUCCESS, store.finish_add_row());
+
+    quota.set_limit(quota.committed() + 2 * ObRADatumStore::BIG_BLOCK_SIZE);
+    ObRADatumStore::Reader reader(store);
+    const ObRADatumStore::StoredRow *stored_row = nullptr;
+    ASSERT_EQ(OB_SUCCESS, reader.get_row(0, stored_row));
+    ASSERT_NE(nullptr, stored_row);
+    EXPECT_EQ(ObString(first_payload.size(), first_payload.data()),
+              stored_row->cells()[0].get_string());
+    ASSERT_EQ(OB_SUCCESS, reader.get_row(31, stored_row));
+    ASSERT_NE(nullptr, stored_row);
+    EXPECT_EQ(ObString(second_payload.size(), second_payload.data()),
+              stored_row->cells()[0].get_string());
   }
 
   EXPECT_EQ(0, quota.committed());

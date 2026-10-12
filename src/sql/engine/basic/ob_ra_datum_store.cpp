@@ -333,7 +333,12 @@ int ObRADatumStore::Block::to_copyable()
 ObRADatumStore::ObRADatumStore(common::ObIAllocator *alloc /* = NULL */)
   : inited_(false), label_(nullptr), ctx_id_(0), mem_limit_(0),
     idx_blk_(NULL), save_row_cnt_(0), row_cnt_(0), fd_(-1), dir_id_(-1), file_size_(0),
-    inner_reader_(*this), mem_hold_(0), allocator_(NULL == alloc ? &inner_allocator_ : alloc),
+    inner_reader_(*this), mem_hold_(0),
+    inner_backing_allocator_(lib::ObMemAttr(common::ObModIds::OB_SQL_ROW_STORE)),
+    inner_allocator_(inner_backing_allocator_, nullptr, nullptr,
+                     lib::ObMemAttr(common::ObModIds::OB_SQL_ROW_STORE)),
+    allocator_(NULL == alloc ? &inner_allocator_ : alloc),
+    use_inner_allocator_(NULL == alloc),
     row_extend_size_(0), mem_stat_(NULL), io_observer_(NULL)
 {
 }
@@ -350,6 +355,15 @@ int ObRADatumStore::init(int64_t mem_limit,
   } else {
     ctx_id_ = mem_ctx_id;
     label_ = label;
+    if (use_inner_allocator_) {
+      const ObMemAttr attr(label_, ctx_id_);
+      inner_backing_allocator_.set_attr(attr);
+      inner_allocator_.configure(
+          inner_backing_allocator_,
+          common::resolve_memory_usage_tracker(ctx_id_),
+          common::resolve_memory_quota(ctx_id_),
+          attr);
+    }
     mem_limit_ = mem_limit;
     row_extend_size_ = row_extend_size;
     inited_ = true;
