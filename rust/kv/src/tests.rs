@@ -365,6 +365,58 @@ fn handles_keep_exclusive_ownership_until_last_snapshot_drops() {
     drop(directory.open());
 }
 
+#[cfg(unix)]
+#[test]
+fn closing_store_releases_lock_while_a_child_waits_to_exec() {
+    use std::io::{Read, Write};
+    use std::os::fd::AsRawFd;
+    use std::os::unix::net::UnixStream;
+    use std::os::unix::process::CommandExt;
+    use std::time::Duration;
+
+    unsafe extern "C" {
+        fn read(fd: i32, buffer: *mut std::ffi::c_void, length: usize) -> isize;
+        fn write(fd: i32, buffer: *const std::ffi::c_void, length: usize) -> isize;
+    }
+
+    let directory = Directory::new();
+    let store = directory.open();
+    let (mut parent, child) = UnixStream::pair().unwrap();
+    parent
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    let process = thread::spawn(move || {
+        let fd = child.as_raw_fd();
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command.args(["--exact", "tests::crash_child"]);
+        unsafe {
+            command.pre_exec(move || {
+                // Use only async-signal-safe syscalls between fork and exec.
+                let mut byte = 1_u8;
+                if write(fd, (&byte as *const u8).cast(), 1) != 1
+                    || read(fd, (&mut byte as *mut u8).cast(), 1) != 1
+                {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        command.output().unwrap()
+    });
+    let mut ready = [0];
+    parent.read_exact(&mut ready).unwrap();
+    // The child still has the inherited CLOEXEC descriptor at this point.
+    drop(store);
+    let reopened = Store::open(&directory.0);
+    parent.write_all(&[1]).unwrap();
+    assert!(process.join().unwrap().status.success());
+    assert!(
+        reopened.is_ok(),
+        "lock retained by child: {:?}",
+        reopened.err()
+    );
+}
+
 #[test]
 fn torn_latest_root_recovers_fallback_even_after_page_reuse() {
     let directory = Directory::new();

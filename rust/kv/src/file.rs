@@ -13,12 +13,22 @@ use crate::{Error, Result};
 // recovery input, and uses eight bytes of disk per data page.
 pub(crate) const LIVE: u64 = u64::MAX;
 
+pub(crate) struct FileLock(File);
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        // CLOEXEC descriptors can still be inherited between fork and exec.
+        // Closing our copy alone may leave the lock held by that child.
+        let _ = self.0.unlock();
+    }
+}
+
 pub(crate) struct Files {
     pub data: File,
     pub roots: [Option<Root>; 2],
     pub slot: usize,
     pub allocation: Allocation,
-    pub lock: File,
+    pub lock: FileLock,
 }
 
 pub(crate) fn open(directory: &Path) -> Result<Files> {
@@ -31,6 +41,7 @@ pub(crate) fn open(directory: &Path) -> Result<Files> {
         std::fs::TryLockError::WouldBlock => Error::Busy,
         std::fs::TryLockError::Error(error) => Error::Io(error),
     })?;
+    let lock = FileLock(lock);
     let path = directory.join("data");
     if !path.try_exists()? {
         initialize(directory, &path)?;

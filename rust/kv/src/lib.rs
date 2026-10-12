@@ -30,7 +30,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use file::{read_exact_at, write_all_at, Allocation, LIVE};
+use file::{read_exact_at, write_all_at, Allocation, FileLock, LIVE};
 use page::{decode_overflow, encode_overflow, encode_root, Child, Entry, Node, Root, Value};
 use page::{INLINE_VALUE_SIZE, MAX_DEPTH, PAYLOAD_SIZE};
 pub use page::{MAX_KEY_SIZE, MAX_VALUE_SIZE, PAGE_SIZE};
@@ -158,7 +158,8 @@ struct Shared {
     visible: Mutex<Visible>,
     poisoned: AtomicBool,
     options: Options,
-    _lock: File,
+    // Keep last: allocation scratch cleanup must finish before unlocking.
+    _lock: FileLock,
 }
 
 struct Writer {
