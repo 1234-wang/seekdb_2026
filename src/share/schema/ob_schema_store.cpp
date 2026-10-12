@@ -38,6 +38,15 @@ int ObSchemaStore::init(const int64_t init_version_count)
   return ret;
 }
 
+int ObSchemaStore::destroy()
+{
+  const int ret = schema_mgr_cache_.destroy();
+  if (OB_SUCCESS == ret) {
+    reset_version();
+  }
+  return ret;
+}
+
 void ObSchemaStore::reset_version()
 {
   refreshed_version_ = OB_INVALID_VERSION;

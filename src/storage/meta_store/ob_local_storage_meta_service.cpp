@@ -90,14 +90,21 @@ int ObLocalStorageMetaService::start()
   return ret;
 }
 
-void ObLocalStorageMetaService::stop()
+void ObLocalStorageMetaService::stop_checkpoint()
 {
   if (IS_INIT) {
-     {
-      slogger_.stop();
-      ckpt_slog_handler_.stop();
-    }
+    ckpt_slog_handler_.stop();
+    ckpt_slog_handler_.wait();
   }
+}
+
+void ObLocalStorageMetaService::stop()
+{
+  stop_checkpoint();
+  if (IS_INIT) {
+    slogger_.stop();
+  }
+  is_started_ = false;
 }
 
 void ObLocalStorageMetaService::wait()
@@ -112,6 +119,8 @@ void ObLocalStorageMetaService::wait()
 
 void ObLocalStorageMetaService::destroy()
 {
+  stop();
+  wait();
   slogger_.destroy();
   ckpt_slog_handler_.destroy();
   persister_.destroy();

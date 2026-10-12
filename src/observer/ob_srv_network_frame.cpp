@@ -72,7 +72,10 @@ int ObSrvNetworkFrame::init()
 void ObSrvNetworkFrame::destroy()
 {
   if (NULL != obmysql::global_sql_nio_server) {
-    obmysql::global_sql_nio_server->destroy();
+    ObSqlNioServer *server = obmysql::global_sql_nio_server;
+    obmysql::global_sql_nio_server = nullptr;
+    server->destroy();
+    ob_delete(server);
   }
 }
 

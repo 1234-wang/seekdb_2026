@@ -231,6 +231,7 @@ void ObTabletRuntimeMetaUpdater::destroy()
 {
   stop();
   wait();
+  update_queue_.destroy();
   is_inited_ = false;
   is_stop_ = true;
 }

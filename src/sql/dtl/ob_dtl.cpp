@@ -69,42 +69,49 @@ int ObDtlChannelManager::foreach_refactored(int64_t interval, std::function<int(
 ////////////////////////////////////////////////////////////////////////////
 ObDtlHashTable::~ObDtlHashTable()
 {
+  destroy();
+}
+
+void ObDtlHashTable::destroy()
+{
   if (nullptr != bucket_cells_) {
     for (int64_t i = 0; i < bucket_num_; ++i) {
-      ObDtlHashTableCell &cell = bucket_cells_[i];
-      cell.~ObDtlHashTableCell();
+      bucket_cells_[i].~ObDtlHashTableCell();
     }
     allocator_.free(bucket_cells_);
     bucket_cells_ = nullptr;
   }
+  allocator_.reset();
+  bucket_num_ = 0;
 }
 
 int ObDtlHashTable::init(int64_t bucket_num)
 {
   int ret = OB_SUCCESS;
-  bucket_num_ = bucket_num;
-  if (bucket_num <= 0) {
+  if (nullptr != bucket_cells_ || allocator_.is_inited()) {
+    ret = OB_INIT_TWICE;
+  } else if (bucket_num <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect bukcet number", K(bucket_num));
+    LOG_WARN("unexpected bucket number", K(bucket_num));
   } else {
     ObMemAttr attr("SqlDtlMgr");
-    if (OB_FAIL(allocator_.init(
-        lib::ObMallocAllocator::get_instance(),
-        OB_MALLOC_NORMAL_BLOCK_SIZE,
-        attr))) {
+    if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
+                               OB_MALLOC_NORMAL_BLOCK_SIZE, attr))) {
     } else {
       allocator_.set_label("SqlDtlMgr");
-      bucket_cells_ = reinterpret_cast<ObDtlHashTableCell*>(allocator_.alloc(bucket_num * sizeof(ObDtlHashTableCell)));
+      bucket_cells_ = reinterpret_cast<ObDtlHashTableCell*>(
+          allocator_.alloc(bucket_num * sizeof(ObDtlHashTableCell)));
       if (nullptr == bucket_cells_) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        char *buf = reinterpret_cast<char*>(bucket_cells_);
-        for (int64_t i = 0; i < bucket_num_ && OB_SUCC(ret); ++i) {
-          ObDtlHashTableCell *cell = new (buf) ObDtlHashTableCell();
-          buf += sizeof(ObDtlHashTableCell);
-          UNUSED(cell);
+        for (int64_t i = 0; i < bucket_num; ++i) {
+          new (bucket_cells_ + i) ObDtlHashTableCell();
         }
+        bucket_num_ = bucket_num;
       }
+    }
+    if (OB_FAIL(ret)) {
+      destroy();
     }
   }
   return ret;
@@ -242,38 +249,75 @@ ObDtl::ObDtl()
       allocator_("SqlDtlMgr"),
       dfc_server_(),
       hash_table_(),
-      ch_mgrs_(nullptr)
+      ch_mgrs_(nullptr),
+      constructed_manager_count_(0),
+      owned_channel_count_(0)
 {
 }
 
 ObDtl::~ObDtl()
 {
-  if (OB_NOT_NULL(ch_mgrs_)) {
-    allocator_.free(ch_mgrs_);
-    ch_mgrs_ = nullptr;
-  }
+  IGNORE_RETURN destroy();
 }
 
 int ObDtl::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dfc_server_.init())) {
+  if (is_inited_ || nullptr != ch_mgrs_) {
+    ret = OB_INIT_TWICE;
+  } else if (OB_FAIL(dfc_server_.init())) {
+  } else if (OB_FAIL(hash_table_.init(BUCKET_NUM))) {
+  } else if (OB_ISNULL(ch_mgrs_ = reinterpret_cast<ObDtlChannelManager*>(
+      allocator_.alloc(sizeof(ObDtlChannelManager) * HASH_CNT)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    ch_mgrs_ = reinterpret_cast<ObDtlChannelManager*>(allocator_.alloc(sizeof(ObDtlChannelManager) * HASH_CNT));
-    if (OB_ISNULL(ch_mgrs_)) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(hash_table_.init(BUCKET_NUM))) {
-    } else {
-      char *buf = reinterpret_cast<char*>(ch_mgrs_);
-      for (int64_t i = 0; i < HASH_CNT && OB_SUCC(ret); ++i) {
-        ObDtlChannelManager *ch_mgr = new (buf) ObDtlChannelManager(i, hash_table_);
-        UNUSED(ch_mgr);
-        buf += sizeof(ObDtlChannelManager);
-      }
-      is_inited_ = true;
+    for (int64_t i = 0; i < HASH_CNT; ++i) {
+      new (ch_mgrs_ + i) ObDtlChannelManager(i, hash_table_);
+      ++constructed_manager_count_;
+    }
+    is_inited_ = true;
+  }
+  if (OB_FAIL(ret) && !is_inited_) {
+    reset_resources();
+  }
+  return ret;
+}
+
+int ObDtl::check_channels_drained() const
+{
+  // Count includes channels removed from the hash but still owned by operators,
+  // and channels waiting for a get_channel pin to be returned before deletion.
+  return 0 == ATOMIC_LOAD(&owned_channel_count_) ? OB_SUCCESS : OB_EAGAIN;
+}
+
+int ObDtl::destroy()
+{
+  int ret = check_channels_drained();
+  if (OB_SUCC(ret)) {
+    // The singleton does not own orphaned channels. A registry entry must be
+    // unlinked by its SQL/PX owner before its hash-cell storage can be reset.
+    for (int64_t i = 0; i < constructed_manager_count_ && OB_SUCC(ret); ++i) {
+      ret = ch_mgrs_[i].foreach_refactored(HASH_CNT,
+          [](ObDtlChannel *) { return OB_EAGAIN; });
+    }
+    if (OB_SUCC(ret)) {
+      reset_resources();
     }
   }
   return ret;
+}
+
+void ObDtl::reset_resources()
+{
+  for (int64_t i = 0; i < constructed_manager_count_; ++i) {
+    ch_mgrs_[i].~ObDtlChannelManager();
+  }
+  constructed_manager_count_ = 0;
+  ch_mgrs_ = nullptr;
+  hash_table_.destroy();
+  allocator_.reset();
+  dfc_server_.destroy();
+  is_inited_ = false;
 }
 // Remove the channel from the registry by id and destroy it after readers release their pins.
 int ObDtl::destroy_channel(uint64_t chid)
@@ -383,7 +427,9 @@ int ObDtl::create_local_channel(uint64_t chid, ObDtlChannel *&chan, ObDtlFlowCon
   int ret = OB_SUCCESS;
   // if nullptr != chan, batch free chans until link_ch_sets
   const bool need_free_chan = (nullptr == chan);
-  if (nullptr == chan && OB_FAIL(new_channel(chid, chan))) {
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+  } else if (nullptr == chan && OB_FAIL(new_channel(chid, chan))) {
   } else if (nullptr == chan) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(init_channel(chid, chan, dfc, need_free_chan))) {
@@ -426,8 +472,17 @@ int ObDtl::init_channel(uint64_t chid, ObDtlChannel *&chan,
   int ret = OB_SUCCESS;
   if (nullptr == chan) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(chan->init())) {
+  } else if (nullptr != chan->dtl_owner_ && this != chan->dtl_owner_) {
+    ret = OB_INVALID_ARGUMENT;
   } else {
+    if (nullptr == chan->dtl_owner_) {
+      ATOMIC_INC(&owned_channel_count_);
+      chan->dtl_owner_ = this;
+    }
+    if (OB_FAIL(chan->init())) {
+    }
+  }
+  if (OB_SUCC(ret)) {
     if (nullptr != dfc) {
       // Register DFC before publishing the channel so every local user observes
       // the channel and its flow-control state atomically.
@@ -465,6 +520,9 @@ int ObDtl::init_channel(uint64_t chid, ObDtlChannel *&chan,
 int ObDtl::foreach_refactored(std::function<int(ObDtlChannel *ch)> op)
 {
   int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+  }
   for (int64_t i = 0; i < HASH_CNT && OB_SUCC(ret); ++i) {
     if (OB_FAIL(ch_mgrs_[i].foreach_refactored(HASH_CNT, op))) {
     }

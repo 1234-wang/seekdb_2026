@@ -31,7 +31,7 @@ template <class T>
 ObSimpleThreadPoolBase<T>::ObSimpleThreadPoolBase()
     : ObSimpleDynamicThreadPool(),
       is_inited_(false), stop_(false),
-      run_wrapper_(nullptr),
+      run_wrapper_(lib::Threads::get_default_run_wrapper()),
       cur_worker_idx_(0)
 {
 }
@@ -103,6 +103,10 @@ void ObSimpleThreadPoolBase<T>::destroy()
   }
   IGNORE_RETURN ObSimpleThreadPoolDynamicMgr::get_instance().unbind(this);
   queue_.destroy();
+  // This pool object can be initialized again. Explicit destruction joins and
+  // removes workers without passing through try_shrink_one(), so reset the
+  // adaptive counters after no worker can still update them.
+  this->reset_worker_counts();
 }
 
 template <class T>
@@ -141,9 +145,9 @@ bool ObSimpleThreadPoolBase<T>::do_add_worker()
     if (OB_ISNULL(w)) {
       return false;
     }
-    if (run_wrapper_ != nullptr) {
-      w->set_run_wrapper(run_wrapper_);
-    }
+    // Inherit the outer owner's context even when it is nullptr. Lazy workers
+    // must not capture a database that opened after this process pool was built.
+    w->set_run_wrapper(run_wrapper_);
     if (OB_SUCCESS != w->init()) {
       OB_DELETE(Worker, "QThWker", w);
       return false;

@@ -32,8 +32,8 @@ PalfEnv::PalfEnv() : palf_env_impl_()
 
 PalfEnv::~PalfEnv()
 {
-  stop_();
-  wait_();
+  stop();
+  wait();
   destroy_();
 }
 
@@ -79,12 +79,12 @@ int PalfEnv::start()
   return ret;
 }
 
-void PalfEnv::stop_()
+void PalfEnv::stop()
 {
   palf_env_impl_.stop();
 }
 
-void PalfEnv::wait_()
+void PalfEnv::wait()
 {
   palf_env_impl_.wait();
 }

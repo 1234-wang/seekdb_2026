@@ -69,6 +69,7 @@ public:
   virtual bool pred_process(int64_t, ObDtlChannel *) = 0;
 };
 
+class ObDtl;
 class ObDtlChannelLoop;
 class ObDtlChannelWatcher;
 class ObDtlFlowControl;
@@ -94,7 +95,7 @@ class ObDtlChannel : public common::ObDLinkBase<ObDtlChannel>
 {
 public:
   explicit ObDtlChannel(uint64_t id);
-  virtual ~ObDtlChannel() {}
+  virtual ~ObDtlChannel();
 
   virtual int init() = 0;
 
@@ -284,6 +285,9 @@ public:
   virtual bool has_msg() { return false; }
   ObDtlChannel *prev_link_;
   ObDtlChannel *next_link_;
+private:
+  friend class ObDtl;
+  ObDtl *dtl_owner_;
 };
 
 OB_INLINE void ObDtlChannel::remove_self()

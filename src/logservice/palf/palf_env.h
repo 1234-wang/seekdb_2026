@@ -105,9 +105,10 @@ public:
   // @brief iterate each PalfHandle of PalfEnv and execute 'func'
   palf::IPalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }
   int start();
+  // Stop after all LS handles are detached; wait drains IO and log callbacks.
+  void stop();
+  void wait();
 private:
-  void stop_();
-  void wait_();
   void destroy_();
 private:
   // the implmention of PalfEnv

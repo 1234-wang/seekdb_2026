@@ -20,6 +20,8 @@
 #ifndef _WIN32
 #include <sys/statvfs.h>
 #endif
+#include <atomic>
+#include <mutex>
 #include "lib/net/ob_net_util.h"
 #include "lib/task/ob_timer.h"
 #include "lib/random/ob_mysql_random.h"
@@ -220,17 +222,8 @@ namespace observer
 class ObServerOptions;
 class ObSchemaRefreshSchedulerAdapter;
 
-// This the class definition of ObAddr which responds the server
-// itself. It's designed as a singleton in program. This class is
-// structure aggregated but not logical processing. Please don't put
-// cumbersome logical processes into it. Here's a typical usage:
-//
-//   ObServer server;
-//   server.init(...);
-//   server.set_xxx(...);
-//   server.start(); // blocked only program is coming to stop
-//   server.destory();
-//
+// Process-wide server composition. Explicit initialization/shutdown own database resources;
+// process foundations (allocator, immutable registries) have a longer lifetime.
 class ObServer : public share::ObIMemstoreRuntime,
                  public data_plane::ObILockWaitService,
                  public data_plane::ObIMemoryPressureService,
@@ -250,13 +243,14 @@ public:
   static ObServer &get_instance();
 
 public:
-  int init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg);
-  void destroy();
-
-  // Start OceanBase server, this function is blocked after invoking
-  // until the server itself stops it.
+  // Serialize the engine lifecycle. Bindings own their public open/close API.
+  // Process signal handling is opt-in for the standalone executable.
+  int init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg,
+           bool handle_process_signals = false);
   int start();
+  int stop();
   int wait();
+  int destroy();
   void prepare_stop();
   bool is_prepare_stopped();
   void set_stop();
@@ -273,6 +267,8 @@ public:
     ObCTASCleanUpTask();
     virtual ~ObCTASCleanUpTask() {}
     int init(ObServer *observer, common::ObTimer &timer);
+    // Call only after the owning timer has canceled and joined callbacks.
+    void reset() { obs_ = nullptr; is_inited_ = false; }
     virtual void runTimerTask() override;
   private:
     const static int64_t CLEANUP_INTERVAL = 60L * 1000L * 1000L;//60s
@@ -286,6 +282,8 @@ public:
     ObRefreshCpuFreqTimeTask();
     virtual ~ObRefreshCpuFreqTimeTask() {}
     int init(ObServer *observer, common::ObTimer &timer);
+    // Call only after the owning timer has canceled and joined callbacks.
+    void reset() { obs_ = nullptr; is_inited_ = false; }
     virtual void runTimerTask() override;
   private:
     const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L;//10s
@@ -339,7 +337,11 @@ public:
   int64_t get_start_time() const { return start_time_; }
   sql::ObConnectResourceMgr& get_conn_res_mgr() { return conn_res_mgr_; }
 private:
-  int stop();
+  int init_resources(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg);
+  int start_resources();
+  int stop_resources();
+  int destroy_unlocked();
+  int destroy_resources();
   int wait_no_client();
 
 private:
@@ -411,11 +413,16 @@ private:
 
   // self addr
   common::ObAddr self_addr_;
-  bool prepare_stop_;
-  bool stop_;
+  enum class LifecycleState { UNINITIALIZED, INITIALIZING, INITIALIZED, RUNNING, STOPPING, STOPPED };
+  std::mutex lifecycle_mutex_;
+  LifecycleState lifecycle_state_ = LifecycleState::UNINITIALIZED;
+  bool handle_process_signals_ = false;
+  std::atomic<bool> prepare_stop_;
+  std::atomic<bool> stop_;
   bool need_bootstrap_;
-  volatile bool has_stopped_;
+  bool has_stopped_;
   bool has_destroy_;
+  bool ddl_heart_beat_task_container_inited_ = false;
   int clients_fd_ = -1;
 #ifdef _WIN32
   HANDLE clients_h_ = INVALID_HANDLE_VALUE;

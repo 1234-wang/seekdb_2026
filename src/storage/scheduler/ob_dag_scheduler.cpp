@@ -3672,11 +3672,25 @@ ObDagScheduler::~ObDagScheduler()
 void ObDagScheduler::stop()
 {
   lib::ThreadPool::stop();
+  notify();
+  if (is_inited_) {
+    // Waiting workers must resume even when another module is waiting for a
+    // DAG result before this scheduler's wait() is reached.
+    for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
+      prio_sche_[i].destroy_workers();
+    }
+  }
 }
 
 void ObDagScheduler::wait()
 {
-  lib::ThreadPool::wait();
+  if (is_inited_) {
+    // Queued DAGs also own tablet/memtable references. Release them together
+    // with worker callbacks before the storage providers begin their cleanup.
+    reset();
+  } else {
+    lib::ThreadPool::wait();
+  }
 }
 
 void ObDagScheduler::reload_config()
@@ -3778,7 +3792,7 @@ void ObDagScheduler::reset()
   COMMON_LOG(INFO, "ObDagScheduler starts to destroy");
   stop();
   notify();
-  wait();
+  lib::ThreadPool::wait();
 
   while (is_inited_) {
     ObThreadCondGuard guard(scheduler_sync_);
@@ -3868,6 +3882,8 @@ int ObDagScheduler::add_dag_net(ObIDagNet *dag_net)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
+  } else if (has_set_stop()) {
+    ret = OB_NOT_RUNNING;
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arugment", KP(dag_net));
@@ -3903,6 +3919,8 @@ int ObDagScheduler::add_dag(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
+  } else if (has_set_stop()) {
+    ret = OB_NOT_RUNNING;
   } else if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", KP(dag));
@@ -4598,6 +4616,9 @@ int ObDagScheduler::try_reclaim_threads()
 
 void ObDagScheduler::destroy_all_workers()
 {
+  if (0 == total_worker_cnt_) {
+    return;
+  }
   {
     // resume all waiting workers
     // all workers will run to complete since switch is forbedden after stop sign is set
@@ -4615,6 +4636,7 @@ void ObDagScheduler::destroy_all_workers()
         ob_delete(worker);
       }
       free_workers_.reset();
+      total_worker_cnt_ = 0;
       break;
     }
   }

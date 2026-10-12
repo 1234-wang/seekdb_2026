@@ -30,7 +30,7 @@ namespace storage
 {
 ObStorageLogger::ObStorageLogger()
   : is_inited_(false), log_writer_(nullptr),
-    local_log_writer_(), server_log_writer_(),
+    local_log_writer_(), server_log_writer_(), slog_dir_(),
     log_seq_(0), build_log_mutex_(common::ObLatchIds::SLOG_PROCESSING_MUTEX),
     log_file_spec_(), is_start_(false)
 {
@@ -105,7 +105,9 @@ void ObStorageLogger::destroy()
   }
   MEMSET(slog_dir_, 0, sizeof(slog_dir_));
   is_inited_ = false;
+  is_start_ = false;
   log_seq_ = 0;
+  log_file_spec_.reset();
 }
 
 void ObStorageLogger::stop()
@@ -145,7 +147,12 @@ int ObStorageLogger::start_log(const ObLogCursor &start_cursor)
 int ObStorageLogger::get_active_cursor(ObLogCursor &log_cursor)
 {
   int ret = OB_SUCCESS;
-  log_cursor = log_writer_->get_cur_cursor();
+  log_cursor.reset();
+  if (!is_inited_ || nullptr == log_writer_) {
+    ret = OB_NOT_INIT;
+  } else {
+    log_cursor = log_writer_->get_cur_cursor();
+  }
   return ret;
 }
 

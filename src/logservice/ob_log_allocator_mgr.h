@@ -37,6 +37,8 @@ public:
   ~ObLogAllocatorMgr()
   {}
   int init();
+  // All PALF/apply/replay tasks must have released this allocator first.
+  void destroy();
 
   int get_log_allocator(ObILogAllocator *&out_allocator);
   int delete_log_allocator();

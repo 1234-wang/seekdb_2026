@@ -90,6 +90,13 @@ public:
     return false;
   }
 
+  /// Reset counters after every worker has been joined and removed.
+  void reset_worker_counts()
+  {
+    idle_cnt_.store(0, std::memory_order_relaxed);
+    total_cnt_.store(0, std::memory_order_relaxed);
+  }
+
   /// CAS-based shrink down to the given floor.
   /// Refuses to shrink to 0 when queue is non-empty.
   bool try_shrink_one(int64_t floor)

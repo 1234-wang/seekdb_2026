@@ -47,26 +47,46 @@ int ObDataVersionMgr::init()
   return ret;
 }
 
-int ObDataVersionMgr::validate_or_init_current_version()
+void ObDataVersionMgr::destroy()
+{
+  SpinWLockGuard guard(lock_);
+  version_ = nullptr;
+  allocator_.reset();
+  file_exists_when_loading_ = false;
+  is_inited_ = false;
+}
+
+int ObDataVersionMgr::validate_loaded_version()
+{
+  SpinRLockGuard guard(lock_);
+  return validate_loaded_version_();
+}
+
+int ObDataVersionMgr::validate_loaded_version_() const
 {
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(lock_);
-
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObDataVersionMgr doesn't init", K(ret));
-  } else if (OB_ISNULL(version_)) {
-    if (OB_FAIL(init_current_version_())) {
-    }
-  } else if (DATA_CURRENT_VERSION != version_->get_version()) {
+  } else if (OB_NOT_NULL(version_) && DATA_CURRENT_VERSION != version_->get_version()) {
     ret = OB_NOT_SUPPORTED;
     COMMON_LOG(ERROR, "persisted data version does not match this binary",
                K(ret), "persisted_data_version", DVP(version_->get_version()),
                "binary_data_version", DVP(DATA_CURRENT_VERSION));
-  } else {
+  } else if (OB_NOT_NULL(version_)) {
     DV_ILOG_F("persisted data version matches this binary", K(ret), KPC(version_));
   }
+  return ret;
+}
 
+int ObDataVersionMgr::validate_or_init_current_version()
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  if (OB_FAIL(validate_loaded_version_())) {
+  } else if (OB_ISNULL(version_)) {
+    ret = init_current_version_();
+  }
   return ret;
 }
 

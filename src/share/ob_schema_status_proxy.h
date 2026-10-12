@@ -59,6 +59,7 @@ public:
   virtual ~ObSchemaStatusProxy() {}
 
   int init();
+  void reset();
 
 
   int get_refresh_schema_status(

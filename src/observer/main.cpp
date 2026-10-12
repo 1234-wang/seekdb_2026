@@ -795,7 +795,7 @@ int inner_main(int argc, char *argv[])
       lib::Worker::set_worker_to_thread_local(&worker);
       ObServer &observer = ObServer::get_instance();
       LOG_INFO("seekdb starts", "seekdb_version", PACKAGE_STRING, "embedded", opts->embedded_);
-      if (OB_FAIL(observer.init(*opts, log_cfg))) {
+      if (OB_FAIL(observer.init(*opts, log_cfg, true))) {
       } else if (OB_MALLOC_BACKEND_UNKNOWN == malloc_backend) {
         LOG_WARN("invalid malloc backend",
                  "env", ob_malloc_backend_env_name(),
@@ -813,16 +813,14 @@ int inner_main(int argc, char *argv[])
       }
       if (initialize) {
         LOG_INFO("seekdb starts in initialize mode, exit now", K(initialize));
-        _exit(OB_SUCC(ret) ? 0 : 1);
+        // Initialization mode also completes the normal shutdown path.
+      } else if (OB_SUCC(ret)) {
+        ret = observer.wait();
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(observer.wait())) {
+      const int destroy_ret = observer.destroy();
+      if (OB_SUCC(ret)) {
+        ret = destroy_ret;
       }
-
-      if (OB_FAIL(ret)) {
-        _exit(1);
-      }
-      observer.destroy();
     }
     curl_global_cleanup();
     unlink(PID_FILE_NAME);

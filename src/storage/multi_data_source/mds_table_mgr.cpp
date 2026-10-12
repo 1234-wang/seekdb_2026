@@ -34,7 +34,12 @@ void RemovedMdsTableRecorder::record(MdsTableBase *mds_table)
 void RemovedMdsTableRecorder::del(MdsTableBase *mds_table)
 {
   SpinWLockGuard guard(lock_);
-  removed_mds_table_list_.del(mds_table);
+  // Neighbour removal changes this node's links too. Check membership while
+  // holding the same lock that protects recording and unlinking the nodes.
+  if (OB_NOT_NULL(mds_table->prev_) || OB_NOT_NULL(mds_table->next_)
+      || removed_mds_table_list_.list_head_ == static_cast<ListNodeBase *>(mds_table)) {
+    removed_mds_table_list_.del(mds_table);
+  }
 }
 
 int ObMdsTableMgr::init(ObLS *ls)
@@ -59,12 +64,18 @@ int ObMdsTableMgr::init(ObLS *ls)
 int ObMdsTableMgr::reset()
 {
   int ret = OB_SUCCESS;
-  is_inited_ = false;
-  is_freezing_ = false;
-  freezing_scn_.atomic_store(share::SCN::min_scn());
-  ref_cnt_ = 0;
-  ls_ = nullptr;
-  if (OB_FAIL(mds_table_map_.reset())) {
+  if (0 != get_ref()) {
+    // Clearing this count would hide live table/handler references to the
+    // removed-table recorder. The LS owner must drain them before reset.
+    ret = OB_EAGAIN;
+    MDS_LOG(WARN, "mds table manager still has borrowers", KR(ret), KPC(this));
+  } else {
+    is_inited_ = false;
+    is_freezing_ = false;
+    freezing_scn_.atomic_store(share::SCN::min_scn());
+    ls_ = nullptr;
+    if (OB_FAIL(mds_table_map_.reset())) {
+    }
   }
   return ret;
 }
@@ -74,7 +85,11 @@ void ObMdsTableMgr::offline()
   freezing_scn_.atomic_store(share::SCN::min_scn());
 }
 
-void ObMdsTableMgr::destroy() { reset(); }
+void ObMdsTableMgr::destroy()
+{
+  const int ret = reset();
+  MDS_ASSERT(OB_SUCCESS == ret);
+}
 
 int ObMdsTableMgr::register_to_mds_table_mgr(MdsTableBase *p_mds_table)
 {
@@ -117,11 +132,7 @@ int ObMdsTableMgr::unregister_from_mds_table_mgr(MdsTableBase *p_mds_table)
 
 void ObMdsTableMgr::unregister_from_removed_mds_table_recorder(MdsTableBase *p_mds_table)
 {
-  // make sure this mds_table is recored in list
-  if ((OB_NOT_NULL(p_mds_table->prev_) || OB_NOT_NULL(p_mds_table->next_)) ||// if true, means mds_table is in list
-      removed_mds_table_recorder_.check_is_list_head(p_mds_table)) {// but if both prev_ and next_ are NULL, maybe is list_head, means also in list
-    removed_mds_table_recorder_.del(p_mds_table);
-  }
+  removed_mds_table_recorder_.del(p_mds_table);
 }
 
 template <typename Flusher>

@@ -50,7 +50,9 @@ public:
   ~ObDataVersionMgr() {}
   static ObDataVersionMgr& get_instance();
   int init();
+  void destroy();
   int load_from_file();
+  int validate_loaded_version();
   int validate_or_init_current_version();
   bool get_file_exists_when_loading()
   {
@@ -77,6 +79,7 @@ private:
   private:
     uint64_t version_;
   };
+  int validate_loaded_version_() const;
   int init_current_version_();
   int dump_current_version_to_file_();
   int dump_data_version_(char *buf, int64_t buf_length, int64_t &pos,

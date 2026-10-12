@@ -737,7 +737,8 @@ void ObDDLScheduler::HeartBeatCheckTask::runTimerTask()
 ObDDLScheduler::ObDDLScheduler()
   : is_inited_(false),
     is_stop_(true),
-    idler_(is_stop_),
+    // Idle observes the same predicate as do_work, including module shutdown.
+    idler_(stop_),
     scan_task_(*this),
     heart_beat_check_task_(*this),
     ddl_builder_()
@@ -767,10 +768,12 @@ void ObDDLScheduler::server_module_stop(ObDDLScheduler *&ddl_scheduler)
   int ret = OB_SUCCESS;
   FLOG_INFO("start server_module_stop for ddl scheduler");
   if (ddl_scheduler != NULL) {
+    ddl_scheduler->task_queue_.set_stop(true);
     ddl_scheduler->ddl_builder_.server_module_thread_stop();
     ddl_scheduler->scan_task_.server_module_thread_stop();
     ddl_scheduler->heart_beat_check_task_.server_module_thread_stop();
     ddl_scheduler->server_module_thread_stop();
+    ddl_scheduler->idler_.wakeup();
   }
   FLOG_INFO("finish server_module_stop for ddl scheduler", KR(ret));
 }
@@ -784,6 +787,9 @@ void ObDDLScheduler::server_module_wait(ObDDLScheduler *&ddl_scheduler)
     ddl_scheduler->scan_task_.server_module_thread_wait();
     ddl_scheduler->heart_beat_check_task_.server_module_thread_wait();
     ddl_scheduler->server_module_thread_wait();
+    // Reclaim queued tasks explicitly after all producers and executors join,
+    // while the Runtime providers borrowed by their members still exist.
+    ddl_scheduler->destroy_all_tasks();
   }
   FLOG_INFO("finish server_module_wait for ddl scheduler", KR(ret));
 }

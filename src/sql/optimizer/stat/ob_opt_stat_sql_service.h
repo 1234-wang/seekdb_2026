@@ -95,6 +95,7 @@ public:
   ~ObOptStatSqlService();
   bool is_inited() const { return inited_; }
   int init(ObMySQLProxy *proxy);
+  void destroy();
 
   int fetch_table_stat(const ObOptTableStat::Key &key,
                        ObIArray<ObOptTableStat> &all_part_stats);

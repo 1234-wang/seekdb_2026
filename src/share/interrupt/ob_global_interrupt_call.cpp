@@ -97,6 +97,37 @@ ObGlobalInterruptManager *ObGlobalInterruptManager::getInstance()
 
 int ObGlobalInterruptManager::init()
 {
+  std::lock_guard<std::mutex> guard(init_mutex_);
+  return initialize_registry_();
+}
+
+int ObGlobalInterruptManager::ensure_initialized()
+{
+  std::lock_guard<std::mutex> guard(init_mutex_);
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = initialize_registry_();
+  } else if (!map_.created() || bucket_capacity_ != map_.bucket_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("process interrupt registry has inconsistent capacity", KR(ret), K(bucket_capacity_));
+  }
+  // There is no database pointer in the registry. Reopening with a different
+  // mini_mode retains its first capacity and does not recreate live buckets.
+  return ret;
+}
+
+int ObGlobalInterruptManager::check_registered_checkers_drained() const
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_ && !map_.empty()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("interrupt checkers remain after database producers joined", KR(ret), "registered_task_count", map_.size());
+  }
+  return ret;
+}
+
+int ObGlobalInterruptManager::initialize_registry_()
+{
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -108,6 +139,7 @@ int ObGlobalInterruptManager::init()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LIB_LOG(WARN, "create hash table failed", K(ret));
   } else {
+    bucket_capacity_ = map_.bucket_count();
     is_inited_ = true;
   }
   return ret;

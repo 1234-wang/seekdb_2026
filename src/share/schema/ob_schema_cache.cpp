@@ -347,7 +347,10 @@ ObSchemaCache::~ObSchemaCache()
 void ObSchemaCache::destroy()
 {
   tablet_cache_.destroy();
+  history_cache_.destroy();
   cache_.destroy();
+  all_core_table_.reset();
+  is_inited_ = false;
 }
 
 int ObSchemaCache::init_all_core_table()
@@ -599,6 +602,13 @@ int ObSchemaFetcher::init(ObSchemaService *schema_service,
     is_inited_ = true;
   }
   return ret;
+}
+
+void ObSchemaFetcher::reset()
+{
+  schema_service_ = nullptr;
+  sql_client_ = nullptr;
+  is_inited_ = false;
 }
 
 bool ObSchemaFetcher::check_inner_stat() const

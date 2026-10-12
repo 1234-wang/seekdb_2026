@@ -81,6 +81,11 @@ void ObTimerMonitor::stop()
 void ObTimerMonitor::destroy()
 {
   timer_.destroy();
+  // The owner joins all monitored timer workers before clearing their records.
+  memset(&records_, 0, sizeof(records_));
+  ATOMIC_STORE(&tail_, 0);
+  monitor_task_.reset();
+  inited_ = false;
 }
 
 int64_t ObTimerMonitor::find_pos(const int64_t thread_id) const

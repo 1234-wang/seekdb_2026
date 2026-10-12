@@ -130,6 +130,9 @@ private:
 
 public:
   int prepare_for_safe_destroy();
+  // After producers have joined and tablets have been removed, the embedded
+  // managers must outlive every delayed metadata borrower.
+  bool is_safe_to_destroy() const;
 
   // tablet operation
   int create_ls_inner_tablet(

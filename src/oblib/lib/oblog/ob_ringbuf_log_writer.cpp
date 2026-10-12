@@ -222,7 +222,7 @@ int ObRingBufLogWriter::init(int64_t group_commit_max_wait_us, const char *threa
 
 void ObRingBufLogWriter::stop()
 {
-  has_stopped_ = true;
+  ATOMIC_STORE_REL(&has_stopped_, true);
   if (OB_NOT_NULL(flush_cond_)) {
     flush_cond_->signal(UINT32_MAX);
   }
@@ -233,6 +233,11 @@ void ObRingBufLogWriter::wait()
   if (NULL != flush_tid_) {
     ob_pthread_join(flush_tid_);
     flush_tid_ = NULL;
+  }
+  // The owner must quiesce producers before wait(). A producer that was busy
+  // when stop() was requested may have committed after the worker's last scan.
+  if (is_inited_) {
+    do_flush(true);
   }
 }
 
@@ -291,26 +296,28 @@ void *ObRingBufLogWriter::flush_thread(void *arg)
 
 void ObRingBufLogWriter::flush_loop()
 {
-  while (!has_stopped_) {
+  while (!has_stopped()) {
     // Snapshot key BEFORE do_flush: if a commit() fires between do_flush
     // returning false and wait(), the key bump ensures we don't miss it.
     const uint32_t key = flush_cond_->get_key();
     if (!do_flush()) {
-      if (!has_stopped_) {
+      if (!has_stopped()) {
         flush_cond_->wait(key, group_commit_max_wait_us_);
       }
     }
   }
+  // Stopping the worker must not discard records that were already committed.
+  do_flush(true);
 }
 
-bool ObRingBufLogWriter::do_flush()
+bool ObRingBufLogWriter::do_flush(const bool drain_all)
 {
   static const int64_t BATCH_SIZE = 64;
   char *entries[BATCH_SIZE];
   int64_t lens[BATCH_SIZE];
   bool did_work = false;
 
-  while (!has_stopped_) {
+  while (drain_all || !has_stopped()) {
     int64_t item_cnt = 0;
     int64_t cur_pop = ringbuf_.get_pop();
     int64_t cur_push = ringbuf_.get_push();

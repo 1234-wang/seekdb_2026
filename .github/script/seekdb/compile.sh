@@ -67,7 +67,7 @@ else
 
   phase_start=$SECONDS
   set +e
-  bash "$WORKSPACE/build.sh" "$BUILD_TARGET" -DOB_USE_CCACHE=ON -DNEED_PARSER_CACHE=OFF 2>&1 | tee "$TASK_DIR/compile_configure.output"
+  bash "$WORKSPACE/build.sh" "$BUILD_TARGET" -DOB_USE_CCACHE=ON -DNEED_PARSER_CACHE=OFF -DSEEKDB_BUILD_LIFECYCLE_TESTS=ON 2>&1 | tee "$TASK_DIR/compile_configure.output"
   phase_ret=${PIPESTATUS[0]}
   set -e
   echo "[compile.sh] configure elapsed=$((SECONDS - phase_start))s"
@@ -80,13 +80,24 @@ else
   phase_start=$SECONDS
   # MAKE and MAKE_ARGS intentionally support a command plus separate arguments.
   # shellcheck disable=SC2086
-  (cd "$WORKSPACE/$BUILD_DIR" && $MAKE $MAKE_ARGS seekdb) 2>&1 | tee "$TASK_DIR/compile.output"
+  (cd "$WORKSPACE/$BUILD_DIR" && $MAKE $MAKE_ARGS seekdb lifecycle_tests) 2>&1 | tee "$TASK_DIR/compile.output"
   compile_ret=${PIPESTATUS[0]}
   echo "[compile.sh] make elapsed=$((SECONDS - phase_start))s"
   if command -v ccache >/dev/null 2>&1; then
     ccache -s || true
   fi
   set -e
+
+  if [[ $compile_ret -eq 0 ]]; then
+    phase_start=$SECONDS
+    set +e
+    (cd "$WORKSPACE/$BUILD_DIR" && ctest -L lifecycle --output-on-failure) \
+      2>&1 | tee "$TASK_DIR/lifecycle.output"
+    lifecycle_ret=${PIPESTATUS[0]}
+    set -e
+    echo "[compile.sh] lifecycle tests elapsed=$((SECONDS - phase_start))s"
+    compile_ret=$lifecycle_ret
+  fi
 fi
 
 echo "[compile.sh] total elapsed=$((SECONDS - compile_start))s"

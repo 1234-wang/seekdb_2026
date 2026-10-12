@@ -82,7 +82,7 @@ int ObReentrantThread::logical_start()
   } else {
     if (stop_) {
       ObThreadCondGuard guard(cond_);
-      stop_ = false;
+      ATOMIC_STORE(&stop_, false);
       int tmp_ret = cond_.broadcast();
       if (OB_SUCCESS != tmp_ret) {
       }
@@ -98,7 +98,7 @@ void ObReentrantThread::logical_stop()
     ret = OB_NOT_INIT;
   } else {
     ObThreadCondGuard guard(cond_);
-    stop_ = true;
+    ATOMIC_STORE(&stop_, true);
     int tmp_ret = cond_.broadcast();
     if (OB_SUCCESS != tmp_ret) {
     }

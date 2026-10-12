@@ -172,6 +172,7 @@ public:
 
 
   int init(const bool is_ddl);
+  void destroy();
 
   virtual int escape(const char *from, const int64_t from_size,
       char *to, const int64_t to_size, int64_t &out_size) override;

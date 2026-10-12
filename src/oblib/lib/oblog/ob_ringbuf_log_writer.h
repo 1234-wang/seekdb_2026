@@ -133,7 +133,7 @@ public:
 
   // State queries
   bool is_inited() const { return is_inited_; }
-  bool has_stopped() const { return has_stopped_; }
+  bool has_stopped() const { return ATOMIC_LOAD_ACQ(&has_stopped_); }
   const char *get_thread_name() const { return thread_name_; }
   bool is_queue_full();
   int64_t get_queue_depth() const { return ringbuf_.get_queue_depth(); }
@@ -144,7 +144,7 @@ protected:
 private:
   static void *flush_thread(void *arg);
   void flush_loop();
-  bool do_flush();
+  bool do_flush(const bool drain_all = false);
 
   bool       has_stopped_;
   bool       is_inited_;

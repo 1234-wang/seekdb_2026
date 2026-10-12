@@ -36,6 +36,11 @@ int ObRedefTableHeartBeatTask::init(common::ObTimer &timer)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(timer.schedule(*this, HEARTBEAT_INTERVAL, true))) {
+    if (timer.inited()) {
+      IGNORE_RETURN timer.cancel_task(*this);
+      IGNORE_RETURN timer.wait_task(*this);
+    }
+    reset();
   } else {
     is_inited_ = true;
   }
@@ -66,10 +71,12 @@ ObDDLHeartBeatTaskContainer::ObDDLHeartBeatTaskContainer()
 {}
 ObDDLHeartBeatTaskContainer::~ObDDLHeartBeatTaskContainer()
 {
+  destroy();
 }
 int ObDDLHeartBeatTaskContainer::init()
 {
   int ret = OB_SUCCESS;
+  common::ObSpinLockGuard guard(lock_);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
   } else {
@@ -78,16 +85,23 @@ int ObDDLHeartBeatTaskContainer::init()
   return ret;
 }
 
+void ObDDLHeartBeatTaskContainer::destroy()
+{
+  common::ObSpinLockGuard guard(lock_);
+  register_tasks_.destroy();
+  is_inited_ = false;
+}
+
 int ObDDLHeartBeatTaskContainer::set_register_task_id(const int64_t task_id)
 {
   int ret = OB_SUCCESS;
+  common::ObSpinLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     bool found = false;
-    common::ObSpinLockGuard guard(lock_);
     for (int64_t i = 0; !found && i < register_tasks_.count(); ++i) {
       found = register_tasks_.at(i) == task_id;
     }
@@ -101,12 +115,12 @@ int ObDDLHeartBeatTaskContainer::set_register_task_id(const int64_t task_id)
 int ObDDLHeartBeatTaskContainer::remove_register_task_id(const int64_t task_id)
 {
   int ret = OB_SUCCESS;
+  common::ObSpinLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    common::ObSpinLockGuard guard(lock_);
     for (int64_t i = 0; OB_SUCC(ret) && i < register_tasks_.count(); ++i) {
       if (register_tasks_.at(i) == task_id) {
         if (OB_FAIL(register_tasks_.remove(i))) {
@@ -121,24 +135,20 @@ int ObDDLHeartBeatTaskContainer::remove_register_task_id(const int64_t task_id)
 int ObDDLHeartBeatTaskContainer::send_task_status_to_rs()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-  } else {
-    common::ObSEArray<int64_t, 4> task_ids;
-    {
-      common::ObSpinLockGuard guard(lock_);
+  common::ObSEArray<int64_t, 4> task_ids;
+  {
+    common::ObSpinLockGuard guard(lock_);
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+    } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < register_tasks_.count(); ++i) {
         if (OB_FAIL(task_ids.push_back(register_tasks_.at(i)))) {
         }
       }
     }
-    if (OB_FAIL(ret)) {
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); ++i) {
-        const int64_t task_id = task_ids.at(i);
-        if (OB_FAIL(data_plane::renew_ddl_task_lease(task_id))) {
-        }
-      }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < task_ids.count(); ++i) {
+    if (OB_FAIL(data_plane::renew_ddl_task_lease(task_ids.at(i)))) {
     }
   }
   return ret;

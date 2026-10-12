@@ -18,6 +18,7 @@
 #define OCEANBASE_STORAGE_DICT_OB_GEN_DIC_LOADER_H_
 
 #include "lib/lock/ob_tc_rwlock.h"
+#include "lib/charset/ob_charset.h"
 #include "data_plane/fts/dict/ob_dic_loader.h"
 #include "data_plane/fts/ob_fts_parser_name.h"
 
@@ -70,6 +71,7 @@ public:
     return ins;
   }
   int init();
+  void destroy();
   int get_dic_loader(const ObString &parser_name,
                      const ObCharsetType charset,
                      ObDicLoaderHandle &loader_handle);
@@ -77,7 +79,7 @@ public:
 private:
   ObGenDicLoader()
       : is_inited_(false), lock_(), dic_loader_map_() { }
-  ~ObGenDicLoader() { dic_loader_map_.destroy(); }
+  ~ObGenDicLoader() { destroy(); }
   int gen_dic_loader(const ObGenDicLoaderKey &dic_loader_key,
                      ObDicLoader *&dic_loader);
 

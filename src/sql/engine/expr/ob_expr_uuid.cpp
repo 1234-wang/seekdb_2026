@@ -15,6 +15,7 @@
  */
 
 #define USING_LOG_PREFIX  SQL_ENG
+#include <mutex>
 #ifdef _WIN32
 #include <winsock2.h>
 #include <windows.h>
@@ -395,18 +396,17 @@ ObExprUuid::~ObExprUuid()
 
 int ObExprUuid::init()
 {
-  //will be inited once when and only when server starts
-  //so, please do not worry too much about the contention even we use ob_malloc here.
   int ret = OB_SUCCESS;
-  ObMemAttr mem_attr;
-  mem_attr.label_ = ObModIds::OB_SQL_EXPR;
-  uuid_node = static_cast<ObUUIDNode*>(ob_malloc(sizeof(ObUUIDNode), mem_attr));
-  if (OB_UNLIKELY(NULL == uuid_node)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory failed", K(ret));
-  } else if (OB_FAIL(uuid_node->init())) {
-    ob_free(uuid_node);//very important ! do not forget this !
-    uuid_node = NULL;//very important ! do not forget this !
+  static std::mutex mutex;
+  std::lock_guard<std::mutex> guard(mutex);
+  // The host node and UUID clock sequence must survive database reopen, both
+  // to avoid allocating another node and to preserve UUID uniqueness.
+  static ObUUIDNode process_node;
+  if (nullptr == ATOMIC_LOAD_ACQ(&uuid_node)) {
+    if (!process_node.is_inited_ && OB_FAIL(process_node.init())) {
+    } else {
+      ATOMIC_STORE_REL(&uuid_node, &process_node);
+    }
   }
   return ret;
 }
@@ -414,14 +414,15 @@ int ObExprUuid::init()
 int ObExprUuid::calc(unsigned char *scratch)
 {
   int ret = OB_SUCCESS;
+  ObUUIDNode *node = ATOMIC_LOAD_ACQ(&uuid_node);
   if (OB_ISNULL(scratch)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected error. pointer is null", K(ret), K(scratch));
-  } else if (OB_ISNULL(uuid_node) || OB_UNLIKELY(!(uuid_node->is_inited_))) {
+  } else if (OB_ISNULL(node) || OB_UNLIKELY(!node->is_inited_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected error. uuid node is not inited", K(ret), K(uuid_node));
+    LOG_ERROR("unexpected error. uuid node is not inited", K(ret), K(node));
   } else {
-    unsigned char *mac_addr = uuid_node->mac_addr_;
+    unsigned char *mac_addr = node->mac_addr_;
     uint64_t time = 0;
     uint16_t seq = 0;
     if (OB_FAIL(ObUUIDTime::get_time(time, seq))) {
@@ -483,27 +484,13 @@ int ObExprUuid::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
 int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator calc_buf("ServerUuid");
   unsigned char scratch[UuidCommon::LENGTH_UUID] = {0};
-  bool need_reset = false;
-  if (OB_ISNULL(uuid_node)) {
-    need_reset = true;
-    if (OB_ISNULL(uuid_node = static_cast<ObUUIDNode*>(calc_buf.alloc(sizeof(ObUUIDNode))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_FAIL(uuid_node->init())) {
-    }
-  }
-  if (OB_FAIL(ret)) {
-    //do nothing
-  } else if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != UuidCommon::LENGTH_UUID)) {
+  if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != UuidCommon::LENGTH_UUID)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(init())) {
   } else if (OB_FAIL(calc(scratch))) {
   } else if (OB_FAIL(UuidCommon::bin2uuid(server_uuid, scratch))) {
   } else {/*do nothing*/}
-
-  if (need_reset) {
-    uuid_node = NULL;
-  }
   return ret;
 }
 

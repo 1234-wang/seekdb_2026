@@ -209,8 +209,29 @@ int ObLSTabletService::prepare_for_safe_destroy()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(delete_all_tablets())) {
+  } else {
+    // Initialization rollback may not have completed LS offline. Release each
+    // initialized child's own table references before waiting for delayed GC.
+    ObIMemtableMgr *mgrs[] = {&tx_data_memtable_mgr_, &tx_ctx_memtable_mgr_, &lock_memtable_mgr_};
+    for (ObIMemtableMgr *mgr : mgrs) {
+      if (OB_SUCC(ret) && mgr->get_memtable_count() > 0 && OB_FAIL(mgr->release_memtables())) {
+      }
+    }
   }
   return ret;
+}
+
+bool ObLSTabletService::is_safe_to_destroy() const
+{
+  const int64_t mds_ref = mds_table_mgr_.get_ref();
+  const int64_t tx_data_ref = tx_data_memtable_mgr_.get_ref();
+  const int64_t tx_ctx_ref = tx_ctx_memtable_mgr_.get_ref();
+  const int64_t lock_ref = lock_memtable_mgr_.get_ref();
+  const bool is_safe = 0 == mds_ref && 0 == tx_data_ref && 0 == tx_ctx_ref && 0 == lock_ref;
+  if (!is_safe && REACH_TIME_INTERVAL(5_s)) {
+    LOG_INFO("waiting for embedded LS manager borrowers", K(mds_ref), K(tx_data_ref), K(tx_ctx_ref), K(lock_ref));
+  }
+  return is_safe;
 }
 
 int ObLSTabletService::delete_all_tablets()

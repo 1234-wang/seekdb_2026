@@ -41,7 +41,7 @@ public:
         threads_(nullptr),
         stack_size_(global_thread_stack_size),
         stop_(true),
-        run_wrapper_(nullptr)
+        run_wrapper_(get_default_run_wrapper())
   {}
   virtual ~Threads();
   static IRunWrapper *&get_expect_run_wrapper();
@@ -80,8 +80,9 @@ public:
   }
   IRunWrapper *get_effective_run_wrapper()
   {
-    IRunWrapper *run_wrapper = run_wrapper_;
-    return OB_NOT_NULL(run_wrapper) ? run_wrapper : get_default_run_wrapper();
+    // The owner captures its context at construction. A process pool can start
+    // or expand after a database opens without borrowing that database's owner.
+    return run_wrapper_;
   }
   virtual int start();
   virtual void stop();

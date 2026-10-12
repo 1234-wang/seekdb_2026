@@ -75,10 +75,19 @@ class ObRuntimeDDLService
 {
 public:
   ObRuntimeDDLService() : inited_(false), stopped_(false), ddl_service_(NULL),
-  schema_service_(NULL),
+  sql_proxy_(NULL), schema_service_(NULL),
   ddl_trans_controller_(NULL) {}
 
   virtual int create_system_runtime(share::schema::ObServerRuntimeSchema &runtime_schema);
+  void destroy()
+  {
+    stop();
+    ddl_service_ = nullptr;
+    sql_proxy_ = nullptr;
+    schema_service_ = nullptr;
+    ddl_trans_controller_ = nullptr;
+    inited_ = false;
+  }
   void stop() { stopped_ = true; }
   void restart() { stopped_ = false; }
   bool is_stopped() { return stopped_; }
@@ -104,8 +113,8 @@ private:
   int publish_schema();
 
   int init_system_variables(
-      const ObServerRuntimeSchema &runtime_schema,
-      ObSysVariableSchema &sys_variable_schema);
+      const share::schema::ObServerRuntimeSchema &runtime_schema,
+      share::schema::ObSysVariableSchema &sys_variable_schema);
   int update_mysql_runtime_sys_var(
       const share::schema::ObServerRuntimeSchema &runtime_schema,
       share::schema::ObSysParam *sys_params,

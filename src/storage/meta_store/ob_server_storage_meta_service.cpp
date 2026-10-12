@@ -63,6 +63,9 @@ int ObServerStorageMetaService::init(ObIServerRuntime &server_runtime)
   } else {
     is_inited_ = true;
   }
+  if (OB_FAIL(ret) && !is_inited_) {
+    destroy();
+  }
   return ret;
 }
 
@@ -72,6 +75,8 @@ int ObServerStorageMetaService::start()
   const int64_t start_time = ObTimeUtility::current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (ATOMIC_LOAD(&is_started_)) {
+    ret = OB_INIT_TWICE;
   } else if (OB_FAIL(server_slogger_.start())) {
   } else if (OB_FAIL(replayer_.start_replay()))  {
   } else if (OB_FAIL(ckpt_slog_handler_.start())) {
@@ -83,12 +88,21 @@ int ObServerStorageMetaService::start()
   return ret;
 }
 
-void ObServerStorageMetaService::stop()
+void ObServerStorageMetaService::stop_checkpoint()
 {
   if (IS_INIT) {
-    server_slogger_.stop();
     ckpt_slog_handler_.stop();
+    ckpt_slog_handler_.wait();
   }
+}
+
+void ObServerStorageMetaService::stop()
+{
+  stop_checkpoint();
+  if (IS_INIT) {
+    server_slogger_.stop();
+  }
+  ATOMIC_STORE(&is_started_, false);
 }
 void ObServerStorageMetaService::wait()
 {
@@ -99,6 +113,8 @@ void ObServerStorageMetaService::wait()
 }
 void ObServerStorageMetaService::destroy()
 {
+  stop();
+  wait();
   server_slogger_.destroy();
   ckpt_slog_handler_.destroy();
   persister_.destroy();

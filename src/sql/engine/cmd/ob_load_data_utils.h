@@ -230,6 +230,9 @@ public:
   static ObGlobalLoadDataStatMap *getInstance();
   ObGlobalLoadDataStatMap() : is_inited_(false) {}
   int init();
+  // Job owners must finish and unregister before the database registry resets.
+  // A nonempty registry remains intact so its owners can finish cleanup.
+  int destroy();
   int register_job(const ObLoadDataGID &id, ObLoadDataStat *job_status);
   int unregister_job(const ObLoadDataGID &id, ObLoadDataStat *&job_status);
   int get_job_status(const ObLoadDataGID &id, ObLoadDataStat *&job_status);

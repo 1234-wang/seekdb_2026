@@ -40,10 +40,6 @@ public:
   RemovedMdsTableRecorder() = default;
   void record(MdsTableBase *mds_table);
   void del(MdsTableBase *mds_table);
-  bool check_is_list_head(MdsTableBase *mds_table) {
-    SpinRLockGuard guard(lock_);
-    return removed_mds_table_list_.list_head_ == (ListNodeBase *)mds_table;
-  }
   template <typename OP>
   void for_each(OP &&op) {
     SpinRLockGuard guard(lock_);
@@ -120,7 +116,7 @@ public: // derived from ObCommonCheckpoint
 public: // getter and setter
   void inc_ref() { ATOMIC_INC(&ref_cnt_); };
   void dec_ref() { ATOMIC_DEC(&ref_cnt_); };
-  int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
+  int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
 
   struct ObFlushOp {
   public:      

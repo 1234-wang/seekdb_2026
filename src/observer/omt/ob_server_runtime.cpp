@@ -57,6 +57,8 @@ int ObPxPools::init()
   int ret = OB_SUCCESS;
   ObMemAttr attr("PxPoolBkt");
   if (OB_FAIL(pool_map_.create(PX_POOL_COUNT, attr, attr))) {
+  } else {
+    ATOMIC_STORE(&is_stopped_, false);
   }
   return ret;
 }
@@ -66,6 +68,8 @@ int ObPxPools::get_or_create(int64_t group_id, ObPxPool *&pool)
   int ret = OB_SUCCESS;
   if (!pool_map_.created()) {
     ret = OB_NOT_INIT;
+  } else if (ATOMIC_LOAD(&is_stopped_)) {
+    ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(pool_map_.get_refactored(group_id, pool))) {
     if (OB_HASH_NOT_EXIST == ret) {
       if (OB_FAIL(create_pool(group_id, pool))) {
@@ -81,7 +85,9 @@ int ObPxPools::create_pool(int64_t group_id, ObPxPool *&pool)
   static constexpr uint64_t MAX_TASKS_PER_CPU = 1;
   int ret = OB_SUCCESS;
   common::SpinWLockGuard g(lock_);
-  if (OB_FAIL(pool_map_.get_refactored(group_id, pool))) {
+  if (ATOMIC_LOAD(&is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(pool_map_.get_refactored(group_id, pool))) {
     if (OB_HASH_NOT_EXIST == ret) {
       pool = OB_NEW(ObPxPool, ObMemAttr("PxPool"));
       if (OB_ISNULL(pool)) {
@@ -92,6 +98,14 @@ int ObPxPools::create_pool(int64_t group_id, ObPxPool *&pool)
         pool->set_run_wrapper(share::server_runtime());
         if (OB_FAIL(pool->start())) {
         } else if (OB_FAIL(pool_map_.set_refactored(group_id, pool))) {
+        }
+        if (OB_FAIL(ret)) {
+          // An unpublished pool is not reachable by the module cleanup pass.
+          pool->stop();
+          pool->wait();
+          pool->destroy();
+          ob_delete(pool);
+          pool = nullptr;
         }
       }
     } else {
@@ -135,6 +149,14 @@ int ObPxPools::StopPoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPx
   return ret;
 }
 
+int ObPxPools::WaitPoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPxPool*> &kv)
+{
+  if (OB_NOT_NULL(kv.second)) {
+    kv.second->wait();
+  }
+  return OB_SUCCESS;
+}
+
 int ObPxPools::DeletePoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPxPool*> &kv)
 {
   int ret = OB_SUCCESS;
@@ -159,9 +181,30 @@ void ObPxPools::server_module_stop(ObPxPools *&pools)
     // pools will be null if it's creating runtime and failed.
   } else {
     common::SpinWLockGuard g(pools->lock_);
+    ATOMIC_STORE(&pools->is_stopped_, true);
     StopPoolFunc stop_pool_func;
     if (OB_FAIL(pools->pool_map_.foreach_refactored(stop_pool_func))) {
     }
+  }
+}
+
+void ObPxPools::server_module_wait(ObPxPools *&pools)
+{
+  if (OB_NOT_NULL(pools)) {
+    pools->wait();
+  }
+}
+
+void ObPxPools::wait()
+{
+  // stop() freezes pool creation under lock_. Do not hold that lock while
+  // joining workers: a finishing task may try to acquire a pool and must be
+  // able to observe OB_NOT_RUNNING.
+  if (pool_map_.created()) {
+    ObPxPools *pools = this;
+    server_module_stop(pools);
+    WaitPoolFunc wait_pool_func;
+    IGNORE_RETURN pool_map_.foreach_refactored(wait_pool_func);
   }
 }
 
@@ -179,23 +222,28 @@ void ObPxPools::destroy()
 int ObPxPool::submit(const RunFuncT &func)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    queue_.set_limit(::oceanbase::config::server_task_queue_size());
-    is_inited_ = true;
-  }
   disable_recycle();
-  ATOMIC_INC(&concurrency_);
-  if (ATOMIC_LOAD(&active_threads_) < ATOMIC_LOAD(&concurrency_)) {
-    ret = OB_SIZE_OVERFLOW;
+  if (has_set_stop()) {
+    ret = OB_NOT_RUNNING;
   } else {
-    Task *t = OB_NEW(Task, ObMemAttr("PxTask"), func);
-    if (OB_ISNULL(t)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_FAIL(queue_.push(static_cast<ObLink*>(t), 0))) {
+    if (!is_inited_) {
+      queue_.set_limit(::oceanbase::config::server_task_queue_size());
+      is_inited_ = true;
     }
-  }
-  if (ret != OB_SUCCESS) {
-    ATOMIC_DEC(&concurrency_);
+    ATOMIC_INC(&concurrency_);
+    if (ATOMIC_LOAD(&active_threads_) < ATOMIC_LOAD(&concurrency_)) {
+      ret = OB_SIZE_OVERFLOW;
+    } else {
+      Task *t = OB_NEW(Task, ObMemAttr("PxTask"), func);
+      if (OB_ISNULL(t)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else if (OB_FAIL(queue_.push(static_cast<ObLink*>(t), 0))) {
+        OB_DELETE(Task, "PxTask", t);
+      }
+    }
+    if (ret != OB_SUCCESS) {
+      ATOMIC_DEC(&concurrency_);
+    }
   }
   enable_recycle();
   return ret;
@@ -291,7 +339,10 @@ void ObPxPool::try_recycle(int64_t idle_time)
 void ObPxPool::stop()
 {
   int ret = OB_SUCCESS;
+  // Serialize admission with submit(), then release the lock before callbacks.
+  disable_recycle();
   Threads::stop();
+  enable_recycle();
   ObLink *task = nullptr;
   bool need_exec = false;
   while (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
@@ -422,9 +473,12 @@ int ObServerRuntime::create_modules()
   int ret = OB_SUCCESS;
   FLOG_INFO("begin create modules");
 
-  // Publish the single runtime before constructing modules so their thread
-  // wrappers can resolve the server context during initialization.
+  // Module owners capture their runtime at construction. Process facilities
+  // constructed earlier retain their own context, including an explicit null.
+  auto *previous_runtime = g_server_runtime;
+  auto *previous_wrapper = lib::Threads::get_default_run_wrapper();
   g_server_runtime = this;
+  lib::Threads::set_default_run_wrapper(this);
 
   bool modules_constructed = false;
   if (OB_FAIL(OBSERVER.obs_construct_modules())) {
@@ -445,6 +499,10 @@ int ObServerRuntime::create_modules()
       OBSERVER.obs_wait_modules();
     }
     OBSERVER.obs_destroy_modules();
+    modules_stopped_ = true;
+    // All constructed module threads have joined before restoring publication.
+    lib::Threads::set_default_run_wrapper(previous_wrapper);
+    g_server_runtime = previous_runtime;
   } else {
     ::oceanbase::share::g_server_modules_ready = true;
   }
@@ -502,7 +560,9 @@ int ObServerRuntime::try_wait()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ATOMIC_LOAD(&gc_thread_))) {
-    if (!ATOMIC_BCAS(&has_created_, false, true)) {
+    if (modules_stopped_) {
+      // A completed wait, or an initialization rollback, is already quiescent.
+    } else if (!ATOMIC_BCAS(&has_created_, false, true)) {
       // there will be double-try_wait when kill -15 or failure of locking,
       // so we have to tolerate that and return OB_SUCCESS although it is not correct.
       // ret = OB_ERR_UNEXPECTED;
@@ -543,6 +603,9 @@ void ObServerRuntime::destroy()
   ::oceanbase::share::g_server_modules_ready = false;
   print_all_thread("SERVER_RUNTIME_BEFORE_DESTROY");
   OBSERVER.obs_destroy_modules();
+  if (lib::Threads::get_default_run_wrapper() == this) {
+    lib::Threads::set_default_run_wrapper(nullptr);
+  }
   ::oceanbase::share::g_server_runtime = &::oceanbase::share::g_bootstrap_server_runtime;
   ObServerRuntimeState::destroy();
 

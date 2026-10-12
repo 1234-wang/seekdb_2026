@@ -17,6 +17,7 @@
 #ifndef _OB_SQL_INIT_H
 #define _OB_SQL_INIT_H 1
 
+#include <mutex>
 #include "lib/alloc/malloc_hook.h"
 #include "engine/ob_physical_plan.h"
 #include "sql/engine/expr/ob_sql_expression.h"
@@ -60,12 +61,35 @@ inline int init_sql_factories()
 inline int init_sql_expr_static_var()
 {
   int ret = common::OB_SUCCESS;
-  static ObArenaAllocator allocator("init_sql");
-  if (OB_FAIL(ObExprUuid::init())) {
-  } else if (OB_FAIL(common::ObNumberConstValue::init(allocator))) {
-  } else if (OB_FAIL(MOD_RESULT_TYPE_MAP.init())) {
-  } else if (OB_FAIL(ObCharset::init_charset())) {
-  } else if (OB_FAIL(wide::ObDecimalIntConstValue::init_const_values(allocator))) {
+  // These values describe SQL types and the host UUID node, not a database.
+  // Keep completed stages across open/close. Startup must succeed before SQL
+  // can consume the constants; a failed allocating stage can then be retried
+  // using its own arena without discarding a different, successful stage.
+  static std::mutex mutex;
+  static ObArenaAllocator number_allocator("SqlNumberConst");
+  static ObArenaAllocator decimal_allocator("SqlDecimalConst");
+  static bool number_inited = false;
+  static bool inited = false;
+  std::lock_guard<std::mutex> guard(mutex);
+  if (!inited) {
+    if (OB_FAIL(ObExprUuid::init())) {
+    } else if (!number_inited) {
+      number_allocator.reset();
+      if (OB_FAIL(common::ObNumberConstValue::init(number_allocator))) {
+      } else {
+        number_inited = true;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(MOD_RESULT_TYPE_MAP.init())) {
+    } else if (OB_FAIL(ObCharset::init_charset())) {
+    } else {
+      decimal_allocator.reset();
+      if (OB_FAIL(wide::ObDecimalIntConstValue::init_const_values(decimal_allocator))) {
+      } else {
+        inited = true;
+      }
+    }
   }
   return ret;
 }

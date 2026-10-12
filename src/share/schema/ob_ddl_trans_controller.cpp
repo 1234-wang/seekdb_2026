@@ -62,15 +62,16 @@ void ObDDLTransController::wait()
 
 void ObDDLTransController::destroy()
 {
-  if (inited_) {
-    inited_ = false;
-    stop();
-    wait();
-    lib::ThreadPool::destroy();
-    tasks_.destroy();
-    schema_service_ = NULL;
-    pending_refresh_version_ = 0;
+  stop();
+  wait();
+  lib::ThreadPool::destroy();
+  for (int i = 0; i < DDL_TASK_COND_SLOT; ++i) {
+    cond_slot_[i].destroy();
   }
+  tasks_.destroy();
+  schema_service_ = nullptr;
+  pending_refresh_version_ = 0;
+  inited_ = false;
 }
 
 ObDDLTransController::~ObDDLTransController()

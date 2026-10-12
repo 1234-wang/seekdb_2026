@@ -255,6 +255,9 @@ struct ObMdsEventBuffer {
   struct Singleton {
     int init() {
       int ret = OB_SUCCESS;
+      if (is_inited_) {
+        return OB_INIT_TWICE;
+      }
       if (OB_FAIL(mds_event_cache_.init("MdsEventCache", DefaultAllocator::get_instance(), 0, 128_MB, 8192))) {// not enable
         ret = OB_SUCCESS;
         OCCAM_LOG(WARN, "init failed", KR(ret));
@@ -265,7 +268,8 @@ struct ObMdsEventBuffer {
       return ret;
     }
     void destroy() {
-      mds_event_cache_.~ObVtableEventRecycleBuffer();
+      mds_event_cache_.destroy();
+      is_inited_ = false;
     }
     void append(const MdsEventKey &key,
                 const MdsEvent &event,

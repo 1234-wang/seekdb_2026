@@ -74,6 +74,13 @@ int ObSchemaStatusProxy::init()
   return ret;
 }
 
+void ObSchemaStatusProxy::reset()
+{
+  common::SpinWLockGuard guard(schema_status_cache_lock_);
+  schema_status_cache_ = ObRefreshSchemaStatus();
+  is_inited_ = false;
+}
+
 int ObSchemaStatusProxy::check_inner_stat()
 {
   int ret = OB_SUCCESS;

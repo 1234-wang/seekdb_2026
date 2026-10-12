@@ -37,7 +37,8 @@ ObTimezoneMgr::ObTimezoneMgr()
     : is_inited_(false),
       update_task_(this),
       timer_(),
-      usable_(false)
+      usable_(false),
+      is_closing_(false)
 {
 }
 
@@ -54,9 +55,19 @@ ObTimezoneMgr &ObTimezoneMgr::get_instance()
 int ObTimezoneMgr::init(ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  is_inited_ = true;
-  if (OB_FAIL(init_timezone(sql_proxy))) {
-  } else if (OB_FAIL(timer_.init("TimezoneMgr", ObMemAttr("TimezoneMgr")))) {
+  if (is_inited_ || nullptr != tz_info_mgr_) {
+    ret = OB_INIT_TWICE;
+  } else {
+    usable_ = false;
+    is_closing_ = false;
+    if (OB_FAIL(init_timezone(sql_proxy))) {
+    } else if (OB_FAIL(timer_.init("TimezoneMgr", ObMemAttr("TimezoneMgr")))) {
+    } else {
+      is_inited_ = true;
+    }
+    if (OB_FAIL(ret)) {
+      (void)destroy();
+    }
   }
   return ret;
 }
@@ -67,7 +78,9 @@ int ObTimezoneMgr::start()
   const int64_t delay = SLEEP_USECONDS;
   const bool repeat = true;
   const bool immediate = false;
-  if (OB_FAIL(timer_.start())) {
+  if (!is_inited_ || is_closing_) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(timer_.start())) {
   } else if (OB_FAIL(timer_.schedule(update_task_, delay, repeat, immediate))) {
   }
   return ret;
@@ -83,18 +96,28 @@ void ObTimezoneMgr::wait()
   timer_.wait();
 }
 
-void ObTimezoneMgr::destroy()
+int ObTimezoneMgr::destroy()
 {
+  int ret = OB_SUCCESS;
+  is_closing_ = true;
+  usable_ = false;
   timer_.destroy();
-  ob_delete(tz_info_mgr_);
+  if (nullptr != tz_info_mgr_ && OB_FAIL(tz_info_mgr_->get_tz_info_map()->destroy())) {
+    // Existing wrappers retain access to the old map while shutdown is retried.
+    LOG_WARN("timezone data is still borrowed", KR(ret),
+             "borrowed_maps", tz_info_mgr_->get_tz_info_map()->borrowed_maps());
+  } else {
+    ob_delete(tz_info_mgr_);
+    is_inited_ = false;
+    is_closing_ = false;
+  }
+  return ret;
 }
 
 int ObTimezoneMgr::init_timezone(ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  if (! is_inited_) {
-    ret = OB_NOT_INIT;
-  } else if (OB_NOT_NULL(tz_info_mgr_)) {
+  if (OB_NOT_NULL(tz_info_mgr_)) {
     ret = OB_INIT_TWICE;
   } else {
     tz_info_mgr_ = OB_NEW(ObTimeZoneInfoManager, "Timezone", sql_proxy);
@@ -112,8 +135,8 @@ int ObTimezoneMgr::init_timezone(ObMySQLProxy &sql_proxy)
 int ObTimezoneMgr::refresh_timezone_info()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(tz_info_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
+  if (!is_inited_ || is_closing_ || OB_ISNULL(tz_info_mgr_)) {
+    ret = OB_NOT_INIT;
   } else if (OB_FAIL(tz_info_mgr_->fetch_time_zone_info())) {
   }
   return ret;
@@ -122,7 +145,9 @@ int ObTimezoneMgr::refresh_timezone_info()
 int ObTimezoneMgr::schedule_retry()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(timer_.schedule(update_task_, 1000000, false))) {
+  if (!is_inited_ || is_closing_) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(timer_.schedule(update_task_, 1000000, false))) {
   } else {
     LOG_INFO("[TIMEZONE] retry timer scheduled");
   }
@@ -134,8 +159,10 @@ int ObTimezoneMgr::get_timezone(
     ObTimeZoneInfoManager *&tz_info_mgr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(tz_info_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
+  timezone_wrap.set_tz_map(nullptr);
+  tz_info_mgr = nullptr;
+  if (!is_inited_ || is_closing_ || OB_ISNULL(tz_info_mgr_)) {
+    ret = OB_NOT_INIT;
   } else {
     timezone_wrap.set_tz_map(tz_info_mgr_->get_tz_info_map());
     tz_info_mgr = tz_info_mgr_;

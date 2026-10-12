@@ -634,7 +634,95 @@ ObServer::~ObServer()
   destroy();
 }
 
-int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
+int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg,
+                   bool handle_process_signals)
+{
+  std::lock_guard<std::mutex> guard(lifecycle_mutex_);
+  int ret = OB_SUCCESS;
+  if (LifecycleState::UNINITIALIZED != lifecycle_state_) {
+    ret = OB_INIT_TWICE;
+  } else {
+    lifecycle_state_ = LifecycleState::INITIALIZING;
+    handle_process_signals_ = handle_process_signals;
+    has_destroy_ = false;
+    has_stopped_ = true;
+    prepare_stop_ = false;
+    stop_ = false;
+    need_bootstrap_ = false;
+    need_ctas_cleanup_ = true;
+    start_time_ = ObTimeUtility::current_time();
+    warm_up_start_time_ = 0;
+    if (OB_FAIL(init_resources(opts, log_cfg))) {
+      const int cleanup_ret = destroy_unlocked();
+      if (OB_SUCCESS != cleanup_ret) {
+        LOG_WARN_RET(cleanup_ret, "failed to clean up server initialization", K(ret));
+      }
+    } else {
+      lifecycle_state_ = LifecycleState::INITIALIZED;
+    }
+  }
+  return ret;
+}
+
+int ObServer::start()
+{
+  std::lock_guard<std::mutex> guard(lifecycle_mutex_);
+  int ret = OB_SUCCESS;
+  if (LifecycleState::INITIALIZED != lifecycle_state_) {
+    ret = LifecycleState::UNINITIALIZED == lifecycle_state_ ? OB_NOT_INIT : OB_INIT_TWICE;
+  } else if (OB_FAIL(start_resources())) {
+    const int cleanup_ret = destroy_unlocked();
+    if (OB_SUCCESS != cleanup_ret) {
+      LOG_WARN_RET(cleanup_ret, "failed to clean up server startup", K(ret));
+    }
+  } else {
+    lifecycle_state_ = LifecycleState::RUNNING;
+  }
+  return ret;
+}
+
+int ObServer::stop()
+{
+  std::lock_guard<std::mutex> guard(lifecycle_mutex_);
+  int ret = OB_SUCCESS;
+  if (LifecycleState::UNINITIALIZED != lifecycle_state_
+      && LifecycleState::STOPPED != lifecycle_state_) {
+    lifecycle_state_ = LifecycleState::STOPPING;
+    prepare_stop_ = true;
+    set_stop();
+    if (OB_SUCC(ret = stop_resources())) {
+      lifecycle_state_ = LifecycleState::STOPPED;
+    }
+  }
+  return ret;
+}
+
+int ObServer::destroy()
+{
+  std::lock_guard<std::mutex> guard(lifecycle_mutex_);
+  return destroy_unlocked();
+}
+
+int ObServer::destroy_unlocked()
+{
+  int ret = OB_SUCCESS;
+  if (LifecycleState::UNINITIALIZED != lifecycle_state_) {
+    if (LifecycleState::STOPPED != lifecycle_state_) {
+      lifecycle_state_ = LifecycleState::STOPPING;
+      prepare_stop_ = true;
+      set_stop();
+      if (OB_SUCC(ret = stop_resources())) {
+        lifecycle_state_ = LifecycleState::STOPPED;
+      }
+    }
+    if (OB_SUCC(ret) && OB_SUCC(ret = destroy_resources())) {
+      lifecycle_state_ = LifecycleState::UNINITIALIZED;
+    }
+  }
+  return ret;
+}
+
+int ObServer::init_resources(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 {
   gctx_.set_embedded_mode(opts.embedded_);
   FLOG_INFO("[OBSERVER_NOTICE] start to init observer");
@@ -649,6 +737,9 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   // recorded in observer.log.
   if (OB_FAIL(OB_LOGGER.init(log_cfg))) {
     LOG_ERROR("async log init error", KR(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(GDS.start())) {
+    LOG_ERROR("restart debug sync failed", KR(ret));
   }
   if (OB_SUCC(ret) && OB_FAIL(init_config(opts))) {
     LOG_ERROR("init config failed", KR(ret));
@@ -685,7 +776,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   rust::String data_dir_for_init = config::data_dir();
   rust::String redo_dir_for_init = config::redo_dir();
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_need_initialize(opts.base_dir_.ptr(),
+  } else if (FAILEDx(check_need_initialize(opts.base_dir_.ptr(),
                                            data_dir_for_init.c_str(),
                                            redo_dir_for_init.c_str(),
                                            need_initialize))) {
@@ -701,47 +792,47 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObSimpleThreadPoolDynamicMgr::get_instance().init())) {
       LOG_ERROR("init queue_thread dynamic mgr failed", KR(ret));
-    } else if (OB_FAIL(ObTimerService::get_instance().start())) {
+    } else if (FAILEDx(ObTimerService::get_instance().start())) {
       LOG_ERROR("start timer service failed", KR(ret));
     }
   }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
+    } else if (FAILEDx(OB_LOG_COMPRESSOR.init())) {
       LOG_ERROR("log compressor init error.", KR(ret));
-    } else if (OB_FAIL(OB_LOGGER.set_log_compressor(&OB_LOG_COMPRESSOR))) {
+    } else if (FAILEDx(OB_LOGGER.set_log_compressor(&OB_LOG_COMPRESSOR))) {
       LOG_ERROR("set log compressor error.", KR(ret));
-    } else if (OB_FAIL(init_tz_info_mgr())) {
+    } else if (FAILEDx(init_tz_info_mgr())) {
       LOG_ERROR("init tz_info_mgr failed", KR(ret));
-    } else if (OB_FAIL(ObSqlTaskFactory::get_instance().init())) {
+    } else if (FAILEDx(ObSqlTaskFactory::get_instance().init())) {
       LOG_ERROR("init sql task factory failed", KR(ret));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(sql::init_sql_factories())) {
         LOG_ERROR("init sql factories !", KR(ret));
-      } else if (OB_FAIL(sql::init_sql_executor_singletons())) {
+      } else if (FAILEDx(sql::init_sql_executor_singletons())) {
         LOG_ERROR("init sql executor singletons !", KR(ret));
-      } else if (OB_FAIL(sql::init_sql_expr_static_var())) {
+      } else if (FAILEDx(sql::init_sql_expr_static_var())) {
         LOG_ERROR("init sql expr static var !", KR(ret));
-      } else if (OB_FAIL(ObPreProcessSysVars::init_sys_var(!need_initialize ? ObServerOptions::KeyValueArray() : opts.variables_))) {
+      } else if (FAILEDx(ObPreProcessSysVars::init_sys_var(!need_initialize ? ObServerOptions::KeyValueArray() : opts.variables_))) {
         LOG_ERROR("init PreProcessing system variable failed !", KR(ret));
-      } else if (OB_FAIL(ObBasicSessionInfo::init_sys_vars_cache_base_values())) {
+      } else if (FAILEDx(ObBasicSessionInfo::init_sys_vars_cache_base_values())) {
         LOG_ERROR("init session base values failed", KR(ret));
       }
     }
     if (FAILEDx(ObQueryRetryCtrl::init())) {
       LOG_ERROR("init retry ctrl failed", KR(ret));
-    } else if (OB_FAIL(storage::mds::ObMdsEventBuffer::init())) {
+    } else if (FAILEDx(storage::mds::ObMdsEventBuffer::init())) {
       LOG_WARN("init MDS event buffer failed", KR(ret));
-    } else if (OB_FAIL(init_loaddata_global_stat())) {
+    } else if (FAILEDx(init_loaddata_global_stat())) {
       LOG_ERROR("init global load data stat map failed", KR(ret));
-    } else if (OB_FAIL(init_pre_setting())) {
+    } else if (FAILEDx(init_pre_setting())) {
       LOG_ERROR("init pre setting failed", KR(ret));
-    } else if (OB_FAIL(init_global_context())) {
+    } else if (FAILEDx(init_global_context())) {
       LOG_ERROR("init global context failed", KR(ret));
-    } else if (OB_FAIL(parse_role(opts))) {
+    } else if (FAILEDx(parse_role(opts))) {
       LOG_ERROR("parse role failed", KR(ret));
-    } else if (OB_FAIL(init_sql_proxy())) {
+    } else if (FAILEDx(init_sql_proxy())) {
       LOG_ERROR("init sql connection pool failed", KR(ret));
     }
     if (OB_SUCC(ret)) {
@@ -785,7 +876,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     }
     if (OB_SUCC(ret) && OB_FAIL(init_fts())) {
       LOG_ERROR("init fulltext parser data failed", KR(ret));
-    } else if (OB_FAIL(init_ob_service(need_initialize))) {
+    } else if (FAILEDx(init_ob_service(need_initialize))) {
       LOG_ERROR("init ob service failed", KR(ret));
     }
     if (OB_SUCC(ret) && OB_FAIL(init_local_management_service(need_initialize))) {
@@ -799,7 +890,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     }
     if (OB_SUCC(ret) && OB_FAIL(init_pl())) {
       LOG_ERROR("init pl failed", K(ret));
-    } else if (OB_FAIL(tablet_operator_.init(&meta_db_pool_))) {
+    } else if (FAILEDx(tablet_operator_.init(&meta_db_pool_))) {
       LOG_ERROR("tablet table operator init failed", KR(ret));
     }
     if (OB_SUCC(ret) && OB_FAIL(init_autoincrement_service())) {
@@ -820,44 +911,44 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     if (OB_SUCC(ret)) {
     if (OB_FAIL(init_tx_data_cache())) {
       LOG_ERROR("init tx data cache failed", KR(ret));
-    } else if (OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache"))) {
+    } else if (FAILEDx(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache"))) {
       LOG_ERROR("init tmp block cache failed", KR(ret));
-    } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache"))) {
+    } else if (FAILEDx(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache"))) {
       LOG_ERROR("init tmp page cache failed", KR(ret));
-    } else if (OB_FAIL(ObLogAllocatorMgr::get_instance().init())) {
+    } else if (FAILEDx(ObLogAllocatorMgr::get_instance().init())) {
       LOG_ERROR("init ObLogAllocatorMgr failed", KR(ret));
-    } else if (OB_FAIL(startup_accel_handler_.init())) {
+    } else if (FAILEDx(startup_accel_handler_.init())) {
       LOG_ERROR("init server startup task handler failed", KR(ret));
-    } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(server_runtime_controller_))) {
+    } else if (FAILEDx(SERVER_STORAGE_META_SERVICE.init(server_runtime_controller_))) {
       LOG_ERROR("init server storage meta handler failed", KR(ret));
-    } else if (OB_FAIL(init_server_runtime())) {
+    } else if (FAILEDx(init_server_runtime())) {
       LOG_ERROR("init server runtime failed", KR(ret));
-    } else if (OB_FAIL(init_ctas_clean_up_task())) {
+    } else if (FAILEDx(init_ctas_clean_up_task())) {
       LOG_ERROR("init ctas clean up task failed", KR(ret));
-    } else if (OB_FAIL(init_ddl_heart_beat_task_container())) {
+    } else if (FAILEDx(init_ddl_heart_beat_task_container())) {
       LOG_ERROR("init ddl heart beat task container failed", KR(ret));
-    } else if (OB_FAIL(init_redef_heart_beat_task())) {
+    } else if (FAILEDx(init_redef_heart_beat_task())) {
       LOG_ERROR("init redef heart beat task failed", KR(ret));
-    } else if (OB_FAIL(init_refresh_cpu_frequency())) {
+    } else if (FAILEDx(init_refresh_cpu_frequency())) {
       LOG_ERROR("init refresh cpu frequency failed", KR(ret));
-    } else if (OB_FAIL(ObOptStatManager::get_instance().init(&sql_proxy_))) {
+    } else if (FAILEDx(ObOptStatManager::get_instance().init(&sql_proxy_))) {
       LOG_ERROR("init opt stat manager failed", KR(ret));
-    } else if (OB_FAIL(ObSysTaskStatMgr::get_instance().set_self_addr(self_addr_))) {
+    } else if (FAILEDx(ObSysTaskStatMgr::get_instance().set_self_addr(self_addr_))) {
       LOG_ERROR("set sys task status self addr failed", KR(ret));
-    } else if (OB_FAIL(ObTimerMonitor::get_instance().init())) {
+    } else if (FAILEDx(ObTimerMonitor::get_instance().init())) {
       LOG_ERROR("init timer monitor failed", KR(ret));
-    } else if (OB_FAIL(PX_P2P_DH.init())) {
+    } else if (FAILEDx(PX_P2P_DH.init())) {
       LOG_ERROR("init px p2p datahub failed", KR(ret));
-    } else if (OB_FAIL(init_px_target_mgr())) {
+    } else if (FAILEDx(init_px_target_mgr())) {
       LOG_ERROR("init px target mgr failed", KR(ret));
-    } else if (OB_FAIL(ObDictCache::get_instance().init("dict_cache"))) {
+    } else if (FAILEDx(ObDictCache::get_instance().init("dict_cache"))) {
       LOG_ERROR("init dict cache failed", KR(ret));
-    } else if (OB_FAIL(ObGenDicLoader::get_instance().init())) {
+    } else if (FAILEDx(ObGenDicLoader::get_instance().init())) {
       LOG_WARN("init dictionary loader failed", K(ret));
-    } else if (OB_FAIL(ObDDLRedoLock::get_instance().init())) {
+    } else if (FAILEDx(ObDDLRedoLock::get_instance().init())) {
       LOG_WARN("init ddl redo lock failed", K(ret));
 #ifdef ERRSIM
-    } else if (OB_FAIL(ObDDLSimPointMgr::get_instance().init())) {
+    } else if (FAILEDx(ObDDLSimPointMgr::get_instance().init())) {
       LOG_WARN("init ddl sim point mgr fail", KR(ret));
 #endif
     } else {
@@ -875,8 +966,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 #ifdef _WIN32
     Sleep(3000);
 #endif
-    set_stop();
-    destroy();
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] success to init observer",
         "lib::g_runtime_enabled", lib::g_runtime_enabled);
@@ -888,8 +977,9 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 }
 
 
-void ObServer::destroy()
+int ObServer::destroy_resources()
 {
+  int ret = OB_SUCCESS;
   // observer.destroy() be called under two scenarios:
   // 1. main() exit
   // 2. ObServer destruction.
@@ -908,32 +998,96 @@ void ObServer::destroy()
   FLOG_INFO("destroy config manager success");
 
   if (!has_destroy_ && has_stopped_) {
+    if (OB_FAIL(DTL.check_channels_drained())) {
+      return ret;
+    }
+    // The registry borrows job statistics. An unfinished job must keep its
+    // Runtime and other providers alive; never clear it to force shutdown.
+    ObGlobalLoadDataStatMap *load_data_stats = ObGlobalLoadDataStatMap::getInstance();
+    if (OB_NOT_NULL(load_data_stats) && OB_FAIL(load_data_stats->destroy())) {
+      LOG_WARN("load data registry still has active jobs", KR(ret));
+      return ret;
+    }
+    if (OB_FAIL(ObAutoincrementService::get_instance().destroy())) {
+      LOG_WARN("autoincrement resources are still borrowed", KR(ret));
+      return ret;
+    }
 
-    FLOG_INFO("begin to destroy OB_LOGGER");
-    OB_LOGGER.stop();
-    OB_LOGGER.wait();
-    OB_LOGGER.destroy();
-    FLOG_INFO("OB_LOGGER destroyed");
-
-    FLOG_INFO("begin to destroy OB_LOG_COMPRESSOR");
-    OB_LOG_COMPRESSOR.destroy();
-    FLOG_INFO("OB_LOG_COMPRESSOR destroyed");
-
-    FLOG_INFO("begin to destroy task controller");
-    ObTaskController::get().destroy();
-    FLOG_INFO("task controller destroyed");
-
+    if (OB_FAIL(PX_P2P_DH.destroy())) {
+      LOG_WARN("PX messages are still borrowed", KR(ret));
+      return ret;
+    }
+    ObGlobalInterruptManager *interrupt_mgr = ObGlobalInterruptManager::getInstance();
+    if (nullptr != interrupt_mgr
+        && OB_FAIL(interrupt_mgr->check_registered_checkers_drained())) {
+      return ret;
+    }
+    if (OB_FAIL(ObDDLCtrlSpeedHandle::get_instance().destroy())) {
+      LOG_WARN("DDL log throttling is still in use", KR(ret));
+      return ret;
+    }
+    // The block-manager GC timer can read T3M/LocalStorageMeta providers from
+    // Runtime. Join it after Runtime consumers drain but before Runtime storage
+    // is physically released. The manager remains initialized until its normal
+    // destroy phase below so checkpoint references can still be decremented.
+    OB_STORAGE_OBJECT_MGR.stop();
+    OB_STORAGE_OBJECT_MGR.wait();
+    FLOG_INFO("begin to destroy server runtime");
+    if (OB_FAIL(server_runtime_controller_.destroy())) {
+      return ret;
+    }
+    FLOG_INFO("server runtime destroyed");
+    // The local-log handler is owned by ObServer but stores Runtime module
+    // pointers. All runtime log services are gone now; clear them for the next
+    // Runtime initialized by this same root instance.
+    internal_table_refresh_adapter_.reset();
 
     FLOG_INFO("begin destroy signal handle");
     signal_handle_.destroy();
     FLOG_INFO("signal handle destroyed");
 
-    FLOG_INFO("begin to destroy timer monitor");
-    ObTimerMonitor::get_instance().destroy();
-    FLOG_INFO("timer monitor destroyed");
+    FLOG_INFO("begin to destroy ob service");
+    if (OB_NOT_NULL(standby_module_)) {
+      standby_module_->destroy();
+      OB_DELETE(StandbyModule, ObModIds::OB_COMMON_NETWORK, standby_module_);
+      standby_module_ = nullptr;
+    }
+    if (OB_NOT_NULL(standby_host_)) {
+      OB_DELETE(StandbyHostAdapter, ObModIds::OB_COMMON_NETWORK, standby_host_);
+      standby_host_ = nullptr;
+    }
+    ob_service_.destroy();
+    FLOG_INFO("ob service destroyed");
+
+    FLOG_INFO("begin to destroy session manager");
+    session_mgr_.destroy();
+    FLOG_INFO("session manager destroyed");
+    if (OB_FAIL(conn_res_mgr_.destroy())) {
+      LOG_WARN("connection resources are still borrowed", KR(ret));
+      return ret;
+    }
+
+    FLOG_INFO("begin to destroy sql engine");
+    sql_engine_.destroy();
+    FLOG_INFO("sql engine destroyed");
+    if (OB_FAIL(DTL.destroy())) {
+      return ret;
+    }
+
+    FLOG_INFO("begin to destroy xml ctx");
+    ObLibXml2SaxHandler::destroy();
+    FLOG_INFO("xml ctx destroyed");
+
+    FLOG_INFO("begin to destroy pl engine");
+    pl_engine_.destory();
+    FLOG_INFO("pl engine destroyed");
 
     FLOG_INFO("begin to destroy schema service");
-    schema_service_.destroy();
+    if (OB_FAIL(schema_service_.destroy())) {
+      // A schema guard owned by the host can outlive its query. Preserve the
+      // backing service until the guard is released and destruction is retried.
+      return ret;
+    }
     if (OB_NOT_NULL(schema_refresh_scheduler_)) {
       OB_DELETE(ObSchemaRefreshSchedulerAdapter,
                 ObModIds::OB_SCHEMA_SERVICE,
@@ -962,6 +1116,12 @@ void ObServer::destroy()
 
     FLOG_INFO("begin to destroy server timer");
     server_gtimer_.destroy();
+    refresh_cpu_frequency_task_.reset();
+    redef_table_heart_beat_task_.reset();
+    if (ddl_heart_beat_task_container_inited_) {
+      OB_DDL_HEART_BEAT_TASK_CONTAINER.destroy();
+      ddl_heart_beat_task_container_inited_ = false;
+    }
     FLOG_INFO("server timer destroyed");
 
     FLOG_INFO("begin to destroy sql memory manager timer");
@@ -970,40 +1130,12 @@ void ObServer::destroy()
 
     FLOG_INFO("begin to destroy ctas clean up timer");
     ctas_clean_up_timer_.destroy();
+    ctas_clean_up_task_.reset();
     FLOG_INFO("ctas clean up timer destroyed");
 
     FLOG_INFO("begin to destroy local management service");
     local_management_service_.destroy();
     FLOG_INFO("local management service destroyed");
-
-    FLOG_INFO("begin to destroy ob service");
-    if (OB_NOT_NULL(standby_module_)) {
-      standby_module_->destroy();
-      OB_DELETE(StandbyModule, ObModIds::OB_COMMON_NETWORK, standby_module_);
-      standby_module_ = nullptr;
-    }
-    if (OB_NOT_NULL(standby_host_)) {
-      OB_DELETE(StandbyHostAdapter, ObModIds::OB_COMMON_NETWORK, standby_host_);
-      standby_host_ = nullptr;
-    }
-    ob_service_.destroy();
-    FLOG_INFO("ob service destroyed");
-
-    FLOG_INFO("begin to destroy session manager");
-    session_mgr_.destroy();
-    FLOG_INFO("session manager destroyed");
-
-    FLOG_INFO("begin to destroy sql engine");
-    sql_engine_.destroy();
-    FLOG_INFO("sql engine destroyed");
-
-    FLOG_INFO("begin to destroy xml ctx");
-    ObLibXml2SaxHandler::destroy();
-    FLOG_INFO("xml ctx destroyed");
-
-    FLOG_INFO("begin to destroy pl engine");
-    pl_engine_.destory();
-    FLOG_INFO("pl engine destroyed");
 
     FLOG_INFO("begin to destroy disk usage report task");
     disk_usage_report_task_.destroy();
@@ -1025,14 +1157,6 @@ void ObServer::destroy()
     tmp_file::ObTmpPageCache::get_instance().destroy();
     FLOG_INFO("tmp page cache destroyed");
 
-    FLOG_INFO("begin to destroy net frame");
-    net_frame_.destroy();
-    FLOG_INFO("net frame destroyed");
-
-    FLOG_INFO("begin to destroy io manager");
-    ObIOManager::get_instance().destroy();
-    FLOG_INFO("io manager destroyed");
-
     FLOG_INFO("begin to destroy server storage meta service");
     SERVER_STORAGE_META_SERVICE.destroy();
     FLOG_INFO("server storage meta service destroyed");
@@ -1042,22 +1166,24 @@ void ObServer::destroy()
     FLOG_INFO("memory dump destroyed");
 
     FLOG_INFO("begin to destroy time zone manager");
-    timezone_mgr_.destroy();
+    if (OB_FAIL(timezone_mgr_.destroy())) {
+      // Retain timezone backing storage and its remaining root providers until
+      // outstanding map borrows have been released.
+      return ret;
+    }
     FLOG_INFO("time zone manager destroyed");
 
     FLOG_INFO("begin to destroy ObMdsEventBuffer");
     storage::mds::ObMdsEventBuffer::destroy();
     FLOG_INFO("ObMdsEventBuffer destroyed");
 
-    FLOG_INFO("begin to destroy server runtime");
-    server_runtime_controller_.destroy();
-    FLOG_INFO("server runtime destroyed");
-
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
 
     FLOG_INFO("begin to destroy storage object mgr");
+    OB_STORAGE_OBJECT_MGR.stop();
+    OB_STORAGE_OBJECT_MGR.wait();
     OB_STORAGE_OBJECT_MGR.destroy();
     FLOG_INFO("storage object mgr destroyed");
 
@@ -1065,14 +1191,17 @@ void ObServer::destroy()
     startup_accel_handler_.destroy();
     FLOG_INFO("server startup task handler destroyed");
 
+    ObGenDicLoader::get_instance().destroy();
     FLOG_INFO("begin to destroy dict cache");
     ObDictCache::get_instance().destroy();
     FLOG_INFO("dict cache destroyed");
 
+    ObLogAllocatorMgr::get_instance().destroy();
     FLOG_INFO("begin to destroy log block mgr");
     log_block_mgr_.destroy();
     FLOG_INFO("log block mgr destroy");
 
+    ObOptStatManager::get_instance().destroy();
     FLOG_INFO("begin to destroy kv global cache");
     ObKVGlobalCache::get_instance().destroy();
     FLOG_INFO("kv global cache destroyed");
@@ -1080,9 +1209,13 @@ void ObServer::destroy()
     // for unittest, make sure threads can exit
     ObTimerService::get_instance().stop();
     ObTimerService::get_instance().wait();
+    ObSimpleThreadPoolDynamicMgr::get_instance().destroy();
     FLOG_INFO("begin to destroy timer service");
     ObTimerService::get_instance().destroy();
     FLOG_INFO("timer service destroyed");
+    // start_task/end_task write records from the timer workers. Clear them only
+    // after every worker has joined, so the next lifecycle gets a fresh monitor.
+    ObTimerMonitor::get_instance().destroy();
 
     FLOG_INFO("begin to destroy clock generator");
     ObClockGenerator::destroy();
@@ -1090,8 +1223,14 @@ void ObServer::destroy()
 
     deinit_fts();
 
+    FLOG_INFO("begin to destroy io manager");
+    ObIOCalibration::get_instance().destroy();
+    ObIOManager::get_instance().destroy();
+    FLOG_INFO("io manager destroyed");
+
     FLOG_INFO("begin to destroy io device");
     ObIODeviceWrapper::get_instance().destroy();
+    OB_FILE_SYSTEM_ROUTER.destroy();
     FLOG_INFO("io device destroyed");
 
 #ifndef _WIN32
@@ -1108,12 +1247,41 @@ void ObServer::destroy()
     }
 #endif
 
+    schema_status_proxy_.reset();
+    tablet_operator_.reset();
+    OB_PX_TARGET_MONITOR.reset();
+    sql_proxy_.destroy();
+    ddl_sql_proxy_.destroy();
+    bandwidth_throttle_.destroy();
+    meta_db_pool_.destroy();
+    DATA_VERSION_MGR.destroy();
+    ObMdsSchemaHelper::get_instance().reset();
+    gctx_.inited_ = false;
+    gctx_.sys_package_ready_ = false;
+    gctx_.status_ = SS_STOPPED;
+    gctx_.schema_service_ = nullptr;
+    gctx_.config_mgr_ = nullptr;
+    gctx_.tablet_operator_ = nullptr;
+    gctx_.meta_db_pool_ = nullptr;
+    gctx_.sql_proxy_ = nullptr;
+    gctx_.ddl_sql_proxy_ = nullptr;
+    gctx_.bandwidth_throttle_ = nullptr;
+    gctx_.warm_up_start_time_ = nullptr;
+    gctx_.diag_ = nullptr;
+    gctx_.scramble_rand_ = nullptr;
+    gctx_.schema_status_proxy_ = nullptr;
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
+    // Keep the writer and limiter providers available through the last module
+    // destructor. No shutdown message may be submitted after this point.
+    ObTaskController::get().destroy();
+    OB_LOGGER.destroy();
+    OB_LOG_COMPRESSOR.destroy();
   }
+  return ret;
 }
 
-int ObServer::start()
+int ObServer::start_resources()
 {
   int ret = OB_SUCCESS;
   gctx_.status_ = SS_STARTING;
@@ -1127,10 +1295,12 @@ int ObServer::start()
                     DBA_STEP_INC_INFO(server_start),
                     "observer instance start begin.");
 
-    if (FAILEDx(signal_handle_.start())) {
-      LOG_ERROR("fail to start signal handler", KR(ret));
-    } else {
-      FLOG_INFO("success to start signal handler");
+    if (handle_process_signals_) {
+      if (FAILEDx(signal_handle_.start())) {
+        LOG_ERROR("fail to start signal handler", KR(ret));
+      } else {
+        FLOG_INFO("success to start signal handler");
+      }
     }
     if (FAILEDx(startup_accel_handler_.start())) {
       LOG_ERROR("fail to start server startup task handler", KR(ret));
@@ -1215,7 +1385,7 @@ int ObServer::start()
     const bool need_commit_bootstrap = need_bootstrap_;
     if (FAILEDx(standby_module_->prepare_service_start(need_bootstrap_))) {
       LOG_ERROR("fail to prepare server service start", KR(ret));
-    } else if (need_commit_bootstrap) {
+    } else if (OB_SUCC(ret) && need_commit_bootstrap) {
       storage::ObLocalStorageMetaService *local_meta_service =
           share::server_service<storage::ObLocalStorageMetaService>();
       if (OB_ISNULL(local_meta_service)) {
@@ -1323,11 +1493,11 @@ int ObServer::start()
     LOG_ERROR("failure occurs, stop observer startup", KR(ret));
     LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
                         DBA_STEP_INC_INFO(server_start),
-                        "observer start fail, the stop status is ", stop_, ". "
+                        "observer start fail, the stop status is ", stop_.load(), ". "
                         "you may find solutions in previous error logs or seek help from official technicians.");
 
-    // Return the startup error to inner_main.  wait() terminates the process
-    // with _Exit(0), which would turn a failed bootstrap into a false success.
+    // start() returns the startup error after rolling back the resources
+    // acquired by this attempt.
     set_stop();
   } else if (!stop_) {
     GCTX.status_ = SS_SERVING;
@@ -1337,10 +1507,10 @@ int ObServer::start()
                     DBA_STEP_INC_INFO(server_start),
                     "observer start success.");
   } else {
-    FLOG_INFO("[OBSERVER_NOTICE] observer is set to stop", KR(ret), K_(stop));
+    FLOG_INFO("[OBSERVER_NOTICE] observer is set to stop", KR(ret), K(is_stopped()));
     LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
                         DBA_STEP_INC_INFO(server_start),
-                        "observer start fail, the stop status is ", stop_, ". "
+                        "observer start fail, the stop status is ", stop_.load(), ". "
                         "you may find solutions in previous error logs or seek help from official technicians.");
   }
 
@@ -1416,10 +1586,10 @@ int ObServer::wait_for_server_runtime()
     }
   }
   if (OB_SUCC(ret) && !stop_
-      && OB_FAIL(standby_module_->wait_replay_ready([this]() { return stop_; }))) {
+      && OB_FAIL(standby_module_->wait_replay_ready([this]() { return stop_.load(); }))) {
     LOG_WARN("standby startup replay did not become ready", KR(ret));
   }
-  FLOG_INFO("wait for server runtime", KR(ret), K(stop_), K(synced), K(timestamp_ready));
+  FLOG_INFO("wait for server runtime", KR(ret), K(is_stopped()), K(synced), K(timestamp_ready));
   if (!stop_ && synced && timestamp_ready) {
     LOG_DBA_INFO_V2(OB_SERVER_WAIT_RUNTIME_READY_SUCCESS,
                     DBA_STEP_INC_INFO(server_start),
@@ -1427,7 +1597,7 @@ int ObServer::wait_for_server_runtime()
   } else {
     LOG_DBA_ERROR_V2(OB_SERVER_WAIT_RUNTIME_READY_FAIL, ret,
                      DBA_STEP_INC_INFO(server_start),
-                     "wait for server runtime failed, server stop status is ", stop_, ". "
+                     "wait for server runtime failed, server stop status is ", stop_.load(), ". "
                      "you may find solutions in previous error logs or seek help from official technicians.");
   }
   return ret;
@@ -1457,7 +1627,7 @@ int ObServer::check_if_schema_ready()
       ob_usleep(SLEEP_INTERVAL_US);
     }
   }
-  FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready),
+  FLOG_INFO("check if schema ready", KR(ret), K(is_stopped()), K(schema_ready),
             K(current_schema_version), K(baseline_schema_version));
   if (!stop_ && schema_ready) {
     LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_SUCCESS,
@@ -1466,7 +1636,7 @@ int ObServer::check_if_schema_ready()
   } else {
     LOG_DBA_ERROR_V2(OB_SERVER_WAIT_SCHEMA_READY_FAIL, ret,
                      DBA_STEP_INC_INFO(server_start),
-                     "wait schema ready fail, server stop status is ", stop_, ". "
+                     "wait schema ready fail, server stop status is ", stop_.load(), ". "
                      "you may find solutions in previous error logs or seek help from official technicians.");
   }
   return ret;
@@ -1487,7 +1657,7 @@ int ObServer::check_if_timezone_usable()
   } else {
     FLOG_INFO("success to start time zone manager");
   }
-  FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+  FLOG_INFO("check if timezone usable", KR(ret), K(is_stopped()), K(timezone_usable));
   return ret;
 }
 void ObServer::prepare_stop()
@@ -1504,7 +1674,7 @@ bool ObServer::is_prepare_stopped()
 
 bool ObServer::is_stopped()
 {
-  return stop_;
+  return stop_.load();
 }
 
 void ObServer::set_stop()
@@ -1516,138 +1686,53 @@ void ObServer::set_stop()
   FLOG_INFO("[OBSERVER_NOTICE] observer is setted to stop");
 }
 
-int ObServer::stop()
+int ObServer::stop_resources()
 {
   int ret = OB_SUCCESS;
-  int fail_ret = OB_SUCCESS;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer begin");
-  LOG_DBA_INFO_V2(OB_SERVER_STOP_BEGIN, "observer stop begin.");
-
-  FLOG_INFO("begin to stop OB_LOGGER");
-  OB_LOGGER.stop();
-  FLOG_INFO("stop OB_LOGGER success");
-
-  FLOG_INFO("begin to stop OB_LOG_COMPRESSOR");
-  OB_LOG_COMPRESSOR.stop();
-  FLOG_INFO("stop OB_LOG_COMPRESSOR success");
-
-  FLOG_INFO("begin to stop task controller");
-  ObTaskController::get().stop();
-  FLOG_INFO("stop task controller success");
-
-  FLOG_INFO("begin to stop config manager");
-  FLOG_INFO("stop config manager success");
-
-    FLOG_INFO("begin stop signal handle");
-    signal_handle_.stop();
-    FLOG_INFO("stop signal handle success");
-
-    FLOG_INFO("begin to stop GDS");
-    GDS.stop();
-    FLOG_INFO("GDS stopped");
-
-    FLOG_INFO("begin to sql nio stop");
-    net_frame_.sql_nio_stop();
-    FLOG_INFO("sql nio stopped");
-
-
-    FLOG_INFO("begin to stop schema service");
-    schema_service_.stop();
-    FLOG_INFO("schema service stopped");
-
-
-    FLOG_INFO("begin to stop storage object mgr");
-    OB_STORAGE_OBJECT_MGR.stop();
-    FLOG_INFO("storage object mgr stopped");
-
-    FLOG_INFO("begin to stop timer monitor");
-    ObTimerMonitor::get_instance().stop();
-    FLOG_INFO("timer monitor stopped");
-
-    FLOG_INFO("begin to stop timer");
-    server_gtimer_.stop();
-    FLOG_INFO("timer stopped");
-
-    FLOG_INFO("begin to stop sql memory manager timer");
-    sql_mem_timer_.stop();
-    FLOG_INFO("sql memory manager timer stopped");
-
-    FLOG_INFO("begin to stop ctas clean up timer");
-    ctas_clean_up_timer_.stop();
-    FLOG_INFO("ctas clean up timer stopped");
-
-    FLOG_INFO("begin to stop inner sql proxy");
-    sql_proxy_.stop();
-    ddl_sql_proxy_.stop();
-    FLOG_INFO("inner sql proxy stopped");
-
-    FLOG_INFO("begin to stop local management service");
-    if (OB_FAIL(local_management_service_.stop())) {
-      FLOG_WARN("fail to stop local management service", KR(ret));
-      fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
-    } else {
-      FLOG_INFO("local management service stopped");
-    }
-
-    FLOG_INFO("begin to stop memory dump");
-    ObMemoryDump::get_instance().stop();
-    FLOG_INFO("memory dump stopped");
-
-    FLOG_INFO("begin to stop time zone manager");
+  signal_handle_.stop();
+  signal_handle_.wait();
+  GDS.stop();
+  // Wake DDL producers before cancelling the timer that refreshes their rate.
+  ObDDLCtrlSpeedHandle::get_instance().stop();
+  ObTimerMonitor::get_instance().stop();
+  ObTimerMonitor::get_instance().wait();
+  server_gtimer_.stop();
+  sql_mem_timer_.stop();
+  ctas_clean_up_timer_.stop();
+  if (timezone_mgr_.is_inited()) {
     timezone_mgr_.stop();
-    FLOG_INFO("time zone manager stopped");
-    //FLOG_INFO("begin stop partition scheduler");
-    //ObPartitionScheduler::get_instance().stop_merge();
-    //FLOG_INFO("partition scheduler stopped", KR(ret));
-
-    FLOG_INFO("begin to stop server storage meta service");
-    SERVER_STORAGE_META_SERVICE.stop();
-    FLOG_INFO("server storage meta service stopped");
-
-    FLOG_INFO("begin to stop server startup task handler");
-    startup_accel_handler_.stop();
-    FLOG_INFO("server startup task handler stopped");
-
-    // It will wait for all requests done.
-    FLOG_INFO("begin to stop server runtime");
-    server_runtime_controller_.stop();
-    FLOG_INFO("server runtime stopped");
-    FLOG_INFO("begin to stop ob_service");
-    if (OB_NOT_NULL(standby_module_)) {
-      (void)standby_module_->stop();
-    }
-    ob_service_.stop();
-    FLOG_INFO("ob_service stopped");
-
-    FLOG_INFO("begin to stop io manager");
-    ObIOManager::get_instance().stop();
-    FLOG_INFO("io manager stopped");
-
-    FLOG_INFO("begin to stop kv global cache");
-    ObKVGlobalCache::get_instance().stop();
-    FLOG_INFO("kv global cache stopped");
-
-    FLOG_INFO("begin to stop timer service");
-    ObTimerService::get_instance().stop();
-    FLOG_INFO("timer service stopped");
-
-    FLOG_INFO("begin to stop thread dynamic mgr");
-    ObSimpleThreadPoolDynamicMgr::get_instance().stop();
-    FLOG_INFO("thread dynamic mgr stopped");
-
-    FLOG_INFO("begin to stop clock generator");
-    ObClockGenerator::get_instance().stop();
-    FLOG_INFO("clock generator stopped");
-
-  has_stopped_ = true;
-  FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
-  if (OB_SUCCESS != fail_ret) {
-    LOG_DBA_ERROR_V2(OB_SERVER_STOP_FAIL, fail_ret, "observer stop fail. "
-                     "you may find solutions in previous error logs or seek help from official technicians.");
-  } else {
-    LOG_DBA_INFO_V2(OB_SERVER_STOP_SUCCESS, "observer stop success.");
+    timezone_mgr_.wait();
   }
-
+  SERVER_STORAGE_META_SERVICE.stop_checkpoint();
+  if (local_management_service_.is_inited()) {
+    if (OB_FAIL(local_management_service_.stop())) {
+      LOG_WARN("failed to stop local management producers", KR(ret));
+    } else {
+      local_management_service_.wait();
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(standby_module_)) {
+    ret = standby_module_->stop();
+  }
+  if (OB_SUCC(ret)) {
+    // These bootstrap-context workers can refresh schema and submit internal
+    // SQL; they must finish while Runtime, schema and SQL providers still live.
+    ob_service_.stop();
+    ob_service_.wait();
+    // Dependency maintenance tasks borrow Runtime command services.
+    sql_engine_.get_dep_info_queue().stop();
+    sql_engine_.get_dep_info_queue().wait();
+    server_runtime_controller_.stop();
+    ret = server_runtime_controller_.wait();
+  }
+  if (OB_SUCC(ret)) {
+    // The reactor keeps servicing close notifications until bound sessions
+    // drain. Join it while Session and all callbacks' providers still exist.
+    net_frame_.destroy();
+    has_stopped_ = true;
+    FLOG_INFO("[OBSERVER_NOTICE] stop observer end");
+  }
   return ret;
 }
 
@@ -1656,46 +1741,38 @@ int ObServer::wait_no_client()
   int ret = OB_SUCCESS;
 #ifdef _WIN32
   OVERLAPPED ov = {};
-  if (LockFileEx(clients_h_,
-                 LOCKFILE_EXCLUSIVE_LOCK,
-                 0, MAXDWORD, MAXDWORD, &ov)) {
-    FLOG_INFO("no clients remaining, exiting");
-    net_frame_.sql_nio_stop();
-    _Exit(0);
-  } else {
-    ret = OB_ERROR;
-    LOG_ERROR("LockFileEx failed", "last_error", (int)GetLastError());
+  if (!LockFileEx(clients_h_, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+                  0, MAXDWORD, MAXDWORD, &ov)) {
+    ret = ERROR_LOCK_VIOLATION == GetLastError() ? OB_EAGAIN : OB_ERROR;
   }
 #else
-  if (flock(clients_fd_, LOCK_EX) == 0) {
-    FLOG_INFO("no clients remaining, exiting");
-    net_frame_.sql_nio_stop();
-    _Exit(0);
-  } else {
-    ret = OB_ERROR;
-    LOG_ERROR("flock failed", K(errno));
+  if (flock(clients_fd_, LOCK_EX | LOCK_NB) != 0) {
+    ret = EWOULDBLOCK == errno || EINTR == errno ? OB_EAGAIN : OB_ERROR;
   }
 #endif
+  if (OB_SUCC(ret)) {
+    FLOG_INFO("no clients remaining, stopping server");
+    set_stop();
+  }
   return ret;
 }
 
 int ObServer::wait()
 {
   int ret = OB_SUCCESS;
-  FLOG_INFO("[OBSERVER_NOTICE] wait observer begin");
-  LOG_DBA_INFO_V2(OB_SERVER_WAIT_BEGIN, "observer process wait begin.");
-  // wait for stop flag
-
-  if (gctx_.is_embedded_mode()) {
-    std::thread([this]() { wait_no_client(); }).detach();
+  while (OB_SUCC(ret) && !is_stopped()) {
+    if (gctx_.is_embedded_mode()) {
+      ret = wait_no_client();
+      if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_SUCC(ret) && !is_stopped()) {
+      ob_usleep(100 * 1000);
+    }
   }
-
-  FLOG_INFO("begin to wait observer setted to stop");
-  while (OB_SUCC(ret) && !stop_) {
-    SLEEP(3);
-  }
-  _Exit(0);
-  return ret;
+  const int stop_ret = stop();
+  return OB_SUCCESS == ret ? stop_ret : ret;
 }
 
 int ObServer::init_tz_info_mgr()
@@ -1733,7 +1810,7 @@ int ObServer::init_config(const ObServerOptions &opts)
   } else if (OB_FAIL(config_mgr_.got_version())) {
   } else if (OB_FAIL(DATA_VERSION_MGR.init())) {
   } else if (OB_FAIL(DATA_VERSION_MGR.load_from_file())) {
-  } else if (OB_FAIL(DATA_VERSION_MGR.validate_or_init_current_version())) {
+  } else if (OB_FAIL(DATA_VERSION_MGR.validate_loaded_version())) {
   }
 
   if (OB_SUCC(ret) && 0 == config::server_create_time()) {
@@ -1743,8 +1820,11 @@ int ObServer::init_config(const ObServerOptions &opts)
     }
   }
 
+  // Validate startup options before creating a new bootstrap marker. Loaded
+  // versions were already checked above without changing the data directory.
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_opts_config(opts))) {
+  } else if (OB_FAIL(DATA_VERSION_MGR.validate_or_init_current_version())) {
   } else if (OB_FAIL(GMEMCONF.reload_config())) {
   } else if (OB_FAIL(set_running_mode())) {
   } else if (OB_FAIL(init_self_addr())) {
@@ -2109,7 +2189,7 @@ int ObServer::init_interrupt()
   if (OB_ISNULL(mgr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail get interrupt mgr instance", KR(ret));
-  } else if (OB_FAIL(mgr->init())) {
+  } else if (OB_FAIL(mgr->ensure_initialized())) {
   }
   return ret;
 }
@@ -2676,6 +2756,11 @@ int ObServer::ObCTASCleanUpTask::init(ObServer *obs, common::ObTimer &timer)
     is_inited_ = true;
     disable_timeout_check();
     if (OB_FAIL(timer.schedule(*this, CLEANUP_INTERVAL, true /*schedule repeatly*/))) {
+      if (timer.inited()) {
+        IGNORE_RETURN timer.cancel_task(*this);
+        IGNORE_RETURN timer.wait_task(*this);
+      }
+      reset();
     }
   }
   return ret;
@@ -2685,15 +2770,14 @@ int ObServer::ObCTASCleanUpTask::init(ObServer *obs, common::ObTimer &timer)
 void ObServer::ObCTASCleanUpTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  bool need_ctas_cleanup = ATOMIC_BCAS(&obs_->need_ctas_cleanup_, true, false);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObCTASCleanUpTask has not been inited", KR(ret));
-  } else if (false == need_ctas_cleanup) {
-    LOG_DEBUG("CTAS cleanup task skipped this time");
   } else if (OB_ISNULL(obs_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("CTAS cleanup task got null ptr", KR(ret));
+  } else if (!ATOMIC_BCAS(&obs_->need_ctas_cleanup_, true, false)) {
+    LOG_DEBUG("CTAS cleanup task skipped this time");
   } else if (OB_FAIL(obs_->clean_up_invalid_tables())) {
     ATOMIC_STORE(&obs_->need_ctas_cleanup_, true);
   } else {
@@ -2761,6 +2845,11 @@ int ObServer::ObRefreshCpuFreqTimeTask::init(ObServer *obs, common::ObTimer &tim
     obs_ = obs;
     is_inited_ = true;
     if (OB_FAIL(timer.schedule(*this, REFRESH_INTERVAL, true /*schedule repeatly*/))) {
+      if (timer.inited()) {
+        IGNORE_RETURN timer.cancel_task(*this);
+        IGNORE_RETURN timer.wait_task(*this);
+      }
+      reset();
     }
   }
   return ret;
@@ -2817,6 +2906,8 @@ int ObServer::init_ddl_heart_beat_task_container()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(OB_DDL_HEART_BEAT_TASK_CONTAINER.init())) {
+  } else {
+    ddl_heart_beat_task_container_inited_ = true;
   }
   return ret;
 }

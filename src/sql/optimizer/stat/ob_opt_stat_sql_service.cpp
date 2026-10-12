@@ -276,13 +276,21 @@ int ObOptStatSqlService::init(ObMySQLProxy *proxy)
   return ret;
 }
 
+void ObOptStatSqlService::destroy()
+{
+  lib::ObMutexGuard guard(mutex_);
+  inited_ = false;
+  // The server owns the proxy. Release the reference, not the proxy itself.
+  mysql_proxy_ = nullptr;
+}
+
 int ObOptStatSqlService::fetch_table_stat(const ObOptTableStat::Key &key,
                                           ObIArray<ObOptTableStat> &all_part_stats)
 {
   int ret = OB_SUCCESS;
   ObOptTableStat stat;
   stat.set_table_id(key.get_table_id());
-  auto &sql_client_retry_weak = *mysql_proxy_;
+  auto *sql_client_retry_weak = mysql_proxy_;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
     ObSqlString sql;
@@ -301,7 +309,7 @@ int ObOptStatSqlService::fetch_table_stat(const ObOptTableStat::Key &key,
                                       "spare1 as sample_size FROM %s ", share::OB_ALL_TABLE_STAT_TNAME))) {
     } else if (OB_FAIL(sql.append_fmt(" WHERE TABLE_ID=%ld",
                                       ObSchemaUtils::get_extract_schema_id(key.table_id_)))) {
-    } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
+    } else if (OB_FAIL(sql_client_retry_weak->read(res, sql.ptr()))) {
     } else if (NULL == (result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
     }
@@ -352,7 +360,7 @@ int ObOptStatSqlService::batch_fetch_table_stats(const uint64_t table_id,
 {
   int ret = OB_SUCCESS;
 
-  auto &sql_client_retry_weak = *mysql_proxy_;
+  auto *sql_client_retry_weak = mysql_proxy_;
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
     sqlclient::ObMySQLResult *result = NULL;
@@ -379,7 +387,7 @@ int ObOptStatSqlService::batch_fetch_table_stats(const uint64_t table_id,
                                       ObSchemaUtils::get_extract_schema_id(table_id),
                                       !part_str.empty() ? part_str.ptr() : " "))) {
     } else if (conn != NULL && OB_FAIL(conn->execute_read(sql.ptr(), res))) {
-    } else if (conn == NULL && OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
+    } else if (conn == NULL && OB_FAIL(sql_client_retry_weak->read(res, sql.ptr()))) {
     } else if (NULL == (result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
     }
@@ -1027,7 +1035,7 @@ int ObOptStatSqlService::fetch_column_stat(ObIAllocator &allocator,
   } else if (OB_UNLIKELY(key_col_stats.count() < 1) || OB_ISNULL(key_col_stats.at(0).key_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    auto &sql_client_retry_weak = *mysql_proxy_;
+    auto *sql_client_retry_weak = mysql_proxy_;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
@@ -1042,7 +1050,7 @@ int ObOptStatSqlService::fetch_column_stat(ObIAllocator &allocator,
       } else if (conn != NULL &&
                  OB_FAIL(conn->execute_read(sql.ptr(), res))) {
       } else if (conn == NULL &&
-                 OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
+                 OB_FAIL(sql_client_retry_weak->read(res, sql.ptr()))) {
       } else if (NULL == (result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
       } else {
@@ -1676,7 +1684,9 @@ int ObOptStatSqlService::fetch_table_rowcnt(const uint64_t table_id,
   ObSqlString tablet_list_str;
   ObSqlString tablet_tuple_list_str;
   uint64_t real_table_id = table_id;
-  if (OB_FAIL(gen_tablet_list_str(all_tablet_ids, tablet_list_str, tablet_tuple_list_str))) {
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(gen_tablet_list_str(all_tablet_ids, tablet_list_str, tablet_tuple_list_str))) {
   } else if (OB_FAIL(raw_sql.append_fmt("select /*+opt_param('enable_in_range_optimization','true') opt_param('use_default_opt_stat','true')*/"\
                                          "tablet_id, max(row_count) from "\
                                          "(select cast(tablet_id as unsigned) as tablet_id, cast(inserts - deletes as signed) as row_count "\
@@ -1693,8 +1703,8 @@ int ObOptStatSqlService::fetch_table_rowcnt(const uint64_t table_id,
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
-      auto &sql_client_retry_weak = *mysql_proxy_;
-      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, raw_sql.ptr()))) {
+      auto *sql_client_retry_weak = mysql_proxy_;
+      if (OB_FAIL(sql_client_retry_weak->read(proxy_result, raw_sql.ptr()))) {
       } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
       } else {
@@ -1861,7 +1871,7 @@ int ObOptStatSqlService::fetch_system_stat(const ObOptSystemStat::Key &key,
                                           ObOptSystemStat &stat)
 {
   int ret = OB_SUCCESS;
-  auto &sql_client_retry_weak = *mysql_proxy_;
+  auto *sql_client_retry_weak = mysql_proxy_;
   
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
@@ -1871,7 +1881,7 @@ int ObOptStatSqlService::fetch_system_stat(const ObOptSystemStat::Key &key,
       ret = OB_NOT_INIT;
     } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s ", share::OB_ALL_AUX_STAT_TNAME))) {
     } else if (OB_FAIL(sql.append_fmt(" WHERE ID = 1"))) {
-    } else if (OB_FAIL(sql_client_retry_weak.read(res, sql.ptr()))) {
+    } else if (OB_FAIL(sql_client_retry_weak->read(res, sql.ptr()))) {
     } else if (NULL == (result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(result->next())) {

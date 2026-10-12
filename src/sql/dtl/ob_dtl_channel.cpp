@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SQL_DTL
 #include "config_bridge.h"
 #include "ob_dtl_channel.h"
+#include "sql/dtl/ob_dtl.h"
 #include "sql/dtl/ob_dtl_flow_control.h"
 
 using namespace oceanbase::common;
@@ -48,9 +49,20 @@ ObDtlChannel::ObDtlChannel(uint64_t id)
       thread_id_(0),
       enable_channel_sync_(false),
       prev_link_(nullptr),
-      next_link_(nullptr)
+      next_link_(nullptr),
+      dtl_owner_(nullptr)
 {
   cond_.init(common::ObLatchIds::DTL_CHANNEL_WAIT);
+}
+
+ObDtlChannel::~ObDtlChannel()
+{
+  // Derived destructors have already freed queues and buffers while Runtime's
+  // DFC/memory providers are still alive. Only now can database close proceed.
+  if (nullptr != dtl_owner_) {
+    dtl_owner_->release_owned_channel();
+    dtl_owner_ = nullptr;
+  }
 }
 
 int64_t ObDtlChannel::get_op_id()

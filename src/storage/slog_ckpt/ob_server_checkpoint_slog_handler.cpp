@@ -59,7 +59,9 @@ ObServerCheckpointSlogHandler::ObServerCheckpointSlogHandler()
     write_ckpt_task_(this),
     task_timer_(),
     runtime_meta_for_replay_(),
-    runtime_meta_valid_for_replay_(false)
+    runtime_meta_valid_for_replay_(false),
+    last_write_time_(0),
+    last_slog_cursor_()
 {
 }
 
@@ -166,8 +168,20 @@ void ObServerCheckpointSlogHandler::wait()
 
 void ObServerCheckpointSlogHandler::destroy()
 {
-  is_inited_ = false;
   task_timer_.destroy();
+  TCWLockGuard guard(lock_);
+  // This handler lives in the root storage-meta singleton. Drop both checkpoint
+  // buffer references while the old block manager still exists; otherwise a
+  // later read_checkpoint would release old block IDs in a new database.
+  server_meta_block_handle_.reset();
+  runtime_meta_for_replay_ = omt::ObServerRuntimeMeta();
+  runtime_meta_valid_for_replay_ = false;
+  server_slogger_ = nullptr;
+  server_runtime_ = nullptr;
+  is_writing_checkpoint_ = false;
+  last_write_time_ = 0;
+  last_slog_cursor_.reset();
+  is_inited_ = false;
 }
 
 int ObServerCheckpointSlogHandler::read_checkpoint(const ObServerSuperBlock &super_block)
@@ -362,9 +376,6 @@ int ObServerCheckpointSlogHandler::replay_over()
 int ObServerCheckpointSlogHandler::write_checkpoint(bool is_force)
 {
   int ret = OB_SUCCESS;
-
-  static int64_t last_write_time_ = 0;
-  static ObLogCursor last_slog_cursor_;
 
   ObLogCursor cur_cursor;
   int64_t alert_interval = ObWriteCheckpointTask::FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL;

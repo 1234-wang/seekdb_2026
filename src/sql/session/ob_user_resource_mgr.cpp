@@ -50,28 +50,91 @@ void ObConnectResAlloc::free_node(ObConnectResHashNode* node)
 }
 
 ObConnectResourceMgr::ObConnectResourceMgr()
-: inited_(false), user_res_map_(), server_res_inited_(false), schema_service_(nullptr),
+: lifecycle_lock_(), inited_(false), stopping_(false), borrowed_user_resources_(0),
+  user_res_map_(), server_res_(), server_res_inited_(false), schema_service_(nullptr),
   timer_(nullptr),
   cleanup_task_(*this)
 {
 }
 
 ObConnectResourceMgr::~ObConnectResourceMgr()
-{}
+{
+  // The owner must keep this object alive until destroy succeeds.
+  const int ret = destroy();
+  if (OB_SUCCESS != ret) {
+    LOG_ERROR("connection resource manager destroyed with outstanding resources", K(ret));
+  }
+}
 
 int ObConnectResourceMgr::init(ObMultiVersionSchemaService &schema_service, common::ObTimer &timer)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(inited_)) {
-    ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(user_res_map_.init("UserResCtrl"))) {
-  } else {
-    schema_service_ = &schema_service;
-    timer_ = &timer;
-    inited_ = true;
-    const int64_t delay = ConnResourceCleanUpTask::SLEEP_USECONDS;
-    const bool repeat = false;
-    if (OB_FAIL(timer_->schedule(cleanup_task_, delay, repeat))) {
+  bool need_cleanup = false;
+  {
+    ObLatchWGuard guard(lifecycle_lock_, ObLatchIds::DEFAULT_MUTEX);
+    if (OB_UNLIKELY(inited_)) {
+      ret = OB_INIT_TWICE;
+    } else {
+      need_cleanup = true;
+      if (OB_FAIL(user_res_map_.init("UserResCtrl"))) {
+      } else {
+        schema_service_ = &schema_service;
+        timer_ = &timer;
+        stopping_ = false;
+        inited_ = true;
+        const int64_t delay = ConnResourceCleanUpTask::SLEEP_USECONDS;
+        const bool repeat = false;
+        if (OB_FAIL(timer_->schedule(cleanup_task_, delay, repeat))) {
+        } else {
+          need_cleanup = false;
+        }
+      }
+    }
+  }
+  if (need_cleanup) {
+    const int cleanup_ret = destroy();
+    if (OB_SUCCESS != cleanup_ret) {
+      LOG_WARN("clean up partially initialized connection resource manager failed", K(cleanup_ret));
+    }
+  }
+  return ret;
+}
+
+int ObConnectResourceMgr::destroy()
+{
+  int ret = OB_SUCCESS;
+  ObTimer *timer = nullptr;
+  {
+    ObLatchWGuard guard(lifecycle_lock_, ObLatchIds::DEFAULT_MUTEX);
+    stopping_ = true;
+    timer = timer_;
+  }
+  // Close admission before cancelling: a running callback cannot re-schedule.
+  // Do not hold lifecycle_lock_ while waiting for that callback to finish.
+  if (nullptr != timer && timer->inited()) {
+    if (OB_FAIL(timer->cancel_task(cleanup_task_))) {
+    } else if (OB_FAIL(timer->wait_task(cleanup_task_))) {
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObLatchWGuard guard(lifecycle_lock_, ObLatchIds::DEFAULT_MUTEX);
+    if (0 != borrowed_user_resources_) {
+      // This also covers values already removed by the periodic cleanup task.
+      // LinkHashMap::revert requires its original map to remain initialized.
+      ret = OB_EAGAIN;
+    } else {
+      user_res_map_.destroy();
+      {
+        ObLatchWGuard server_guard(server_res_.rwlock_, ObLatchIds::DEFAULT_MUTEX);
+        server_res_.cur_connections_ = 0;
+        server_res_.history_connections_ = 0;
+        server_res_.start_time_ = 0;
+        server_res_inited_ = false;
+      }
+      schema_service_ = nullptr;
+      timer_ = nullptr;
+      inited_ = false;
+      stopping_ = false;
     }
   }
   return ret;
@@ -81,12 +144,17 @@ int ObConnectResourceMgr::apply_for_server_conn_resource(const ObPrivSet &priv,
                                                          const uint64_t max_connections)
 {
   int ret = OB_SUCCESS;
+  ObLatchWGuard guard(lifecycle_lock_, ObLatchIds::DEFAULT_MUTEX);
   ObLatchWGuard wr_guard(server_res_.rwlock_, ObLatchIds::DEFAULT_MUTEX);
-  server_res_inited_ = true;
-  if (server_res_.cur_connections_ < max_connections
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+  } else if (stopping_) {
+    ret = OB_CANCELED;
+  } else if (server_res_.cur_connections_ < max_connections
       || (max_connections == server_res_.cur_connections_
           && OB_PRIV_HAS_ANY(priv, OB_PRIV_SUPER))) {
     // A user with SUPER privilege may connect when the server reaches max_connections.
+    server_res_inited_ = true;
     server_res_.cur_connections_++;
   } else {
     ret = OB_ERR_CON_COUNT_ERROR;
@@ -114,9 +182,14 @@ int ObConnectResourceMgr::get_or_insert_user_resource(const uint64_t user_id,
       ObConnectResource *&user_res)
 {
   int ret = OB_SUCCESS;
+  ObLatchWGuard guard(lifecycle_lock_, ObLatchIds::DEFAULT_MUTEX);
   user_res = NULL;
   ObUserKey user_key(user_id);
-  if (OB_FAIL(user_res_map_.get(user_key, user_res))) {
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+  } else if (stopping_) {
+    ret = OB_CANCELED;
+  } else if (OB_FAIL(user_res_map_.get(user_key, user_res))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       // not exist, alloc and insert
@@ -143,7 +216,20 @@ int ObConnectResourceMgr::get_or_insert_user_resource(const uint64_t user_id,
     } else {
     }
   }
+  if (OB_SUCC(ret) && nullptr != user_res) {
+    ++borrowed_user_resources_;
+  }
   return ret;
+}
+
+void ObConnectResourceMgr::revert_user_resource(ObConnectResource *&user_res)
+{
+  ObLatchWGuard guard(lifecycle_lock_, ObLatchIds::DEFAULT_MUTEX);
+  if (nullptr != user_res) {
+    user_res_map_.revert(user_res);
+    user_res = nullptr;
+    --borrowed_user_resources_;
+  }
 }
 
 int ObConnectResourceMgr::increase_user_connections_count(
@@ -229,8 +315,7 @@ int ObConnectResourceMgr::on_user_connect(
         session.set_conn_res_user_id(user_id);
       }
       if (OB_NOT_NULL(user_res)) {
-        user_res_map_.revert(user_res);
-        user_res = NULL;
+        revert_user_resource(user_res);
       }
     }
   }
@@ -321,7 +406,10 @@ void ObConnectResourceMgr::ConnResourceCleanUpTask::runTimerTask()
   }
   const int64_t delay = SLEEP_USECONDS;
   const bool repeat = false;
-  if (OB_SUCC(ret) && OB_ISNULL(conn_res_mgr_.timer_)) {
+  ObLatchWGuard guard(conn_res_mgr_.lifecycle_lock_, ObLatchIds::DEFAULT_MUTEX);
+  if (conn_res_mgr_.stopping_) {
+    // The owner is waiting for this callback before releasing its dependencies.
+  } else if (OB_SUCC(ret) && OB_ISNULL(conn_res_mgr_.timer_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("connect resource cleanup timer is null", K(ret));
   } else if (OB_SUCC(ret) && OB_FAIL(conn_res_mgr_.timer_->schedule(*this, delay, repeat))) {

@@ -17,6 +17,7 @@
 #ifndef OCEANBASE_COMMON_OB_DEBUG_SYNC_H_
 #define OCEANBASE_COMMON_OB_DEBUG_SYNC_H_
 
+#include <atomic>
 #include "lib/string/ob_fixed_length_string.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/lock/ob_spin_lock.h"
@@ -156,6 +157,8 @@ public:
   int broadcast(const ObSyncEventName &name);
   int wait(const ObSyncEventName &name, const int64_t timeout_us, const bool clear);
 
+  // Start a new lifetime only after the old waiters have returned.
+  int start();
   // clear events with no waiters.
   void clear_event();
 
@@ -203,17 +206,20 @@ public:
 
   ObDSActionArray &rpc_spread_actions() const;
 
+  // Call at the next core init, after all workers of the old database joined.
+  int start();
   void stop();
 
 private:
-  ObDebugSync() : stop_(false), lock_(ObLatchIds::DEFAULT_SPIN_LOCK)
+  ObDebugSync() : stop_(false), generation_(0), lock_(ObLatchIds::DEFAULT_SPIN_LOCK)
   {}
 
   int parse_action(const ObString &str, ObDebugSyncAction &action, bool &clear, bool &reset);
   static ObString get_token(ObString &str);
 
 private:
-  volatile bool stop_;
+  std::atomic<bool> stop_;
+  std::atomic<uint64_t> generation_;
   ObSpinLock lock_; // protect global action access
   ObDSActionArray global_actions_;
   ObDSEventControl event_control_;

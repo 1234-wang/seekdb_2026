@@ -100,6 +100,11 @@ ObPLCtx::~ObPLCtx()
 
 void ObPL::destory()
 {
+  // PL is owned by the root server, while these locks and interface map are
+  // initialized for each Runtime. Runtime consumers have drained before this.
+  interface_service_.destroy();
+  build_lock_.second.destroy();
+  build_lock_.first.destroy();
   sql_proxy_ = NULL;
   ai_endpoint_admin_ = NULL;
   resource_limit_calculator_ = NULL;

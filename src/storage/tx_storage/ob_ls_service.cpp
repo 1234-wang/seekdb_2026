@@ -24,6 +24,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
+#include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_share_util.h"
 #include "storage/allocator/ob_mds_allocator.h"
@@ -84,7 +85,7 @@ int ObLSService::stop()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ls service not inited, cannot stop.", K(ret));
-  } else if (!is_running_ || is_stopped_) {
+  } else if (is_stopped_) {
     // do nothing
   } else {
     ObLS *ls = nullptr;
@@ -128,6 +129,8 @@ int ObLSService::init()
                                         OB_LS_SERVICE,
                                         LS_ALLOC_TOTAL_LIMIT))) {
   } else {
+    is_running_ = false;
+    is_stopped_ = false;
     is_inited_ = true;
   }
   if (OB_FAIL(ret)) {
@@ -149,6 +152,7 @@ int ObLSService::start()
     // the write gate closed until all role capabilities are ready.
     boot_append_mode_ = !share::server_is_recovery_mode();
     LOG_INFO("ls service start successfully");
+    is_stopped_ = false;
     is_running_ = true;
   }
   return ret;
@@ -180,6 +184,32 @@ int ObLSService::inner_create_ls_(const ObRestoreStatus &restore_status,
 void ObLSService::free_ls_(ObLS *ls)
 {
   if (OB_NOT_NULL(ls)) {
+    // prepare_for_safe_destroy releases the LS's own tablet/cache references,
+    // but T3M destroys their objects asynchronously. Those objects still borrow
+    // the embedded MDS/memtable managers, freezer and transaction state.
+    int prepare_ret = OB_SUCCESS;
+    while (OB_SUCCESS != (prepare_ret = ls->prepare_for_safe_destroy())) {
+      LOG_WARN_RET(prepare_ret, "failed to release LS-owned metadata before destruction", KR(prepare_ret), KP(ls));
+      ob_usleep(100_ms);
+    }
+    ObStorageMetaMemMgr *t3m = share::server_service<ObStorageMetaMemMgr>();
+    bool meta_released = false;
+    do {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(t3m)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(t3m->check_all_meta_mem_released(meta_released, "ls_wait"))) {
+        meta_released = false;
+      }
+      if (OB_FAIL(ret) || !meta_released || !ls->get_tablet_svr()->is_safe_to_destroy()) {
+        if (REACH_TIME_INTERVAL(5_s)) {
+          LOG_WARN("waiting for LS metadata borrowers to drain", KR(ret), KP(ls));
+        }
+        ob_usleep(100_ms);
+      } else {
+        break;
+      }
+    } while (true);
     if (ls_ == ls) {
       ls_ = nullptr;
     }

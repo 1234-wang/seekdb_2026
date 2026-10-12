@@ -216,7 +216,8 @@ int CacheHandle::next_value(uint64_t &next_value)
 }
 
 ObAutoincrementService::ObAutoincrementService()
-  : node_allocator_(),
+  : is_inited_(false), active_handles_(0), borrowed_nodes_(0),
+    node_allocator_(),
     handle_allocator_(),
     map_mutex_(common::ObLatchIds::AUTO_INCREMENT_INIT_LOCK)
 {
@@ -235,13 +236,55 @@ ObAutoincrementService &ObAutoincrementService::get_instance()
 int ObAutoincrementService::init(ObMySQLProxy *mysql_proxy)
 {
   int ret = OB_SUCCESS;
-
-  ObMemAttr attr(ObModIds::OB_AUTOINCREMENT);
-  if (OB_FAIL(autoinc_store_.init(mysql_proxy))) {
-  } else if (OB_FAIL(node_allocator_.init(sizeof(TableNode), attr))) {
-  } else if (OB_FAIL(handle_allocator_.init(sizeof(CacheHandle), attr))) {
-  } else if (OB_FAIL(node_map_.init(attr))) {
+  if (is_inited_) {
+    // SliceAlloc::init replaces its state. Never run it on active resources.
+    ret = OB_INIT_TWICE;
+  } else if (OB_ISNULL(mysql_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
   } else {
+    ObMemAttr attr(ObModIds::OB_AUTOINCREMENT);
+    if (OB_FAIL(autoinc_store_.init(mysql_proxy))) {
+    } else if (OB_FAIL(node_allocator_.init(sizeof(TableNode), attr))) {
+    } else if (OB_FAIL(handle_allocator_.init(sizeof(CacheHandle), attr))) {
+    } else if (OB_FAIL(node_map_.init(attr))) {
+    } else {
+      is_inited_ = true;
+    }
+    if (OB_FAIL(ret)) {
+      const int cleanup_ret = destroy();
+      if (OB_SUCCESS != cleanup_ret) {
+        LOG_WARN_RET(cleanup_ret, "failed to clean up autoincrement initialization", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAutoincrementService::destroy()
+{
+  lib::ObMutexGuard guard(map_mutex_);
+  int ret = OB_SUCCESS;
+  // Callers stop admission and drain SQL first. Handles can outlive a request;
+  // preserve the allocator and proxy until every borrowed object is returned.
+  if (ATOMIC_LOAD(&active_handles_) != 0 || ATOMIC_LOAD(&borrowed_nodes_) != 0) {
+    ret = OB_EAGAIN;
+  } else {
+    auto check_nodes = [](const AutoincKey &, TableNode *node) {
+      // for_each temporarily owns one reference in addition to the map's ref.
+      return ATOMIC_LOAD(&node->hash_node_->uref_) == common::RefHandle::BORN_REF + 1;
+    };
+    if (OB_FAIL(node_map_.for_each(check_nodes))) {
+    } else {
+      node_map_.destroy();
+      // ObSmallAllocator::destroy only purges extra cached blocks. Reset the
+      // SliceAlloc base as well before a later init replaces its arena state.
+      handle_allocator_.ObSliceAlloc::destroy();
+      handle_allocator_.destroy();
+      node_allocator_.ObSliceAlloc::destroy();
+      node_allocator_.destroy();
+      autoinc_store_.reset();
+      is_inited_ = false;
+    }
   }
   return ret;
 }
@@ -250,8 +293,10 @@ int ObAutoincrementService::init(ObMySQLProxy *mysql_proxy)
 
 int ObAutoincrementService::get_handle(AutoincParam &param, CacheHandle *&handle)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sequence_load);
   int ret = OB_SUCCESS;
+  CacheHandle *original_handle = handle;
 
   const ObObjType column_type  = param.autoinc_col_type_;
   const uint64_t offset        = param.autoinc_offset_;
@@ -351,16 +396,29 @@ int ObAutoincrementService::get_handle(AutoincParam &param, CacheHandle *&handle
 
   // table node must be reverted after get to decrement reference count
   if (OB_UNLIKELY(NULL != table_node)) {
-    node_map_.revert(table_node);
+    revert_table_node(table_node);
+  }
+  if (OB_NOT_NULL(handle) && handle != original_handle) {
+    ATOMIC_INC(&active_handles_);
   }
   return ret;
 }
 
 void ObAutoincrementService::release_handle(CacheHandle *&handle)
 {
-  handle_allocator_.free(handle);
-  // bug#8200783, should reset handle here
-  handle = NULL;
+  if (OB_NOT_NULL(handle)) {
+    handle_allocator_.free(handle);
+    handle = nullptr;
+    ATOMIC_DEC(&active_handles_);
+  }
+}
+
+void ObAutoincrementService::revert_table_node(TableNode *table_node)
+{
+  if (OB_NOT_NULL(table_node)) {
+    node_map_.revert(table_node);
+    ATOMIC_DEC(&borrowed_nodes_);
+  }
 }
 
 int ObAutoincrementService::refresh_local_sync_value(const uint64_t table_id,
@@ -373,12 +431,13 @@ int ObAutoincrementService::refresh_local_sync_value(const uint64_t table_id,
   if (OB_ENTRY_NOT_EXIST == (ret = node_map_.get(key, table_node))) {
     ret = OB_SUCCESS;
   } else if (OB_SUCC(ret)) {
+    ATOMIC_INC(&borrowed_nodes_);
     atomic_update(table_node->local_sync_, sync_value);
   } else {
   }
   // table node must be reverted after get to decrement reference count
   if (NULL != table_node) {
-    node_map_.revert(table_node);
+    revert_table_node(table_node);
   }
   return ret;
 }
@@ -387,6 +446,7 @@ int ObAutoincrementService::lock_autoinc_row(const uint64_t &table_id,
                                              const uint64_t &column_id,
                                              common::ObMySQLTransaction &trans)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   ObSqlString lock_sql;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
@@ -417,6 +477,7 @@ int ObAutoincrementService::reset_autoinc_row(const uint64_t &table_id,
                                               const int64_t &autoinc_version,
                                               common::ObMySQLTransaction &trans)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   ObSqlString update_sql;
   int64_t affected_rows = 0;
@@ -440,6 +501,7 @@ int ObAutoincrementService::reinit_autoinc_row(const uint64_t &table_id,
                                                const int64_t &autoinc_version,
                                                common::ObMySQLTransaction &trans)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(lock_autoinc_row(table_id, column_id, trans))) {
@@ -455,6 +517,7 @@ int ObAutoincrementService::try_lock_autoinc_row(const uint64_t &table_id,
                                                  bool &need_update_inner_table,
                                                  common::ObMySQLTransaction &trans)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   ObSqlString lock_sql;
   need_update_inner_table = false;
@@ -533,6 +596,7 @@ int ObAutoincrementService::calculate_idempotent_autoinc_val_for_ddl(
 int ObAutoincrementService::clear_autoinc_cache(const uint64_t table_id,
                                                 const uint64_t column_id)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   LOG_INFO("begin to clear local auto-increment cache", K(table_id), K(column_id));
   const AutoincKey key(table_id, column_id);
@@ -660,6 +724,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam &param, TableNode 
   if (OB_SUCC(ret)) {
   } else {
   }
+  if (OB_NOT_NULL(table_node)) { ATOMIC_INC(&borrowed_nodes_); }
   return ret;
 }
 
@@ -811,8 +876,7 @@ int ObAutoincrementService::sync_insert_value_to_store(AutoincParam &param,
           }
         } else {
           // release handle No.
-          handle_allocator_.free(cache_handle);
-          cache_handle = NULL;
+          release_handle(cache_handle);
           // invalid cache handle; record count
           param.autoinc_intervals_count_++;
         }
@@ -848,7 +912,7 @@ int ObAutoincrementService::sync_insert_value_to_store(AutoincParam &param,
   }
   // table node must be reverted after get to decrement reference count
   if (NULL != table_node) {
-    node_map_.revert(table_node);
+    revert_table_node(table_node);
   }
   return ret;
 }
@@ -856,6 +920,7 @@ int ObAutoincrementService::sync_insert_value_to_store(AutoincParam &param,
 // sync last user specified value first(compatible with MySQL)
 int ObAutoincrementService::sync_insert_value(AutoincParam &param)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   if (0 != param.pending_value_to_sync_) {
     if (param.pending_value_to_sync_ < param.autoinc_auto_increment_) {
@@ -872,6 +937,7 @@ int ObAutoincrementService::sync_insert_value(AutoincParam &param)
 // sync last user specified value in stmt
 int ObAutoincrementService::sync_insert_value_local(AutoincParam &param)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   if (param.sync_flag_) {
     if (param.pending_value_to_sync_ < param.value_to_sync_) {
@@ -885,6 +951,7 @@ int ObAutoincrementService::sync_insert_value_local(AutoincParam &param)
 int ObAutoincrementService::sync_auto_increment(const ObTableSchema &table_schema,
                                                 const uint64_t sync_value)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   const uint64_t table_id = table_schema.get_table_id();
   const uint64_t column_id = table_schema.get_autoinc_column_id();
@@ -989,6 +1056,7 @@ int ObAutoincrementService::get_local_sequence_value_(const AutoincKey &key,
   // standalone deployment, so its next unallocated value is the logical
   // sequence value exposed to SHOW/FORK, just as the former ORDER service did.
   int tmp_ret = node_map_.get(key, table_node);
+  if (OB_NOT_NULL(table_node)) { ATOMIC_INC(&borrowed_nodes_); }
   if (OB_SUCCESS == tmp_ret) {
     if (OB_ISNULL(table_node)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1010,7 +1078,7 @@ int ObAutoincrementService::get_local_sequence_value_(const AutoincKey &key,
     ret = tmp_ret;
   }
   if (OB_NOT_NULL(table_node)) {
-    node_map_.revert(table_node);
+    revert_table_node(table_node);
   }
   return ret;
 }
@@ -1020,6 +1088,7 @@ int ObAutoincrementService::get_sequence_value(const uint64_t table_id,
                                                const int64_t autoinc_version,
                                                uint64_t &seq_value)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   const AutoincKey key(table_id, column_id);
   bool found_in_local_cache = false;
@@ -1037,6 +1106,7 @@ int ObAutoincrementService::get_sequence_values(const ObIArray<AutoincKey> &auto
     const ObIArray<int64_t> &autoinc_versions,
     ObHashMap<AutoincKey, uint64_t> &seq_values)
 {
+  if (!is_inited_) { return OB_NOT_INIT; }
   int ret = OB_SUCCESS;
   if (OB_FAIL(autoinc_store_.get_auto_increment_values(
                 autoinc_keys, autoinc_versions, seq_values))) {

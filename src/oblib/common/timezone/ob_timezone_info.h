@@ -242,8 +242,9 @@ class ObTZMapWrap
 public:
   ObTZMapWrap() : tz_info_map_(nullptr)
   { }
-  ~ObTZMapWrap()
-  { }
+  ObTZMapWrap(const ObTZMapWrap &other);
+  ObTZMapWrap &operator=(const ObTZMapWrap &other);
+  ~ObTZMapWrap();
   const ObTZInfoMap *get_tz_map() const { return tz_info_map_; }
   void set_tz_map(const common::ObTZInfoMap *tz_info_map);
   TO_STRING_KV(KP_(tz_info_map));
@@ -691,10 +692,13 @@ typedef common::hash::ObHashMap<ObTZOffsetKey, ObTZOffsetValue, common::hash::No
 class ObTZInfoMap
 {
 public:
-  ObTZInfoMap() : inited_(false), id_map_(&id_map_buf_), name_map_(&name_map_buf_), offset_map_(&offset_map_buf_) {}
+  ObTZInfoMap() : inited_(false), id_map_(&id_map_buf_), name_map_(&name_map_buf_), offset_map_(&offset_map_buf_), borrowed_maps_(0) {}
   ~ObTZInfoMap() { destroy(); }
   int init(const lib::ObMemAttr &attr);
-  void destroy();
+  int destroy();
+  void acquire_map() { ATOMIC_INC(&borrowed_maps_); }
+  void release_map() { ATOMIC_DEC(&borrowed_maps_); }
+  int64_t borrowed_maps() const { return ATOMIC_LOAD(&borrowed_maps_); }
   bool is_inited() { return inited_; }
   int get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos &tz_info_by_id);
   int get_tz_info_by_name(const common::ObString &tz_name, ObTimeZoneInfoPos &tz_info_by_name);
@@ -714,6 +718,7 @@ public:
   ObTZInfoOffsetMap offset_map_buf_; // <tz_id1, tz_id2> => offset
 
 private:
+  int64_t borrowed_maps_;
   DISALLOW_COPY_AND_ASSIGN(ObTZInfoMap);
 };
 

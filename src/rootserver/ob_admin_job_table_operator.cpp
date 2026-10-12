@@ -112,6 +112,14 @@ int ObAdminJobTableOperator::init()
   return ret;
 }
 
+void ObAdminJobTableOperator::destroy()
+{
+  ObLatchWGuard guard(latch_, ObLatchIds::DEFAULT_MUTEX);
+  storage_.reset();
+  ATOMIC_STORE(&max_job_id_, -1);
+  inited_ = false;
+}
+
 int ObAdminJobTableOperator::create_job(ObAdminJobType job_type, int64_t &job_id)
 {
   int ret = OB_SUCCESS;

@@ -176,9 +176,47 @@ int ObMaintainDepInfoTaskQueue::init(const int64_t thread_cnt, const int64_t que
 {
   int ret = OB_SUCCESS;
   auto attr = lib::ObMemAttr("DepInfoTaskQ");
-  if (OB_FAIL(ObAsyncTaskQueue::init(thread_cnt, queue_size, "MaintainDepInfoTaskQueue", OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
-  } else if (OB_FAIL(view_info_set_.create(INIT_BKT_SIZE, attr, attr))) {
-  } else if (OB_FAIL(sys_view_consistent_.create(INIT_BKT_SIZE, attr, attr))) {
+  if (is_inited_) {
+    // A rejected duplicate init must leave the active queue and its sets intact.
+    ret = OB_INIT_TWICE;
+  } else {
+    if (OB_FAIL(ObAsyncTaskQueue::init(thread_cnt, queue_size, "MaintainDepInfoTaskQueue", OB_MALLOC_MIDDLE_BLOCK_SIZE))) {
+    } else if (OB_FAIL(view_info_set_.create(INIT_BKT_SIZE, attr, attr))) {
+    } else if (OB_FAIL(sys_view_consistent_.create(INIT_BKT_SIZE, attr, attr))) {
+    }
+    if (OB_FAIL(ret)) {
+      const int cleanup_ret = destroy();
+      if (OB_SUCCESS != cleanup_ret) {
+        LOG_WARN_RET(cleanup_ret, "failed to clean up dependency task queue initialization", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMaintainDepInfoTaskQueue::destroy()
+{
+  // Tasks may access Schema and Root Command services. Join and release queued
+  // tasks before discarding the sets or detaching those borrowed providers.
+  const bool fully_initialized_base = is_inited_;
+  ObAsyncTaskQueue::stop();
+  ObAsyncTaskQueue::wait();
+  int ret = ObAsyncTaskQueue::destroy();
+  if (OB_SUCC(ret)) {
+    // ReentrantThread::destroy joins but leaves the Threads backing objects
+    // allocated. Release them before a later create() replaces threads_.
+    lib::ThreadPool::destroy();
+    set_run_wrapper(nullptr);
+    if (!fully_initialized_base) {
+      // The base sets is_inited_ only after allocator, queue, and thread
+      // creation succeed. Its destroy skips these fields on partial init.
+      queue_.destroy();
+      allocator_.destroy();
+    }
+    view_info_set_.destroy();
+    sys_view_consistent_.destroy();
+    root_command_service_ = nullptr;
+    last_execute_time_ = 0;
   }
   return ret;
 }

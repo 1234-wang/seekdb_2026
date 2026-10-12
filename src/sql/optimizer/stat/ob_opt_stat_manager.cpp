@@ -79,6 +79,15 @@ int ObOptStatManager::init(ObMySQLProxy *proxy)
   return ret;
 }
 
+void ObOptStatManager::destroy()
+{
+  // The singleton survives close. Its cache registrations and borrowed proxy
+  // belong to this database lifetime, so reset the complete service graph.
+  inited_ = false;
+  stat_service_.destroy();
+  last_schema_version_ = -1;
+}
+
 int ObOptStatManager::refresh_stat_cache(const obcall::ObUpdateStatCacheArg &arg)
 {
   int ret = OB_SUCCESS;

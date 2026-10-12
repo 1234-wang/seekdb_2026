@@ -39064,10 +39064,34 @@ uint64_t ObTZNameKey::hash() const
 }
 
 
+ObTZMapWrap::ObTZMapWrap(const ObTZMapWrap &other) : tz_info_map_(nullptr)
+{
+  set_tz_map(other.tz_info_map_);
+}
+
+ObTZMapWrap &ObTZMapWrap::operator=(const ObTZMapWrap &other)
+{
+  set_tz_map(other.tz_info_map_);
+  return *this;
+}
+
+ObTZMapWrap::~ObTZMapWrap()
+{
+  set_tz_map(nullptr);
+}
+
 void ObTZMapWrap::set_tz_map(const common::ObTZInfoMap *timezone_info_map)
 {
-  ObTZInfoMap *non_const_tz_map = const_cast<ObTZInfoMap *>(timezone_info_map);
-  tz_info_map_ = non_const_tz_map;
+  ObTZInfoMap *new_map = const_cast<ObTZInfoMap *>(timezone_info_map);
+  if (tz_info_map_ != new_map) {
+    if (nullptr != new_map) {
+      new_map->acquire_map();
+    }
+    if (nullptr != tz_info_map_) {
+      tz_info_map_->release_map();
+    }
+    tz_info_map_ = new_map;
+  }
 }
 
 int ObTimeZoneInfo::assign(const ObTimeZoneInfo &src)
@@ -39722,32 +39746,59 @@ void ObTZNameIDAlloc::free_node(ObTZNameHashNode *node)
 
 int ObTZInfoMap::init(const lib::ObMemAttr &attr)
 {
-  // offset_map will be init in ObTimeZoneInfoManager when necessary
+  // offset_map will be initialized in ObTimeZoneInfoManager when necessary.
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(id_map_buf_.init(attr))) {
-  } else if (OB_FAIL(name_map_buf_.init(attr))) {
   } else {
-    inited_ = true;
+    id_map_ = &id_map_buf_;
+    name_map_ = &name_map_buf_;
+    offset_map_ = &offset_map_buf_;
+    if (OB_FAIL(id_map_buf_.init(attr))) {
+    } else if (OB_FAIL(name_map_buf_.init(attr))) {
+    } else {
+      inited_ = true;
+    }
+    if (OB_FAIL(ret)) {
+      (void)destroy();
+    }
   }
   return ret;
 }
 
-void ObTZInfoMap::destroy()
+int ObTZInfoMap::destroy()
 {
-  id_map_ = NULL;
-  name_map_ = NULL;
-  offset_map_ = NULL;
-  id_map_buf_.destroy();
-  name_map_buf_.destroy();
-  offset_map_buf_.destroy();
+  int ret = OB_SUCCESS;
+  // Callers stop admission before destroy. Keep the map and its nodes alive
+  // until every wrapper and raw node borrowed by an existing caller is returned.
+  auto id_unborrowed = [](const ObTZIDKey &, ObTimeZoneInfoPos *node) {
+    return ATOMIC_LOAD(&node->hash_node_->uref_) == RefHandle::BORN_REF + 1;
+  };
+  auto name_unborrowed = [](const ObTZNameKey &, ObTZNameIDInfo *node) {
+    return ATOMIC_LOAD(&node->hash_node_->uref_) == RefHandle::BORN_REF + 1;
+  };
+  if (0 != borrowed_maps()) {
+    ret = OB_EAGAIN;
+  } else if (OB_FAIL(id_map_buf_.for_each(id_unborrowed))) {
+  } else if (OB_FAIL(name_map_buf_.for_each(name_unborrowed))) {
+  } else {
+    id_map_buf_.destroy();
+    name_map_buf_.destroy();
+    offset_map_buf_.destroy();
+    id_map_ = nullptr;
+    name_map_ = nullptr;
+    offset_map_ = nullptr;
+    inited_ = false;
+  }
+  return ret;
 }
-
 
 
 int ObTZInfoMap::get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos &tz_info_by_id)
 {
+  if (!inited_) {
+    return OB_NOT_INIT;
+  }
   int ret = OB_SUCCESS;
   ObTimeZoneInfoPos *tmp_tz_info = NULL;
   if (OB_FAIL(id_map_->get(tz_id, tmp_tz_info))) {
@@ -39762,6 +39813,9 @@ int ObTZInfoMap::get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos &tz_in
 
 int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos &tz_info_by_name)
 {
+  if (!inited_) {
+    return OB_NOT_INIT;
+  }
   int ret = OB_SUCCESS;
   ObTZNameIDInfo *name_id_info = NULL;
   if (OB_FAIL(name_map_->get(ObTZNameKey(tz_name), name_id_info))) {
@@ -39784,6 +39838,9 @@ int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos 
 // get value pointer of id_map_, only used for updating ObTimeZoneInfoPos by ObTimeZoneInfoManager.
 int ObTZInfoMap::get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos *&tz_info_by_id)
 {
+  if (!inited_) {
+    return OB_NOT_INIT;
+  }
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(tz_info_by_id)) {
     ret = OB_ERR_UNEXPECTED;
@@ -39794,6 +39851,9 @@ int ObTZInfoMap::get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos *&tz_i
 
 int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos *&tz_info_by_name)
 {
+  if (!inited_) {
+    return OB_NOT_INIT;
+  }
   int ret = OB_SUCCESS;
   ObTZNameIDInfo *name_id_info = NULL;
   if (OB_NOT_NULL(tz_info_by_name)) {
@@ -39814,6 +39874,9 @@ int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos 
 
 int ObTZInfoMap::get_offset_by_couple_tz_name(int64_t timestamp_data, const common::ObString &tz_str_s, const common::ObString &tz_str_d, int32_t &offset)
 {
+  if (!inited_) {
+    return OB_NOT_INIT;
+  }
   int ret = OB_SUCCESS;
   ObTZNameIDInfo *name_id_info_s = NULL;
   ObTZNameIDInfo *name_id_info_d = NULL;

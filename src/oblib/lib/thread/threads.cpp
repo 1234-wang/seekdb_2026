@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX LIB
 #include "threads.h"
+#include <atomic>
 #include "lib/worker.h"
 #include "lib/utility/ob_platform_utils.h"
 using namespace oceanbase;
@@ -28,7 +29,7 @@ const int64_t THREAD_STACK_RESERVED_SIZE = 16L << 10;
 // Use 256KB stack size by default. OB has SMART_CALL mechanism to extend stack when needed.
 int64_t global_thread_stack_size = (1L << 18) - THREAD_STACK_RESERVED_SIZE - ACHUNK_PRESERVE_SIZE;
 thread_local uint64_t ThreadPool::thread_idx_ = 0;
-static IRunWrapper *g_default_run_wrapper = nullptr;
+static std::atomic<IRunWrapper *> g_default_run_wrapper{nullptr};
 // Get the thread-local runtime context for thread-pool startup validation.
 IRunWrapper *&Threads::get_expect_run_wrapper()
 {
@@ -38,12 +39,12 @@ IRunWrapper *&Threads::get_expect_run_wrapper()
 
 void Threads::set_default_run_wrapper(IRunWrapper *run_wrapper)
 {
-  g_default_run_wrapper = run_wrapper;
+  g_default_run_wrapper.store(run_wrapper, std::memory_order_release);
 }
 
 IRunWrapper *Threads::get_default_run_wrapper()
 {
-  return g_default_run_wrapper;
+  return g_default_run_wrapper.load(std::memory_order_acquire);
 }
 
 Threads::~Threads()

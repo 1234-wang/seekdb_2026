@@ -1053,11 +1053,13 @@ public:
   int init(const int64_t rate, const char *comment = "unknown");
   int set_rate(const int64_t rate);
   int get_rate(int64_t &rate);
-  int limit_and_sleep(const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time, int64_t &sleep_us);
+  int limit_and_sleep(const int64_t bytes, const int64_t last_active_time,
+      const int64_t max_idle_time, int64_t &sleep_us, const bool *stop_token = nullptr);
   void destroy();
 private:
   int cal_limit(const int64_t bytes, int64_t &avaliable_timestamp);
-  static int do_sleep(const int64_t next_avaliable_ts, const int64_t last_active_time, const int64_t max_idle_time, int64_t &sleep_us);
+  static int do_sleep(const int64_t next_avaliable_ts, const int64_t last_active_time,
+      const int64_t max_idle_time, int64_t &sleep_us, const bool *stop_token = nullptr);
 private:
   common::ObSpinLock lock_;
   int64_t rate_; // bandwidth limit bytes/s.
@@ -1082,7 +1084,8 @@ public:
   int set_rate(const int64_t rate);
   int get_rate(int64_t &rate);
   int limit_in_and_sleep(const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time);
-  int limit_out_and_sleep(const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time, int64_t *need_sleep_us = nullptr);
+  int limit_out_and_sleep(const int64_t bytes, const int64_t last_active_time,
+      const int64_t max_idle_time, int64_t *need_sleep_us = nullptr, const bool *stop_token = nullptr);
   void destroy();
 
 private:

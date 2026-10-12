@@ -53,6 +53,11 @@ ObFileSystemRouter::ObFileSystemRouter()
   is_inited_ = false;
 }
 
+void ObFileSystemRouter::destroy()
+{
+  reset();
+}
+
 void ObFileSystemRouter::reset()
 {
   data_dir_[0] = '\0';

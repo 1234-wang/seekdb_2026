@@ -34,6 +34,8 @@ public:
   static ObServerStorageMetaService &get_instance();
   int init(ObIServerRuntime &server_runtime);
   int start();
+  // Quiesce checkpoint production while preserving the slog writer for LS cleanup.
+  void stop_checkpoint();
   void stop();
   void wait();
   void destroy();

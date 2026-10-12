@@ -52,6 +52,7 @@ static inline int sigtimedwait(const sigset_t*, void*, const struct timespec *ts
 #else
 #include <signal.h>
 #endif
+#include <atomic>
 #include "share/ob_thread_pool.h"
 
 namespace oceanbase
@@ -64,15 +65,9 @@ public:
   ObSignalHandle() : thread_id_{} {}
   ~ObSignalHandle() {
     stop();
-#ifdef __APPLE__
-    // On macOS, sigwait() may block indefinitely. Send SIGUSR1 to wake up the thread.
-    // SIGUSR1 is in the signal set being waited on (see add_signums_to_set).
-    if (thread_id_ != 0) {
-      pthread_kill(thread_id_, SIGUSR1);
-    }
-#endif
     wait();
   }
+  void stop();
   virtual void run1();
   //should be called in main thread. Change signal mask to block these signals.
   static int change_signal_mask();
@@ -82,7 +77,7 @@ public:
   static int deal_signals(int signum);
 
   // Store thread id for macOS wakeup
-  pthread_t thread_id_;
+  std::atomic<pthread_t> thread_id_;
 };
 
 }

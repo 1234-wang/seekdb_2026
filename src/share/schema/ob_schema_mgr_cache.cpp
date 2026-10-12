@@ -125,14 +125,45 @@ ObSchemaMgrCache::ObSchemaMgrCache()
 
 ObSchemaMgrCache::~ObSchemaMgrCache()
 {
-  // TODO: release
+  (void)destroy();
+}
+
+int ObSchemaMgrCache::destroy()
+{
+  int ret = OB_SUCCESS;
+  TCWLockGuard guard(lock_);
+  if (nullptr != schema_mgr_items_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MAX_SCHEMA_SLOT_NUM; ++i) {
+      if (0 != ATOMIC_LOAD(&schema_mgr_items_[i].ref_cnt_)) {
+        ret = OB_EAGAIN;
+        LOG_WARN("schema cache still has borrowed handles", K(ret), K(i),
+                 "ref_count", ATOMIC_LOAD(&schema_mgr_items_[i].ref_cnt_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < MAX_SCHEMA_SLOT_NUM; ++i) {
+        schema_mgr_items_[i].~ObSchemaMgrItem();
+      }
+      ob_free(schema_mgr_items_);
+      schema_mgr_items_ = nullptr;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    max_cached_num_ = 0;
+    last_get_schema_idx_ = 0;
+    cur_cached_num_ = 0;
+    latest_schema_idx_ = 0;
+  }
+  return ret;
 }
 
 int ObSchemaMgrCache::init(int64_t init_cached_num)
 {
   int ret = OB_SUCCESS;
 
-  if (init_cached_num <= 0) {
+  if (nullptr != schema_mgr_items_) {
+    ret = OB_INIT_TWICE;
+  } else if (init_cached_num <= 0 || init_cached_num > MAX_SCHEMA_SLOT_NUM) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     max_cached_num_ = init_cached_num;

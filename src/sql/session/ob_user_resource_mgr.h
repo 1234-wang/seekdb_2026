@@ -113,6 +113,9 @@ public:
   ObConnectResourceMgr();
   virtual ~ObConnectResourceMgr();
   int init(share::schema::ObMultiVersionSchemaService &schema_service, common::ObTimer &timer);
+  // Drain session operations before destroying. A borrowed user resource keeps
+  // the manager alive: return it and retry destroy when OB_EAGAIN is returned.
+  int destroy();
   int apply_for_server_conn_resource(const ObPrivSet &priv,
                                      const uint64_t max_connections);
   void release_server_conn_resource();
@@ -120,6 +123,8 @@ public:
       const uint64_t max_user_connections,
       const uint64_t max_connections_per_hour,
       ObConnectResource *&user_res);
+  // Every successful get_or_insert_user_resource must be paired with this call.
+  void revert_user_resource(ObConnectResource *&user_res);
   int increase_user_connections_count(
       const uint64_t max_user_connections,
       const uint64_t max_connections_per_hour,
@@ -162,7 +167,10 @@ private:
   friend class ConnResourceCleanUpTask;
   friend class CleanUpUserResourceFunc;
 private:
+  common::ObLatch lifecycle_lock_;
   bool inited_;
+  bool stopping_;
+  int64_t borrowed_user_resources_;
   ObConnResMap user_res_map_;
   ObConnectResource server_res_;
   bool server_res_inited_;

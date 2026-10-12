@@ -235,6 +235,8 @@ public:
     return inner_table_proxy_.init(mysql_proxy);
   }
 
+  void reset() { inner_table_proxy_.reset(); }
+
   int get_value(
       const AutoincKey &key,
       const uint64_t offset,
@@ -280,6 +282,8 @@ public:
   ~ObAutoincrementService();
   static ObAutoincrementService &get_instance();
   int init(common::ObMySQLProxy *mysql_proxy);
+  // Call after SQL producers drain; retained handles keep the service alive.
+  int destroy();
   int get_handle(AutoincParam &param, CacheHandle *&handle);
   void release_handle(CacheHandle *&handle);
 
@@ -344,6 +348,7 @@ private:
                                 uint64_t &seq_value,
                                 bool &found);
   int get_table_node(const AutoincParam &param, TableNode *&table_node);
+  void revert_table_node(TableNode *table_node);
   int fetch_table_node(const AutoincParam &param,
                        TableNode *table_node,
                        const bool fetch_prefetch = false);
@@ -354,6 +359,9 @@ private:
   int alloc_autoinc_try_lock(lib::ObMutex &alloc_mutex);
 
 private:
+  bool is_inited_;
+  int64_t active_handles_;
+  int64_t borrowed_nodes_;
   common::ObSmallAllocator node_allocator_;
   common::ObSmallAllocator handle_allocator_;
   ObInnerTableAutoincrementStore autoinc_store_;

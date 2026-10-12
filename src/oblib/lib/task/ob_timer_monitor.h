@@ -62,6 +62,7 @@ private:
     ObTimerMonitorTask(ObTimerMonitor &monitor);
     virtual ~ObTimerMonitorTask();
     virtual void runTimerTask() override;
+    void reset() { running_cnt_ = 0; }
   private:
     ObTimerMonitor &monitor_;
     int64_t running_cnt_;

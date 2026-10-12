@@ -1735,7 +1735,9 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
   } else if (OB_FAIL(op.op_is_update_pk_with_dop(is_update_uk_parallel))) {
   } else if (OB_FAIL(check_is_main_table_in_fts_ddl(op, index_tid, index_dml_info, das_dml_ctdef))) {
   } else {
-    das_dml_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
+    // This arena-owned base value is only used to format duplicate keys.
+    // Copy its scalars without retaining the session's timezone map.
+    ret = das_dml_ctdef.tz_info_.assign(*session->get_tz_info_wrap().get_time_zone_info());
     das_dml_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
     das_dml_ctdef.is_update_partition_key_ = index_dml_info.is_update_part_key_;
     das_dml_ctdef.is_update_pk_with_dop_ = is_update_uk_parallel;
@@ -1972,7 +1974,8 @@ int ObDmlCgService::generate_das_lock_ctdef(ObLogicalOperator &op,
     LOG_WARN("session is invalid", K(op.get_plan()), K(session));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
   } else {
-    das_lock_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
+    // The lock definition keeps the same scalar snapshot, without map ownership.
+    ret = das_lock_ctdef.tz_info_.assign(*session->get_tz_info_wrap().get_time_zone_info());
     das_lock_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
   }
   return ret;

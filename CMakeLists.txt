@@ -28,6 +28,7 @@ endif()
 
 option(OB_ENABLE_STANDBY "Build physical standby support" ON)
 option(ENABLE_SANITY "Build with seekdb memory Sanity instrumentation" OFF)
+option(SEEKDB_BUILD_LIFECYCLE_TESTS "Build in-process initialization/shutdown regression tests" OFF)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(SEEKDB_GENERATED_ROOT "${CMAKE_BINARY_DIR}/generated")
@@ -331,6 +332,20 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux"
       DESTINATION "unittest/${SEEKDB_PRETEST_MODULE}"
       COMPONENT pretest)
   endforeach()
+endif()
+
+# Lifecycle coverage runs one database repeatedly in the same host process.
+# Keep it separate from the farm pretest layout, which is absent from public
+# source snapshots, while sharing the production object graph and libraries.
+if(SEEKDB_BUILD_LIFECYCLE_TESTS)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "Lifecycle regression tests currently require Linux")
+  endif()
+  if(OB_SO_CACHE)
+    message(FATAL_ERROR "Lifecycle regression tests must build the current sources, not OB_SO_CACHE")
+  endif()
+  enable_testing()
+  add_subdirectory(unittest/lifecycle)
 endif()
 
 if(SEEKDB_CMAKE_PACKAGE_FORMAT STREQUAL "RPM")

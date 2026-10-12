@@ -37,6 +37,7 @@ public:
       baseline_schema_version_(common::OB_INVALID_VERSION) {}
   ~ObSchemaStore() {}
   int init(const int64_t init_version_count);
+  int destroy();
   void reset_version();
   void update_refreshed_version(int64_t version);
   void update_published_version(int64_t version);

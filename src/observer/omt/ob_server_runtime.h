@@ -114,6 +114,11 @@ public:
     virtual ~StopPoolFunc() = default;
     int operator()(common::hash::HashMapPair<int64_t, ObPxPool*> &kv);
   };
+  class WaitPoolFunc
+  {
+  public:
+    int operator()(common::hash::HashMapPair<int64_t, ObPxPool*> &kv);
+  };
   class DeletePoolFunc
   {
   public:
@@ -138,13 +143,14 @@ public:
     return ret;
   }
   static void server_module_stop(ObPxPools *&pools);
+  static void server_module_wait(ObPxPools *&pools);
   static void server_module_destroy(ObPxPools *&pools)
   {
     common::ob_delete(pools);
     pools = nullptr;
   }
 public:
-  ObPxPools() {}
+  ObPxPools() : is_stopped_(true) {}
   ~ObPxPools()
   {
     destroy();
@@ -153,11 +159,13 @@ public:
   int get_or_create(int64_t group_id, ObPxPool *&pool);
   int thread_recycle();
 private:
+  void wait();
   void destroy();
   int create_pool(int64_t group_id, ObPxPool *&pool);
 private:
   common::SpinRWLock lock_;
   common::hash::ObHashMap<int64_t, ObPxPool *> pool_map_;
+  bool is_stopped_;
 };
 
 // Forward declarations

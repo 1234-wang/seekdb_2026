@@ -721,8 +721,9 @@ protected:
       common::ObISQLClient &sql_client,
       const share::schema::ObRefreshSchemaStatus &schema_status,
       ObTableSchema &table_schema);
-private:
+protected:
   virtual int destroy();
+private:
 
   // stats table instances in schem mgrs
   class ObTable

@@ -63,6 +63,7 @@ public:
   virtual ~ObAdminJobTableStorage();
 
   int init(ObSQLiteConnectionPool *pool);
+  void reset() { pool_ = nullptr; }
   bool is_inited() const { return nullptr != pool_; }
 
   int create_job(const ObAdminJobEntry &entry);

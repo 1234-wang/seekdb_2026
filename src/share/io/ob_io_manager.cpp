@@ -77,7 +77,8 @@ ObIOManager::ObIOManager()
     mutex_(ObLatchIds::GLOBAL_IO_CONFIG_LOCK),
     io_config_(),
     allocator_(),
-    fault_detector_(io_config_)
+    fault_detector_(io_config_),
+    io_service_(nullptr)
 {
 }
 

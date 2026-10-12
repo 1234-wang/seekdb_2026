@@ -46,6 +46,7 @@ public:
   ObDDLHeartBeatTaskContainer();
   ~ObDDLHeartBeatTaskContainer();
   int init();
+  void destroy();
   int set_register_task_id(const int64_t task_id);
   int remove_register_task_id(const int64_t task_id);
   int send_task_status_to_rs();
@@ -61,6 +62,8 @@ public:
   ObRedefTableHeartBeatTask();
   virtual ~ObRedefTableHeartBeatTask() = default;
   int init(common::ObTimer &timer);
+  // The owner must drain the timer before resetting the task.
+  void reset() { is_inited_ = false; }
   virtual void runTimerTask() override;
 private:
   int send_task_status_to_rs();

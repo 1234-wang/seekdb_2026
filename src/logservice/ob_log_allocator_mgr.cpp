@@ -37,6 +37,21 @@ int ObLogAllocatorMgr::init()
   return ret;
 }
 
+void ObLogAllocatorMgr::destroy()
+{
+  Allocator *allocator = nullptr;
+  {
+    obsys::ObWLockGuard guard(lock_);
+    allocator = allocator_;
+    allocator_ = nullptr;
+    is_inited_ = false;
+  }
+  if (nullptr != allocator) {
+    allocator->~Allocator();
+    ob_free(allocator);
+  }
+}
+
 int ObLogAllocatorMgr::get_log_allocator(ObILogAllocator *&out_allocator)
 {
   int ret = OB_SUCCESS;

@@ -57,8 +57,9 @@ public:
 
   int start();
   void stop();
-  void wait();
-  void destroy();
+  // Failure leaves the stopped runtime owned by the controller for a retry.
+  int wait();
+  int destroy();
 
   int create_bootstrap_runtime();
   int refresh_runtime_resources();

@@ -16,6 +16,8 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_log.h"
+#include <chrono>
+#include <thread>
 #ifdef _WIN32
 #include <windows.h>
 #ifdef ERROR
@@ -77,7 +79,9 @@ const char* OB_WEAK_SYMBOL ob_strerror(const int oberr)
 }
 extern void update_easy_log_level();
 lib::ObRateLimiter *ObLogger::default_log_limiter_ = nullptr;
+uint64_t ObLogger::limiter_generation_ = 0;
 _RLOCAL(lib::ObRateLimiter*, ObLogger::tl_log_limiter_);
+_RLOCAL(uint64_t, ObLogger::tl_limiter_generation_);
 _RLOCAL(int32_t, ObLogger::tl_type_);
 _RLOCAL(uint64_t, ObLogger::curr_logging_seq_);
 _RLOCAL(uint64_t, ObLogger::last_logging_seq_);
@@ -516,6 +520,19 @@ void ObLogger::print_trace_buffer(const char* mod_name,
                                   int32_t line,
                                   const char* function)
 {
+  if (!is_enable_logging()) { return; }
+  ProducerGuard producer(*this);
+  if (producer.admitted()) {
+    print_trace_buffer_admitted(mod_name, level, file, line, function);
+  }
+}
+
+void ObLogger::print_trace_buffer_admitted(const char *mod_name,
+                                          const int32_t level,
+                                          const char *file,
+                                          int32_t line,
+                                          const char *function)
+{
   TraceBuffer *tb = get_trace_buffer();
   if (tb->get_pos() > 0) {
     auto &&log_data_func = [&](char *buf, const int64_t buf_len, int64_t &pos) {
@@ -540,7 +557,7 @@ ObLogger::ObLogger()
     name_id_map_(), id_level_map_(), alert_log_level_(OB_LOG_LEVEL_DBA_INFO), level_version_(0),
     disable_thread_log_level_(false), force_check_(false), redirect_flag_(false),
     can_print_(true),
-    enable_async_log_(true), use_multi_flush_(false), stop_append_log_(false), enable_perf_mode_(false),
+    enable_async_log_(true), use_multi_flush_(false), producer_state_(0), enable_perf_mode_(false),
     last_async_flush_count_per_sec_(0), log_compressor_(nullptr), enable_log_limit_(true),
     new_file_info_(nullptr), info_as_wdiag_(true)
 {
@@ -566,9 +583,19 @@ ObLogger::~ObLogger()
   (void)pthread_mutex_destroy(&file_size_mutex_);
   (void)pthread_mutex_destroy(&file_index_mutex_);
 }
+void ObLogger::wait_log_producers()
+{
+  while (0 != (producer_state_.load() & ~PRODUCERS_CLOSED)) {
+    // Keep the flush worker running while accepted producers finish formatting
+    // and commit or roll back their records.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+}
+
 void ObLogger::stop()
 {
-  OB_LOGGER.set_enable_async_log(false);
+  close_log_producers();
+  wait_log_producers();
   ObRingBufLogWriter::stop();
 }
 void ObLogger::wait()
@@ -577,10 +604,15 @@ void ObLogger::wait()
 }
 void ObLogger::destroy()
 {
-  stop_append_log_ = true;
-  enable_async_log_ = false;
-  enable_log_limit_ = false;
+  stop();
+  wait();
   ObRingBufLogWriter::destroy();
+  for (int32_t i = 0; i < static_cast<int32_t>(MAX_FD_FILE); ++i) {
+    log_file_[i].close_all();
+  }
+  log_compressor_ = nullptr;
+  new_file_info_ = nullptr;
+  file_list_.clear();
 }
 
 void ObLogger::set_trace_mode(bool trace_mode)
@@ -1387,12 +1419,25 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg)
 
   static const char *thread_name = "OB_PLOG";
   if (OB_UNLIKELY(is_inited())) {
-    ret = OB_INIT_TWICE;
     LOG_STDERR("ObLogger has inited twice");
-  } else if (OB_UNLIKELY(!log_cfg.is_valid())) {
+    return OB_INIT_TWICE;
+  }
+  // The constructor permits legacy pre-init logging. Fence it before changing
+  // writer resources; successful initialization opens admission at the end.
+  close_log_producers();
+  wait_log_producers();
+  if (OB_UNLIKELY(!log_cfg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_STDERR("log_cfg is not valid");
   } else {
+    for (int32_t i = 0; OB_SUCC(ret) && i < static_cast<int32_t>(MAX_FD_FILE); ++i) {
+      if ('\0' != log_file_[i].filename_[0] && !log_file_[i].is_opened()) {
+        const bool redirect = (FD_SVR_FILE == i) && redirect_flag_;
+        if (OB_FAIL(log_file_[i].reopen(redirect))) {
+          LOG_STDERR("reopen log file error. ret=%d\n", ret);
+        }
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObRingBufLogWriter::init(log_cfg.group_commit_max_wait_us_, thread_name))) {
         LOG_STDERR("init ringbuf writer error. ret=%d\n", ret);
@@ -1407,6 +1452,7 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg)
                      "you may find solutions in previous error logs or seek help from official technicians.");
     destroy();
   } else {
+    producer_state_.store(0);
     LOG_DBA_INFO_V2(OB_SERVER_SYSLOG_SERVICE_INIT_SUCCESS,
                     DBA_STEP_INC_INFO(server_start),
                     "observer syslog service init success.");
@@ -1527,10 +1573,21 @@ void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
   }
 }
 
+lib::ObRateLimiter *ObLogger::get_log_limiter()
+{
+  const uint64_t generation = ATOMIC_LOAD_ACQ(&limiter_generation_);
+  if (tl_limiter_generation_ != generation) {
+    tl_log_limiter_ = nullptr;
+    tl_limiter_generation_ = generation;
+    tl_type_ = 0;
+  }
+  return nullptr != tl_log_limiter_ ? tl_log_limiter_ : ATOMIC_LOAD_ACQ(&default_log_limiter_);
+}
+
 bool ObLogger::is_force_allows() const
 {
   bool bret = false;
-  auto log_limiter = (nullptr != tl_log_limiter_) ? tl_log_limiter_ : default_log_limiter_;
+  auto log_limiter = get_log_limiter();
   if (enable_log_limit_ && nullptr != log_limiter
       && log_limiter->is_force_allows()) {
     bret = true;
@@ -1540,7 +1597,7 @@ bool ObLogger::is_force_allows() const
 
 void ObLogger::check_reset_force_allows()
 {
-  auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
+  auto log_limiter = get_log_limiter();
   if (enable_log_limit_ && nullptr != log_limiter
       && log_limiter->is_force_allows()) {
     log_limiter->reset_force_allows();
@@ -1602,7 +1659,7 @@ int ObLogger::check_tl_log_limiter(const int32_t level,
   allow = true;
   return ret;
   if (OB_LIKELY(is_inited())) {
-    auto log_limiter = (nullptr != tl_log_limiter_ ? tl_log_limiter_ : default_log_limiter_);
+    auto log_limiter = get_log_limiter();
     if (enable_log_limit_) {
       if (nullptr != log_limiter) {
         allow = OB_SUCCESS == log_limiter->try_acquire(log_size, level, errcode);
@@ -1662,40 +1719,37 @@ int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem
   ObDisableDiagnoseGuard disable_diagnose_guard;
   int ret = OB_SUCCESS;
   log_item = NULL;
-  if (!stop_append_log_) {
-    if (OB_UNLIKELY(!is_inited())) {
-      ret = OB_NOT_INIT;
-    } else {
-      int64_t total_len = ENTRY_HEADER_SIZE + size;
-      int64_t ring_offset = alloc(total_len);
-      if (ring_offset < 0) {
-        ATOMIC_AAF(&alloc_wait_count_, 1);
-        int64_t wait_us = get_wait_us(level);
-        const int64_t per_us = MIN(wait_us, 10);
-        while (wait_us > 0) {
-          usleep(per_us);
-          wait_us -= per_us;
-          if (!stop_append_log_ && (ring_offset = alloc(total_len)) >= 0) {
-            break;
-          }
-        }
-        if (ring_offset < 0) {
-          ATOMIC_AAF(&alloc_drop_count_, 1);
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_STDERR("alloc_log_item error, ret=%d level=%d\n", ret, level);
+  // The caller owns a ProducerGuard, so close cannot stop the writer or
+  // release its ring buffer until this record has committed or rolled back.
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+  } else {
+    int64_t total_len = ENTRY_HEADER_SIZE + size;
+    int64_t ring_offset = alloc(total_len);
+    if (ring_offset < 0) {
+      ATOMIC_AAF(&alloc_wait_count_, 1);
+      int64_t wait_us = get_wait_us(level);
+      const int64_t per_us = MIN(wait_us, 10);
+      while (wait_us > 0) {
+        usleep(per_us);
+        wait_us -= per_us;
+        if ((ring_offset = alloc(total_len)) >= 0) {
+          break;
         }
       }
-      if (OB_SUCC(ret)) {
-        ATOMIC_AAF(&alloc_success_count_, 1);
-        log_item = new (data_of(ring_offset)) ObPLogItem();
-        log_item->set_ring_offset(ring_offset);
-        log_item->set_buf_size(size - LOG_ITEM_SIZE);
-        log_item->set_log_level(level);
+      if (ring_offset < 0) {
+        ATOMIC_AAF(&alloc_drop_count_, 1);
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_STDERR("alloc_log_item error, ret=%d level=%d\n", ret, level);
       }
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_STDERR("can not alloc_log_item, ret=%d, stop_append_log=%d\n", ret, stop_append_log_);
+    if (OB_SUCC(ret)) {
+      ATOMIC_AAF(&alloc_success_count_, 1);
+      log_item = new (data_of(ring_offset)) ObPLogItem();
+      log_item->set_ring_offset(ring_offset);
+      log_item->set_buf_size(size - LOG_ITEM_SIZE);
+      log_item->set_log_level(level);
+    }
   }
   return ret;
 }

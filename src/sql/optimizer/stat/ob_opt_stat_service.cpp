@@ -249,21 +249,40 @@ int ObOptStatService::init(common::ObMySQLProxy *proxy)
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
-  } else if (OB_ISNULL(proxy)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(sql_service_.init(proxy))) {
-  } else if (OB_FAIL(table_stat_cache_.init(
-      "opt_table_stat_cache", DEFAULT_TAB_STAT_CACHE_PRIORITY))) {
-  } else if (OB_FAIL(column_stat_cache_.init("opt_column_stat_cache",
-                                             DEFAULT_COL_STAT_CACHE_PRIORITY))) {
-  } else if (OB_FAIL(ds_stat_cache_.init("opt_ds_stat_cache",
-                                          DEFAULT_DS_STAT_CACHE_PRIORITY))) {
-  } else if (OB_FAIL(system_stat_cache_.init("opt_system_stat_cache",
-                                             DEFAULT_SYSTEM_STAT_CACHE_PRIORITY))) {
   } else {
-    inited_ = true;
+    if (OB_ISNULL(proxy)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_FAIL(sql_service_.init(proxy))) {
+    } else if (OB_FAIL(table_stat_cache_.init(
+        "opt_table_stat_cache", DEFAULT_TAB_STAT_CACHE_PRIORITY))) {
+    } else if (OB_FAIL(column_stat_cache_.init("opt_column_stat_cache",
+                                               DEFAULT_COL_STAT_CACHE_PRIORITY))) {
+    } else if (OB_FAIL(ds_stat_cache_.init("opt_ds_stat_cache",
+                                            DEFAULT_DS_STAT_CACHE_PRIORITY))) {
+    } else if (OB_FAIL(system_stat_cache_.init("opt_system_stat_cache",
+                                               DEFAULT_SYSTEM_STAT_CACHE_PRIORITY))) {
+    } else {
+      inited_ = true;
+    }
+    if (OB_FAIL(ret)) {
+      // Later cache registration can fail after SQL service or earlier caches
+      // were initialized. Retrying must not encounter their old registrations.
+      destroy();
+    }
   }
   return ret;
+}
+
+void ObOptStatService::destroy()
+{
+  inited_ = false;
+  // Cache handles must already be released by the caller. Unregister every
+  // cache even after partial initialization while ObKVGlobalCache is alive.
+  system_stat_cache_.destroy();
+  ds_stat_cache_.destroy();
+  column_stat_cache_.destroy();
+  table_stat_cache_.destroy();
+  sql_service_.destroy();
 }
 
 int ObOptStatService::erase_table_stat(const ObOptTableStat::Key &key)

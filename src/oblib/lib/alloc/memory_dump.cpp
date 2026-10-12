@@ -145,7 +145,9 @@ public:
 ObMemoryDump::ObMemoryDump()
   : lib::ThreadPool(1),
     pending_(0),
+    pending_dump_task_(),
     print_buf_(nullptr),
+    array_(nullptr),
     dump_context_(nullptr),
     iter_lock_(),
     r_stat_(nullptr),
@@ -175,40 +177,28 @@ int ObMemoryDump::init()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
+    return OB_INIT_TWICE;
   } else if (OB_FAIL(cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(
+      dump_context_, ContextParam().set_label("MemDumpContext")))) {
   } else {
-    MemoryContext context;// = nullptr;
-    int ret = ROOT_CONTEXT->CREATE_CONTEXT(context, ContextParam().set_label("MemDumpContext"));
-    PreAllocMemory *pre_mem = nullptr;
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(pre_mem = (PreAllocMemory*)context->allocp(sizeof(PreAllocMemory)))) {
+    PreAllocMemory *pre_mem = static_cast<PreAllocMemory *>(dump_context_->allocp(sizeof(PreAllocMemory)));
+    if (OB_ISNULL(pre_mem)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       LOG_INFO("pre memory size", K(sizeof(PreAllocMemory)));
       print_buf_ = pre_mem->print_buf_;
       array_ = pre_mem->array_buf_;
-      
-      print_buf_ = pre_mem->print_buf_;
+      r_stat_ = new (pre_mem->stats_buf_) Stat();
+      w_stat_ = new (r_stat_ + 1) Stat();
       if (OB_FAIL(lmap_.create(1000, ObMemAttr("MemDumpMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
+      } else if (OB_FAIL(r_stat_->malloc_sample_map_.create(1000, ObMemAttr("MallocInfoMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
+      } else if (OB_FAIL(w_stat_->malloc_sample_map_.create(1000, ObMemAttr("MallocInfoMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
+      } else if (OB_FAIL(lib::ThreadPool::init())) {
+      } else if (OB_FAIL(lib::ThreadPool::start())) {
       } else {
-        r_stat_ = new (pre_mem->stats_buf_) Stat();
-        w_stat_ = new (r_stat_ + 1) Stat();
-        dump_context_ = context;
         is_inited_ = true;
-        if (OB_FAIL(r_stat_->malloc_sample_map_.create(1000, ObMemAttr("MallocInfoMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
-        } else if (OB_FAIL(w_stat_->malloc_sample_map_.create(1000, ObMemAttr("MallocInfoMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
-        }
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(lib::ThreadPool::init())) {
-        } else if (OB_FAIL(lib::ThreadPool::start())) {
-        }
-      }
-    }
-    if (OB_FAIL(ret) && context != nullptr) {
-      DESTROY_CONTEXT(context);
-      context = nullptr;
     }
   }
   if (OB_FAIL(ret)) {
@@ -219,28 +209,44 @@ int ObMemoryDump::init()
 
 void ObMemoryDump::stop()
 {
-  if (is_inited_) {
-    lib::ThreadPool::stop();
+  lib::ThreadPool::stop();
+  if (cond_.is_inited()) {
     signal_stop();
   }
 }
 
 void ObMemoryDump::wait()
 {
-  if (is_inited_) {
-    lib::ThreadPool::wait();
-  }
+  lib::ThreadPool::wait();
 }
 
 void ObMemoryDump::destroy()
 {
-  if (is_inited_) {
-    stop();
-    wait();
-    lib::ThreadPool::destroy();
-    cond_.destroy();
-    is_inited_ = false;
+  stop();
+  wait();
+  lib::ThreadPool::destroy();
+  cond_.destroy();
+  lmap_.destroy();
+  if (nullptr != r_stat_) {
+    r_stat_->malloc_sample_map_.destroy();
+    r_stat_->~Stat();
+    r_stat_ = nullptr;
   }
+  if (nullptr != w_stat_) {
+    w_stat_->malloc_sample_map_.destroy();
+    w_stat_->~Stat();
+    w_stat_ = nullptr;
+  }
+  if (nullptr != dump_context_) {
+    DESTROY_CONTEXT(dump_context_);
+    dump_context_ = nullptr;
+  }
+  print_buf_ = nullptr;
+  array_ = nullptr;
+  pending_ = 0;
+  pending_dump_task_ = ObMemoryDumpTask();
+  huge_segv_cnt_ = 0;
+  is_inited_ = false;
 }
 
 int ObMemoryDump::generate_mod_stat_task()

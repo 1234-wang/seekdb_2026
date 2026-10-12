@@ -51,6 +51,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <atomic>
 #include <deque>
 #include <string>
 #include <pthread.h>
@@ -427,8 +428,8 @@ public:
   int64_t get_alloc_success_count() const { return alloc_success_count_; }
   bool enable_async_log() const { return enable_async_log_; }
   void set_enable_async_log(const bool flag) { enable_async_log_ = flag; }
-  void set_stop_append_log() { stop_append_log_ = true; }
-  void disable() { stop_append_log_ = true; }
+  void set_stop_append_log() { close_log_producers(); }
+  void disable() { close_log_producers(); }
   bool set_disable_logging(const bool flag) {
     bool old_val = disable_logging_;
     disable_logging_ = flag;
@@ -709,6 +710,7 @@ public:
   static void set_tl_limiter(::oceanbase::lib::ObRateLimiter &limiter)
   {
     tl_log_limiter_ = &limiter;
+    tl_limiter_generation_ = ATOMIC_LOAD_ACQ(&limiter_generation_);
   }
 
   static void set_tl_type(const int32_t type)
@@ -718,7 +720,16 @@ public:
 
   static void set_default_limiter(::oceanbase::lib::ObRateLimiter &limiter)
   {
-    default_log_limiter_ = &limiter;
+    ATOMIC_STORE_REL(&default_log_limiter_, &limiter);
+  }
+
+  // Call after log producers have drained, before destroying the limiters.
+  // Host threads can survive a database close, so their TLS needs invalidation
+  // as well as the default pointer.
+  static void clear_log_limiters()
+  {
+    ATOMIC_STORE_REL(&default_log_limiter_, static_cast<::oceanbase::lib::ObRateLimiter *>(nullptr));
+    ATOMIC_AAF(&limiter_generation_, 1);
   }
 
   OB_INLINE bool& get_guard()
@@ -803,7 +814,43 @@ private:
   int check_tl_log_limiter(const int32_t level, const int errcode,
                            const int64_t log_size, bool &allow, const char *&limiter_info);
   bool need_print_log_limit_msg();
+  static ::oceanbase::lib::ObRateLimiter *get_log_limiter();
 
+  // A single atomic word couples admission with the producer count. A closed
+  // logger cannot acquire a new reader of its ring buffer or output files.
+  static constexpr uint64_t PRODUCERS_CLOSED = uint64_t{1} << 63;
+  bool acquire_log_producer()
+  {
+    uint64_t state = producer_state_.load();
+    while (0 == (state & PRODUCERS_CLOSED)) {
+      if (producer_state_.compare_exchange_weak(state, state + 1)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  void release_log_producer() { producer_state_.fetch_sub(1); }
+  void close_log_producers() { producer_state_.fetch_or(PRODUCERS_CLOSED); }
+  void wait_log_producers();
+
+  class ProducerGuard
+  {
+  public:
+    explicit ProducerGuard(ObLogger &logger)
+        : logger_(logger), admitted_(logger.acquire_log_producer()) {}
+    ~ProducerGuard() { if (admitted_) { logger_.release_log_producer(); } }
+    bool admitted() const { return admitted_; }
+    ProducerGuard(const ProducerGuard &) = delete;
+    ProducerGuard &operator=(const ProducerGuard &) = delete;
+  private:
+    ObLogger &logger_;
+    bool admitted_;
+  };
+
+  // Only an admitted producer may use these paths. Trace-buffer retries must
+  // reuse the outer guard rather than attempt admission after close begins.
+  void print_trace_buffer_admitted(const char *mod_name, const int32_t level,
+                                  const char *file, int32_t line, const char *function);
   int alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item);
   void free_log_item(ObPLogItem *log_item);
   void inc_dropped_log_count(const int32_t level);
@@ -840,7 +887,9 @@ private:
   static constexpr const char *const errstr_[] = {"ERROR", "WARN", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
   // default log rate limiter if there's no tl_log_limiger
   static ::oceanbase::lib::ObRateLimiter *default_log_limiter_;
+  static uint64_t limiter_generation_;
   RLOCAL_STATIC(lib::ObRateLimiter*, tl_log_limiter_);
+  RLOCAL_STATIC(uint64_t, tl_limiter_generation_);
   RLOCAL_STATIC(int32_t, tl_type_);
   //used for stat logging time and log dropped
   RLOCAL_STATIC(uint64_t, curr_logging_seq_);
@@ -876,7 +925,7 @@ private:
 
   bool enable_async_log_;//if false, use sync way logging
   bool use_multi_flush_;//whether use multi flush, default false
-  bool stop_append_log_;//whether stop product log
+  std::atomic<uint64_t> producer_state_;
   bool enable_perf_mode_;
   //used for statistics
   int64_t dropped_log_count_[OB_LOG_LEVEL_MAX];
@@ -1009,6 +1058,9 @@ void ObLogger::log_it(const char *mod_name,
     }
 #endif
     int ret = OB_SUCCESS;
+    if (!is_enable_logging()) { return; }
+    ProducerGuard producer(*this);
+    if (!producer.admitted()) { return; }
     if (OB_LIKELY(level <= OB_LOG_LEVEL_DEBUG)
         && OB_LIKELY(level >= OB_LOG_LEVEL_DBA_ERROR)
         && OB_LIKELY(is_enable_logging())
@@ -1034,7 +1086,7 @@ void ObLogger::log_it(const char *mod_name,
             if (OB_SIZE_OVERFLOW == ret && orig_pos > 0) {
               /* restore pos */
               tb->set_pos(orig_pos);
-              print_trace_buffer(mod_name, level, file, line, function);
+              print_trace_buffer_admitted(mod_name, level, file, line, function);
               /* retry */
               continue;
             }
@@ -1212,7 +1264,7 @@ inline void ObLogger::do_log_message(const bool is_async,
                                      Function &log_data_func)
 {
   int ret = OB_SUCCESS;
-  if(!is_enable_logging()) return;
+  if (!is_enable_logging()) return;
   bool old_val = set_disable_logging(true);
   DEFER(set_disable_logging(old_val));
   bool allow = true;

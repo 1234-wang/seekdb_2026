@@ -81,6 +81,8 @@ private:
   RateLimiter *limiters_[MAX_TASK_ID];
   double rate_pctgs_[MAX_TASK_ID];
   int64_t log_rate_limit_;
+  bool rates_inited_;
+  bool active_;
 
   static ObTaskController instance_;
 };

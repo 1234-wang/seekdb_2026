@@ -116,47 +116,39 @@ bool ObServerSchemaTask::is_barrier() const
 int ObServerSchemaUpdater::init(const common::ObAddr &host, ObMultiVersionSchemaService *schema_mgr)
 {
   int ret = OB_SUCCESS;
-  if (NULL == schema_mgr) {
+  if (inited_) {
+    return OB_INIT_TWICE;
+  } else if (NULL == schema_mgr) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(task_queue_.init(this,
-                                      SSU_MAX_THREAD_NUM,
-                                      SSU_TASK_QUEUE_SIZE,
-                                      "SerScheQueue"))) {
   } else {
+    // Publish the processor state before its first queue worker can run.
     host_ = host;
     schema_mgr_ = schema_mgr;
     inited_ = true;
+    if (OB_FAIL(task_queue_.init(this, SSU_MAX_THREAD_NUM,
+                                 SSU_TASK_QUEUE_SIZE, "SerScheQueue"))) {
+      destroy();
+    }
   }
   return ret;
 }
 
 void ObServerSchemaUpdater::stop()
 {
-  if (!inited_) {
-    LOG_WARN_RET(OB_NOT_INIT, "not init");
-  } else {
-    task_queue_.stop();
-  }
+  task_queue_.stop();
 }
 
 void ObServerSchemaUpdater::wait()
 {
-  if (!inited_) {
-    LOG_WARN_RET(OB_NOT_INIT, "not init");
-  } else {
-    task_queue_.wait();
-  }
+  task_queue_.wait();
 }
 
 void ObServerSchemaUpdater::destroy()
 {
- if (inited_) {
-   stop();
-   wait();
-   host_.reset();
-   schema_mgr_ = NULL;
-   inited_ = false;
- }
+  task_queue_.destroy();
+  host_.reset();
+  schema_mgr_ = nullptr;
+  inited_ = false;
 }
 
 int ObServerSchemaUpdater::process_barrier(const ObServerSchemaTask &task, bool &stopped)

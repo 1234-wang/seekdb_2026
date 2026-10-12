@@ -47,12 +47,34 @@ ObSchemaMemMgr::ObSchemaMemMgr()
 
 ObSchemaMemMgr::~ObSchemaMemMgr()
 {
+  destroy();
+}
+
+void ObSchemaMemMgr::destroy()
+{
+  SpinWLockGuard guard(schema_mem_rwlock_);
+  if (is_inited_) {
+    for (int i = 0; i < 2; ++i) {
+      // Each live placement-constructed manager is tracked exactly once.
+      // Slots and schema_mgr_for_cache_ only borrow these objects.
+      for (int64_t j = 0; j < ptrs_[i].count(); ++j) {
+        static_cast<ObSchemaMgr *>(ptrs_[i].at(j))->~ObSchemaMgr();
+      }
+      ptrs_[i].destroy();
+      allocator_[i].~ObArenaAllocator();
+      all_ptrs_[i] = 0;
+    }
+    pos_ = 0;
+    is_inited_ = false;
+  }
 }
 
 int ObSchemaMemMgr::init(const char *label)
 {
   int ret = OB_SUCCESS;
-
+  if (is_inited_) {
+    return OB_INIT_TWICE;
+  }
   auto attr = lib::ObMemAttr(label, ObCtxIds::SCHEMA_SERVICE);
   // Schema memory is owned by the single server runtime.
   new(&allocator_[0]) ObArenaAllocator(attr, OB_MALLOC_BIG_BLOCK_SIZE);

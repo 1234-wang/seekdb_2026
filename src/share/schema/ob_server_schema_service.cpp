@@ -51,18 +51,21 @@ ObServerSchemaService::~ObServerSchemaService()
 int ObServerSchemaService::destroy()
 {
   int ret = OB_SUCCESS;
-  // The concrete backend is owned by the Observer composition root.
-  schema_service_ = NULL;
-  // Each map held exactly one entry (sys). Mirror the per-entry
-  // dtor on the single member, preserving the original FOREACH destroy (no leak).
-  if (OB_SUCC(ret) && OB_NOT_NULL(schema_mgr_for_cache_)) {
-    schema_mgr_for_cache_->~ObSchemaMgr();
-    schema_mgr_for_cache_ = NULL;
-  }
-  if (OB_SUCC(ret) && OB_NOT_NULL(mem_mgr_)) {
-    mem_mgr_->~ObSchemaMemMgr();
-    mem_mgr_ = NULL;
-  }
+  SpinWLockGuard guard(schema_manager_rwlock_);
+  SpinWLockGuard cache_guard(schema_mgr_for_cache_rwlock_);
+  // Managers and their arenas have one owner. The cache pointer is borrowed,
+  // and its manager is included in mem_mgr_'s live-object list.
+  ATOMIC_STORE(&schema_mgr_for_cache_, nullptr);
+  ob_delete(mem_mgr_);
+  version_his_map_.destroy();
+  refresh_full_schema_present_ = false;
+  refresh_full_schema_ = false;
+  // The concrete backend and these proxies belong to Observer.
+  schema_service_ = nullptr;
+  sql_proxy_ = nullptr;
+  schema_status_proxy_ = nullptr;
+  service_status_ = nullptr;
+  in_bootstrap_ = nullptr;
   return ret;
 }
 

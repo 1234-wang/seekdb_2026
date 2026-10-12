@@ -334,6 +334,7 @@ private:
   bool need_bootstrap_;
   bool service_started_;
   bool local_services_ready_;
+  bool admin_job_table_inited_;
   // use mysql server backend for debug.
   bool debug_;
 

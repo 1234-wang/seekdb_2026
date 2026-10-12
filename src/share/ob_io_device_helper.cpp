@@ -250,16 +250,19 @@ int ObSNIODeviceWrapper::init(
 
 void ObSNIODeviceWrapper::destroy()
 {
-  if (is_inited_) {
-    if (NULL != local_device_) {
+  // init obtains the device-manager reference before validating its options.
+  // Return it even when initialization fails before is_inited_ becomes true.
+  if (nullptr != local_device_) {
+    if (is_inited_) {
       local_device_->destroy();
-      common::ObDeviceManager::get_instance().release_device((ObIODevice*&)local_device_);
-      local_device_ = NULL;
     }
-
-    is_inited_ = false;
-    LOG_INFO("io device wrapper destroy");
+    // ObLocalDevice::init rolls back its own partial resources on failure.
+    // A reference acquired before validation does not own device initialization.
+    common::ObDeviceManager::get_instance().release_device((ObIODevice*&)local_device_);
+    local_device_ = nullptr;
   }
+  is_inited_ = false;
+  LOG_INFO("io device wrapper destroy");
 }
 
 /**

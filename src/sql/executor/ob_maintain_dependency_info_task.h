@@ -98,12 +98,9 @@ public:
   constexpr static const double MAX_QUEUE_USAGE_RATIO = 0.8;
   ObMaintainDepInfoTaskQueue()
       : last_execute_time_(0), root_command_service_(nullptr) {}
-  virtual ~ObMaintainDepInfoTaskQueue()
-  {
-    view_info_set_.destroy();
-    sys_view_consistent_.destroy();
-  }
+  virtual ~ObMaintainDepInfoTaskQueue() { destroy(); }
   int init(const int64_t thread_cnt, const int64_t queue_size);
+  int destroy();
   virtual void run2() override;
   inline int64_t get_last_execute_time() const { return last_execute_time_; }
   inline void set_last_execute_time(const int64_t execute_time)

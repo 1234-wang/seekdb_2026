@@ -91,6 +91,7 @@ int ObLocalManagementService::check_partition_exchange_schema_for_user(
 ObLocalManagementService::ObLocalManagementService()
 : inited_(false), need_bootstrap_(false), service_started_(false),
     local_services_ready_(false),
+    admin_job_table_inited_(false),
     debug_(false),
     self_addr_(), config_mgr_(NULL),
     sql_proxy_(),
@@ -114,9 +115,7 @@ ObLocalManagementService::ObLocalManagementService()
 
 ObLocalManagementService::~ObLocalManagementService()
 {
-  if (inited_) {
-    destroy();
-  }
+  destroy();
 }
 
 int ObLocalManagementService::init(ObConfigManager &config_mgr,
@@ -128,8 +127,7 @@ int ObLocalManagementService::init(ObConfigManager &config_mgr,
   int ret = OB_SUCCESS;
   FLOG_INFO("begin to initialize local management services");
   if (inited_) {
-    ret = OB_INIT_TWICE;
-    FLOG_WARN("local management services already initialized", KR(ret));
+    return OB_INIT_TWICE;
   } else if (!self.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     FLOG_WARN("invalid self address", K(self), KR(ret));
@@ -153,26 +151,28 @@ int ObLocalManagementService::init(ObConfigManager &config_mgr,
 
   if (FAILEDx(load_ddl_task_timer_.init("LocalLoadDDL", ObMemAttr("LocalLoadDDL")))) {
     FLOG_WARN("init local load ddl task timer failed", KR(ret));
-  } else if (OB_FAIL(deadlock_event_clear_task_timer_.init(
+  } else if (FAILEDx(deadlock_event_clear_task_timer_.init(
                  "LocalDlkClear", ObMemAttr("LocalDlkClear")))) {
     FLOG_WARN("init local deadlock event clear task timer failed", KR(ret));
-  } else if (OB_FAIL(purge_recyclebin_task_timer_.init("LocalRecycle", ObMemAttr("LocalRecycle")))) {
+  } else if (FAILEDx(purge_recyclebin_task_timer_.init("LocalRecycle", ObMemAttr("LocalRecycle")))) {
     FLOG_WARN("init local purge recyclebin task timer failed", KR(ret));
-  } else if (OB_FAIL(root_minor_freeze_.init())) {
+  } else if (FAILEDx(root_minor_freeze_.init())) {
     // init root minor freeze
     FLOG_WARN("init root_minor_freeze_ failed", KR(ret));
-  } else if (OB_FAIL(ddl_service_.init(*GCTX.sql_proxy_, *GCTX.schema_service_,
+  } else if (FAILEDx(ddl_service_.init(*GCTX.sql_proxy_, *GCTX.schema_service_,
                                        snapshot_manager_, runtime_ddl_service_))) {
     // init ddl service
     FLOG_WARN("init ddl_service_ failed", KR(ret));
-  } else if (OB_FAIL(runtime_ddl_service_.init(ddl_service_,
+  } else if (FAILEDx(runtime_ddl_service_.init(ddl_service_,
           sql_proxy_, *schema_service))) {
     // Initialize the server runtime DDL service.
     FLOG_WARN("init runtime_ddl_service_ failed", KR(ret));
-  } else if (OB_FAIL(snapshot_manager_.init(self_addr_))) {
+  } else if (FAILEDx(snapshot_manager_.init(self_addr_))) {
     FLOG_WARN("init snapshot manager failed", KR(ret));
-  } else if (OB_FAIL(THE_ADMIN_JOB_TABLE.init())) {
+  } else if (FAILEDx(THE_ADMIN_JOB_TABLE.init())) {
     FLOG_WARN("init THE_ADMIN_JOB_TABLE failed", KR(ret));
+  } else if (OB_SUCC(ret)) {
+    admin_job_table_inited_ = true;
   }
 
   if (OB_SUCC(ret)) {
@@ -180,6 +180,7 @@ int ObLocalManagementService::init(ObConfigManager &config_mgr,
     FLOG_INFO("initialize local management services succeeded", KR(ret), K_(inited));
   } else {
     LOG_ERROR("failed to initialize local management services", KR(ret));
+    destroy();
   }
 
   return ret;
@@ -202,11 +203,28 @@ void ObLocalManagementService::destroy()
   purge_recyclebin_task_timer_.destroy();
   FLOG_INFO("task timer destroy");
 
-  if (OB_SUCC(ret)) {
-    if (inited_) {
-      inited_ = false;
-    }
+  // Reset only a singleton acquired by this initialization attempt. A
+  // duplicate init error must not tear down another active binding.
+  if (admin_job_table_inited_) {
+    THE_ADMIN_JOB_TABLE.destroy();
+    admin_job_table_inited_ = false;
   }
+  runtime_ddl_service_.destroy();
+  ddl_service_.destroy();
+  root_minor_freeze_.destroy();
+  max_id_cache_mgr_.reset();
+  sql_proxy_.destroy();
+  config_mgr_ = nullptr;
+  schema_service_ = nullptr;
+  local_command_service_ = nullptr;
+  self_addr_.reset();
+  core_meta_table_version_ = 0;
+  baseline_schema_version_ = 0;
+  need_bootstrap_ = false;
+  service_started_ = false;
+  local_services_ready_ = false;
+  debug_ = false;
+  inited_ = false;
 
   FLOG_INFO("destroy local management services finished", KR(ret));
   if (OB_SUCCESS != fail_ret) {

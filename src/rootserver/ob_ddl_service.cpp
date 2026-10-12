@@ -94,6 +94,7 @@ ObDDLService::ObDDLService()
     sql_proxy_(NULL),
     schema_service_(NULL),
     snapshot_mgr_(NULL),
+    runtime_ddl_service_(NULL),
     ddl_lock_()
 {
 }
@@ -114,6 +115,17 @@ int ObDDLService::init(common::ObMySQLProxy &sql_proxy,
     inited_ = true;
   }
   return ret;
+}
+
+void ObDDLService::destroy()
+{
+  // The composition owner has drained DDL callers. All dependencies are
+  // borrowed; the latch stays constructed for the next initialization.
+  sql_proxy_ = nullptr;
+  schema_service_ = nullptr;
+  snapshot_mgr_ = nullptr;
+  runtime_ddl_service_ = nullptr;
+  inited_ = false;
 }
 
 int ObDDLService::get_runtime_schema_guard_with_version_in_inner_table(ObSchemaGetterGuard &schema_guard)

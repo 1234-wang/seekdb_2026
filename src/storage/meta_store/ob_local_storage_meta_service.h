@@ -41,6 +41,8 @@ public:
   static int server_module_init(ObLocalStorageMetaService *&meta_service);
   int init();
   int start();
+  // Preserve the slog writer until LS/transaction cleanup has completed.
+  void stop_checkpoint();
   void stop();
   void wait();
   void destroy();

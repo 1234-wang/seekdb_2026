@@ -46,16 +46,19 @@ template <typename K, typename V>
 class ObVtableEventRecycleBuffer {
 public:
   ObVtableEventRecycleBuffer() : buffer_bkt_(nullptr), bkt_len_(0), alloc_(nullptr) {}
-  ~ObVtableEventRecycleBuffer() {
+  ~ObVtableEventRecycleBuffer() { destroy(); }
+  // The owner drains append/read operations before releasing the buckets.
+  // Keep this object alive so the same instance can initialize again.
+  void destroy() {
     if (OB_NOT_NULL(alloc_)) {
       for (int64_t idx = 0; idx < bkt_len_; ++idx) {
         buffer_bkt_[idx].~ObRecycleMultiKVCacheAligedWrapper();
       }
       alloc_->free(buffer_bkt_);
-      buffer_bkt_ = nullptr;
-      bkt_len_ = 0;
-      alloc_ = 0;
     }
+    buffer_bkt_ = nullptr;
+    bkt_len_ = 0;
+    alloc_ = nullptr;
   }
   ObVtableEventRecycleBuffer(const ObVtableEventRecycleBuffer &) = delete;
   template <int N>
@@ -72,9 +75,11 @@ public:
         hash_idx_bkt_num_each < 1) {
       ret = OB_INVALID_ARGUMENT;
       OCCAM_LOG(WARN, "invalid argument", PRINT_WRAPPER);
+      return ret;
     } else if (OB_NOT_NULL(alloc_)) {
       ret = OB_INIT_TWICE;
       OCCAM_LOG(WARN, "invalid argument", PRINT_WRAPPER);
+      return ret;
     } else if (nullptr == (buffer_bkt_ = (ObRecycleMultiKVCacheAligedWrapper<K, V> *)alloc.alloc(sizeof(ObRecycleMultiKVCacheAligedWrapper<K, V>) * recycle_buffer_number))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OCCAM_LOG(WARN, "fail to allocate", PRINT_WRAPPER);
@@ -82,19 +87,18 @@ public:
       alloc_ = &alloc;
       for (int64_t idx = 0; idx < recycle_buffer_number && OB_SUCC(ret); ++idx) {
         new (&buffer_bkt_[idx]) ObRecycleMultiKVCacheAligedWrapper<K, V>();
+        // Count constructed buckets even when their allocating init fails.
+        bkt_len_ = idx + 1;
         if (OB_FAIL(buffer_bkt_[idx].init(mem_tag,
                                           alloc,
                                           recycle_buffer_size_each,
                                           hash_idx_bkt_num_each,
                                           idx))) {
-        } else {
-          bkt_len_ = idx + 1;
         }
       }
     }
     if (OB_FAIL(ret)) {
-      this->~ObVtableEventRecycleBuffer();
-      new (this) ObVtableEventRecycleBuffer();
+      destroy();
     }
     return ret;
     #undef PRINT_WRAPPER

@@ -108,6 +108,8 @@ private:
   common::ObTimer task_timer_;
   omt::ObServerRuntimeMeta runtime_meta_for_replay_;
   bool runtime_meta_valid_for_replay_;
+  int64_t last_write_time_;
+  common::ObLogCursor last_slog_cursor_;
 };
 
 }  // end namespace storage

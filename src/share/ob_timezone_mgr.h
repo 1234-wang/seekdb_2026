@@ -66,7 +66,7 @@ public:
 
   void stop();
   void wait();
-  void destroy();
+  int destroy();
 
   int refresh_timezone_info();
   int schedule_retry();
@@ -79,6 +79,7 @@ private:
   common::ObTimer timer_;
   common::ObTimeZoneInfoManager *tz_info_mgr_ = nullptr;
   bool usable_;
+  bool is_closing_;
 public:
   const uint64_t SLEEP_USECONDS = 5000000;
 };

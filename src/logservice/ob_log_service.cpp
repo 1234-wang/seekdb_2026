@@ -120,6 +120,9 @@ void ObLogService::stop()
   CLOG_LOG(INFO, "begin to stop ObLogService");
   (void)apply_service_.stop();
   (void)replay_service_.stop();
+  if (NULL != palf_env_) {
+    palf_env_->stop();
+  }
   FLOG_INFO("ObLogService is stopped");
 }
 
@@ -127,6 +130,9 @@ void ObLogService::wait()
 {
   apply_service_.wait();
   replay_service_.wait();
+  if (NULL != palf_env_) {
+    palf_env_->wait();
+  }
 }
 
 void ObLogService::destroy()

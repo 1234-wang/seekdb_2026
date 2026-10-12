@@ -245,28 +245,35 @@ void ObServerRuntimeController::stop()
   stop_runtime_();
 }
 
-void ObServerRuntimeController::wait()
+int ObServerRuntimeController::wait()
 {
-  if (OB_NOT_NULL(runtime_)) {
-    while (OB_EAGAIN == runtime_->try_wait()) {
-      usleep(50 * 1000);
-    }
-  }
+  int ret = OB_SUCCESS;
   if (timer_.inited()) {
     timer_.wait();
   }
   if (memory_printer_timer_.inited()) {
     memory_printer_timer_.wait();
   }
+  if (OB_NOT_NULL(runtime_)) {
+    while (OB_EAGAIN == (ret = runtime_->try_wait())) {
+      usleep(50 * 1000);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("runtime shutdown did not complete", K(ret), KP_(runtime));
+    }
+  }
+  return ret;
 }
 
 
-void ObServerRuntimeController::destroy()
+int ObServerRuntimeController::destroy()
 {
-  if (OB_NOT_NULL(runtime_)) {
-    runtime_->destroy();
-    ob_delete(runtime_);
-    runtime_ = nullptr;
+  stop();
+  const int ret = wait();
+  if (OB_SUCCESS != ret) {
+    // Retain the runtime and its providers until a later close can finish.
+    LOG_ERROR("cannot destroy a runtime that has not finished", K(ret), KP_(runtime));
+    return ret;
   }
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(::oceanbase::share::server_service<::oceanbase::data_plane::ObIDiskReport>())) {
@@ -275,10 +282,19 @@ void ObServerRuntimeController::destroy()
       LOG_WARN_RET(tmp_ret, "fail to delete runtime disk usage during shutdown", K(tmp_ret));
     }
   }
+  if (OB_NOT_NULL(runtime_)) {
+    runtime_->destroy();
+    ob_delete(runtime_);
+    runtime_ = nullptr;
+  }
   timer_.destroy();
   memory_printer_timer_.destroy();
   log_block_mgr_ = nullptr;
+  has_synced_ = false;
+  runtime_active_ = false;
+  timer_stopped_ = true;
   is_inited_ = false;
+  return ret;
 }
 
 int ObServerRuntimeController::construct_bootstrap_meta(ObServerRuntimeMeta &meta)
@@ -760,16 +776,12 @@ bool ObServerRuntimeController::has_runtime() const
 void ObServerRuntimeController::stop_runtime_()
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(runtime_) || !runtime_active_) {
-  } else if (OB_ISNULL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected condition", K(ret));
-  } else {
+  if (OB_NOT_NULL(runtime_)) {
     runtime_->stop();
     runtime_active_ = false;
-    if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>()->kill_all_sessions(true))) {
+    if (OB_NOT_NULL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>())
+        && OB_FAIL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>()->kill_all_sessions(true))) {
+      LOG_WARN("failed to kill sessions while stopping runtime", K(ret));
     }
   }
 }
@@ -1442,6 +1454,10 @@ int ObServer::obs_init_modules()
   if (OB_SUCC(ret) && OB_FAIL(rootserver::ObDBMSSchedService::server_module_init(mods_dbms_sched_service_))) { SERVER_LOG(WARN, "mods_dbms_sched_service_ fail", KR(ret)); }
   if (OB_SUCC(ret) && OB_FAIL(ObOptStatMonitorManager::server_module_init(mods_opt_stat_monitor_manager_))) { SERVER_LOG(WARN, "mods_opt_stat_monitor_manager_ fail", KR(ret)); }
   if (OB_SUCC(ret) && OB_FAIL(omt::ObSrsService::server_module_init(mods_srs_service_))) { SERVER_LOG(WARN, "mods_srs_service_ fail", KR(ret)); }
+  if (OB_SUCC(ret)) {
+    // This root member starts a database-owned worker during module init.
+    sql_engine_.get_dep_info_queue().set_run_wrapper(share::server_runtime());
+  }
   if (OB_SUCC(ret) && OB_FAIL(sql_engine_.init(
       &ObOptStatManager::get_instance(),
       &vt_data_service_,
@@ -1547,6 +1563,11 @@ int ObServer::obs_start_modules()
 
 void ObServer::obs_stop_modules()
 {
+  // The SQL dependency queue borrows module services and the runtime wrapper.
+  // Include initialization rollback, which can run before root stop_resources.
+  sql_engine_.get_dep_info_queue().stop();
+  // Stop producers and cancel tasks first. Storage, WAL and IO providers
+  // remain available until the workers have finished in obs_wait_modules().
   server_module_stop_default(mods_shared_macro_block_mgr_);
   server_module_stop_default(mods_change_stream_mgr_);
   server_module_stop_default(mods_ai_service_);
@@ -1556,7 +1577,6 @@ void ObServer::obs_stop_modules()
   ObOptStatMonitorManager::server_module_stop(mods_opt_stat_monitor_manager_);
   server_module_stop_default(mods_dbms_sched_service_);
   server_module_stop_default(mods_multi_version_garbage_collector_);
-  server_module_stop_default(mods_tx_loop_worker_);
   server_module_stop_default(mods_freeze_info_mgr_);
   server_module_stop_default(mods_dag_scheduler_);
   server_module_stop_default(mods_compaction_mem_pool_);
@@ -1568,7 +1588,6 @@ void ObServer::obs_stop_modules()
   ObPxPools::server_module_stop(mods_px_pools_);
   ObPlanCache::server_module_stop(mods_plan_cache_);
   ObPsCache::server_module_stop(mods_ps_cache_);
-  server_module_stop_default(mods_timestamp_service_);
   server_module_stop_default(mods_dead_lock_detector_mgr_);
   server_module_stop_default(mods_lob_manager_);
   server_module_stop_default(mods_tablet_runtime_meta_updater_);
@@ -1578,19 +1597,18 @@ void ObServer::obs_stop_modules()
   server_module_stop_default(mods_lock_wait_mgr_);
   server_module_stop_default(mods_tablet_stat_mgr_);
   server_module_stop_default(mods_tmp_file_manager_);
-  server_module_stop_default(mods_local_storage_meta_service_);
-  server_module_stop_default(mods_ls_service_);
-  server_module_stop_default(mods_log_service_);
-  server_module_stop_default(mods_trans_service_);
-  server_module_stop_default(mods_shared_mem_alloc_mgr_);
   storage::mds::ObMdsService::server_module_stop(mods_mds_service_);
-  server_module_stop_default(mods_io_service_);
-  server_module_stop_default(mods_storage_meta_mem_mgr_);
-  ObSharedTimer::server_module_stop(mods_shared_timer_);
+  if (OB_NOT_NULL(mods_local_storage_meta_service_)) {
+    mods_local_storage_meta_service_->stop_checkpoint();
+  }
 }
 
 void ObServer::obs_wait_modules()
 {
+  sql_engine_.get_dep_info_queue().wait();
+  // ObAsyncTaskQueue::wait only parks workers. Destroy physically joins them
+  // before their captured runtime and queued tasks' providers can be deleted.
+  sql_engine_.get_dep_info_queue().destroy();
   server_module_wait_default(mods_shared_macro_block_mgr_);
   server_module_wait_default(mods_change_stream_mgr_);
   server_module_wait_default(mods_ai_service_);
@@ -1600,16 +1618,13 @@ void ObServer::obs_wait_modules()
   ObOptStatMonitorManager::server_module_wait(mods_opt_stat_monitor_manager_);
   server_module_wait_default(mods_dbms_sched_service_);
   server_module_wait_default(mods_multi_version_garbage_collector_);
-  server_module_wait_default(mods_tx_loop_worker_);
   server_module_wait_default(mods_freeze_info_mgr_);
-  server_module_wait_default(mods_dag_scheduler_);
   server_module_wait_default(mods_compaction_mem_pool_);
   server_module_wait_default(mods_tablet_scheduler_);
   server_module_wait_default(mods_tablet_gc_service_);
   server_module_wait_default(mods_check_point_service_);
   server_module_wait_default(mods_memstore_freezer_);
   ObDTLIntermResultManager::server_module_wait(mods_dtl_interm_result_manager_);
-  server_module_wait_default(mods_timestamp_service_);
   server_module_wait_default(mods_dead_lock_detector_mgr_);
   server_module_wait_default(mods_lob_manager_);
   server_module_wait_default(mods_tablet_runtime_meta_updater_);
@@ -1619,21 +1634,47 @@ void ObServer::obs_wait_modules()
   server_module_wait_default(mods_lock_wait_mgr_);
   server_module_wait_default(mods_tablet_stat_mgr_);
   server_module_wait_default(mods_tmp_file_manager_);
-  server_module_wait_default(mods_local_storage_meta_service_);
-  server_module_wait_default(mods_ls_service_);
-  server_module_wait_default(mods_log_service_);
-  server_module_wait_default(mods_trans_service_);
-  server_module_wait_default(mods_shared_mem_alloc_mgr_);
+  // MDS timer tasks borrow bare LS pointers and must join before LS removal.
   storage::mds::ObMdsService::server_module_wait(mods_mds_service_);
-  server_module_wait_default(mods_storage_meta_mem_mgr_);
+
+  // All DAG producers have joined. Cancelled/queued DAGs can now release their
+  // references, and PX callbacks can finish while SQL/transaction services live.
+  server_module_wait_default(mods_dag_scheduler_);
+  ObPxPools::server_module_wait(mods_px_pools_);
   if (OB_NOT_NULL(::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>())) {
     ::oceanbase::share::server_service<::oceanbase::sql::ObSQLSessionMgr>()->wait_sessions_drained();
   }
+
+  // TxLoopWorker borrows LS pointers, so stop it before removing the LS.
+  server_module_stop_default(mods_tx_loop_worker_);
+  server_module_wait_default(mods_tx_loop_worker_);
+
+  // LS offline and destruction need live WAL callbacks and transaction state.
+  // In particular, do not stop PALF before stop_and_remove_ls_ finishes.
+  server_module_stop_default(mods_ls_service_);
+  server_module_wait_default(mods_ls_service_);
+  server_module_stop_default(mods_log_service_);
+  server_module_wait_default(mods_log_service_);
+  server_module_stop_default(mods_trans_service_);
+  server_module_wait_default(mods_trans_service_);
+  server_module_stop_default(mods_local_storage_meta_service_);
+  server_module_wait_default(mods_local_storage_meta_service_);
+  server_module_stop_default(mods_timestamp_service_);
+  server_module_wait_default(mods_timestamp_service_);
+  server_module_stop_default(mods_shared_mem_alloc_mgr_);
+  server_module_wait_default(mods_shared_mem_alloc_mgr_);
+  server_module_stop_default(mods_storage_meta_mem_mgr_);
+  server_module_wait_default(mods_storage_meta_mem_mgr_);
+  ObSharedTimer::server_module_stop(mods_shared_timer_);
   ObSharedTimer::server_module_wait(mods_shared_timer_);
+  // PALF has joined and LS/Tx cleanup no longer produces IO callbacks.
+  server_module_stop_default(mods_io_service_);
 }
 
 void ObServer::obs_destroy_modules()
 {
+  // Root storage outlives the modules; no later queue cleanup may borrow them.
+  sql_engine_.get_dep_info_queue().set_run_wrapper(nullptr);
   server_module_destroy_default(mods_shared_macro_block_mgr_);
   server_module_destroy_default(mods_change_stream_mgr_);
   server_module_destroy_default(mods_ai_service_);

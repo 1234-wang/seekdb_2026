@@ -223,8 +223,9 @@ int ObLockTable::init(ObLS *parent)
 
 int ObLockTable::prepare_for_safe_destroy()
 {
-  // do nothing
-  return OB_SUCCESS;
+  // Partial initialization may not have reached LS offline. The cached handle
+  // must release its table before the LS owner waits for T3M reclamation.
+  return offline();
 }
 
 void ObLockTable::destroy()

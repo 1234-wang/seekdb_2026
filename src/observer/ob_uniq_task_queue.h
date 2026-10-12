@@ -16,6 +16,7 @@
 
 #ifndef OCEANBASE_OBSERVER_OB_UNIQ_TASK_QUEUE_H_
 #define OCEANBASE_OBSERVER_OB_UNIQ_TASK_QUEUE_H_
+#include <mutex>
 #include "share/rc/ob_server_runtime.h"
 
 #include "lib/allocator/ob_malloc.h"
@@ -103,16 +104,18 @@ public:
   friend class TestBatchProcessQueue_test_update_process_Test;
   friend class TestBatchProcessQueue_test_single_update_Test;
   static const int64_t QUEUE_WAIT_INTERVAL_MS = 200; // 200ms
-  ObUniqTaskQueue() : inited_(false), queue_size_(0), thread_name_(nullptr), task_set_(),
+  ObUniqTaskQueue() : inited_(false), started_(false), accepting_tasks_(false), queue_size_(0), thread_name_(nullptr), task_set_(),
                       task_count_(0), group_map_(), processing_task_set_(), cur_group_(NULL),
                       processing_thread_count_(0), barrier_task_count_(0),
   updater_(NULL) {}
-  virtual ~ObUniqTaskQueue() { }
+  virtual ~ObUniqTaskQueue() { destroy(); }
 
   int init(Process *process, const int64_t thread_num, const int64_t queue_size,
            const char *thread_name = nullptr);
   // init() will trigger start(), we only want to init and start later in some cases
   int start() override;
+  void stop() override;
+  void destroy();
   int init_only(
       Process *process,
       const int64_t thread_num,
@@ -133,7 +136,7 @@ public:
 
   virtual int64_t task_count() const
   {
-    return task_count_;
+    return ATOMIC_LOAD(&task_count_);
   }
 
   int diagnose_waiting_task(ObIArray<Task> &tasks);
@@ -163,7 +166,11 @@ private:
   int try_lock(const Task &tasks);
   int batch_unlock(const common::ObIArray<Task> &tasks);
 
+  // This mutex survives resource destroy/reinit, unlike cond_.
+  std::mutex admission_mutex_;
   bool inited_;
+  bool started_;
+  bool accepting_tasks_;
   int64_t queue_size_;
   const char *thread_name_;
   common::ObThreadCond cond_;
@@ -207,7 +214,6 @@ int ObUniqTaskQueue<Task, Process>::init(Process *updater, const int64_t thread_
   if (OB_FAIL(init_only(updater, thread_num, queue_size, thread_name))) {
   } else if (FALSE_IT(share::ObThreadPool::set_run_wrapper(share::server_runtime()))) {  // seekdb: always set (was 500!=1)
   } else if (OB_FAIL(start())) {
-    inited_ = false;
     SERVER_LOG(WARN, "start thread failed", K(ret), K(thread_num));
   } else {
     inited_ = true;
@@ -217,54 +223,112 @@ int ObUniqTaskQueue<Task, Process>::init(Process *updater, const int64_t thread_
 
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t thread_num,
-                                              const int64_t queue_size, const char *thread_name/*OB_SERVER_RUNTIME_ID*/)
+                                             const int64_t queue_size, const char *thread_name)
 {
   int ret = common::OB_SUCCESS;
   ObMemAttr attr(common::ObModIds::OB_PARTITION_TABLE_TASK);
   const int64_t group_count = 128;
+  std::unique_lock<std::mutex> admission_guard(admission_mutex_);
   if (inited_) {
-    ret = common::OB_INIT_TWICE;
-    SERVER_LOG(WARN, "init twice", K(ret));
-  } else if (thread_num <= 0 || queue_size <= 0 || OB_ISNULL(updater)) {
+    return common::OB_INIT_TWICE;
+  } else if (thread_num <= 0 || thread_num > INT32_MAX || queue_size <= 0 || OB_ISNULL(updater)) {
     ret = common::OB_INVALID_ARGUMENT;
-    SERVER_LOG(WARN, "invalid argument", K(thread_num), K(queue_size), K(updater));
   } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::PARTITION_TABLE_UPDATER_COND_WAIT))) {
   } else if (OB_FAIL(task_set_.create(queue_size, attr, attr))) {
-  } else if (OB_FAIL(group_map_.create(group_count,
-                                       attr, attr))) {
-  } else if (OB_FAIL(processing_task_set_.create(common::UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM * thread_num,
-                                                 attr, attr))) {
+  } else if (OB_FAIL(group_map_.create(group_count, attr, attr))) {
+  } else if (OB_FAIL(processing_task_set_.create(
+      common::UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM * thread_num, attr, attr))) {
   } else {
     this->set_thread_count(static_cast<int32_t>(thread_num));
     queue_size_ = queue_size;
-    task_count_ = 0;
-    cur_group_ = NULL;
+    ATOMIC_STORE(&task_count_, 0);
+    cur_group_ = nullptr;
     processing_thread_count_ = 0;
     barrier_task_count_ = 0;
     updater_ = updater;
     thread_name_ = thread_name;
     inited_ = true;
+    accepting_tasks_ = true;
+  }
+  admission_guard.unlock();
+  if (OB_FAIL(ret)) {
+    destroy();
+  }
+  return ret;
+}
+
+
+template <typename Task, typename Process>
+int ObUniqTaskQueue<Task, Process>::start()
+{
+  int ret = common::OB_SUCCESS;
+  {
+    std::lock_guard<std::mutex> admission_guard(admission_mutex_);
+    if (!inited_) {
+      return common::OB_NOT_INIT;
+    } else if (started_) {
+      return common::OB_INIT_TWICE;
+    }
+  }
+  if (OB_FAIL(share::ObThreadPool::start())) {
+    destroy();
+  } else {
+    std::lock_guard<std::mutex> admission_guard(admission_mutex_);
+    started_ = true;
   }
   return ret;
 }
 
 template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::start()
+void ObUniqTaskQueue<Task, Process>::stop()
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "ObUniqTaskQueue is not inited", K(ret), K_(inited));
-  } else if (OB_FAIL(share::ObThreadPool::start())) {
+  std::lock_guard<std::mutex> admission_guard(admission_mutex_);
+  accepting_tasks_ = false;
+  share::ObThreadPool::stop();
+  if (cond_.is_inited()) {
+    common::ObThreadCondGuard guard(cond_);
+    cond_.broadcast();
   }
-  return ret;
 }
+
+template <typename Task, typename Process>
+void ObUniqTaskQueue<Task, Process>::destroy()
+{
+  stop();
+  share::ObThreadPool::wait();
+  share::ObThreadPool::destroy();
+  std::lock_guard<std::mutex> admission_guard(admission_mutex_);
+  // Hash nodes own groups and tasks. Detach their intrusive links before
+  // destroying nodes; no worker or admitted producer remains.
+  while (nullptr != groups_.remove_first()) {}
+  if (group_map_.created()) {
+    for (auto it = group_map_.begin(); it != group_map_.end(); ++it) {
+      while (nullptr != it->second.list_.remove_first()) {}
+    }
+  }
+  cur_group_ = nullptr;
+  processing_task_set_.destroy();
+  task_set_.destroy();
+  group_map_.destroy();
+  cond_.destroy();
+  queue_size_ = 0;
+  ATOMIC_STORE(&task_count_, 0);
+  processing_thread_count_ = 0;
+  barrier_task_count_ = 0;
+  updater_ = nullptr;
+  thread_name_ = nullptr;
+  inited_ = false;
+  started_ = false;
+  share::ObThreadPool::set_run_wrapper(nullptr);
+}
+
 
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::check_exist(const Task &task, bool &exist)
 {
   int ret = common::OB_SUCCESS;
   exist = false;
+  std::lock_guard<std::mutex> admission_guard(admission_mutex_);
   if (OB_UNLIKELY(!inited_)) {
     ret = common::OB_NOT_INIT;
     SERVER_LOG(WARN, "task queue not inited", K(ret));
@@ -288,6 +352,7 @@ int ObUniqTaskQueue<Task, Process>::check_processing_exist(const Task &task, boo
 {
   int ret = common::OB_SUCCESS;
   exist = false;
+  std::lock_guard<std::mutex> admission_guard(admission_mutex_);
   if (OB_UNLIKELY(!inited_)) {
     ret = common::OB_NOT_INIT;
     SERVER_LOG(WARN, "task queue not inited", K(ret));
@@ -310,9 +375,12 @@ template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::add(const Task &task)
 {
   int ret = common::OB_SUCCESS;
+  std::lock_guard<std::mutex> admission_guard(admission_mutex_);
   if (!inited_) {
     ret = common::OB_NOT_INIT;
     SERVER_LOG(WARN, "task queue not inited", K(ret));
+  } else if (!accepting_tasks_) {
+    ret = common::OB_CANCELED;
   } else if (!task.is_valid() || NULL != task.get_next() || NULL != task.get_prev()) {
     ret = common::OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(ret), K(task));
@@ -352,7 +420,7 @@ int ObUniqTaskQueue<Task, Process>::add(const Task &task)
           ret = common::OB_ERR_SYS;
           SERVER_LOG(ERROR, "add task to list failed", K(ret));
         } else {
-          ++task_count_;
+          ATOMIC_AAF(&task_count_, 1);
           int tmp_ret = common::OB_SUCCESS;
           if (barrier_task_count_ > 0) {
             if (common::OB_SUCCESS != (tmp_ret = cond_.broadcast())) {
@@ -412,7 +480,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
                 } else if (OB_FAIL(task_set_.erase_refactored(*t))) {
                 } else {
                   t = NULL;
-                  --task_count_;
+                  ATOMIC_SAF(&task_count_, 1);
                 }
                 if (OB_SUCC(ret)
                     && tasks.at(tasks.count() - 1).need_process_alone()) {
@@ -502,6 +570,10 @@ void ObUniqTaskQueue<Task, Process>::run1()
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::diagnose_waiting_task(ObIArray<Task> &tasks)
 {
+  std::lock_guard<std::mutex> admission_guard(admission_mutex_);
+  if (!inited_) {
+    return common::OB_NOT_INIT;
+  }
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(tasks.reserve(MAX_DIAGNOSE_NUM))) {
@@ -525,6 +597,10 @@ int ObUniqTaskQueue<Task, Process>::diagnose_waiting_task(ObIArray<Task> &tasks)
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::diagnose_processing_task(ObIArray<Task> &tasks)
 {
+  std::lock_guard<std::mutex> admission_guard(admission_mutex_);
+  if (!inited_) {
+    return common::OB_NOT_INIT;
+  }
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(tasks.reserve(MAX_DIAGNOSE_NUM))) {

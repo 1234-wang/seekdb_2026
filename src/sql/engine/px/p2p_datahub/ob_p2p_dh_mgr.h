@@ -54,7 +54,8 @@ public:
   static ObP2PDatahubManager &instance();
   typedef common::hash::ObHashMap<ObP2PDhKey, ObP2PDatahubMsgBase *> MsgMap;
   int init();
-  void destroy();
+  // Call after all SQL/PX readers have joined. Retain messages on OB_EAGAIN.
+  int destroy();
   int publish_local_copy(ObP2PDatahubMsgBase &msg);
   int publish_local_msg(ObP2PDatahubMsgBase &msg);
   template<typename T>

@@ -53,6 +53,7 @@ public:
     allocator_()
   {}
   ~ObDtlHashTable();
+  void destroy();
 
   int init(int64_t bucket_num);
   int insert_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan);
@@ -74,7 +75,7 @@ public:
   ObDtlChannelManager(int64_t idx, ObDtlHashTable &hash_table) :
     idx_(idx), spin_lock_(common::ObLatchIds::DTL_CHANNEL_MGR_LOCK), hash_table_(hash_table)
   {}
-  ~ObDtlChannelManager();
+  ~ObDtlChannelManager() = default;
 
   int insert_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan);
   int remove_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan);
@@ -96,6 +97,10 @@ public:
 
   // Initialize DTL service.
   int init();
+  // The owner stops new calls and drains SQL/PX before resetting the registry.
+  // Detached channels remain database users until their destructors complete.
+  int check_channels_drained() const;
+  int destroy();
 
   //// Channel Manipulations
   //
@@ -138,6 +143,9 @@ private:
   int init_channel(uint64_t chid, ObDtlChannel *&chan,
                    ObDtlFlowControl *dfc, const bool need_free_chan);
   int get_dtl_channel_manager(uint64_t hash_val, ObDtlChannelManager *&ch_mgr);
+  void reset_resources();
+  void release_owned_channel() { ATOMIC_DEC(&owned_channel_count_); }
+  friend class ObDtlChannel;
 private:
   // bucket number must be an integer multiple of hash_cnt, there is currently a dependency
   // Currently it is considered that a ch_mgr manages a batch of buckets, using a multiple relationship of hash_cnt for locking
@@ -150,6 +158,8 @@ private:
   ObDfcServer dfc_server_;
   ObDtlHashTable hash_table_;
   ObDtlChannelManager *ch_mgrs_;
+  int64_t constructed_manager_count_;
+  int64_t owned_channel_count_;
 };
 
 OB_INLINE ObDfcServer &ObDtl::get_dfc_server()

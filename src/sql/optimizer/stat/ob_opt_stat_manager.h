@@ -37,6 +37,8 @@ public:
   ObOptStatManager();
   virtual ~ObOptStatManager() {}
   virtual int init(ObMySQLProxy *proxy);
+  // Call after optimizer/stat workers have drained and before global KV cache teardown.
+  virtual void destroy();
   static int64_t get_default_data_size();
 
   static int64_t get_default_avg_row_size();

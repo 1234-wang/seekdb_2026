@@ -1815,7 +1815,8 @@ void ObBandwidthThrottle::destroy()
   inited_ = false;
 }
 
-int ObBandwidthThrottle::limit_and_sleep(const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time, int64_t &sleep_us)
+int ObBandwidthThrottle::limit_and_sleep(const int64_t bytes, const int64_t last_active_time,
+    const int64_t max_idle_time, int64_t &sleep_us, const bool *stop_token)
 {
   int ret = OB_SUCCESS;
   const int64_t PRINT_LOG_INTERVAL_MS = 1000;// 1s
@@ -1825,8 +1826,10 @@ int ObBandwidthThrottle::limit_and_sleep(const int64_t bytes, const int64_t last
   if (!inited_) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "throttle is not initialized.", K(ret));
+  } else if (nullptr != stop_token && ATOMIC_LOAD(stop_token)) {
+    ret = OB_IN_STOP_STATE;
   } else if (OB_FAIL(cal_limit(bytes, avaliable_timestamp))) {
-  } else if (OB_FAIL(do_sleep(avaliable_timestamp, last_active_time, max_idle_time, sleep_us))) {
+  } else if (OB_FAIL(do_sleep(avaliable_timestamp, last_active_time, max_idle_time, sleep_us, stop_token))) {
   } else {
     ObSpinLockGuard guard(lock_);
     const int64_t cur_time = ObTimeUtility::current_time();
@@ -1897,7 +1900,7 @@ int ObBandwidthThrottle::cal_limit(const int64_t bytes, int64_t &avaliable_times
 
 int ObBandwidthThrottle::do_sleep(
     const int64_t next_avaliable_ts, const int64_t last_active_time, const int64_t max_idle_time,
-    int64_t &sleep_us)
+    int64_t &sleep_us, const bool *stop_token)
 {
   int ret = OB_SUCCESS;
 
@@ -1908,9 +1911,31 @@ int ObBandwidthThrottle::do_sleep(
   int64_t real_sleep_time = std::min(sleep_time, max_wait_time);
   sleep_us = 0;
 
-  if (real_sleep_time > 0 && real_sleep_time <= UINT32_MAX) {
-    sleep_us = real_sleep_time;
-    ob_usleep<common::ObWaitEventIds::BANDWIDTH_THROTTLE_SLEEP>(static_cast<uint32_t>(real_sleep_time));
+  if (nullptr == stop_token) {
+    // Preserve the existing single-sleep path and its uint32_t boundary.
+    if (real_sleep_time > 0 && real_sleep_time <= UINT32_MAX) {
+      sleep_us = real_sleep_time;
+      ob_usleep<common::ObWaitEventIds::BANDWIDTH_THROTTLE_SLEEP>(static_cast<uint32_t>(real_sleep_time));
+    }
+  } else {
+    const int64_t begin_time = cur_time;
+    const int64_t deadline = real_sleep_time > 0 ? cur_time + real_sleep_time : cur_time;
+    const int64_t max_sleep_slice_us = 10 * 1000;
+    // cal_limit reserved bandwidth once. Poll cancellation against that same
+    // deadline; recalculating the reservation here would charge bytes twice.
+    for (;;) {
+      if (ATOMIC_LOAD(stop_token)) {
+        ret = OB_IN_STOP_STATE;
+        break;
+      }
+      cur_time = ObTimeUtility::current_time();
+      if (cur_time >= deadline) {
+        break;
+      }
+      const int64_t slice_us = std::min(deadline - cur_time, max_sleep_slice_us);
+      ob_usleep<common::ObWaitEventIds::BANDWIDTH_THROTTLE_SLEEP>(static_cast<uint32_t>(slice_us));
+    }
+    sleep_us = std::max(static_cast<int64_t>(0), ObTimeUtility::current_time() - begin_time);
   }
 
   return ret;
@@ -1968,12 +1993,13 @@ int ObInOutBandwidthThrottle::limit_in_and_sleep(
 }
 
 int ObInOutBandwidthThrottle::limit_out_and_sleep(
-    const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time, int64_t *need_sleep_us)
+    const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time,
+    int64_t *need_sleep_us, const bool *stop_token)
 {
   int ret = OB_SUCCESS;
   int64_t sleep_us = 0;
 
-  if (OB_FAIL(out_throttle_.limit_and_sleep(bytes, last_active_time, max_idle_time, sleep_us))) {
+  if (OB_FAIL(out_throttle_.limit_and_sleep(bytes, last_active_time, max_idle_time, sleep_us, stop_token))) {
   }
   if (OB_SUCC(ret) && nullptr != need_sleep_us) {
     *need_sleep_us = sleep_us;

@@ -200,6 +200,7 @@ public:
 
   PL_C_INTERFACE_t get_entry(common::ObString &name) const;
   int init();
+  void destroy();
 
 private:
 

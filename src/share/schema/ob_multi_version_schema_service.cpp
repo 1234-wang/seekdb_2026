@@ -1037,11 +1037,24 @@ int ObMultiVersionSchemaService::destroy()
 {
   int ret = OB_SUCCESS;
   ddl_trans_controller_.destroy();
-  schema_cache_.destroy();
-  schema_service_ = NULL;
-  schema_refresh_scheduler_ = NULL;
-  schema_publish_signal_ = NULL;
-  init_ = false;
+  lib::ObMutexGuard guard(schema_refresh_mutex_);
+  // Guard handles refer directly to slot storage. Do not discard those slots
+  // or their owning arenas until every borrowed handle has been released.
+  if (OB_FAIL(schema_mgr_cache_.destroy())) {
+  } else if (OB_FAIL(schema_store_.destroy())) {
+  } else {
+    schema_cache_.destroy();
+    schema_fetcher_.reset();
+    ddl_epoch_mgr_.destroy();
+    if (OB_FAIL(ObServerSchemaService::destroy())) {
+    } else {
+      schema_refresh_scheduler_ = nullptr;
+      schema_publish_signal_ = nullptr;
+      last_refreshed_schema_info_.reset();
+      init_version_cnt_ = OB_INVALID_COUNT;
+      init_ = false;
+    }
+  }
   return ret;
 }
 

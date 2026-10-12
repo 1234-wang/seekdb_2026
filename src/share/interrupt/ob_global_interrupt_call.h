@@ -22,6 +22,7 @@
 #include "lib/net/ob_addr.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/coro/co_var.h"
+#include <mutex>
 
 using oceanbase::obcall::ObInterruptMessage;
 
@@ -261,8 +262,17 @@ public:
 public:
   static ObGlobalInterruptManager *getInstance();
 
-  /// Initialize the local checker map.
+  /// Strict initialization; a repeated call returns OB_INIT_TWICE.
   int init();
+
+  // Process infrastructure: keep the initial bucket capacity across database
+  // lifetimes. mini_mode only selects initial allocation size, not semantics.
+  // Only initialization uses this mutex; task operations retain bucket locking.
+  int ensure_initialized();
+
+  // Call after request/async/PX/DAG producers have joined. Never clear nodes
+  // which still borrow thread/coroutine checkers; an incomplete drain is EAGAIN.
+  int check_registered_checkers_drained() const;
 
   /// Record the checker pointer in the map with tid as the key
   int register_checker(ObInterruptChecker *checker, const ObInterruptibleTaskID &tid);
@@ -282,8 +292,10 @@ public:
 
   MAP &get_map() { return map_; }
 private:
-  ObGlobalInterruptManager() : map_(), is_inited_(false) {};
-  ObGlobalInterruptManager(const ObGlobalInterruptManager &) {};
+  ObGlobalInterruptManager()
+    : map_(), is_inited_(false), bucket_capacity_(0), init_mutex_() {};
+  ObGlobalInterruptManager(const ObGlobalInterruptManager &) = delete;
+  int initialize_registry_();
 
 private:
   static ObGlobalInterruptManager *instance_;
@@ -291,6 +303,8 @@ private:
 private:
   MAP map_;
   bool is_inited_;
+  int64_t bucket_capacity_;
+  std::mutex init_mutex_;
 };
 
 OB_INLINE ObInterruptChecker &get_local_checker()

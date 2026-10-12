@@ -50,6 +50,15 @@ int ObDDLEpochMgr::init(ObMySQLProxy *sql_proxy, share::schema::ObMultiVersionSc
   return ret;
 }
 
+void ObDDLEpochMgr::destroy()
+{
+  SpinWLockGuard guard(lock_);
+  ddl_epoch_stat_.destroy();
+  sql_proxy_ = nullptr;
+  schema_service_ = nullptr;
+  inited_ = false;
+}
+
 int ObDDLEpochMgr::get_ddl_epoch(int64_t &ddl_epoch)
 {
   int ret = OB_SUCCESS;

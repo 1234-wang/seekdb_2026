@@ -111,6 +111,23 @@ int ObGenDicLoader::init()
   return ret;
 }
 
+void ObGenDicLoader::destroy()
+{
+  TCWLockGuard guard(lock_);
+  // Each map entry owns one reference. A handle that survives close keeps its
+  // old loader alive; a new database must receive a fresh loading state.
+  if (dic_loader_map_.created()) {
+    for (auto it = dic_loader_map_.begin(); it != dic_loader_map_.end(); ++it) {
+      ObDicLoader *loader = it->second;
+      if (nullptr != loader && 0 == loader->dec_ref()) {
+        ob_delete(loader);
+      }
+    }
+  }
+  dic_loader_map_.destroy();
+  is_inited_ = false;
+}
+
 int ObGenDicLoader::get_dic_loader(const ObString &parser_name, 
                                    const ObCharsetType charset, 
                                    ObDicLoaderHandle &loader_handle)
@@ -118,6 +135,7 @@ int ObGenDicLoader::get_dic_loader(const ObString &parser_name,
   int ret = OB_SUCCESS;
   ObGenDicLoaderKey dic_loader_key;
   ObDicLoader *dic_loader = nullptr;
+  TCWLockGuard guard(lock_);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (parser_name.empty()
@@ -125,13 +143,16 @@ int ObGenDicLoader::get_dic_loader(const ObString &parser_name,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(dic_loader_key.init(parser_name, charset))) {
   } else {
-    TCWLockGuard guard(lock_);
     if (OB_FAIL(dic_loader_map_.get_refactored(dic_loader_key, dic_loader))) {
       if (OB_HASH_NOT_EXIST == ret) {
         if (OB_FAIL(gen_dic_loader(dic_loader_key, dic_loader))) {
+          if (nullptr != dic_loader) {
+            ob_delete(dic_loader);
+          }
         } else if (OB_ISNULL(dic_loader)) {
           ret = OB_ERR_UNEXPECTED;
         } else if (OB_FAIL(dic_loader_map_.set_refactored(dic_loader_key, dic_loader))) {
+          ob_delete(dic_loader);
         } else if (OB_FALSE_IT(dic_loader->inc_ref())) {
         } else if (OB_FAIL(loader_handle.set_loader(dic_loader))) {
         }

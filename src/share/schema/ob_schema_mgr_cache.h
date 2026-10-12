@@ -119,6 +119,9 @@ public:
   ObSchemaMgrCache();
   virtual ~ObSchemaMgrCache();
   int init(int64_t init_cached_num);
+  // Slots borrow managers from ObSchemaMemMgr. Retain them while any handle
+  // still refers to a slot; callers may release handles and retry destruction.
+  int destroy();
   int check_schema_mgr_exist(const int64_t schema_version, bool &is_exist);
   int get(const int64_t schema_version,
           const ObSchemaMgr *&schema_mgr,

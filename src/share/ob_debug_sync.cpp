@@ -599,20 +599,41 @@ int ObDSEventControl::wait(const ObSyncEventName &name,
       LOG_INFO("is stopping", K(ret), K(name));
     } else {
       LOG_INFO("finish wait", KP(e), K(name));
-      e->waiter_cnt_--;
       if (e->signal_cnt_ <= 0) {
         LOG_INFO("wait for event timeout", K(name), K(timeout_us));
       }
       if (e->signal_cnt_ > 0 && clear) {
         e->signal_cnt_--;
       }
-      if (0 == e->waiter_cnt_ && 0 == e->signal_cnt_) {
-        used_.remove(e);
-        free_event(e);
-        e = NULL;
-      }
     }
+    // Cancellation releases the waiter reference just like normal completion.
+    // Otherwise a subsequent start cannot prove that the old waiters drained.
+    e->waiter_cnt_--;
+    if (0 == e->waiter_cnt_ && 0 == e->signal_cnt_) {
+      used_.remove(e);
+      free_event(e);
+      e = NULL;
+    }
+  }
+  return ret;
+}
 
+int ObDSEventControl::start()
+{
+  int ret = OB_SUCCESS;
+  ObThreadCondGuard guard(cond_);
+  DLIST_FOREACH_NORET(e, used_) {
+    if (e->waiter_cnt_ != 0) {
+      ret = OB_EAGAIN;
+      break;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    DLIST_FOREACH_REMOVESAFE_NORET(e, used_) {
+      used_.remove(e);
+      free_event(e);
+    }
+    stop_ = false;
   }
   return ret;
 }
@@ -951,7 +972,16 @@ ObDebugSync &ObDebugSync::instance()
 
 ObDSActionArray *ObDebugSync::thread_local_actions() const
 {
-  return GET_TSI(ObDSActionArray);
+  static thread_local uint64_t seen_generation = 0;
+  ObDSActionArray *actions = GET_TSI(ObDSActionArray);
+  const uint64_t generation = generation_.load(std::memory_order_acquire);
+  if (nullptr != actions && seen_generation != generation) {
+    // The TSI object belongs to its host thread. Invalidate action values
+    // lazily, without destroying another thread's storage or its references.
+    actions->clear_all();
+    seen_generation = generation;
+  }
+  return actions;
 }
 
 ObDSActionArray &ObDebugSync::rpc_spread_actions() const
@@ -963,6 +993,19 @@ ObDSActionArray &ObDebugSync::rpc_spread_actions() const
     actions = &empty_actions;
   }
   return *actions;
+}
+
+int ObDebugSync::start()
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (OB_FAIL(event_control_.start())) {
+  } else {
+    global_actions_.clear_all();
+    generation_.fetch_add(1, std::memory_order_release);
+    stop_.store(false, std::memory_order_release);
+  }
+  return ret;
 }
 
 void ObDebugSync::stop()

@@ -17,6 +17,7 @@
 #ifndef OCEANBASE_STORAGE_OB_DDL_REDO_LOG_WRITER_H
 #define OCEANBASE_STORAGE_OB_DDL_REDO_LOG_WRITER_H
 #include "lib/task/ob_timer.h"
+#include "lib/lock/ob_spin_lock.h"
 #include "common/ob_tablet_id.h"
 #include "share/scn.h"
 #include "storage/ddl/ob_ddl_clog.h"
@@ -74,13 +75,15 @@ public:
       next_available_write_ts_(-1), write_speed_(750), disk_used_stop_write_threshold_(-1),
       need_stop_write_(false), ref_cnt_(0) {}
   ~ObDDLCtrlSpeedItem() {};
-  void reset_need_stop_write() { need_stop_write_ = false; }
+  void reset_need_stop_write() { ATOMIC_STORE(&need_stop_write_, false); }
+  void reset();
   int init();
   int refresh();
   int limit_and_sleep(const int64_t bytes,
                       const int64_t task_id,
                       ObDDLNeedStopWriteChecker &checker,
-                      int64_t &real_sleep_us);
+                      int64_t &real_sleep_us,
+                      const bool *stop_token = nullptr);
   int check_need_stop_write(ObDDLNeedStopWriteChecker &checker,
                             bool &is_need_stop_write);
   // for ref_cnt_
@@ -95,7 +98,9 @@ private:
   int do_sleep(const int64_t next_available_ts,
                const int64_t task_id,
                ObDDLNeedStopWriteChecker &checker,
-               int64_t &real_sleep_us);
+               int64_t &real_sleep_us,
+               const bool *stop_token);
+  static int sleep_until(const int64_t deadline, const bool *stop_token, int64_t &sleep_us);
 private:
   static const int64_t MIN_WRITE_SPEED = 50L;
   static const int64_t SLEEP_INTERVAL = 1 * 1000; // 1ms
@@ -112,6 +117,8 @@ class ObDDLCtrlSpeedHandle final
 {
 public:
   int init(common::ObTimer &timer);
+  void stop();
+  int destroy();
   static ObDDLCtrlSpeedHandle &get_instance();
   int limit_and_sleep(const int64_t bytes,
                       const int64_t task_id,
@@ -124,6 +131,8 @@ private:
     RefreshSpeedHandleTask();
     virtual ~RefreshSpeedHandleTask();
     int init(common::ObTimer &timer);
+    void stop();
+    void destroy();
     virtual void runTimerTask() override;
   private:
 #ifdef ERRSIM
@@ -132,6 +141,7 @@ private:
     const static int64_t REFRESH_INTERVAL = 1 * 1000 * 1000; // 1s
 #endif
     bool is_inited_;
+    common::ObTimer *timer_;
     DISABLE_COPY_ASSIGN(RefreshSpeedHandleTask);
   };
 private:
@@ -141,6 +151,8 @@ private:
 
 private:
   bool is_inited_;
+  bool is_stopped_;
+  common::ObSpinLock lifecycle_lock_;
   ObDDLCtrlSpeedItem speed_handle_item_;
   RefreshSpeedHandleTask refreshTimerTask_;
 };

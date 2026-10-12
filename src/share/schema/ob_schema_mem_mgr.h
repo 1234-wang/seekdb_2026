@@ -70,6 +70,8 @@ public:
   ObSchemaMemMgr();
   virtual ~ObSchemaMemMgr();
   int init(const char *label);
+  // The owner must release all schema guards before destroying this manager.
+  void destroy();
   int check_can_switch_allocator(const int64_t &switch_cnt, bool &can_switch) const;
   int switch_allocator();
   int switch_back_allocator();

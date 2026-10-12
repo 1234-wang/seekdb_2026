@@ -200,6 +200,7 @@ int ObService::init(common::ObMySQLProxy &sql_proxy)
   } else if (OB_FAIL(schema_release_task_.init(schema_updater_))) {
     FLOG_WARN("init schema release task failed", KR(ret));
   } else {
+    stopped_ = false;
     inited_ = true;
   }
   FLOG_INFO("[OBSERVICE_NOTICE] init ob_service finish", KR(ret), K_(inited));
@@ -232,61 +233,31 @@ void ObService::set_stop()
 
 void ObService::stop()
 {
-  FLOG_INFO("[OBSERVICE_NOTICE] start to stop observice");
-  if (!inited_) {
-    FLOG_WARN_RET(OB_NOT_INIT, "ob_service not init", K_(inited));
-  } else {
-    FLOG_INFO("begin to add server event");
+  if (inited_) {
     SERVER_EVENT_ADD("observer", "stop");
-    FLOG_INFO("add server event success");
-
-    stopped_ = true;
-
-    FLOG_INFO("begin to stop schema release task");
-    schema_release_task_.stop();
-    FLOG_INFO("schema release task stopped");
-    FLOG_INFO("begin to stop schema updater");
-    schema_updater_.stop();
-    FLOG_INFO("schema updater stopped");
-
   }
-  FLOG_INFO("[OBSERVICE_NOTICE] observice finish stop", K_(stopped));
+  stopped_ = true;
+  // Child init can succeed before the enclosing init commits. Each child
+  // must stop/wait independently so a later failure cannot leave it running.
+  schema_release_task_.stop();
+  schema_updater_.stop();
 }
 
 void ObService::wait()
 {
-  FLOG_INFO("[OBSERVICE_NOTICE] wait ob_service begin");
-  if (!inited_) {
-    LOG_WARN_RET(OB_NOT_INIT, "ob_service not init", K_(inited));
-  } else {
-    FLOG_INFO("begin to wait schema release task");
-    schema_release_task_.wait();
-    FLOG_INFO("wait schema release task success");
-    FLOG_INFO("begin to wait schema updater");
-    schema_updater_.wait();
-    FLOG_INFO("wait schema updater success");
-
-  }
-  FLOG_INFO("[OBSERVICE_NOTICE] wait ob_service end");
+  schema_release_task_.wait();
+  schema_updater_.wait();
 }
 
 int ObService::destroy()
 {
-  int ret = OB_SUCCESS;
-  FLOG_INFO("[OBSERVICE_NOTICE] destroy ob_service begin");
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-  } else {
-    FLOG_INFO("begin to destroy schema release task");
-    schema_release_task_.destroy();
-    FLOG_INFO("schema release task destroyed");
-    FLOG_INFO("begin to destroy schema updater");
-    schema_updater_.destroy();
-    FLOG_INFO("schema updater destroyed");
-
-  }
-  FLOG_INFO("[OBSERVICE_NOTICE] destroy ob_service end", KR(ret));
-  return ret;
+  // Each child handles its own partial initialization. Do not skip cleanup
+  // merely because a later init stage failed before setting inited_.
+  schema_release_task_.destroy();
+  schema_updater_.destroy();
+  inited_ = false;
+  stopped_ = true;
+  return OB_SUCCESS;
 }
 
 

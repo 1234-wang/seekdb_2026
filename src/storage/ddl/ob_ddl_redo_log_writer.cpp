@@ -57,6 +57,17 @@ int ObDDLCtrlSpeedItem::init()
   return ret;
 }
 
+void ObDDLCtrlSpeedItem::reset()
+{
+  // The owner checks that every active limiter has completed before resetting.
+  is_inited_ = false;
+  next_available_write_ts_ = -1;
+  write_speed_ = 750;
+  disk_used_stop_write_threshold_ = -1;
+  need_stop_write_ = false;
+  ref_cnt_ = 0;
+}
+
 // Refresh DDL log write speed and the database-wide disk threshold.
 int ObDDLCtrlSpeedItem::refresh()
 {
@@ -77,11 +88,12 @@ int ObDDLCtrlSpeedItem::refresh()
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(GCTX.bandwidth_throttle_->get_rate(refresh_speed))) {
   } else {
-    write_speed_ = std::max(refresh_speed, 1 * MIN_WRITE_SPEED);
-    disk_used_stop_write_threshold_ = min(0 == palf_opt.disk_options_.log_disk_utilization_threshold_ ?
+    ATOMIC_STORE(&write_speed_, std::max(refresh_speed, 1 * MIN_WRITE_SPEED));
+    const int64_t threshold = min(0 == palf_opt.disk_options_.log_disk_utilization_threshold_ ?
                                           palf::DEFAULT_LOG_UTL_THRESHOLD : palf_opt.disk_options_.log_disk_utilization_threshold_,
                                           palf_opt.disk_options_.log_disk_utilization_limit_threshold_);
-    need_stop_write_ = 100.0 * total_used_space / total_disk_space >= disk_used_stop_write_threshold_ ? true : false;
+    ATOMIC_STORE(&disk_used_stop_write_threshold_, threshold);
+    ATOMIC_STORE(&need_stop_write_, 100.0 * total_used_space / total_disk_space >= threshold);
   }
   return ret;
 }
@@ -91,19 +103,20 @@ int ObDDLCtrlSpeedItem::cal_limit(const int64_t bytes, int64_t &next_available_t
 {
   int ret = OB_SUCCESS;
   next_available_ts = 0;
+  const int64_t write_speed = ATOMIC_LOAD(&write_speed_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
   } else if (bytes < 0) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (write_speed_ < MIN_WRITE_SPEED) {
+  } else if (write_speed < MIN_WRITE_SPEED) {
     ret = OB_ERR_UNEXPECTED;
   }
   if (OB_SUCC(ret)) {
-    const int64_t need_sleep_us = static_cast<int64_t>(1.0 * bytes / (write_speed_ * 1024 * 1024) * 1000 * 1000);
+    const int64_t need_sleep_us = static_cast<int64_t>(1.0 * bytes / (write_speed * 1024 * 1024) * 1000 * 1000);
     int64_t tmp_us = 0;
     do {
-      tmp_us = next_available_write_ts_;
-      next_available_ts = std::max(ObTimeUtility::current_time(), next_available_write_ts_ + need_sleep_us);
+      tmp_us = ATOMIC_LOAD(&next_available_write_ts_);
+      next_available_ts = std::max(ObTimeUtility::current_time(), tmp_us + need_sleep_us);
     } while (!ATOMIC_BCAS(&next_available_write_ts_, tmp_us, next_available_ts));
   }
   return ret;
@@ -113,14 +126,17 @@ int ObDDLCtrlSpeedItem::do_sleep(
   const int64_t next_available_ts,
   const int64_t task_id,
   ObDDLNeedStopWriteChecker &checker,
-  int64_t &real_sleep_us)
+  int64_t &real_sleep_us,
+  const bool *stop_token)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   real_sleep_us = 0;  
 
   bool is_need_stop_write = false;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (nullptr != stop_token && ATOMIC_LOAD(stop_token)) {
+    ret = OB_IN_STOP_STATE;
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
   } else if (next_available_ts <= 0 || task_id == 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -131,7 +147,11 @@ int ObDDLCtrlSpeedItem::do_sleep(
   } else if (is_need_stop_write) /*clog disk used exceeds threshold*/ {
     int64_t loop_cnt = 0;
     while (OB_SUCC(ret) && is_need_stop_write) {
-      ob_usleep(SLEEP_INTERVAL);
+      int64_t interval_sleep_us = 0;
+      if (OB_FAIL(sleep_until(ObTimeUtility::current_time() + SLEEP_INTERVAL,
+                             stop_token, interval_sleep_us))) {
+        break;
+      }
       if (0 == loop_cnt % 100 && dynamic_cast<ObDDLFullNeedStopWriteChecker *>(&checker) != nullptr) {
         uint64_t unused_data_format_version = 0;
         int64_t unused_snapshot_version = 0;
@@ -171,8 +191,34 @@ int ObDDLCtrlSpeedItem::do_sleep(
   }
 
   if (OB_SUCC(ret)) {
-    real_sleep_us = std::max(static_cast<int64_t>(0), next_available_ts - ObTimeUtility::current_time());
-    ob_usleep(real_sleep_us);
+    ret = sleep_until(next_available_ts, stop_token, real_sleep_us);
+  }
+  return ret;
+}
+
+int ObDDLCtrlSpeedItem::sleep_until(const int64_t deadline,
+                                  const bool *stop_token,
+                                  int64_t &sleep_us)
+{
+  int ret = OB_SUCCESS;
+  const int64_t begin = ObTimeUtility::current_time();
+  sleep_us = 0;
+  if (nullptr == stop_token) {
+    sleep_us = std::max(int64_t{0}, deadline - begin);
+    ob_usleep(sleep_us);
+  } else {
+    int64_t now = begin;
+    while (OB_SUCC(ret)) {
+      if (ATOMIC_LOAD(stop_token)) {
+        ret = OB_IN_STOP_STATE;
+      } else if (now >= deadline) {
+        break;
+      } else {
+        ob_usleep(std::min(int64_t{10000}, deadline - now));
+        now = ObTimeUtility::current_time();
+      }
+    }
+    sleep_us = std::max(int64_t{0}, ObTimeUtility::current_time() - begin);
   }
   return ret;
 }
@@ -185,7 +231,7 @@ int ObDDLCtrlSpeedItem::check_need_stop_write(ObDDLNeedStopWriteChecker &checker
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
   } else {
-    is_need_stop_write = checker.check_need_stop_write() || need_stop_write_;
+    is_need_stop_write = checker.check_need_stop_write() || ATOMIC_LOAD(&need_stop_write_);
   }
   return ret;
 }
@@ -195,16 +241,20 @@ int ObDDLCtrlSpeedItem::limit_and_sleep(
   const int64_t bytes,
   const int64_t task_id,
   ObDDLNeedStopWriteChecker &checker,
-  int64_t &real_sleep_us)
+  int64_t &real_sleep_us,
+  const bool *stop_token)
 {
   int ret = OB_SUCCESS;
   real_sleep_us = 0;
   int64_t next_available_ts = 0;
   int64_t transmit_sleep_us = 0; // network related.
-  if (OB_UNLIKELY(!is_inited_)) {
+  const int64_t disk_threshold = ATOMIC_LOAD(&disk_used_stop_write_threshold_);
+  if (nullptr != stop_token && ATOMIC_LOAD(stop_token)) {
+    ret = OB_IN_STOP_STATE;
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-  } else if ((disk_used_stop_write_threshold_ <= 0
-      || disk_used_stop_write_threshold_ > 100) || bytes < 0 || 0 == task_id) {
+  } else if ((disk_threshold <= 0
+      || disk_threshold > 100) || bytes < 0 || 0 == task_id) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(cal_limit(bytes, next_available_ts))) {
   } else if (OB_ISNULL(GCTX.bandwidth_throttle_)) {
@@ -212,14 +262,14 @@ int ObDDLCtrlSpeedItem::limit_and_sleep(
   } else if (OB_FAIL(GCTX.bandwidth_throttle_->limit_out_and_sleep(bytes,
                                                                    ObTimeUtility::current_time(),
                                                                    INT64_MAX,
-                                                                   &transmit_sleep_us))) {
-  } else if (OB_FAIL(do_sleep(next_available_ts, task_id, checker, real_sleep_us))) {
+                                                                   &transmit_sleep_us, stop_token))) {
+  } else if (OB_FAIL(do_sleep(next_available_ts, task_id, checker, real_sleep_us, stop_token))) {
   } else {/* do nothing. */}
   return ret;
 }
 
 ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedHandle()
-  : is_inited_(false), refreshTimerTask_()
+  : is_inited_(false), is_stopped_(true), lifecycle_lock_(), refreshTimerTask_()
 {
 }
 
@@ -236,12 +286,39 @@ ObDDLCtrlSpeedHandle &ObDDLCtrlSpeedHandle::get_instance()
 int ObDDLCtrlSpeedHandle::init(common::ObTimer &timer)
 {
   int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lifecycle_lock_);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(refreshTimerTask_.init(timer))) {
   } else {
-    is_inited_ = true;
-    LOG_INFO("succeed to init ObDDLCtrlSpeedHandle", K(ret));
+    ATOMIC_STORE(&is_stopped_, false);
+    if (OB_FAIL(refreshTimerTask_.init(timer))) {
+      ATOMIC_STORE(&is_stopped_, true);
+    } else {
+      is_inited_ = true;
+      LOG_INFO("succeed to init ObDDLCtrlSpeedHandle", K(ret));
+    }
+  }
+  return ret;
+}
+
+void ObDDLCtrlSpeedHandle::stop()
+{
+  // Publish cancellation without taking the lock used by lazy initialization.
+  ATOMIC_STORE(&is_stopped_, true);
+  refreshTimerTask_.stop();
+}
+
+int ObDDLCtrlSpeedHandle::destroy()
+{
+  int ret = OB_SUCCESS;
+  stop();
+  refreshTimerTask_.destroy();
+  ObSpinLockGuard guard(lifecycle_lock_);
+  if (0 != speed_handle_item_.get_ref()) {
+    ret = OB_EAGAIN;
+  } else {
+    speed_handle_item_.reset();
+    is_inited_ = false;
   }
   return ret;
 }
@@ -252,21 +329,28 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(const int64_t bytes,
                                           int64_t &real_sleep_us)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(bytes < 0 || 0 == task_id)) {
-    ret = OB_INVALID_ARGUMENT;
-  }
-  if (OB_SUCC(ret) && OB_FAIL(speed_handle_item_.init())) {
-    if (OB_INIT_TWICE != ret) {
-    } else {
-      ret = OB_SUCCESS; // already inited, treat as success
+  real_sleep_us = 0;
+  {
+    ObSpinLockGuard guard(lifecycle_lock_);
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+    } else if (ATOMIC_LOAD(&is_stopped_)) {
+      ret = OB_IN_STOP_STATE;
+    } else if (OB_UNLIKELY(bytes < 0 || 0 == task_id)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_FAIL(speed_handle_item_.init())) {
+      if (OB_INIT_TWICE == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      speed_handle_item_.inc_ref();
     }
   }
   if (OB_SUCC(ret)) {
-    ret = speed_handle_item_.limit_and_sleep(bytes, task_id, checker, real_sleep_us);
-    if (OB_FAIL(ret)) {
-    }
+    ret = speed_handle_item_.limit_and_sleep(bytes, task_id, checker, real_sleep_us,
+                                            &is_stopped_);
+    speed_handle_item_.dec_ref();
   }
   return ret;
 }
@@ -274,20 +358,25 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(const int64_t bytes,
 int ObDDLCtrlSpeedHandle::refresh()
 {
   int ret = OB_SUCCESS;
-  SERVER_MODULE_SCOPE {
-    if (OB_FAIL(speed_handle_item_.refresh())) {
-    }
-  } else if (OB_SERVER_RUNTIME_NOT_READY == ret || OB_IN_STOP_STATE == ret) {
-    speed_handle_item_.reset_need_stop_write();
-    ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lifecycle_lock_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+  } else if (ATOMIC_LOAD(&is_stopped_)) {
+    ret = OB_IN_STOP_STATE;
   } else {
+    SERVER_MODULE_SCOPE {
+      if (OB_FAIL(speed_handle_item_.refresh())) {
+      }
+    } else {
+      speed_handle_item_.reset_need_stop_write();
+    }
   }
   return ret;
 }
 
 // RefreshSpeedHandle Timer Task
 ObDDLCtrlSpeedHandle::RefreshSpeedHandleTask::RefreshSpeedHandleTask()
-  : is_inited_(false) {}
+  : is_inited_(false), timer_(nullptr) {}
 
 ObDDLCtrlSpeedHandle::RefreshSpeedHandleTask::~RefreshSpeedHandleTask()
 {
@@ -301,10 +390,30 @@ int ObDDLCtrlSpeedHandle::RefreshSpeedHandleTask::init(common::ObTimer &timer)
     ret = OB_INIT_TWICE;
   } else {
     is_inited_ = true;
+    timer_ = &timer;
     if (OB_FAIL(timer.schedule(*this, REFRESH_INTERVAL, true /* schedule repeatedly */))) {
+      is_inited_ = false;
+      timer_ = nullptr;
     }
   }
   return ret;
+}
+
+void ObDDLCtrlSpeedHandle::RefreshSpeedHandleTask::stop()
+{
+  if (nullptr != timer_) {
+    IGNORE_RETURN timer_->cancel_task(*this);
+  }
+}
+
+void ObDDLCtrlSpeedHandle::RefreshSpeedHandleTask::destroy()
+{
+  stop();
+  if (nullptr != timer_) {
+    IGNORE_RETURN timer_->wait_task(*this);
+  }
+  is_inited_ = false;
+  timer_ = nullptr;
 }
 
 void ObDDLCtrlSpeedHandle::RefreshSpeedHandleTask::runTimerTask()
@@ -390,6 +499,9 @@ int ObDDLRedoLogWriter::local_write_ddl_macro_redo(
   } else {
     ObDDLFullNeedStopWriteChecker checker(ddl_kv_mgr_handle);
     if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(buffer_size, task_id, checker, real_sleep_us))) {
+      if (OB_IN_STOP_STATE == tmp_ret || OB_CANCELED == tmp_ret) {
+        ret = tmp_ret;
+      }
     }
   }
   if (OB_FAIL(ret)) {

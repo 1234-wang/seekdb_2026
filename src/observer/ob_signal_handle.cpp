@@ -53,10 +53,23 @@ using namespace storage;
 namespace observer
 {
 
+void ObSignalHandle::stop()
+{
+  share::ObThreadPool::stop();
+#ifdef __APPLE__
+  // sigwait has no timeout on Apple. Wake the owned thread during explicit
+  // close too, rather than waiting for the C++ object destructor.
+  const pthread_t thread = thread_id_.load();
+  if (thread != 0) {
+    pthread_kill(thread, SIGUSR1);
+  }
+#endif
+}
+
 void ObSignalHandle::run1()
 {
   // Save thread id for macOS wakeup in destructor
-  thread_id_ = pthread_self();
+  thread_id_.store(pthread_self());
 
   int ret = OB_SUCCESS;
   lib::set_thread_name("SignalHandle");
@@ -72,12 +85,13 @@ void ObSignalHandle::run1()
       }
       if (-1 == signum) {
         //do not log error, because timeout will also return -1.
-      } else if (OB_FAIL(deal_signals(signum))) {
+      } else if (!has_set_stop() && OB_FAIL(deal_signals(signum))) {
       } else {
         //do nothing
       }
     }
   }
+  thread_id_.store(pthread_t{});
 }
 
 int ObSignalHandle::change_signal_mask()

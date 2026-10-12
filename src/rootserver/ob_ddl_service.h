@@ -89,12 +89,13 @@ class ObDDLService : public query::ObIAuxIndexSchemaChecker
 public:
   friend class ObPLDDLService;
   ObDDLService();
-  virtual ~ObDDLService() {}
+  virtual ~ObDDLService() { destroy(); }
 
   int init(common::ObMySQLProxy &sql_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
            ObSnapshotInfoManager &snapshot_mgr,
            ObRuntimeDDLService &runtime_ddl_service);
+  void destroy();
   bool is_inited() const { return inited_; }
   // these functions should be called after ddl_service has been inited
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }

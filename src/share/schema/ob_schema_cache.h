@@ -219,6 +219,7 @@ public:
   bool check_inner_stat() const;
   int init(ObSchemaService *schema_service,
            common::ObISQLClient *sql_client);
+  void reset();
   int fetch_schema(ObSchemaType schema_type,
                    const ObRefreshSchemaStatus &schema_status,
                    uint64_t schema_id,

@@ -31,6 +31,8 @@ class ObFileSystemRouter final
 public:
   static ObFileSystemRouter & get_instance();
   int init(const char *data_dir, const char *redo_dir);
+  // Path buffers are borrowed by Storage; reset only after those users drain.
+  void destroy();
 
   OB_INLINE const char* get_data_dir() const { return data_dir_; }
   OB_INLINE const char* get_slog_dir() const { return slog_dir_; }

@@ -45,11 +45,37 @@ int ObP2PDatahubManager::init()
   return ret;
 }
 
-void ObP2PDatahubManager::destroy()
+int ObP2PDatahubManager::destroy()
 {
-  if (IS_INIT) {
-    map_.destroy();
+  int ret = OB_SUCCESS;
+  if (map_.created()) {
+    // A late reader cannot free the message when it releases its reference.
+    // Keep the map owner until every reader has finished instead of freeing
+    // borrowed objects or dropping their last reachable owner.
+    auto check_readers = [](common::hash::HashMapPair<ObP2PDhKey, ObP2PDatahubMsgBase *> &entry) {
+      return OB_NOT_NULL(entry.second) && 1 != entry.second->cas_ref_count(1, 1)
+          ? OB_EAGAIN : OB_SUCCESS;
+    };
+    if (OB_FAIL(map_.foreach_refactored(check_readers))) {
+      SQL_LOG(WARN, "PX datahub still has message readers", K(ret));
+    } else {
+      auto release_message = [this](common::hash::HashMapPair<ObP2PDhKey, ObP2PDatahubMsgBase *> &entry) {
+        if (OB_NOT_NULL(entry.second)) {
+          entry.second->dec_ref_count();
+          free_msg(entry.second);
+        }
+        return OB_SUCCESS;
+      };
+      if (OB_FAIL(map_.foreach_refactored(release_message))) {
+      } else {
+        map_.destroy();
+        is_inited_ = false;
+      }
+    }
+  } else {
+    is_inited_ = false;
   }
+  return ret;
 }
 
 template<typename T>

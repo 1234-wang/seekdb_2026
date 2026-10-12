@@ -223,9 +223,25 @@ int ObGlobalLoadDataStatMap::init()
   } else if (OB_FAIL(map_.create(bucket_num,
                                  attr,
                                  attr))) {
+    // Failed construction must not retain buckets and block a later init.
+    map_.destroy();
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObGlobalLoadDataStatMap::destroy()
+{
+  int ret = OB_SUCCESS;
+  if (map_.created() && map_.size() != 0) {
+    // Values are borrowed: ToolBox owns and destroys each job's statistics.
+    // Clearing this map early would prevent it from unregistering its job.
+    ret = OB_EAGAIN;
+  } else {
+    map_.destroy();
+    is_inited_ = false;
   }
   return ret;
 }
@@ -258,14 +274,22 @@ int ObGlobalLoadDataStatMap::get_job_status(const ObLoadDataGID &id, ObLoadDataS
     entry.second->aquire();
     job_status = entry.second;
   };
-  OZ (map_.read_atomic(id, get_and_add_ref));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    OZ (map_.read_atomic(id, get_and_add_ref));
+  }
   return ret;
 }
 
 int ObGlobalLoadDataStatMap::get_all_job_status(ObGetAllJobStatusOp &job_status_op)
 {
   int ret = OB_SUCCESS;
-  OZ (map_.foreach_refactored(job_status_op));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    OZ (map_.foreach_refactored(job_status_op));
+  }
   return ret;
 }
 

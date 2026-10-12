@@ -55,7 +55,7 @@ int ObThreadIdling::idle(const int64_t max_idle_time_us)
   ObThreadCondGuard guard(cond_);
   int ret = OB_SUCCESS;
   const int64_t begin_time_ms = ObTimeUtility::current_time() / 1000;
-  while (!stop_ && wakeup_cnt_ == 0 && OB_SUCC(ret)) {
+  while (!ATOMIC_LOAD(&stop_) && wakeup_cnt_ == 0 && OB_SUCC(ret)) {
     const int64_t now_ms = ObTimeUtility::current_time() / 1000;
     const int64_t idle_time_ms = std::min(max_idle_time_us, get_idle_interval_us()) / 1000;
     int64_t wait_time_ms = begin_time_ms + idle_time_ms - now_ms;
@@ -70,7 +70,7 @@ int ObThreadIdling::idle(const int64_t max_idle_time_us)
       break;
     }
   }
-  if (stop_) {
+  if (ATOMIC_LOAD(&stop_)) {
     ret = OB_CANCELED;
   }
   wakeup_cnt_ = 0;

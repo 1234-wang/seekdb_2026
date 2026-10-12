@@ -61,8 +61,16 @@ int ObCommonSqlProxy::init(const bool is_ddl)
   } else {
     inited_ = true;
     is_ddl_ = is_ddl;
+    stopped_ = false;
   }
   return ret;
+}
+
+void ObCommonSqlProxy::destroy()
+{
+  stop();
+  inited_ = false;
+  is_ddl_ = false;
 }
 
 void ObCommonSqlProxy::operator=(const ObCommonSqlProxy &o)

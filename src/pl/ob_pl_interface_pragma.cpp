@@ -101,6 +101,13 @@ int ObPLInterfaceService::init()
   return ret;
 }
 
+void ObPLInterfaceService::destroy()
+{
+  if (interface_map_.created()) {
+    interface_map_.destroy();
+  }
+}
+
 ObPLInterfaceType ObPLInterfaceService::get_type(ObString &name) const
 {
   ObPLInterfaceType type = INTERFACE_END;

@@ -284,6 +284,14 @@ void PalfEnvImpl::destroy()
   cb_thread_pool_.destroy();
   log_loop_thread_.destroy();
   block_gc_timer_task_.destroy();
+  // The environment owns this handle; open/close only lend its pointer. All
+  // workers and borrowers have drained, and its allocator/IO providers remain
+  // live here. Destroy the in-memory owner without marking the stream deleted
+  // so a normal database shutdown keeps its WAL for the next initialization.
+  if (NULL != palf_handle_) {
+    PalfHandleImplFactory::free(palf_handle_);
+    palf_handle_ = nullptr;
+  }
   log_alloc_mgr_ = NULL;
   monitor_ = NULL;
   disk_not_enough_print_interval_in_gc_thread_ = OB_INVALID_TIMESTAMP;

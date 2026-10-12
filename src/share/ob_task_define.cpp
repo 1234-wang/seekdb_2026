@@ -20,6 +20,7 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/oblog/ob_log.h"
 #include <numeric>
+#include <new>
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -63,11 +64,37 @@ private:
 
 _RLOCAL(int64_t, ObLogRateLimiter::allows_);
 
+namespace
+{
+struct ProcessLogLimiters
+{
+  ProcessLogLimiters()
+  {
+    limiters_[toUType(ObTaskType::GENERIC)].set_name("ObTaskType::GENERIC");
+    limiters_[toUType(ObTaskType::USER_REQUEST)].set_name("ObTaskType::USER_REQUEST");
+    limiters_[toUType(ObTaskType::DATA_MAINTAIN)].set_name("ObTaskType::DATA_MAINTAIN");
+    limiters_[toUType(ObTaskType::SCHEMA)].set_name("ObTaskType::SCHEMA");
+  }
+  ObLogRateLimiter limiters_[toUType(ObTaskType::MAX)];
+};
+
+ProcessLogLimiters &process_log_limiters()
+{
+  // Like ROOT_CONTEXT, these fixed process facilities outlive database close
+  // and host TLS. Raw storage deliberately does not register an atexit
+  // destructor; there are five nodes, with no allocation on subsequent opens.
+  alignas(ProcessLogLimiters) static unsigned char storage[sizeof(ProcessLogLimiters)];
+  static ProcessLogLimiters *const limiters = new (storage) ProcessLogLimiters();
+  return *limiters;
+}
+} // namespace
+
 // class ObTaskController
 ObTaskController ObTaskController::instance_;
 
 ObTaskController::ObTaskController()
-    : limiters_(), rate_pctgs_(), log_rate_limit_(LOG_RATE_LIMIT)
+    : limiters_(), rate_pctgs_(), log_rate_limit_(LOG_RATE_LIMIT),
+      rates_inited_(false), active_(false)
 {}
 
 ObTaskController::~ObTaskController()
@@ -78,18 +105,17 @@ ObTaskController::~ObTaskController()
 int ObTaskController::init()
 {
   int ret = OB_SUCCESS;
-  for (int i = 0; OB_SUCC(ret) && i < MAX_TASK_ID; i++) {
-    limiters_[i] = OB_NEW(ObLogRateLimiter, ObModIds::OB_LOG);
-    if (nullptr == limiters_[i]) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      break;
-    }
+  if (active_) {
+    return OB_INIT_TWICE;
   }
-  if (OB_SUCC(ret)) {
+  if (!rates_inited_) {
+    ProcessLogLimiters &process = process_log_limiters();
+    for (int i = 0; i < MAX_TASK_ID; ++i) {
+      limiters_[i] = &process.limiters_[i];
+    }
 #define LOG_PCTG(ID, PCTG)                      \
     do {                                        \
       set_log_rate_pctg<ID>(PCTG);              \
-      get_limiter(ID)->set_name(#ID);           \
     } while (0)
 
     // Set percentage of each task here.
@@ -102,12 +128,11 @@ int ObTaskController::init()
 #undef LOG_PCTG
 
     calc_log_rate();
-    ObLogger::set_default_limiter(*limiters_[toUType(ObTaskType::GENERIC)]);
-    ObLogger::set_tl_type(0);
-  } else {
-    destroy();
+    rates_inited_ = true;
   }
-
+  ObLogger::set_default_limiter(*limiters_[toUType(ObTaskType::GENERIC)]);
+  ObLogger::set_tl_type(0);
+  active_ = true;
   return ret;
 }
 
@@ -123,12 +148,13 @@ void ObTaskController::destroy()
 {
   stop();
   wait();
-  for (int i = 0; i < MAX_TASK_ID; i++) {
-    if (nullptr != limiters_[i]) {
-      ob_delete(limiters_[i]);
-      limiters_[i] = nullptr;
-    }
+  if (active_) {
+    ObLogger::clear_log_limiters();
+    active_ = false;
   }
+  // Borrowed pointers may already be in use on a host thread. The fixed
+  // process limiters remain alive; generation invalidation resets later TLS
+  // lookups without adding reference counting to the logging hot path.
 }
 
 void ObTaskController::switch_task(ObTaskType task_id)
@@ -160,9 +186,11 @@ void ObTaskController::calc_log_rate()
   const double total = std::accumulate(
       rate_pctgs_, rate_pctgs_ + MAX_TASK_ID, .0);
   for (int i = 0; total > 0 && i < MAX_TASK_ID; i++) {
-    limiters_[i]->set_rate(
-        static_cast<int64_t>(
-            rate_pctgs_[i]/total * static_cast<double>(log_rate_limit_)));
+    if (nullptr != limiters_[i]) {
+      limiters_[i]->set_rate(
+          static_cast<int64_t>(
+              rate_pctgs_[i]/total * static_cast<double>(log_rate_limit_)));
+    }
   }
 }
 

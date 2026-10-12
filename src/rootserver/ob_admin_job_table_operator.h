@@ -55,6 +55,7 @@ public:
   ObAdminJobTableOperator();
   virtual ~ObAdminJobTableOperator() = default;
   int init();
+  void destroy();
 
   // create a new job with the specified properties
   // @return job_id will be -1 on error
