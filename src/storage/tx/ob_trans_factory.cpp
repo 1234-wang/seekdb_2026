@@ -88,7 +88,7 @@ const char *ObLSTxCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_MGR";
 
 #define MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(object_name, LABEL, arg...) MAKE_FACTORY_CLASS_IMPLEMENT(object_name, LABEL, RP, arg)
 
-ObTxCtx *ObTxCtxFactory::alloc(TxCtxCache *cache, const bool use_session_cache)
+ObTxCtx *ObTxCtxFactory::alloc(TxCtxCache *cache)
 {
   int tmp_ret = OB_SUCCESS;
   ObTxCtx *ctx = NULL;
@@ -99,7 +99,7 @@ ObTxCtx *ObTxCtxFactory::alloc(TxCtxCache *cache, const bool use_session_cache)
     TRANS_LOG_RET(ERROR, tmp_ret, "transaction context memory alloc failed", K_(active_tx_ctx_count));
     tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
   } else {
-    if (nullptr == cache && use_session_cache) {
+    if (nullptr == cache) {
       sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
       cache = static_cast<TxCtxCache *>(
           query::ObSessionAccess::get_tx_ctx_cache(session, true));

@@ -36,8 +36,6 @@ struct TxCtxCache::Node
 namespace
 {
 constexpr size_t TX_CTX_ALIGNMENT = alignof(ObTxCtx);
-static_assert(0 == (TX_CTX_ALIGNMENT & (TX_CTX_ALIGNMENT - 1)),
-              "ObTxCtx alignment must be a power of two");
 }
 
 TxCtxCache::TxCtxCache(const int64_t max_free_count)
