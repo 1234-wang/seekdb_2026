@@ -146,6 +146,7 @@ jemalloc builds. `MALLOC_BACKEND=obmalloc`, unknown values, and every non-empty
 value on platform-allocator builds fail during early startup. The following
 configuration parameters remain loadable and persistent compatibility no-ops:
 `cache_wash_threshold`, `memory_chunk_cache_size`,
+`__min_full_resource_pool_memory`,
 `_min_malloc_sample_interval`, `_max_malloc_sample_interval`,
 `_ctx_memory_limit`, and `_enable_memleak_light_backtrace`.
 

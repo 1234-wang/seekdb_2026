@@ -46,6 +46,8 @@ void warn_deprecated_allocator_parameters_once()
         "value", oceanbase::config::cache_wash_threshold());
     LOG_WARN_RET(OB_SUCCESS, "memory_chunk_cache_size is deprecated and has no effect",
         "value", oceanbase::config::memory_chunk_cache_size());
+    LOG_WARN_RET(OB_SUCCESS, "__min_full_resource_pool_memory is deprecated and has no effect",
+        "value", oceanbase::config::legacy_min_full_resource_pool_memory());
     LOG_WARN_RET(OB_SUCCESS, "_min_malloc_sample_interval is deprecated and has no effect",
         "value", oceanbase::config::_min_malloc_sample_interval());
     LOG_WARN_RET(OB_SUCCESS, "_max_malloc_sample_interval is deprecated and has no effect",

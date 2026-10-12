@@ -122,6 +122,7 @@ bundled jemalloc 构建只把 `MALLOC_BACKEND=jemalloc` 接受为 deprecated no-
 `MALLOC_BACKEND=obmalloc`、未知值，以及平台 allocator 构建中的任意非空值，都会在
 启动早期失败。以下参数继续支持加载和持久化，但为无效果的兼容项：
 `cache_wash_threshold`、`memory_chunk_cache_size`、
+`__min_full_resource_pool_memory`、
 `_min_malloc_sample_interval`、`_max_malloc_sample_interval`、
 `_ctx_memory_limit`、`_enable_memleak_light_backtrace`。
 
