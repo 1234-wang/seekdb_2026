@@ -51,28 +51,29 @@ jobs:
         run: cargo test --locked -p kv -p local -p config
 
       - name: generated header is committed
-        run: git diff --exit-code -- rust/sql-nio/include/nio.h rust/config/include/config.h
+        run: git diff --exit-code -- rust/sql-nio/include/nio.h
 
       - name: local virtual table column types
         run: python3 rust/local/tests/virtual_table_generator.py
 
-      - name: local CXX interface checks
+      - name: local and config CXX interface checks
         working-directory: rust
         run: |
-          LOCAL_HEADER_DIR="$PWD/target/include" cargo build -p local --profile cmake-debug
+          LOCAL_HEADER_DIR="$PWD/target/include" CONFIG_HEADER_DIR="$PWD/target/include" cargo build -p local -p config --profile cmake-debug
           python3 - <<'PYTEST'
           import pathlib
           import subprocess
           import tempfile
           with tempfile.TemporaryDirectory(prefix="local-cxx-") as directory:
               root = pathlib.Path(directory)
-              executable = root / "test"
-              subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
-                              "-I", "target/include", "-I", "target/cxxbridge",
-                              "-I", "local/include", "local/tests/bridge.cpp",
-                              "target/cmake-debug/liblocal.a", "-lpthread", "-ldl", "-lm",
-                              "-o", str(executable)], check=True)
-              subprocess.run([str(executable), str(root / "store")], check=True)
+              for crate in ("local", "config"):
+                  executable = root / crate
+                  subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-Werror", "-fno-exceptions",
+                                  "-I", "target/include", "-I", "target/cxxbridge",
+                                  "-I", "local/include", "-I", "config/include", crate + "/tests/bridge.cpp",
+                                  "target/cmake-debug/libconfig.a", "target/cmake-debug/liblocal.a",
+                                  "-lpthread", "-ldl", "-lm", "-o", str(executable)], check=True)
+                  subprocess.run([str(executable), str(root / (crate + "-store"))], check=True)
           PYTEST
 
       # No Windows runner: a cross `cargo check` is the cheapest signal that
@@ -88,6 +89,7 @@ jobs:
           cargo check -p sql-nio --target x86_64-pc-windows-gnu
           cargo check -p kv --target x86_64-pc-windows-gnu
           cargo check -p local --target x86_64-pc-windows-gnu
+          cargo check -p config --target x86_64-pc-windows-gnu
 
       - name: cargo audit
         working-directory: rust

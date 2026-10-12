@@ -13,11 +13,10 @@
 // limitations under the License.
 
 use std::cell::Cell;
-use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
+mod bridge;
 pub mod config;
-mod ffi;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entry {
@@ -94,16 +93,7 @@ fn run_checker(check: impl FnOnce() -> Result<(), Error>) -> Result<(), Error> {
     })
 }
 
-/// Test/helper entry point; the server owns process storage independently.
-pub fn open(directory: &Path) -> Result<(), Error> {
-    let _guard = lock_writers()?;
-    local::open(directory).map_err(|error| Error::storage("open local storage", error, false))
-}
-pub fn close() -> Result<(), Error> {
-    let _guard = lock_writers()?;
-    local::close().map_err(|error| Error::storage("close local storage", error, false))
-}
-fn storage(_directory: &Path) -> Result<kv::Store, Error> {
+fn storage() -> Result<kv::Store, Error> {
     local::store().map_err(|error| Error::storage("access local storage", error, false))
 }
 
@@ -111,8 +101,8 @@ fn key(name: &str) -> Vec<u8> {
     [CONFIG_PREFIX, name.as_bytes()].concat()
 }
 
-pub fn load(directory: &Path) -> Result<Vec<Entry>, Error> {
-    let store = storage(directory)?;
+pub fn load() -> Result<Vec<Entry>, Error> {
+    let store = storage()?;
     let snapshot = store
         .snapshot()
         .map_err(|error| Error::storage("snapshot config storage", error, false))?;
@@ -138,14 +128,13 @@ pub fn load(directory: &Path) -> Result<Vec<Entry>, Error> {
 }
 
 pub(crate) fn update_with_commit(
-    directory: &Path,
     name: &str,
     value: Option<&str>,
     check: impl FnOnce() -> Result<(), Error>,
     publish: impl FnOnce(),
 ) -> Result<(), Error> {
     let _guard = lock_writers()?;
-    let store = storage(directory)?;
+    let store = storage()?;
     if let Some(value) = value {
         config::validate_entry(&Entry {
             name: name.to_owned(),

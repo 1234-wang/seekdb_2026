@@ -27,29 +27,28 @@ impl TestDirectory {
         let path = std::env::temp_dir().join(format!("config-{}-{id}", std::process::id()));
         fs::create_dir(&path).unwrap();
         let directory = Self(path);
-        open(&directory.storage_path()).unwrap();
+        local::open(&directory.storage_path()).unwrap();
         directory
     }
     fn storage_path(&self) -> PathBuf {
         self.0.join("config")
     }
     fn reopen(&self) {
-        close().unwrap();
-        open(&self.storage_path()).unwrap();
+        local::close().unwrap();
+        local::open(&self.storage_path()).unwrap();
     }
 }
 impl Drop for TestDirectory {
     fn drop(&mut self) {
-        close().unwrap();
+        local::close().unwrap();
         fs::remove_dir_all(&self.0).unwrap();
     }
 }
 fn reset_active_defaults() {
-    let directory = PathBuf::new();
-    crate::config::load_active(&directory, true).unwrap();
+    crate::config::load_active(true).unwrap();
 }
-fn raw_put(path: &Path, name: &str, value: &[u8]) {
-    let store = storage(path).unwrap();
+fn raw_put(name: &str, value: &[u8]) {
+    let store = storage().unwrap();
     let mut tx = store.begin().unwrap();
     tx.put(&key(name), value).unwrap();
     tx.commit().unwrap();
@@ -60,16 +59,16 @@ fn updates_survive_close_reopen_and_reset_removes_only_its_key() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
     let directory = TestDirectory::new();
     let path = directory.storage_path();
-    assert!(load(&path).unwrap().is_empty());
-    crate::config::update_parameter(&path, "cpu_count", Some("4")).unwrap();
-    crate::config::update_parameter(&path, "data_dir", Some("quote' and slash\\")).unwrap();
+    assert!(load().unwrap().is_empty());
+    crate::config::update_parameter("cpu_count", Some("4")).unwrap();
+    crate::config::update_parameter("data_dir", Some("quote' and slash\\")).unwrap();
     directory.reopen();
-    crate::config::load_active(&path, true).unwrap();
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::cpu_count(), 4);
     assert_eq!(crate::config::data_dir(), "quote' and slash\\");
-    crate::config::update_parameter(&path, "cpu_count", None).unwrap();
+    crate::config::update_parameter("cpu_count", None).unwrap();
     directory.reopen();
-    let entries = load(&path).unwrap();
+    let entries = load().unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].name, "data_dir");
     #[cfg(unix)]
@@ -90,50 +89,46 @@ fn updates_survive_close_reopen_and_reset_removes_only_its_key() {
 fn concurrent_updates_keep_each_completed_value() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
     let directory = TestDirectory::new();
-    let path = directory.storage_path();
     std::thread::scope(|scope| {
         for parameter in crate::config::CATALOG.iter().take(8) {
-            let path = &path;
             scope.spawn(move || {
-                crate::config::update_parameter(path, parameter.name, Some(parameter.default))
-                    .unwrap()
+                crate::config::update_parameter(parameter.name, Some(parameter.default)).unwrap()
             });
         }
     });
     directory.reopen();
-    assert_eq!(load(&path).unwrap().len(), 8);
+    assert_eq!(load().unwrap().len(), 8);
 }
 
 #[test]
-fn configuration_storage_is_opened_once_and_releases_its_lock_on_close() {
+fn configuration_uses_process_storage_and_releases_its_lock_on_close() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
     let directory = TestDirectory::new();
     let path = directory.storage_path();
-    open(&path).unwrap();
+    local::open(&path).unwrap();
     assert!(matches!(kv::Store::open(&path), Err(kv::Error::Busy)));
-    close().unwrap();
-    assert!(load(&path).is_err());
+    local::close().unwrap();
+    assert!(load().is_err());
     let external = kv::Store::open(&path).unwrap();
     drop(external);
-    open(&path).unwrap();
+    local::open(&path).unwrap();
 }
 
 #[test]
 fn invalid_utf8_and_unknown_entries_block_startup_without_publication() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
+    let _directory = TestDirectory::new();
     reset_active_defaults();
-    raw_put(&path, "cpu_count", b"4");
-    raw_put(&path, "data_dir", b"\xff");
-    assert!(crate::config::load_active(&path, true)
+    raw_put("cpu_count", b"4");
+    raw_put("data_dir", b"\xff");
+    assert!(crate::config::load_active(true)
         .unwrap_err()
         .message
         .contains("UTF-8"));
     assert_eq!(crate::config::cpu_count(), 0);
-    raw_put(&path, "data_dir", b"store");
-    raw_put(&path, "unknown", b"1");
-    let error = crate::config::load_active(&path, true).unwrap_err();
+    raw_put("data_dir", b"store");
+    raw_put("unknown", b"1");
+    let error = crate::config::load_active(true).unwrap_err();
     assert_eq!(error.name.as_deref(), Some("unknown"));
     assert_eq!(crate::config::cpu_count(), 0);
 }
@@ -142,16 +137,15 @@ fn invalid_utf8_and_unknown_entries_block_startup_without_publication() {
 fn startup_skips_write_policy_but_requires_storable_values() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
     let directory = TestDirectory::new();
-    let path = directory.storage_path();
     reset_active_defaults();
     assert!(crate::config::validate("cpu_count", "-1").is_err());
-    raw_put(&path, "cpu_count", b"-1");
+    raw_put("cpu_count", b"-1");
     directory.reopen();
-    crate::config::load_active(&path, true).unwrap();
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::cpu_count(), -1);
-    raw_put(&path, "cpu_count", b"invalid");
+    raw_put("cpu_count", b"invalid");
     assert_eq!(
-        crate::config::load_active(&path, false)
+        crate::config::load_active(false)
             .unwrap_err()
             .name
             .as_deref(),
@@ -163,16 +157,15 @@ fn startup_skips_write_policy_but_requires_storable_values() {
 #[test]
 fn other_namespaces_are_preserved_and_excluded_from_configuration() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
-    let store = storage(&path).unwrap();
+    let _directory = TestDirectory::new();
+    let store = storage().unwrap();
     let mut tx = store.begin().unwrap();
     tx.put(b"merge/status", b"idle").unwrap();
     tx.commit().unwrap();
-    crate::config::update_parameter(&path, "cpu_count", Some("2")).unwrap();
-    assert_eq!(load(&path).unwrap().len(), 1);
-    crate::config::update_parameter(&path, "cpu_count", None).unwrap();
-    assert!(load(&path).unwrap().is_empty());
+    crate::config::update_parameter("cpu_count", Some("2")).unwrap();
+    assert_eq!(load().unwrap().len(), 1);
+    crate::config::update_parameter("cpu_count", None).unwrap();
+    assert!(load().unwrap().is_empty());
     assert_eq!(
         store.get(b"merge/status").unwrap().as_deref(),
         Some(b"idle".as_slice())
@@ -184,13 +177,13 @@ fn corrupt_storage_blocks_reopen_without_reinitializing_data() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
     let directory = TestDirectory::new();
     let path = directory.storage_path();
-    crate::config::update_parameter(&path, "cpu_count", Some("4")).unwrap();
-    close().unwrap();
+    crate::config::update_parameter("cpu_count", Some("4")).unwrap();
+    local::close().unwrap();
     let data = path.join("data");
     let mut bytes = fs::read(&data).unwrap();
     bytes[..2 * kv::PAGE_SIZE].fill(0);
     fs::write(&data, &bytes).unwrap();
-    assert!(open(&path).unwrap_err().message.contains("corrupt"));
+    assert!(matches!(local::open(&path), Err(kv::Error::Corrupt(_))));
     assert_eq!(fs::read(data).unwrap(), bytes);
 }
 
@@ -206,8 +199,8 @@ fn full_catalog_storage_measurement() {
     for parameter in crate::config::CATALOG {
         crate::config::bootstrap_set(parameter.name, parameter.default).unwrap();
     }
-    crate::config::save_bootstrap(&path).unwrap();
-    let entries = load(&path).unwrap();
+    crate::config::save_bootstrap().unwrap();
+    let entries = load().unwrap();
     assert_eq!(entries.len(), crate::config::CATALOG.len());
     // The old backend serialized all overrides for every single-key update.
     let text_bytes = "# Generated by seekdb. Do not edit while seekdb is running.\n".len()
@@ -231,21 +224,21 @@ fn full_catalog_storage_measurement() {
     directory.reopen();
     let open_us = start.elapsed().as_micros();
     let start = Instant::now();
-    crate::config::load_active(&path, true).unwrap();
+    crate::config::load_active(true).unwrap();
     let load_us = start.elapsed().as_micros();
 
     #[cfg(target_os = "linux")]
     let written_before = process_write_bytes();
     let start = Instant::now();
-    crate::config::update_parameter(&path, "cpu_count", Some("4")).unwrap();
+    crate::config::update_parameter("cpu_count", Some("4")).unwrap();
     let update_us = start.elapsed().as_micros();
     #[cfg(target_os = "linux")]
     let written = process_write_bytes() - written_before;
 
     directory.reopen();
-    crate::config::load_active(&path, true).unwrap();
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::cpu_count(), 4);
-    assert_eq!(load(&path).unwrap().len(), entries.len());
+    assert_eq!(load().unwrap().len(), entries.len());
     println!("parameters={} old_text_bytes={text_bytes} kv_data_bytes={data_bytes} allocation_bytes={allocation_bytes} open_us={open_us} load_us={load_us} update_us={update_us}", entries.len());
     #[cfg(target_os = "linux")]
     println!("single_update_userspace_write_bytes={written}");
@@ -266,8 +259,7 @@ fn process_write_bytes() -> u64 {
 #[test]
 fn declared_cpu_count_update_preserves_storage_and_runtime_value_on_rejection() {
     let _config_guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
+    let _directory = TestDirectory::new();
     reset_active_defaults();
     assert_eq!(crate::config::cpu_count(), 0);
     let declaration = crate::config::find("CPU_COUNT").unwrap();
@@ -281,13 +273,13 @@ fn declared_cpu_count_update_preserves_storage_and_runtime_value_on_rejection() 
         "02:00"
     );
     assert!(crate::config::find("server_create_time").is_none());
-    crate::config::update_parameter(&path, "cpu_count", Some("8")).unwrap();
+    crate::config::update_parameter("cpu_count", Some("8")).unwrap();
     assert_eq!(crate::config::cpu_count(), 8);
-    assert_eq!(load(&path).unwrap()[0].value, "8");
-    assert!(crate::config::update_parameter(&path, "cpu_count", Some("-1")).is_err());
+    assert_eq!(load().unwrap()[0].value, "8");
+    assert!(crate::config::update_parameter("cpu_count", Some("-1")).is_err());
     assert_eq!(crate::config::cpu_count(), 8);
-    assert_eq!(load(&path).unwrap()[0].value, "8");
-    crate::config::update_parameter(&path, "cpu_count", None).unwrap();
+    assert_eq!(load().unwrap()[0].value, "8");
+    crate::config::update_parameter("cpu_count", None).unwrap();
 }
 
 #[test]
@@ -320,26 +312,24 @@ fn declared_defaults_have_typed_readers() {
 #[test]
 fn declared_numeric_ranges_reject_without_publishing() {
     let _config_guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
+    let _directory = TestDirectory::new();
     reset_active_defaults();
     assert_eq!(crate::config::rpc_port(), 2882);
-    assert!(crate::config::update_parameter(&path, "rpc_port", Some("1024")).is_err());
+    assert!(crate::config::update_parameter("rpc_port", Some("1024")).is_err());
     assert_eq!(crate::config::rpc_port(), 2882);
-    crate::config::update_parameter(&path, "rpc_port", Some("1025")).unwrap();
+    crate::config::update_parameter("rpc_port", Some("1025")).unwrap();
     assert_eq!(crate::config::rpc_port(), 1025);
-    assert!(crate::config::update_parameter(&path, "rpc_port", Some("65536")).is_err());
+    assert!(crate::config::update_parameter("rpc_port", Some("65536")).is_err());
     assert_eq!(crate::config::rpc_port(), 1025);
-    crate::config::update_parameter(&path, "rpc_port", Some("2882")).unwrap();
+    crate::config::update_parameter("rpc_port", Some("2882")).unwrap();
 
-    assert!(crate::config::update_parameter(&path, "cpu_quota_concurrency", Some("0.99")).is_err());
+    assert!(crate::config::update_parameter("cpu_quota_concurrency", Some("0.99")).is_err());
     assert_eq!(crate::config::cpu_quota_concurrency(), 10.0);
-    assert!(crate::config::update_parameter(&path, "datafile_size", Some("-1M")).is_err());
-    assert!(crate::config::update_parameter(&path, "datafile_size", Some("5")).is_err());
+    assert!(crate::config::update_parameter("datafile_size", Some("-1M")).is_err());
+    assert!(crate::config::update_parameter("datafile_size", Some("5")).is_err());
     assert_eq!(crate::config::datafile_size(), 32 * 1024 * 1024);
     assert!(
-        crate::config::update_parameter(&path, "internal_sql_execute_timeout", Some("999us"))
-            .is_err()
+        crate::config::update_parameter("internal_sql_execute_timeout", Some("999us")).is_err()
     );
     assert_eq!(crate::config::internal_sql_execute_timeout(), 30_000_000);
 }
@@ -377,10 +367,9 @@ fn declared_moment_value_has_typed_reader() {
 #[test]
 fn declared_dynamic_and_static_updates_follow_storage_and_effective_state() {
     let _config_guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
-    crate::config::load_active(&path, true).unwrap();
-    crate::config::update_parameter(&path, "rpc_port", Some("3001")).unwrap();
+    let _directory = TestDirectory::new();
+    crate::config::load_active(true).unwrap();
+    crate::config::update_parameter("rpc_port", Some("3001")).unwrap();
     assert_eq!(crate::config::rpc_port(), 3001);
     assert_eq!(
         crate::config::effective_value("rpc_port").as_deref(),
@@ -398,13 +387,13 @@ fn declared_dynamic_and_static_updates_follow_storage_and_effective_state() {
     );
     assert_eq!(port_row.value, "3001");
     assert_eq!(port_row.source, "DEFAULT");
-    crate::config::update_parameter(&path, "enable_record_trace_log", Some("off")).unwrap();
+    crate::config::update_parameter("enable_record_trace_log", Some("off")).unwrap();
     assert_eq!(
         crate::config::effective_value("enable_record_trace_log").as_deref(),
         Some("False")
     );
 
-    crate::config::update_parameter(&path, "net_thread_count", Some("5")).unwrap();
+    crate::config::update_parameter("net_thread_count", Some("5")).unwrap();
     assert_eq!(crate::config::net_thread_count(), 0);
     assert_eq!(
         crate::config::effective_value("net_thread_count").as_deref(),
@@ -414,33 +403,32 @@ fn declared_dynamic_and_static_updates_follow_storage_and_effective_state() {
         crate::config::configured_value("net_thread_count").as_deref(),
         Some("5")
     );
-    crate::config::load_active(&path, false).unwrap();
+    crate::config::load_active(false).unwrap();
     assert_eq!(crate::config::net_thread_count(), 0);
-    crate::config::load_active(&path, true).unwrap();
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::net_thread_count(), 5);
-    crate::config::update_parameter(&path, "net_thread_count", None).unwrap();
-    crate::config::update_parameter(&path, "rpc_port", None).unwrap();
-    crate::config::update_parameter(&path, "enable_record_trace_log", None).unwrap();
+    crate::config::update_parameter("net_thread_count", None).unwrap();
+    crate::config::update_parameter("rpc_port", None).unwrap();
+    crate::config::update_parameter("enable_record_trace_log", None).unwrap();
     assert_eq!(crate::config::rpc_port(), 2882);
-    crate::config::load_active(&path, true).unwrap();
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::net_thread_count(), 0);
-    assert!(load(&path).unwrap().is_empty());
+    assert!(load().unwrap().is_empty());
 }
 
 #[test]
 fn bootstrap_overrides_are_effective_before_writeback() {
     let _config_guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
-    crate::config::load_active(&path, true).unwrap();
+    let _directory = TestDirectory::new();
+    crate::config::load_active(true).unwrap();
     crate::config::bootstrap_set("memory_budget", "2G").unwrap();
     crate::config::bootstrap_set("net_thread_count", "3").unwrap();
     assert_eq!(crate::config::memory_budget(), 2 * 1024 * 1024 * 1024);
     assert_eq!(crate::config::net_thread_count(), 3);
-    assert!(load(&path).unwrap().is_empty());
+    assert!(load().unwrap().is_empty());
     assert!(crate::config::bootstrap_set("server_create_time", "1").is_err());
-    crate::config::save_bootstrap(&path).unwrap();
-    let entries = load(&path).unwrap();
+    crate::config::save_bootstrap().unwrap();
+    let entries = load().unwrap();
     assert_eq!(entries.len(), 2);
     assert_eq!(
         entries
@@ -458,73 +446,47 @@ fn bootstrap_overrides_are_effective_before_writeback() {
             .value,
         "3"
     );
-    crate::config::load_active(&path, true).unwrap();
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::net_thread_count(), 3);
 }
 
 #[test]
 fn checker_rejection_and_reentry_leave_storage_unchanged() {
     let _config_guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
-    crate::config::load_active(&path, true).unwrap();
-    let rejected = crate::config::update_parameter_checked(&path, "cpu_count", Some("4"), || {
+    let _directory = TestDirectory::new();
+    crate::config::load_active(true).unwrap();
+    let rejected = crate::config::update_parameter_checked("cpu_count", Some("4"), || {
         Err(Error::new(None, "rejected"))
     });
     assert!(rejected.is_err());
-    assert!(load(&path).unwrap().is_empty());
-    let reentered = crate::config::update_parameter_checked(&path, "cpu_count", Some("4"), || {
+    assert!(load().unwrap().is_empty());
+    let reentered = crate::config::update_parameter_checked("cpu_count", Some("4"), || {
         crate::config::snapshot(&["cpu_count"]).map(|_| ())
     });
     assert!(reentered.unwrap_err().message.contains("reentered"));
-    assert!(load(&path).unwrap().is_empty());
+    assert!(load().unwrap().is_empty());
 }
 
 #[test]
 fn internal_state_is_loaded_and_published_without_becoming_a_parameter() {
-    use std::ffi::CString;
-
     let _config_guard = CONFIG_TEST_LOCK.lock().unwrap();
-    let directory = TestDirectory::new();
-    let path = directory.storage_path();
-    crate::config::load_active(&path, true).unwrap();
+    let _directory = TestDirectory::new();
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::server_create_time(), 0);
     assert_eq!(crate::config::server_role_info(), "");
-    crate::config::update_internal_state(&path, "server_create_time", "123").unwrap();
-    crate::config::update_internal_state(&path, "server_role_info", "PRIMARY:INVALID:NORMAL:0")
-        .unwrap();
+    crate::config::update_internal_state("server_create_time", "123").unwrap();
+    crate::config::update_internal_state("server_role_info", "PRIMARY:INVALID:NORMAL:0").unwrap();
     assert_eq!(crate::config::server_create_time(), 123);
     assert_eq!(
         crate::config::server_role_info(),
         "PRIMARY:INVALID:NORMAL:0"
     );
     assert!(crate::config::find("server_create_time").is_none());
-    let path_arg = CString::new(path.to_str().unwrap()).unwrap();
-    let name_arg = CString::new("server_create_time").unwrap();
-    let value_arg = CString::new("124").unwrap();
-    let mut error = ffi::ConfigError {
-        commit_uncertain: 0,
-        message: [0; 512],
-    };
-    let parameter_name = CString::new("cpu_count").unwrap();
-    assert_eq!(
-        ffi::config_update_internal_state(
-            path_arg.as_ptr(),
-            parameter_name.as_ptr(),
-            value_arg.as_ptr(),
-            &mut error,
-        ),
-        1
-    );
-    assert_eq!(
-        ffi::config_update_internal_state(
-            path_arg.as_ptr(),
-            name_arg.as_ptr(),
-            value_arg.as_ptr(),
-            &mut error,
-        ),
-        0
-    );
-    crate::config::load_active(&path, true).unwrap();
+    cxx::let_cxx_string!(name = "server_create_time");
+    cxx::let_cxx_string!(value = "124");
+    cxx::let_cxx_string!(parameter_name = "cpu_count");
+    assert!(!crate::bridge::update_internal_state_status(&parameter_name, &value).ok);
+    assert!(crate::bridge::update_internal_state_status(&name, &value).ok);
+    crate::config::load_active(true).unwrap();
     assert_eq!(crate::config::server_create_time(), 124);
 }

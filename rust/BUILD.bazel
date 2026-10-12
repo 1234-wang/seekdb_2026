@@ -53,6 +53,7 @@ export CARGO_TARGET_DIR="$(@D)/rust-cargo-target"
 export CONFIG_HEADER_DIR="$$PWD/$(@D)/unix"
 export LOCAL_HEADER_DIR="$$PWD/$(@D)/unix"
 export DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
+export CXXFLAGS="$${CXXFLAGS:-} -D_GLIBCXX_USE_CXX11_ABI=1"
 cargo build --release --manifest-path "$(location Cargo.toml)" --workspace
 cp "$$CARGO_TARGET_DIR/release/libsql_nio.a" "$(@D)/libsql_nio.a"
 cp "$$CARGO_TARGET_DIR/release/libconfig.a" "$(@D)/libconfig.a"
@@ -131,19 +132,12 @@ cc_library(
 )
 
 cc_library(
-    name = "config_headers",
-    hdrs = ["config/include/config.h"],
-    includes = ["config/include"],
-    visibility = ["//src/share:__pkg__", "//src/observer:__pkg__"],
-)
-
-cc_library(
     name = "config_bridge_headers",
-    hdrs = select({
-        ":windows": ["windows/config_bridge.h", "windows/config_checkers.h"],
-        "//conditions:default": ["unix/config_bridge.h", "unix/config_checkers.h"],
+    hdrs = ["config/include/check_callback.h"] + select({
+        ":windows": ["windows/config_bridge.h", "windows/config_checkers.h", "windows/rust/cxx.h"],
+        "//conditions:default": ["unix/config_bridge.h", "unix/config_checkers.h", "unix/rust/cxx.h"],
     }),
-    includes = select({
+    includes = ["config/include"] + select({
         ":windows": ["windows"],
         "//conditions:default": ["unix"],
     }),

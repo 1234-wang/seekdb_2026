@@ -18,7 +18,6 @@
 
 #include "config_bridge.h"
 #include "config_checkers.h"
-#include "config.h"
 #ifndef _WIN32
 #include <unistd.h>
 #include "share/rc/ob_server_runtime.h"
@@ -116,15 +115,17 @@ using StandbyModule = standby::StandbyModule;
 int set_bootstrap_parameter(const char *name, const char *value)
 {
   int ret = OB_SUCCESS;
-  ConfigError error = {};
   if (nullptr == name || nullptr == value) {
     ret = OB_INVALID_ARGUMENT;
   } else if (!config::check_parameter(name, value)) {
     ret = OB_INVALID_CONFIG;
     LOG_ERROR("invalid startup parameter", K(ret), K(name), K(value));
-  } else if (0 != config_bootstrap_set(name, value, &error)) {
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("invalid startup parameter", K(ret), K(name), "detail", error.message);
+  } else {
+    auto error = config::bootstrap_set(name, value);
+    if (!error.ok) {
+      ret = OB_INVALID_CONFIG;
+      LOG_ERROR("invalid startup parameter", K(ret), K(name), "detail", error.message.c_str());
+    }
   }
   return ret;
 }

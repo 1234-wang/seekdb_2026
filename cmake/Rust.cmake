@@ -19,7 +19,7 @@
 #     target_link_libraries(<your_target> PRIVATE sql_nio)
 #     #include "nio.h"
 #     target_link_libraries(<your_target> PRIVATE config)
-#     #include "config.h"
+#     #include "config_bridge.h"
 #
 # Override the workspace location by setting RUST_WORKSPACE_DIR before include().
 
@@ -116,6 +116,10 @@ set(_rust_build_env "CARGO_TARGET_DIR=${RUST_TARGET_DIR}"
                     "DEFAULT_LOG_LEVEL=${DEFAULT_LOG_LEVEL}"
                     "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}"
                     "AR=${CMAKE_AR}")
+if(NOT WIN32)
+  # Match the libstdc++ ABI selected in Env.cmake for CXX's std::string boundary.
+  list(APPEND _rust_build_env "CXXFLAGS=$ENV{CXXFLAGS} -D_GLIBCXX_USE_CXX11_ABI=1")
+endif()
 if(ANDROID)
   string(REGEX REPLACE "^android-" "" _android_api "${ANDROID_PLATFORM}")
   get_filename_component(_ndk_toolchain_bin "${CMAKE_C_COMPILER}" DIRECTORY)
@@ -195,7 +199,7 @@ add_custom_command(
           --workspace
   COMMAND "${CMAKE_COMMAND}" -E touch "${SQL_NIO_STATICLIB}"
   WORKING_DIRECTORY "${RUST_WORKSPACE_DIR}"
-  DEPENDS ${_rust_inputs}
+  DEPENDS ${_rust_inputs} "${CMAKE_CURRENT_LIST_FILE}"
   COMMENT "[rust] cargo build workspace (${_cargo_out_subdir})"
   ${_rust_job_server_options}
   VERBATIM)
@@ -224,7 +228,7 @@ target_link_libraries(sql_nio INTERFACE "${SQL_NIO_STATICLIB}" ${_rust_syslibs})
 add_library(config INTERFACE)
 add_dependencies(config rust_staticlibs_build)
 target_include_directories(config INTERFACE
-  "${CONFIG_INCLUDE_DIR}" "${RUST_TARGET_DIR}/include")
+  "${CONFIG_INCLUDE_DIR}" "${RUST_TARGET_DIR}/include" "${RUST_TARGET_DIR}/cxxbridge")
 target_link_libraries(config INTERFACE "${CONFIG_STATICLIB}" ${_rust_syslibs})
 
 set_property(DIRECTORY APPEND PROPERTY

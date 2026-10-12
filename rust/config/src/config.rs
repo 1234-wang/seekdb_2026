@@ -14,8 +14,11 @@
 
 include!(concat!(env!("OUT_DIR"), "/generated_config.rs"));
 
+use crate::bridge::{
+    bootstrap_set_status, load_active_status, save_bootstrap_status, update_checked_status,
+    update_internal_state_status,
+};
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Mutex;
 
 static CONFIGURED: OnceLock<Mutex<BTreeMap<String, String>>> = OnceLock::new();
@@ -390,12 +393,11 @@ pub fn configured_value(name: &str) -> Option<String> {
     )
 }
 
-pub fn update_parameter(path: &Path, name: &str, value: Option<&str>) -> Result<(), crate::Error> {
-    update_parameter_checked(path, name, value, || Ok(()))
+pub fn update_parameter(name: &str, value: Option<&str>) -> Result<(), crate::Error> {
+    update_parameter_checked(name, value, || Ok(()))
 }
 
 pub fn update_parameter_checked(
-    path: &Path,
     name: &str,
     value: Option<&str>,
     check: impl FnOnce() -> Result<(), crate::Error>,
@@ -404,7 +406,7 @@ pub fn update_parameter_checked(
         find(name).ok_or_else(|| crate::Error::new(Some(name.to_owned()), "unknown parameter"))?;
     let candidate = value.unwrap_or(parameter.default);
     validate(parameter.name, candidate)?;
-    crate::update_with_commit(path, parameter.name, value, check, || {
+    crate::update_with_commit(parameter.name, value, check, || {
         let mut configured = configured()
             .lock()
             .expect("configured config lock poisoned");
@@ -436,13 +438,13 @@ pub fn bootstrap_set(name: &str, value: &str) -> Result<(), crate::Error> {
     Ok(())
 }
 
-pub fn save_bootstrap(path: &Path) -> Result<(), crate::Error> {
+pub fn save_bootstrap() -> Result<(), crate::Error> {
     let pending = bootstrap_dirty()
         .lock()
         .expect("bootstrap config lock poisoned")
         .clone();
     for (name, value) in pending {
-        update_parameter(path, &name, Some(&value))?;
+        update_parameter(&name, Some(&value))?;
         bootstrap_dirty()
             .lock()
             .expect("bootstrap config lock poisoned")
@@ -451,7 +453,7 @@ pub fn save_bootstrap(path: &Path) -> Result<(), crate::Error> {
     Ok(())
 }
 
-pub fn update_internal_state(path: &Path, name: &str, value: &str) -> Result<(), crate::Error> {
+pub fn update_internal_state(name: &str, value: &str) -> Result<(), crate::Error> {
     let state = INTERNAL_STATE
         .iter()
         .find(|state| state.name.eq_ignore_ascii_case(name))
@@ -462,7 +464,6 @@ pub fn update_internal_state(path: &Path, name: &str, value: &str) -> Result<(),
     };
     validate_entry(&entry)?;
     crate::update_with_commit(
-        path,
         state.name,
         Some(value),
         || Ok(()),
@@ -482,9 +483,9 @@ pub fn update_internal_state(path: &Path, name: &str, value: &str) -> Result<(),
     )
 }
 
-pub fn load_active(path: &Path, startup: bool) -> Result<(), crate::Error> {
+pub fn load_active(startup: bool) -> Result<(), crate::Error> {
     let _guard = crate::lock_writers()?;
-    let entries = crate::load(path)?;
+    let entries = crate::load()?;
     for entry in &entries {
         validate_entry(entry)?;
     }
