@@ -527,7 +527,7 @@ seekdb_semantic_unity_cc_library(
         "//src/oblib:oblib_compression",
         "//src/oblib:oblib_foundation",
         "//src/oblib:oblib_mysql_client_domain",
-        "//rust:config_bridge_headers",
+        "//rust:config_headers",
     ],
     implementation_deps = [
         "//rust:local",
@@ -1755,7 +1755,7 @@ seekdb_semantic_unity_cc_library(
     ),
     implementation_deps = [
         ":_share_implementation_headers",
-        "//rust:config_bridge_headers",
+        "//rust:config_headers",
     ] + _SHARE_RUNTIME_COMPILE_DEPS,
     features = ["layering_check"],
     tags = ["manual"],

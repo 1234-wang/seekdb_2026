@@ -33,9 +33,3 @@ cargo_workspace(
         allow_empty = True,
     ),
 )
-
-alias(
-    name = "config_bridge_headers",
-    actual = ":config_headers",
-    visibility = ["//visibility:public"],
-)

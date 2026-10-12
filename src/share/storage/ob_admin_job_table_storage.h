@@ -31,12 +31,12 @@ enum Column : uint32_t { JobId, GmtCreate, GmtModified, JobType, JobStatus, Resu
 inline const local::Schema &schema()
 {
   static const auto schema = local_schema(5, {
-    {"job_id", local::Kind::Integer, false},
-    {"gmt_create", local::Kind::Integer, true},
-    {"gmt_modified", local::Kind::Integer, true},
-    {"job_type", local::Kind::Text, false},
-    {"job_status", local::Kind::Text, false},
-    {"result_code", local::Kind::Integer, true},
+    {local::Kind::Integer, false}, // job_id
+    {local::Kind::Integer, true}, // gmt_create
+    {local::Kind::Integer, true}, // gmt_modified
+    {local::Kind::Text, false}, // job_type
+    {local::Kind::Text, false}, // job_status
+    {local::Kind::Integer, true}, // result_code
   }, {JobId}, {});
   return schema;
 }

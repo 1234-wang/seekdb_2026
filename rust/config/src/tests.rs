@@ -62,7 +62,6 @@ fn raw_put(store: &kv::Store, name: &str, value: &[u8]) {
 fn updates_survive_close_reopen_and_reset_removes_only_its_key() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
     let mut directory = TestDirectory::new();
-    let path = directory.storage_path();
     assert!(load(directory.store()).unwrap().is_empty());
     crate::config::update_parameter(directory.store(), "cpu_count", Some("4")).unwrap();
     crate::config::update_parameter(directory.store(), "data_dir", Some("quote' and slash\\"))
@@ -78,6 +77,7 @@ fn updates_survive_close_reopen_and_reset_removes_only_its_key() {
     assert_eq!(entries[0].name, "data_dir");
     #[cfg(unix)]
     {
+        let path = directory.storage_path();
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(
             fs::metadata(path.join("data"))

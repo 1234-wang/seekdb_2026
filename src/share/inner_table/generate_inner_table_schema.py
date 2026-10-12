@@ -101,7 +101,6 @@ all_def_keywords = OrderedDict()
 all_agent_virtual_tables = []
 all_iterate_virtual_tables = []
 all_iterate_private_virtual_tables = []
-all_local_tables = []
 all_local_virtual_tables = []
 cluster_private_tables = []
 core_related_tables = []
@@ -1489,7 +1488,6 @@ def generate_unified_local_virtual_table_cpp():
     for kw in all_local_virtual_tables:
       table_name = kw['table_name']
       base_table_name = kw['base_def_keywords']['table_name']
-      local_db_pool = kw.get('local_db_pool', 'GCTX.local_store_')
       
       class_name_parts = table_name.replace('__all_virtual_', '').split('_')
       class_name = 'ObAllVirtual' + ''.join([x.capitalize() for x in class_name_parts])
@@ -1498,15 +1496,14 @@ def generate_unified_local_virtual_table_cpp():
       rowkey_columns = kw.get('rowkey_columns', [])
       # local metadata virtual table columns should match the base table exactly, no additional columns (e.g., gm_columns)
       all_columns = [col[0] for col in rowkey_columns] + [col[0] for col in columns]
-      select_columns = ', '.join(all_columns)
       
       # Generate implementation for a single class (reuse original logic)
-      generate_single_local_virtual_table_impl(f, table_name, class_name, base_table_name, local_db_pool, kw, all_columns, select_columns)
+      generate_single_local_virtual_table_impl(f, class_name, base_table_name, kw, all_columns)
     
     f.write('} // namespace observer\n')
     f.write('} // namespace oceanbase\n')
 
-def generate_single_local_virtual_table_impl(f, table_name, class_name, base_table_name, local_db_pool, kw, all_columns, select_columns):
+def generate_single_local_virtual_table_impl(f, class_name, base_table_name, kw, all_columns):
   """
   Generate implementation code for a single local metadata virtual table
   """
@@ -1594,7 +1591,7 @@ def generate_single_local_virtual_table_impl(f, table_name, class_name, base_tab
     f.write('int {0}::inner_open()\n'.format(class_name))
     f.write('{\n')
     f.write('  int ret = OB_SUCCESS;\n\n')
-    f.write('  LocalConnectionGuard guard({0});\n'.format(local_db_pool))
+    f.write('  LocalConnectionGuard guard(GCTX.local_store_);\n')
     f.write('  if (!guard) {\n')
     f.write('    ret = OB_ERR_UNEXPECTED;\n')
     f.write('    SERVER_LOG(WARN, "local store is not initialized", K(ret));\n')
@@ -1907,7 +1904,6 @@ def gen_local_table_def(table_name, columns, primary_key):
   Returns:
   - local metadata table definition keywords (registered to all_def_keywords)
   """
-  global all_local_tables
   global all_def_keywords
   
   # Convert column definitions: local metadata type → OceanBase type
@@ -1957,9 +1953,8 @@ def gen_local_table_def(table_name, columns, primary_key):
     'gm_columns': [],  # local metadata tables usually don't have gmt_create/gmt_modified
     'in_runtime_space': False,  # local metadata table is system-only.
     'is_cluster_private': True,  # local metadata table is cluster private
-    # Save original local metadata definition for generating CREATE TABLE
+    # Retain storage types for virtual-table row conversion.
     '_local_columns': columns,
-    '_local_primary_key': primary_key,
   }
   
   # Register to all_def_keywords
@@ -1992,10 +1987,6 @@ def gen_local_virtual_table_def(table_id, table_name, keywords):
   # Remove internal fields, these should not be passed to def_table_schema()
   if '_local_columns' in kw:
     del kw['_local_columns']
-  if '_local_primary_key' in kw:
-    del kw['_local_primary_key']
-  if 'local_db_pool' in kw:
-    del kw['local_db_pool']
   
   # Convert to virtual table type
   kw['table_type'] = 'VIRTUAL_TABLE'
@@ -2028,15 +2019,8 @@ def gen_local_virtual_table_def(table_id, table_name, keywords):
   # Set owner
   kw['owner'] = 'nijia.nj'
   
-  # Save local metadata related information (for subsequent code generation, but not passed to def_table_schema)
-  local_db_pool = 'GCTX.local_store_'
-  
-  # Save to all_local_virtual_tables (includes local_db_pool for code generation)
-  save_kw = copy.deepcopy(kw)
-  save_kw['local_db_pool'] = local_db_pool
-  all_local_virtual_tables.append(save_kw)
-  
-  # Returned kw does not include local_db_pool, as def_table_schema doesn't need this field
+  all_local_virtual_tables.append(copy.deepcopy(kw))
+
   return kw
 
 

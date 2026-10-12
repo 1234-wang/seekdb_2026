@@ -31,14 +31,14 @@ enum Column : uint32_t { GmtCreate, GmtModified, TabletId, CompactionScn, DataSi
 inline const local::Schema &schema()
 {
   static const auto schema = local_schema(3, {
-    {"gmt_create", local::Kind::Integer, true},
-    {"gmt_modified", local::Kind::Integer, true},
-    {"tablet_id", local::Kind::Integer, false},
-    {"compaction_scn", local::Kind::Integer, false},
-    {"data_size", local::Kind::Integer, false},
-    {"required_size", local::Kind::Integer, false},
-    {"report_scn", local::Kind::Integer, false},
-    {"status", local::Kind::Integer, false},
+    {local::Kind::Integer, true}, // gmt_create
+    {local::Kind::Integer, true}, // gmt_modified
+    {local::Kind::Integer, false}, // tablet_id
+    {local::Kind::Integer, false}, // compaction_scn
+    {local::Kind::Integer, false}, // data_size
+    {local::Kind::Integer, false}, // required_size
+    {local::Kind::Integer, false}, // report_scn
+    {local::Kind::Integer, false}, // status
   }, {TabletId}, {CompactionScn});
   return schema;
 }

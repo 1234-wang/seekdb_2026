@@ -33,13 +33,13 @@ enum Column : uint32_t { TabletId, CompactionScn, RowCount, DataChecksum, Column
 inline const local::Schema &schema()
 {
   static const auto schema = local_schema(4, {
-    {"tablet_id", local::Kind::Integer, false},
-    {"compaction_scn", local::Kind::Integer, false},
-    {"row_count", local::Kind::Integer, false},
-    {"data_checksum", local::Kind::Integer, false},
-    {"column_checksums", local::Kind::Text, true},
-    {"b_column_checksums", local::Kind::Blob, true},
-    {"data_checksum_type", local::Kind::Integer, false},
+    {local::Kind::Integer, false}, // tablet_id
+    {local::Kind::Integer, false}, // compaction_scn
+    {local::Kind::Integer, false}, // row_count
+    {local::Kind::Integer, false}, // data_checksum
+    {local::Kind::Text, true}, // column_checksums
+    {local::Kind::Blob, true}, // b_column_checksums
+    {local::Kind::Integer, false}, // data_checksum_type
   }, {TabletId}, {});
   return schema;
 }

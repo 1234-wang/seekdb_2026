@@ -68,7 +68,6 @@ pub mod ffi {
     }
     #[derive(Clone)]
     struct Column {
-        name: String,
         kind: Kind,
         nullable: bool,
     }

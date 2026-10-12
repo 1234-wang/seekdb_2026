@@ -33,7 +33,7 @@ def main():
     exports = json.loads((workspace / "exports.json").read_text())
     output = Path(args.output).resolve()
     target_dir = Path(args.target_dir).resolve()
-    command = [args.cargo, "build", "--locked", "--workspace", "--profile", args.profile,
+    command = [args.cargo, "build", "--workspace", "--profile", args.profile,
                "--manifest-path", str(workspace / "Cargo.toml"),
                "--target-dir", str(target_dir), "--message-format=json-render-diagnostics"]
     if args.target:

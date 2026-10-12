@@ -32,15 +32,15 @@ enum Column : uint32_t { FrozenScn, IndexType, DataTableId, IndexTableId, DataTa
 inline const local::Schema &schema()
 {
   static const auto schema = local_schema(1, {
-    {"frozen_scn", local::Kind::Integer, false},
-    {"index_type", local::Kind::Integer, false},
-    {"data_table_id", local::Kind::Integer, false},
-    {"index_table_id", local::Kind::Integer, false},
-    {"data_tablet_id", local::Kind::Integer, false},
-    {"index_tablet_id", local::Kind::Integer, false},
-    {"column_id", local::Kind::Integer, false},
-    {"data_column_checksum", local::Kind::Integer, false},
-    {"index_column_checksum", local::Kind::Integer, false},
+    {local::Kind::Integer, false}, // frozen_scn
+    {local::Kind::Integer, false}, // index_type
+    {local::Kind::Integer, false}, // data_table_id
+    {local::Kind::Integer, false}, // index_table_id
+    {local::Kind::Integer, false}, // data_tablet_id
+    {local::Kind::Integer, false}, // index_tablet_id
+    {local::Kind::Integer, false}, // column_id
+    {local::Kind::Integer, false}, // data_column_checksum
+    {local::Kind::Integer, false}, // index_column_checksum
   }, {FrozenScn, IndexType, DataTableId, IndexTableId, DataTabletId, IndexTabletId}, {});
   return schema;
 }
