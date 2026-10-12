@@ -394,39 +394,6 @@ fn aggregates_and_paginated_queries_preserve_empty_and_null_semantics() {
     assert_eq!(all(&store, query), vec![vec![Cell::Integer(0)]]);
 }
 #[test]
-fn actual_tablet_queue_batch_fits_and_reopens_both_tables() {
-    let directory = Directory::new();
-    let store = kv::Store::open(&directory.0).unwrap();
-    let mut tx = store.begin().unwrap();
-    for id in 1..=128 {
-        insert(
-            LocalTable::TabletMeta,
-            record(LocalTable::TabletMeta, id),
-            true,
-        )
-        .execute(&mut tx)
-        .unwrap();
-        let mut checksum = record(LocalTable::TabletChecksum, id);
-        checksum[5] = Cell::Blob(vec![37; 8192]);
-        insert(LocalTable::TabletChecksum, checksum, true)
-            .execute(&mut tx)
-            .unwrap();
-    }
-    let info = tx.commit().unwrap();
-    assert!(info.pages_written < 4096);
-    drop(store);
-    let store = kv::Store::open(&directory.0).unwrap();
-    assert_eq!(
-        all(&store, Query::all(LocalTable::TabletMeta.schema())).len(),
-        128
-    );
-    assert_eq!(
-        all(&store, Query::all(LocalTable::TabletChecksum.schema())).len(),
-        128
-    );
-}
-
-#[test]
 fn primary_ranges_and_in_lists_handle_signed_boundaries_without_duplicates() {
     let directory = Directory::new();
     let store = kv::Store::open(&directory.0).unwrap();

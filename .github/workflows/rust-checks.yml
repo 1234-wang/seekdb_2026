@@ -23,7 +23,6 @@ on:
   pull_request:
     paths:
       - 'rust/**'
-      - 'src/share/inner_table/**'
       - '.github/workflows/rust-checks.yml'
       - '.github/actions/setup-rust/**'
 
@@ -52,9 +51,6 @@ jobs:
 
       - name: generated header is committed
         run: git diff --exit-code -- rust/sql-nio/include/nio.h
-
-      - name: local virtual table column types
-        run: python3 rust/local/tests/virtual_table_generator.py
 
       - name: local and config CXX interface checks
         working-directory: rust

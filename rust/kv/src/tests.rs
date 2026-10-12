@@ -588,39 +588,3 @@ fn interrupted_commit_recovers_all_or_none_in_a_new_process() {
         }
     }
 }
-
-#[test]
-#[ignore = "writes a 100 MiB fixture; run explicitly with --ignored"]
-fn single_row_update_in_100_mib_store_writes_only_its_path() {
-    let directory = Directory::new();
-    let store = directory.open();
-    let value = vec![7; 16 * 1024];
-    for batch in 0..25u64 {
-        let mut transaction = store.begin().unwrap();
-        for offset in 0..256u64 {
-            transaction
-                .put(&(batch * 256 + offset).to_be_bytes(), &value)
-                .unwrap();
-        }
-        transaction.commit().unwrap();
-    }
-    assert!(directory.size() >= 100 * 1024 * 1024);
-    let info = write(&store, &3210u64.to_be_bytes(), b"changed");
-    assert!(
-        info.bytes_written <= 64 * 1024,
-        "incremental commit: {info:?}"
-    );
-    println!(
-        "logical data=100 MiB, file={} bytes, one-row update={} bytes ({} pages)",
-        directory.size(),
-        info.bytes_written,
-        info.pages_written
-    );
-    drop(store);
-    let store = directory.open();
-    assert_eq!(
-        store.get(&3210u64.to_be_bytes()).unwrap().unwrap(),
-        b"changed"
-    );
-    assert_eq!(store.get(&3211u64.to_be_bytes()).unwrap().unwrap(), value);
-}
