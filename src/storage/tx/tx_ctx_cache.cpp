@@ -69,18 +69,6 @@ void TxCtxCache::close(TxCtxCache *&cache)
   }
 }
 
-ObTxCtx *TxCtxCache::alloc(TxCtxCache *cache)
-{
-  ObTxCtx *ctx = nullptr;
-  if (nullptr != cache) {
-    ctx = cache->alloc();
-  } else {
-    Node *node = alloc_node(nullptr);
-    ctx = nullptr == node ? nullptr : node_to_ctx(node);
-  }
-  return ctx;
-}
-
 void TxCtxCache::free(ObTxCtx *ctx)
 {
   if (nullptr != ctx) {

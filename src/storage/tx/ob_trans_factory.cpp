@@ -104,7 +104,12 @@ ObTxCtx *ObTxCtxFactory::alloc(TxCtxCache *cache, const bool use_session_cache)
       cache = static_cast<TxCtxCache *>(
           query::ObSessionAccess::get_tx_ctx_cache(session, true));
     }
-    ctx = TxCtxCache::alloc(cache);
+    if (nullptr != cache) {
+      ctx = cache->alloc();
+    } else {
+      TxCtxCache::Node *node = TxCtxCache::alloc_node(nullptr);
+      ctx = nullptr == node ? nullptr : TxCtxCache::node_to_ctx(node);
+    }
   }
   if (NULL != ctx) {
     (void)ATOMIC_FAA(&active_tx_ctx_count_, 1);

@@ -33,13 +33,14 @@ class ObTxCtx;
 // small control block alive and are deleted instead of cached after close().
 class TxCtxCache
 {
+  friend class ObTxCtxFactory;
+
 public:
   static const int64_t SESSION_MAX_FREE_COUNT = 1;
   static const int64_t REPLAY_MAX_FREE_COUNT = 64;
 
   static TxCtxCache *create(int64_t max_free_count);
   static void close(TxCtxCache *&cache);
-  static ObTxCtx *alloc(TxCtxCache *cache);
   static void free(ObTxCtx *ctx);
 
   int64_t get_hit_count() const;
