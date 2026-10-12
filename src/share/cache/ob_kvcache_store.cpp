@@ -165,9 +165,21 @@ void ObKVCacheStore::destroy()
   }
 
   if (NULL != mb_handles_) {
+    // destroy() is called after all KV cache users have stopped.  Retired
+    // handles can still own their backing blocks when the last reclaim pass
+    // observed a hazard pointer.  Detach the retire list before releasing the
+    // handle array, then release every remaining backing block exactly once.
+    HazardDomain::get_instance().reset_retire_list();
     for (int64_t i = 0; i < max_mb_num_; ++i) {
-      if (FREE != mb_handles_[i].status_) {
-        free_mb(mb_handles_[i].mem_block_);
+      if (NULL != mb_handles_[i].mem_block_) {
+        void *buf = NULL;
+        int64_t mb_size = 0;
+        if (OB_FAIL(do_wash_mb(&mb_handles_[i], buf, mb_size))) {
+          COMMON_LOG(ERROR, "failed to release KV cache memblock during destroy",
+              K(ret), K(i), KP(mb_handles_[i].mem_block_));
+        } else {
+          free_mb(buf);
+        }
       }
     }
     // free all mb handles cached by threads

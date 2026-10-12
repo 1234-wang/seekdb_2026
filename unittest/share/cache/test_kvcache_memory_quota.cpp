@@ -17,8 +17,11 @@
 #include "gtest/gtest.h"
 #include "lib/ob_errno.h"
 #include "share/cache/ob_kvcache_store.h"
+#include "share/cache/ob_kvcache_hazard_domain.h"
 
 using oceanbase::common::MemoryQuotaSample;
+using oceanbase::common::HazardDomain;
+using oceanbase::common::HazptrHolder;
 using oceanbase::common::ObKVCacheStore;
 using oceanbase::common::ObKVMemBlockHandle;
 using oceanbase::common::OB_ALLOCATE_MEMORY_FAILED;
@@ -86,4 +89,39 @@ TEST(TestKVCacheMemoryQuota, real_store_pressure_shrink_free_and_destroy)
   EXPECT_EQ(0, destroyed.limit_bytes_);
   EXPECT_EQ(0, destroyed.committed_bytes_);
   EXPECT_EQ(0, destroyed.reserved_bytes_);
+}
+
+TEST(TestKVCacheMemoryQuota, destroy_drains_hazard_protected_retired_block)
+{
+  static const int64_t BLOCK_SIZE = 64L << 10;
+  static const int64_t MAX_CACHE_SIZE = 8 * BLOCK_SIZE;
+
+  for (int64_t round = 0; round < 2; ++round) {
+    ObKVCacheStore store;
+    ASSERT_EQ(OB_SUCCESS, store.init(MAX_CACHE_SIZE, BLOCK_SIZE,
+                                    4 * BLOCK_SIZE));
+
+    ObKVMemBlockHandle *handle = nullptr;
+    ASSERT_EQ(OB_SUCCESS, store.alloc_mbhandle(handle));
+    ASSERT_NE(nullptr, handle);
+    const int64_t committed = store.get_memory_quota_sample().committed_bytes_;
+    ASSERT_GT(committed, 0);
+
+    HazptrHolder holder;
+    bool protected_successfully = false;
+    ASSERT_EQ(OB_SUCCESS, holder.protect(protected_successfully, handle));
+    ASSERT_TRUE(protected_successfully);
+    ASSERT_EQ(OB_SUCCESS, store.free(handle));
+    EXPECT_FALSE(store.wash());
+    EXPECT_EQ(committed, store.get_memory_quota_sample().committed_bytes_);
+    EXPECT_GT(HazardDomain::get_instance().get_retired_memory_size(), 0);
+
+    holder.release();
+    store.destroy();
+    EXPECT_EQ(0, HazardDomain::get_instance().get_retired_memory_size());
+    const MemoryQuotaSample destroyed = store.get_memory_quota_sample();
+    EXPECT_EQ(0, destroyed.limit_bytes_);
+    EXPECT_EQ(0, destroyed.committed_bytes_);
+    EXPECT_EQ(0, destroyed.reserved_bytes_);
+  }
 }
