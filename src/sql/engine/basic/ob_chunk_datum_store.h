@@ -935,19 +935,19 @@ public:
   struct DisableDumpGuard
   {
     DisableDumpGuard(ObChunkDatumStore &store)
-        : store_(store), memory_limit_(store_.mem_limit_)
+        : store_(store)
     {
-      store_.mem_limit_ = 0;
+      ++store_.dump_suspend_depth_;
     }
 
     ~DisableDumpGuard()
     {
-      store_.mem_limit_ = memory_limit_;
+      OB_ASSERT(store_.dump_suspend_depth_ > 0);
+      --store_.dump_suspend_depth_;
     }
 
   private:
     ObChunkDatumStore &store_;
-    int64_t memory_limit_ = 0;
   };
 
 public:
@@ -1150,6 +1150,7 @@ private:
   const char *label_;
   int64_t ctx_id_;
   int64_t mem_limit_;
+  int64_t dump_suspend_depth_;
 
   Block* cur_blk_;
   BlockBuffer* cur_blk_buffer_;

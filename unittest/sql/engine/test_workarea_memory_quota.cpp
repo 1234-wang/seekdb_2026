@@ -11,6 +11,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_ra_datum_store.h"
 #include "sql/engine/basic/ob_workarea_memory_limit.h"
+#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_sql_memory_manager.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "share/rc/ob_server_runtime.h"
@@ -248,6 +249,59 @@ private:
   bool armed_;
   bool triggered_;
 };
+
+std::string batch_value(const int64_t index)
+{
+  return "datum-" + std::to_string(index) + "-payload";
+}
+
+int add_string_vectorized_batch(ObChunkDatumStore &store,
+                                ObIAllocator &allocator,
+                                const int64_t batch_size,
+                                std::vector<ObChunkDatumStore::StoredRow *> &rows)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext exec_ctx(allocator);
+  ObEvalCtx eval_ctx(exec_ctx);
+  eval_ctx.set_max_batch_size(batch_size);
+
+  ObExpr expr;
+  expr.datum_meta_.type_ = ObVarcharType;
+  expr.batch_result_ = true;
+  expr.frame_idx_ = 0;
+  expr.datum_off_ = 0;
+  expr.eval_info_off_ = sizeof(ObDatum) * batch_size;
+  const int64_t frame_size = expr.eval_info_off_ + sizeof(ObEvalInfo);
+  std::vector<uint64_t> frame_words(
+      (frame_size + sizeof(uint64_t) - 1) / sizeof(uint64_t), 0);
+  char *frame = reinterpret_cast<char *>(frame_words.data());
+  std::vector<std::string> payloads(batch_size);
+  for (int64_t i = 0; i < batch_size; ++i) {
+    payloads[i] = batch_value(i);
+    ObDatum *datum = new (frame + sizeof(ObDatum) * i) ObDatum();
+    datum->set_string(payloads[i].data(), payloads[i].size());
+  }
+  ObEvalInfo *eval_info = new (frame + expr.eval_info_off_) ObEvalInfo();
+  eval_info->projected_ = true;
+  char *frames[] = {frame};
+  exec_ctx.set_frames(frames);
+  eval_ctx.frames_ = frames;
+  ObSEArray<ObExpr *, 1> exprs;
+  if (OB_FAIL(exprs.push_back(&expr))) {
+    return ret;
+  }
+  std::vector<char> skip_mem(ObBitVector::memory_size(batch_size), 0);
+  ObBitVector *skip = to_bit_vector(skip_mem.data());
+  skip->reset(batch_size);
+  std::vector<uint16_t> selector(batch_size);
+  rows.resize(batch_size, nullptr);
+  for (int64_t i = 0; i < batch_size; ++i) {
+    selector[i] = static_cast<uint16_t>(i);
+  }
+  ret = store.add_batch(exprs, eval_ctx, *skip, batch_size,
+                        selector.data(), batch_size, rows.data());
+  return ret;
+}
 
 class TestRADatumStore final : public ObRADatumStore
 {
@@ -555,6 +609,89 @@ TEST(TestWorkareaMemoryQuota,
     ASSERT_EQ(OB_SUCCESS, first_store.finish_add_row(false));
   }
 
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+}
+
+TEST(TestWorkareaMemoryQuota,
+     vectorized_batch_suspends_dump_across_block_switch_and_quota_reject)
+{
+  MemoryQuota quota;
+  TestWorkareaQuotaResolverGuard quota_resolver_guard(quota);
+  DefaultPageAllocator backing_allocator(
+      ObMemAttr("WABatchBacking", ObCtxIds::WORK_AREA));
+  ShrinkQuotaOnNextAllocation shrinking_allocator(backing_allocator, quota);
+  TrackedAllocator quota_allocator(
+      shrinking_allocator, nullptr, &quota,
+      ObMemAttr("WABatchQuota", ObCtxIds::WORK_AREA));
+  const int64_t batch_size = 1024;
+
+  quota.set_limit(1L << 20);
+  {
+    DefaultBackedChunkDatumStore store("WABatchOK");
+    ASSERT_EQ(OB_SUCCESS,
+              store.init(0, ObCtxIds::WORK_AREA, "WABatchOK",
+                         true, 0, ObChunkDatumStore::MIN_BLOCK_SIZE));
+    std::vector<ObChunkDatumStore::StoredRow *> rows;
+    ASSERT_EQ(OB_SUCCESS,
+              add_string_vectorized_batch(store, backing_allocator,
+                                          batch_size, rows));
+    ASSERT_GT(store.get_block_cnt(), 1);
+    for (int64_t i = 0; i < batch_size; ++i) {
+      ASSERT_NE(nullptr, rows[i]);
+      EXPECT_EQ(1, rows[i]->cnt_);
+      const std::string expected = batch_value(i);
+      EXPECT_EQ(ObString(expected.length(), expected.data()),
+                rows[i]->cells()[0].get_string());
+    }
+    ObChunkDatumStore::Iterator iterator;
+    ASSERT_EQ(OB_SUCCESS, store.begin(iterator));
+    const ObChunkDatumStore::StoredRow *row = nullptr;
+    for (int64_t i = 0; i < batch_size; ++i) {
+      ASSERT_EQ(OB_SUCCESS, iterator.get_next_row(row));
+      EXPECT_EQ(rows[i], row);
+      EXPECT_EQ(1, row->cnt_);
+      const std::string expected = batch_value(i);
+      EXPECT_EQ(ObString(expected.length(), expected.data()),
+                row->cells()[0].get_string());
+    }
+    EXPECT_EQ(OB_ITER_END, iterator.get_next_row(row));
+  }
+
+  quota.set_limit(1L << 20);
+  {
+    ObSqlMemoryTracker tracker;
+    tracker.set_memory_quota(&quota);
+    TestChunkDatumStore store("WABatchReject", quota_allocator, tracker);
+    ASSERT_EQ(OB_SUCCESS,
+              store.init(0, ObCtxIds::WORK_AREA, "WABatchReject",
+                         true, 0, ObChunkDatumStore::MIN_BLOCK_SIZE));
+    store.set_callback(&tracker);
+    std::vector<ObChunkDatumStore::StoredRow *> seed_rows;
+    ASSERT_EQ(OB_SUCCESS,
+              add_string_vectorized_batch(store, backing_allocator, 1,
+                                          seed_rows));
+    ASSERT_EQ(1, seed_rows.size());
+    ASSERT_NE(nullptr, seed_rows[0]);
+    ObChunkDatumStore::StoredRow *seed_row = seed_rows[0];
+    const uint32_t seed_size = seed_row->row_size_;
+    const std::string seed_value = batch_value(0);
+    const int64_t reject_count = quota.reject_count();
+
+    shrinking_allocator.arm(1);
+    std::vector<ObChunkDatumStore::StoredRow *> rejected_rows;
+    EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED,
+              add_string_vectorized_batch(store, backing_allocator,
+                                          batch_size, rejected_rows));
+    EXPECT_TRUE(shrinking_allocator.triggered());
+    EXPECT_EQ(0, store.spilled_bytes());
+    EXPECT_GT(quota.reject_count(), reject_count);
+    ASSERT_NE(nullptr, seed_row);
+    EXPECT_EQ(1, seed_row->cnt_);
+    EXPECT_EQ(seed_size, seed_row->row_size_);
+    EXPECT_EQ(ObString(seed_value.length(), seed_value.data()),
+              seed_row->cells()[0].get_string());
+  }
   EXPECT_EQ(0, quota.committed());
   EXPECT_EQ(0, quota.reserved());
 }

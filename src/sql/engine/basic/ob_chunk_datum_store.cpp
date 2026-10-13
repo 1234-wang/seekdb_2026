@@ -469,7 +469,8 @@ int ObChunkDatumStore::Block::swizzling(int64_t *col_cnt)
 
 ObChunkDatumStore::ObChunkDatumStore(const lib::ObLabel &label, common::ObIAllocator *alloc /* = NULL */)
   : inited_(false), label_(label),
-    ctx_id_(0), mem_limit_(0), cur_blk_(NULL), cur_blk_buffer_(nullptr),
+    ctx_id_(0), mem_limit_(0), dump_suspend_depth_(0),
+    cur_blk_(NULL), cur_blk_buffer_(nullptr),
     max_blk_size_(0), min_blk_size_(INT64_MAX),
     default_block_size_(BLOCK_SIZE),
     n_blocks_(0), row_cnt_(0), col_count_(-1),
@@ -877,7 +878,8 @@ int ObChunkDatumStore::switch_block(const int64_t min_size)
         // A concurrent store can consume the shared quota after need_dump()
         // samples it.  Spill one local block and retry once before allowing
         // the shared-quota rejection to escape to the SQL operator.
-        if (should_retry_workarea_allocation(ret, ctx_id_, enable_dump_)
+        if (0 == dump_suspend_depth_
+            && should_retry_workarea_allocation(ret, ctx_id_, enable_dump_)
             && !blocks_.is_empty()) {
           ret = OB_SUCCESS;
           const bool dump_last_block = 1 == blocks_.get_size();
@@ -1940,7 +1942,7 @@ int ObChunkDatumStore::aio_read_file(
 bool ObChunkDatumStore::need_dump(int64_t extra_size)
 {
   bool dump = false;
-  if (!config::enable_sql_operator_dump()) {
+  if (dump_suspend_depth_ > 0 || !config::enable_sql_operator_dump()) {
     // no dump
   } else {
     dump = should_spill_workarea(mem_limit_, mem_used_, extra_size);
