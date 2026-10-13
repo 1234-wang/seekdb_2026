@@ -1,6 +1,5 @@
 /* Copyright (c) 2026 OceanBase. Licensed under the Apache License, Version 2.0. */
-#ifndef SEEKDB_ENGINE_H
-#define SEEKDB_ENGINE_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,5 +35,4 @@ int seekdb_engine_close(SeekdbEngineHandle engine);
 
 #ifdef __cplusplus
 }
-#endif
 #endif
