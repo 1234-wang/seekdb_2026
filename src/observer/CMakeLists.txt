@@ -199,18 +199,3 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_subdirectory(ios/driver)
   endif()
 endif()
-
-# Export a self-contained archive and a source-tree-independent public header.
-# This GNU/LLVM-ar packaging path currently targets native Linux Makefile builds.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_GENERATOR MATCHES "Makefiles")
-  add_custom_target(seekdb_engine_sdk
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/cmake/package_engine_sdk.py"
-      --link-command "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/seekdb.dir/link.txt"
-      --ar "${CMAKE_AR}"
-      --header "${CMAKE_CURRENT_SOURCE_DIR}/include/seekdb_engine.h"
-      --output "${CMAKE_BINARY_DIR}/engine-sdk"
-    DEPENDS seekdb
-    VERBATIM)
-  install(DIRECTORY "${CMAKE_BINARY_DIR}/engine-sdk/"
-    DESTINATION . COMPONENT engine-sdk EXCLUDE_FROM_ALL)
-endif()
