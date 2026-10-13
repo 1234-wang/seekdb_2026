@@ -48,7 +48,7 @@
 #include "storage/compaction/ob_compaction_progress.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h" // ObSSTableMergeInfoMgr
@@ -319,7 +319,6 @@ int ObServerRuntimeController::activate_runtime(const ObServerRuntimeConfig &run
       new_super_block = runtime->get_super_block();
       new_super_block.is_hidden_ = false;
       if (OB_FAIL(update_server_resources_no_lock(runtime_config))) {
-      } else if (OB_FAIL(SERVER_STORAGE_META_PERSISTER.update_runtime_super_block(new_super_block))) {
       } else {
         runtime->set_server_super_block(new_super_block);
       }
@@ -465,7 +464,7 @@ int ObServerRuntimeController::update_server_resources_no_lock(const ObServerRun
                                                    allowed_runtime_config))) {
   } else if (FALSE_IT(need_persist_config = !(old_runtime_config == allowed_runtime_config))) {
   } else if (need_persist_config
-             && OB_FAIL(SERVER_STORAGE_META_PERSISTER.update_server_resources(allowed_runtime_config))) {
+             && OB_FAIL(STORAGE_META_SERVICE.write_resources(allowed_runtime_config))) {
   } else {
     if (runtime->min_cpu() != min_cpu) {
       runtime->set_min_cpu(min_cpu);
@@ -674,17 +673,40 @@ int ObServerRuntimeController::get_server_log_disk_size(int64_t &log_disk_size)
   return ret;
 }
 
-int ObServerRuntimeController::get_runtime_meta_for_ckpt(ObServerRuntimeMeta &meta, bool &exist)
+int ObServerRuntimeController::capture_checkpoint(
+    storage::ObStorageLogger &logger, ObServerRuntimeMeta &meta, common::ObLogCursor &cursor)
 {
   int ret = OB_SUCCESS;
-  // The runtime pointer is stable between startup and shutdown.
-  exist = false;
+  // A resource slog written before the cursor must also be reflected in the snapshot.
+  lib::ObMutexGuard guard(resource_conf_lock_);
   if (OB_ISNULL(runtime_) || !runtime_active_) {
+    ret = OB_SERVER_RUNTIME_NOT_READY;
+  } else if (OB_FAIL(logger.get_active_cursor(cursor))) {
   } else {
     meta = runtime_->get_runtime_meta();
-    exist = true;
   }
+  return ret;
+}
 
+int ObServerRuntimeController::replay_server_resources(const ObServerRuntimeConfig &config)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(resource_conf_lock_);
+  ObLogService *log_service = share::server_service<ObLogService>();
+  if (OB_ISNULL(runtime_) || OB_ISNULL(log_service)) {
+    ret = OB_SERVER_RUNTIME_NOT_READY;
+  } else if (!config.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(config.resource_config_.log_disk_size()))) {
+  } else {
+    runtime_->set_min_cpu(config.resource_config_.min_cpu());
+    runtime_->set_max_cpu(config.resource_config_.max_cpu());
+    runtime_->set_memory_size(config.resource_config_.memory_size());
+    set_req_chunkmgr_parallel(ObCtxIds::DEFAULT_CTX_ID, config.resource_config_.min_cpu() * 8);
+    runtime_->set_server_resources(config);
+    if (OB_FAIL(modify_server_io(config.resource_config_))) {
+    }
+  }
   return ret;
 }
 
@@ -899,7 +921,7 @@ int ObServerRuntimeController::refresh_server_config_()
   int ret = OB_SUCCESS;
   ObServerRuntimeConfig runtime_config;
   ObCurTraceId::init(GCTX.self_addr());
-  if (!SERVER_STORAGE_META_SERVICE.is_started()) {
+  if (!STORAGE_META_SERVICE.is_started()) {
     // do nothing if not finish replaying slog
     LOG_INFO("server slog not finish replaying, need wait");
     ret = OB_NEED_RETRY;

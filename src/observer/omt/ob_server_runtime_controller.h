@@ -68,7 +68,9 @@ public:
 
   int get_server_resources(share::ObServerRuntimeConfig &runtime_config);
   int get_server_log_disk_size(int64_t &log_disk_size) override;
-  int get_runtime_meta_for_ckpt(ObServerRuntimeMeta &meta, bool &exist) override;
+  int capture_checkpoint(storage::ObStorageLogger &logger, ObServerRuntimeMeta &meta,
+                         common::ObLogCursor &cursor) override;
+  int replay_server_resources(const share::ObServerRuntimeConfig &config) override;
   storage::ObServerRuntimeSuperBlock get_super_block() override;
   void set_server_super_block(
       const storage::ObServerRuntimeSuperBlock &super_block) override;

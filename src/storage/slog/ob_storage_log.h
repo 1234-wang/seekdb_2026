@@ -48,21 +48,6 @@ private:
   share::ObServerRuntimeConfig &runtime_config_;
 };
 
-struct ObUpdateRuntimeSuperBlockLog : public ObIBaseStorageLogEntry
-{
-public:
-  explicit ObUpdateRuntimeSuperBlockLog(ObServerRuntimeSuperBlock &super_block);
-  virtual ~ObUpdateRuntimeSuperBlockLog() {}
-  virtual bool is_valid() const override;
-
-  TO_STRING_KV(K_(super_block));
-
-  OB_UNIS_VERSION_V(1);
-
-private:
-  ObServerRuntimeSuperBlock &super_block_;
-};
-
 struct ObLSMetaLog : public ObIBaseStorageLogEntry
 {
 public:

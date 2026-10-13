@@ -261,7 +261,6 @@ ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock()
 ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock(const bool is_hidden)
   : is_hidden_(is_hidden), version_(SERVER_RUNTIME_SUPER_BLOCK_VERSION)
 {
-  SET_FIRST_VALID_SLOG_CURSOR(replay_start_point_);
   ls_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
 }
 
@@ -273,7 +272,6 @@ ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock(const ObServerRuntimeSuperB
 void ObServerRuntimeSuperBlock::reset()
 {
   
-  replay_start_point_.reset();
   ls_meta_entry_.reset();
   is_hidden_= false;
   version_ = SERVER_RUNTIME_SUPER_BLOCK_VERSION;
@@ -282,7 +280,6 @@ void ObServerRuntimeSuperBlock::reset()
 bool ObServerRuntimeSuperBlock::is_valid() const
 {
   bool is_valid = true
-                  && replay_start_point_.is_valid()
                   && ls_meta_entry_.is_valid()
                   && version_ == SERVER_RUNTIME_SUPER_BLOCK_VERSION;
   return is_valid;
@@ -314,7 +311,6 @@ int ObServerRuntimeSuperBlock::serialize_(char *buf, const int64_t buf_len, int6
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
-      replay_start_point_,
       ls_meta_entry_,
       is_hidden_);
   return ret;
@@ -349,7 +345,6 @@ int ObServerRuntimeSuperBlock::deserialize_(const char *buf, const int64_t data_
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE,
       
-      replay_start_point_,
       ls_meta_entry_,
       is_hidden_);
   return ret;
@@ -366,7 +361,6 @@ int64_t ObServerRuntimeSuperBlock::get_serialize_size_(void) const
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-      replay_start_point_,
       ls_meta_entry_,
       is_hidden_);
   return len;

@@ -16,7 +16,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "storage/slog_ckpt/ob_server_checkpoint_reader.h"
+#include "storage/slog_ckpt/runtime_checkpoint_reader.h"
 
 namespace oceanbase
 {
@@ -26,7 +26,7 @@ namespace storage
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
-int ObServerCheckpointReader::read_checkpoint(const ObServerSuperBlock &super_block)
+int RuntimeCheckpointReader::read_checkpoint(const ObServerSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!super_block.is_valid())) {
@@ -36,8 +36,7 @@ int ObServerCheckpointReader::read_checkpoint(const ObServerSuperBlock &super_bl
   return ret;
 }
 
-
-int ObServerCheckpointReader::read_runtime_meta_checkpoint(const MacroBlockId &entry_block)
+int RuntimeCheckpointReader::read_runtime_meta_checkpoint(const MacroBlockId &entry_block)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr(ObModIds::OB_CHECKPOINT);
@@ -62,7 +61,7 @@ int ObServerCheckpointReader::read_runtime_meta_checkpoint(const MacroBlockId &e
   return ret;
 }
 
-int ObServerCheckpointReader::deserialize_runtime_meta(const char *buf, const int64_t buf_len)
+int RuntimeCheckpointReader::deserialize_runtime_meta(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -80,12 +79,12 @@ int ObServerCheckpointReader::deserialize_runtime_meta(const char *buf, const in
   return ret;
 }
 
-ObIArray<MacroBlockId> &ObServerCheckpointReader::get_meta_block_list()
+ObIArray<MacroBlockId> &RuntimeCheckpointReader::get_meta_block_list()
 {
   return runtime_meta_item_reader_.get_meta_block_list();
 }
 
-int ObServerCheckpointReader::get_runtime_meta(omt::ObServerRuntimeMeta &runtime_meta, bool &is_valid)
+int RuntimeCheckpointReader::get_runtime_meta(omt::ObServerRuntimeMeta &runtime_meta, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   // A checkpoint carries at most one server runtime entry.

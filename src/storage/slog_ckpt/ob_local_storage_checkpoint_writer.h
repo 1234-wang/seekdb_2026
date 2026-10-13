@@ -29,7 +29,7 @@ namespace storage
 {
 struct ObLSCkptMember;
 
-class ObLocalStorageCheckpointSlogHandler;
+class CheckpointSlogHandler;
 
 class ObLocalStorageCheckpointWriter final
 {
@@ -40,7 +40,7 @@ public:
   ~ObLocalStorageCheckpointWriter() = default;
   ObLocalStorageCheckpointWriter(const ObLocalStorageCheckpointWriter &) = delete;
   ObLocalStorageCheckpointWriter &operator=(const ObLocalStorageCheckpointWriter &) = delete;
-  int init(ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler);
+  int init(CheckpointSlogHandler *ckpt_slog_handler);
 
   // record meta for ckpt
   int record_meta(blocksstable::MacroBlockId &ls_meta_entry);
@@ -84,7 +84,7 @@ private:
 
 private:
   bool is_inited_;
-  ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler_;
+  CheckpointSlogHandler *ckpt_slog_handler_;
   common::ObArray<TabletItemAddrInfo> tablet_item_addr_info_arr_;
   ObLinkedMacroBlockItemWriter ls_item_writer_;
   ObLinkedMacroBlockItemWriter tablet_item_writer_;

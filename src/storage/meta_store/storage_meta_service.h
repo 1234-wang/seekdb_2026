@@ -13,13 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef OCEANBASE_STORAGE_META_STORE_SERVER_STORAGE_META_SERVICE_
-#define OCEANBASE_STORAGE_META_STORE_SERVER_STORAGE_META_SERVICE_
+#pragma once
 
 #include <stdint.h>
-#include "storage/meta_store/ob_server_storage_meta_persister.h"
-#include "storage/meta_store/ob_server_storage_meta_replayer.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
+#include "storage/meta_store/ob_server_runtime_meta.h"
+#include "lib/lock/ob_tc_rwlock.h"
 #include "storage/slog/ob_storage_logger.h"
 #include "share/ob_i_local_device_space_provider.h"
 
@@ -28,49 +27,47 @@ namespace oceanbase
 namespace storage
 {
 class ObIServerRuntime;
-class ObServerStorageMetaService : public share::ObILocalDeviceSpaceProvider
+class StorageMetaService : public share::ObILocalDeviceSpaceProvider
 {
 public:
-  static ObServerStorageMetaService &get_instance();
+  static StorageMetaService &get_instance();
   int init(ObIServerRuntime &server_runtime);
   int start();
   void stop();
   void wait();
   void destroy();
-  ObServerStorageMetaPersister &get_persister() { return persister_; }
+  int write_resources(const share::ObServerRuntimeConfig &config);
   bool is_started() const { return ATOMIC_LOAD(&is_started_); }
-  
+
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   int get_reserved_size(int64_t &reserved_size) const override;
   int write_checkpoint(bool is_force);
+  ObStorageLogger &get_slogger() { return slogger_; }
+  int publish_checkpoint(const omt::ObServerRuntimeMeta &meta, const common::ObLogCursor &cursor);
 
   static constexpr int64_t SLOG_RESERVED_DISK_SIZE = 128 * 1024 * 1024L; // 128M
 
 private:
-  ObServerStorageMetaService();
-  ~ObServerStorageMetaService() = default;
-  ObServerStorageMetaService(const ObServerStorageMetaService &) = delete;
-  ObServerStorageMetaService &operator=(const ObServerStorageMetaService &) = delete;
+  StorageMetaService();
+  ~StorageMetaService() = default;
+  StorageMetaService(const StorageMetaService &) = delete;
+  StorageMetaService &operator=(const StorageMetaService &) = delete;
 
+  int recover();
   int get_using_disk_space(int64_t &using_space) const;
   int check_log_disk(const char *data_dir, const char *log_dir);
 
 private:
   bool is_inited_;
   bool is_started_;
-  ObServerStorageMetaPersister persister_;
-  ObServerStorageMetaReplayer replayer_;
-  ObStorageLogger server_slogger_;
-  ObServerCheckpointSlogHandler ckpt_slog_handler_;
+  ObStorageLogger slogger_;
+  ObIServerRuntime *server_runtime_;
+  common::TCRWLock checkpoint_lock_;
+  ObMetaBlockListHandle runtime_block_handle_;
   bool need_reserved_;
 };
 
-#define SERVER_STORAGE_META_SERVICE (oceanbase::storage::ObServerStorageMetaService::get_instance())
-#define SERVER_STORAGE_META_PERSISTER (oceanbase::storage::ObServerStorageMetaService::get_instance().get_persister())
-
-
+#define STORAGE_META_SERVICE (oceanbase::storage::StorageMetaService::get_instance())
 
 } // namespace storage
 } // namespace oceanbase
-
-#endif // OCEANBASE_STORAGE_META_STORE_SERVER_STORAGE_META_SERVICE_

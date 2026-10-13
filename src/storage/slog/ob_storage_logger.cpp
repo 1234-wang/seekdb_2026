@@ -29,8 +29,7 @@ using namespace share;
 namespace storage
 {
 ObStorageLogger::ObStorageLogger()
-  : is_inited_(false), log_writer_(nullptr),
-    local_log_writer_(), server_log_writer_(),
+  : is_inited_(false), log_writer_(),
     log_seq_(0), build_log_mutex_(common::ObLatchIds::SLOG_PROCESSING_MUTEX),
     log_file_spec_(), is_start_(false)
 {
@@ -44,8 +43,7 @@ ObStorageLogger::~ObStorageLogger()
 int ObStorageLogger::init(
     const char *root_dir,
     const int64_t max_log_file_size,
-    const blocksstable::ObLogFileSpec &log_file_spec,
-    const bool is_server)
+    const blocksstable::ObLogFileSpec &log_file_spec)
 {
   int ret = OB_SUCCESS;
   const int64_t max_log_size = NORMAL_LOG_ITEM_SIZE;
@@ -58,13 +56,7 @@ int ObStorageLogger::init(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_REDO_LOG(WARN, "invalid arguments", K(ret), KP(root_dir), K(max_log_file_size));
   } else {
-    if (is_server) {  // Server metadata uses a distinct stream to preserve replay ordering.
-      log_writer_ = &server_log_writer_;
-      pret = snprintf(slog_dir_, MAX_PATH_SIZE, "%s/server", root_dir);
-    } else {  // Local database storage metadata.
-      log_writer_ = &local_log_writer_;
-      pret = snprintf(slog_dir_, MAX_PATH_SIZE, "%s/sys", root_dir);
-    }
+    pret = snprintf(slog_dir_, MAX_PATH_SIZE, "%s", root_dir);
   }
 
   if (OB_FAIL(ret)) {
@@ -73,7 +65,7 @@ int ObStorageLogger::init(
     ret = OB_BUF_NOT_ENOUGH;
     STORAGE_REDO_LOG(ERROR, "construct storage slog path fail", K(ret));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(slog_dir_))) {
-  } else if (OB_FAIL(log_writer_->init(slog_dir_, max_log_file_size, max_log_size, log_file_spec))) {
+  } else if (OB_FAIL(log_writer_.init(slog_dir_, max_log_file_size, max_log_size, log_file_spec))) {
   } else {
     log_file_spec_ = log_file_spec;
     is_inited_ = true;
@@ -92,34 +84,28 @@ int ObStorageLogger::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_REDO_LOG(WARN, "Slogger has not been inited.");
-  } else if (OB_FAIL(log_writer_->start())) {
+  } else if (OB_FAIL(log_writer_.start())) {
   }
   return ret;
 }
 
 void ObStorageLogger::destroy()
 {
-  if (nullptr != log_writer_) {
-    log_writer_->destroy();
-    log_writer_ = nullptr;
-  }
+  log_writer_.destroy();
   MEMSET(slog_dir_, 0, sizeof(slog_dir_));
   is_inited_ = false;
+  is_start_ = false;
   log_seq_ = 0;
 }
 
 void ObStorageLogger::stop()
 {
-  if (OB_NOT_NULL(log_writer_)) {
-    log_writer_->stop();
-  }
+  log_writer_.stop();
 }
 
 void ObStorageLogger::wait()
 {
-  if (OB_NOT_NULL(log_writer_)) {
-    log_writer_->wait();
-  }
+  log_writer_.wait();
 }
 
 int ObStorageLogger::start_log(const ObLogCursor &start_cursor)
@@ -134,7 +120,7 @@ int ObStorageLogger::start_log(const ObLogCursor &start_cursor)
   } else if (OB_UNLIKELY(!start_cursor.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_REDO_LOG(WARN, "invalid arguments", K(ret), K(start_cursor));
-  } else if (OB_FAIL(log_writer_->start_log(start_cursor))) {
+  } else if (OB_FAIL(log_writer_.start_log(start_cursor))) {
   } else {
     log_seq_ = start_cursor.log_id_;
     is_start_ = true;
@@ -145,7 +131,7 @@ int ObStorageLogger::start_log(const ObLogCursor &start_cursor)
 int ObStorageLogger::get_active_cursor(ObLogCursor &log_cursor)
 {
   int ret = OB_SUCCESS;
-  log_cursor = log_writer_->get_cur_cursor();
+  log_cursor = log_writer_.get_cur_cursor();
   return ret;
 }
 
@@ -167,7 +153,7 @@ int ObStorageLogger::write_log(ObStorageLogParam &param)
       lib::ObMutexGuard guard(build_log_mutex_);
       if (OB_FAIL(build_log_item(param, log_item))) {
       } else {
-        if (OB_FAIL(log_writer_->append_log(*log_item, MAX_APPEND_WAIT_TIME_MS))) {
+        if (OB_FAIL(log_writer_.append_log(*log_item, MAX_APPEND_WAIT_TIME_MS))) {
         }
       }
     }
@@ -237,7 +223,7 @@ int ObStorageLogger::write_log(ObIArray<ObStorageLogParam> &param_arr)
       } else if (OB_ISNULL(log_item)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_REDO_LOG(WARN, "log_item shouldn't be null", K(ret));
-      } else if (OB_FAIL(log_writer_->append_log(*log_item, MAX_APPEND_WAIT_TIME_MS))) {
+      } else if (OB_FAIL(log_writer_.append_log(*log_item, MAX_APPEND_WAIT_TIME_MS))) {
       }
     }
   }
@@ -287,7 +273,7 @@ int ObStorageLogger::remove_useless_log_file(const int64_t end_file_id)
   } else if (OB_FAIL(get_start_file_id(start_file_id))) {
   } else {
     for (; OB_SUCC(ret) && start_file_id < end_file_id; ++start_file_id) {
-      if (OB_FAIL(log_writer_->delete_log_file(start_file_id))) {
+      if (OB_FAIL(log_writer_.delete_log_file(start_file_id))) {
       } else {
         STORAGE_REDO_LOG(INFO, "Success to remove useless log file, ", K(start_file_id));
       }
@@ -304,7 +290,7 @@ int ObStorageLogger::get_using_disk_space(int64_t &using_space) const
     ret = OB_NOT_INIT;
     STORAGE_REDO_LOG(WARN, "slogger has not been inited", K(ret), K(is_inited_));
   } else {
-    ret = log_writer_->get_using_disk_space(using_space);
+    ret = log_writer_.get_using_disk_space(using_space);
   }
   return ret;
 }

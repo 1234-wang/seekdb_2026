@@ -22,7 +22,7 @@
 #include "share/ls/ob_restore_status.h"
 #include "logservice/ob_log_service.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_share_util.h"
@@ -595,7 +595,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg)
   int64_t process_point = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(!SERVER_STORAGE_META_SERVICE.is_started())) {
+  } else if (OB_UNLIKELY(!STORAGE_META_SERVICE.is_started())) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls service does not service before slog replay finished", K(ret));
   } else if (OB_BREAK_FAIL(ObShareUtil::get_abs_timeout(DEFAULT_LOCK_TIMEOUT /* default timeout */,

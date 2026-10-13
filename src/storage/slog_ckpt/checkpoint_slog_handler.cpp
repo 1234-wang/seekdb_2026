@@ -18,10 +18,10 @@
 
 #include "share/ob_server_struct.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
-#include "ob_local_storage_checkpoint_slog_handler.h"
+#include "checkpoint_slog_handler.h"
 #include "share/rc/ob_server_runtime.h"
 #include "storage/slog_ckpt/ob_tablet_replay_create_handler.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_log_reader.h"
 #include "storage/slog_ckpt/ob_local_storage_checkpoint_writer.h"
@@ -127,11 +127,11 @@ int64_t ObLSCkptMember::get_serialize_size() const
   return size;
 }
 
-void ObLocalStorageCheckpointSlogHandler::ObWriteCheckpointTask::runTimerTask()
+void CheckpointSlogHandler::ObWriteCheckpointTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCTX.self_addr());
-  if (SERVER_STORAGE_META_SERVICE.is_started()) {
+  if (STORAGE_META_SERVICE.is_started()) {
     if (OB_FAIL(handler_->write_checkpoint(false/*is_force*/))) {
     }
   } else {
@@ -140,7 +140,7 @@ void ObLocalStorageCheckpointSlogHandler::ObWriteCheckpointTask::runTimerTask()
   }
 }
 
-ObLocalStorageCheckpointSlogHandler::ObLocalStorageCheckpointSlogHandler()
+CheckpointSlogHandler::CheckpointSlogHandler()
   : is_inited_(false),
     is_writing_checkpoint_(false),
     last_ckpt_time_(0),
@@ -159,13 +159,13 @@ ObLocalStorageCheckpointSlogHandler::ObLocalStorageCheckpointSlogHandler()
 {
 }
 
-int ObLocalStorageCheckpointSlogHandler::init(ObStorageLogger &slogger)
+int CheckpointSlogHandler::init(ObStorageLogger &slogger)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler has inited", K(ret));
+    LOG_WARN("CheckpointSlogHandler has inited", K(ret));
   } else if (OB_FAIL(write_ckpt_timer_.init(
       "WriteCkpt", common::ObMemAttr("WriteCkpt")))) {
   } else {
@@ -175,7 +175,7 @@ int ObLocalStorageCheckpointSlogHandler::init(ObStorageLogger &slogger)
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::start()
+int CheckpointSlogHandler::start()
 {
   int ret = OB_SUCCESS;
 
@@ -187,7 +187,7 @@ int ObLocalStorageCheckpointSlogHandler::start()
   return ret;
 }
 
-void ObLocalStorageCheckpointSlogHandler::stop()
+void CheckpointSlogHandler::stop()
 {
   if (IS_INIT) {
     write_ckpt_timer_.stop();
@@ -197,14 +197,14 @@ void ObLocalStorageCheckpointSlogHandler::stop()
   wait();
 }
 
-void ObLocalStorageCheckpointSlogHandler::wait()
+void CheckpointSlogHandler::wait()
 {
   if (IS_INIT) {
     write_ckpt_timer_.wait();
   }
 }
 
-void ObLocalStorageCheckpointSlogHandler::destroy()
+void CheckpointSlogHandler::destroy()
 {
   if (IS_INIT) {
     write_ckpt_timer_.destroy();
@@ -219,7 +219,7 @@ void ObLocalStorageCheckpointSlogHandler::destroy()
   }
 }
 
-int ObLocalStorageCheckpointSlogHandler::start_replay(const ObServerRuntimeSuperBlock &super_block)
+int CheckpointSlogHandler::start_replay(const ObServerRuntimeSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -228,29 +228,29 @@ int ObLocalStorageCheckpointSlogHandler::start_replay(const ObServerRuntimeSuper
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(replay_checkpoint_and_slog(super_block))) {
   }
-  LOG_INFO("finish ObLocalStorageCheckpointSlogHandler replay", K(ret), K(super_block));
+  LOG_INFO("finish CheckpointSlogHandler replay", K(ret), K(super_block));
 
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_and_slog(const ObServerRuntimeSuperBlock &super_block)
+int CheckpointSlogHandler::replay_checkpoint_and_slog(const ObServerRuntimeSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
   const ObMemAttr mem_attr("RuntimeReplay");
   const int64_t replay_tablet_cnt = 10003;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler not init", K(ret));
+    LOG_WARN("CheckpointSlogHandler not init", K(ret));
   } else if (OB_FAIL(replay_tablet_disk_addr_map_.create(replay_tablet_cnt, mem_attr, mem_attr))) {
   } else if (OB_FAIL(replay_checkpoint(super_block))) {
-  } else if (OB_FAIL(replay_local_storage_slog(super_block.replay_start_point_))) {
+  } else if (OB_FAIL(replay_local_storage_slog(OB_STORAGE_OBJECT_MGR.get_server_super_block().body_.replay_start_point_))) {
   } else {
     replay_tablet_disk_addr_map_.destroy();
   }
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay_checkpoint(const ObServerRuntimeSuperBlock &super_block)
+int CheckpointSlogHandler::replay_checkpoint(const ObServerRuntimeSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
   replay_tablet_disk_addr_map_.reuse();
@@ -263,14 +263,14 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint(const ObServerRuntime
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_meta(const ObServerRuntimeSuperBlock &super_block)
+int CheckpointSlogHandler::replay_checkpoint_meta(const ObServerRuntimeSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
   ObLocalStorageCheckpointReader ls_ckpt_reader;
   ObSArray<MacroBlockId> tablet_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("ReplayCKPT"));
   ObSArray<MacroBlockId> ls_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("ReplayCKPT"));
   ObLocalStorageCheckpointReader::ObStorageMetaOp replay_ls_op = std::bind(
-      &ObLocalStorageCheckpointSlogHandler::replay_checkpoint_ls,
+      &CheckpointSlogHandler::replay_checkpoint_ls,
       this,
       std::placeholders::_1,
       std::placeholders::_2,
@@ -285,7 +285,7 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_meta(const ObServerRu
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_ls(
+int CheckpointSlogHandler::replay_checkpoint_ls(
     const ObMetaDiskAddr &addr,
     const char *buf,
     const int64_t buf_len,
@@ -297,7 +297,7 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_ls(
   ObSArray<MacroBlockId> tmp_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("ReplayCKPT"));
   ObLocalStorageCheckpointReader tablet_ckpt_reader;
   ObLocalStorageCheckpointReader::ObStorageMetaOp replay_tablet_op =
-      std::bind(&ObLocalStorageCheckpointSlogHandler::replay_checkpoint_tablet,
+      std::bind(&CheckpointSlogHandler::replay_checkpoint_tablet,
       this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
   if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
@@ -313,7 +313,7 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_ls(
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_tablet(
+int CheckpointSlogHandler::replay_checkpoint_tablet(
     const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
@@ -324,7 +324,7 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_tablet(
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay_local_storage_slog(const common::ObLogCursor &start_point)
+int CheckpointSlogHandler::replay_local_storage_slog(const common::ObLogCursor &start_point)
 {
   int ret = OB_SUCCESS;
   ObLogCursor replay_finish_point;
@@ -354,14 +354,14 @@ int ObLocalStorageCheckpointSlogHandler::replay_local_storage_slog(const common:
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::report_slog(
+int CheckpointSlogHandler::report_slog(
     const ObTabletMapKey &tablet_key,
     const ObMetaDiskAddr &slog_addr)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler hasn't been inited", K(ret));
+    LOG_WARN("CheckpointSlogHandler hasn't been inited", K(ret));
   } else if (OB_UNLIKELY(!slog_addr.is_valid() || !slog_addr.is_file())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("slog_addr is invalid", K(ret), K(slog_addr));
@@ -384,12 +384,12 @@ int ObLocalStorageCheckpointSlogHandler::report_slog(
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::check_slog(const ObTabletMapKey &tablet_key, bool &has_slog)
+int CheckpointSlogHandler::check_slog(const ObTabletMapKey &tablet_key, bool &has_slog)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler hasn't been inited", K(ret));
+    LOG_WARN("CheckpointSlogHandler hasn't been inited", K(ret));
   } else if (OB_UNLIKELY(!tablet_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
   } else {
@@ -407,17 +407,17 @@ int ObLocalStorageCheckpointSlogHandler::check_slog(const ObTabletMapKey &tablet
   return ret;
 }
 
-
-int ObLocalStorageCheckpointSlogHandler::write_checkpoint(bool is_force)
+int CheckpointSlogHandler::write_checkpoint(bool is_force)
 {
   int ret = OB_SUCCESS;
   int64_t alert_interval = ObWriteCheckpointTask::FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL;
   int64_t min_interval = ObWriteCheckpointTask::RETRY_WRITE_CHECKPOINT_MIN_INTERVAL;
 
-  ObIServerRuntime *runtime = ::oceanbase::share::server_service<::oceanbase::storage::ObIServerRuntime>();
+  ObIServerRuntime *runtime = share::server_service<ObIServerRuntime>();
+  omt::ObServerRuntimeMeta meta;
+  ObLogCursor last_cursor;
 
   HEAP_VARS_3((ObServerRuntimeSuperBlock, super_block), (ObServerRuntimeSuperBlock, last_super_block), (ObLocalStorageCheckpointWriter, local_storage_ckpt_writer)) {
-    last_super_block = runtime->get_super_block();
     //Don't compare to MERGE_SCHEDULER_PTR->get_frozen_version(), because we expect to do
     //checkpoint after merge finish.
     // 1) avoid IO traffic between ckpt and major
@@ -431,7 +431,7 @@ int ObLocalStorageCheckpointSlogHandler::write_checkpoint(bool is_force)
 
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
-      LOG_WARN("ObLocalStorageCheckpointSlogHandler not init", K(ret));
+      LOG_WARN("CheckpointSlogHandler not init", K(ret));
     } else {
       // we can't just return warn, since it will clean copy status before exiting
       // the only way is to wait without timeout
@@ -442,6 +442,8 @@ int ObLocalStorageCheckpointSlogHandler::write_checkpoint(bool is_force)
         ob_usleep(100 * 1000); // 100ms
       }
       is_writing_checkpoint_set = true;
+      last_cursor = OB_STORAGE_OBJECT_MGR.get_server_super_block().body_.replay_start_point_;
+      last_super_block = runtime->get_super_block();
     }
     if (OB_FAIL(ret)) {
       // do nothing
@@ -449,25 +451,25 @@ int ObLocalStorageCheckpointSlogHandler::write_checkpoint(bool is_force)
       LOG_INFO("bootstrap runtime is not checkpointed");
     } else if (OB_UNLIKELY(!last_super_block.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(get_cur_cursor())) {
+    } else if (OB_FAIL(get_cur_cursor(meta))) {
     } else if (OB_UNLIKELY(!ckpt_cursor_.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (is_force // alter system command triggered
-               || (!is_major_doing && (ckpt_cursor_.file_id_ > last_super_block.replay_start_point_.file_id_))
+    } else if (is_force
+               || (!is_major_doing && (ckpt_cursor_.file_id_ > last_cursor.file_id_))
                || ((start_time > last_ckpt_time_ + min_interval) // slog is long
                    && !is_major_doing
-                   && ckpt_cursor_.newer_than(last_super_block.replay_start_point_)
-                   &&(ckpt_cursor_.log_id_ - last_super_block.replay_start_point_.log_id_ >= ObWriteCheckpointTask::MIN_WRITE_CHECKPOINT_LOG_CNT))) {
+                   && ckpt_cursor_.newer_than(last_cursor)
+                   &&(ckpt_cursor_.log_id_ - last_cursor.log_id_ >= ObWriteCheckpointTask::MIN_WRITE_CHECKPOINT_LOG_CNT))) {
       DEBUG_SYNC(AFTER_CHECKPOINT_GET_CURSOR);
       super_block = last_super_block;
-      super_block.replay_start_point_ = ckpt_cursor_;
       if (OB_FAIL(local_storage_ckpt_writer.init(this))) {
       } else if (OB_FAIL(local_storage_ckpt_writer.record_meta(super_block.ls_meta_entry_))) {
       }
       clean_copy_status();
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(SERVER_STORAGE_META_PERSISTER.update_runtime_super_block(super_block))) {
+        meta.super_block_ = super_block;
+        if (OB_FAIL(STORAGE_META_SERVICE.publish_checkpoint(meta, ckpt_cursor_))) {
         } else {
           runtime->set_server_super_block(super_block);
         }
@@ -505,12 +507,12 @@ int ObLocalStorageCheckpointSlogHandler::write_checkpoint(bool is_force)
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::get_cur_cursor()
+int CheckpointSlogHandler::get_cur_cursor(omt::ObServerRuntimeMeta &meta)
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(slog_ckpt_lock_);
   tablet_key_set_.destroy();
-  if (OB_FAIL(slogger_->get_active_cursor(ckpt_cursor_))) {
+  if (OB_FAIL(share::server_service<ObIServerRuntime>()->capture_checkpoint(*slogger_, meta, ckpt_cursor_))) {
   } else if (OB_FAIL(tablet_key_set_.create(BUCKET_NUM, ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_BUCKET))) {
   } else {
     is_copying_tablets_ = true;
@@ -518,14 +520,14 @@ int ObLocalStorageCheckpointSlogHandler::get_cur_cursor()
   return ret;
 }
 
-void ObLocalStorageCheckpointSlogHandler::clean_copy_status()
+void CheckpointSlogHandler::clean_copy_status()
 {
   TCWLockGuard guard(slog_ckpt_lock_);
   is_copying_tablets_ = false;
   tablet_key_set_.destroy();
 }
 
-int ObLocalStorageCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
+int CheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
     ObLocalStorageCheckpointWriter &meta_writer)
 {
   int ret = OB_SUCCESS;
@@ -549,7 +551,7 @@ int ObLocalStorageCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::get_meta_block_list(ObIArray<MacroBlockId> &meta_block_list)
+int CheckpointSlogHandler::get_meta_block_list(ObIArray<MacroBlockId> &meta_block_list)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(lock_);
@@ -570,7 +572,7 @@ int ObLocalStorageCheckpointSlogHandler::get_meta_block_list(ObIArray<MacroBlock
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay(const ObRedoModuleReplayParam &param)
+int CheckpointSlogHandler::replay(const ObRedoModuleReplayParam &param)
 {
   int ret = OB_SUCCESS;
   ObRedoLogMainType main_type = ObRedoLogMainType::OB_REDO_LOG_MAX;
@@ -584,6 +586,15 @@ int ObLocalStorageCheckpointSlogHandler::replay(const ObRedoModuleReplayParam &p
     LOG_WARN("wrong redo log main type.", K(ret), K(main_type), K(sub_type));
   } else {
     switch (sub_type) {
+    case ObRedoLogSubType::OB_REDO_LOG_UPDATE_SERVER_RESOURCES: {
+      share::ObServerRuntimeConfig config;
+      ObUpdateServerResourcesLog entry(config);
+      int64_t pos = 0;
+      if (OB_FAIL(entry.deserialize(param.buf_, param.disk_addr_.size(), pos))) {
+      } else if (OB_FAIL(share::server_service<ObIServerRuntime>()->replay_server_resources(config))) {
+      }
+      break;
+    }
     case ObRedoLogSubType::OB_REDO_LOG_UPDATE_LS: {
       if (OB_FAIL(inner_replay_update_ls_slog(param))) {
       }
@@ -615,7 +626,7 @@ int ObLocalStorageCheckpointSlogHandler::replay(const ObRedoModuleReplayParam &p
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::inner_replay_update_ls_slog(const ObRedoModuleReplayParam &param)
+int CheckpointSlogHandler::inner_replay_update_ls_slog(const ObRedoModuleReplayParam &param)
 {
   int ret = OB_SUCCESS;
 
@@ -630,8 +641,7 @@ int ObLocalStorageCheckpointSlogHandler::inner_replay_update_ls_slog(const ObRed
   return ret;
 }
 
-
-int ObLocalStorageCheckpointSlogHandler::inner_replay_update_tablet(const ObRedoModuleReplayParam &param)
+int CheckpointSlogHandler::inner_replay_update_tablet(const ObRedoModuleReplayParam &param)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(inner_replay_deserialize(param.buf_, param.data_size_, true /*overwrite if tablet exists*/))) {
@@ -639,7 +649,7 @@ int ObLocalStorageCheckpointSlogHandler::inner_replay_update_tablet(const ObRedo
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::inner_replay_deserialize(
+int CheckpointSlogHandler::inner_replay_deserialize(
     const char *buf,
     const int64_t buf_len,
     bool allow_override /* allow to overwrite the map's element or not */)
@@ -663,7 +673,7 @@ int ObLocalStorageCheckpointSlogHandler::inner_replay_deserialize(
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::inner_replay_delete_tablet(const ObRedoModuleReplayParam &param)
+int CheckpointSlogHandler::inner_replay_delete_tablet(const ObRedoModuleReplayParam &param)
 {
   int ret = OB_SUCCESS;
 
@@ -683,7 +693,7 @@ int ObLocalStorageCheckpointSlogHandler::inner_replay_delete_tablet(const ObRedo
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::inner_replay_empty_shell_tablet(const ObRedoModuleReplayParam &param)
+int CheckpointSlogHandler::inner_replay_empty_shell_tablet(const ObRedoModuleReplayParam &param)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -699,7 +709,7 @@ int ObLocalStorageCheckpointSlogHandler::inner_replay_empty_shell_tablet(const O
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::parse(
+int CheckpointSlogHandler::parse(
   const int32_t cmd, const char *buf, const int64_t len, FILE *stream)
 {
   int ret = OB_SUCCESS;
@@ -719,6 +729,12 @@ int ObLocalStorageCheckpointSlogHandler::parse(
     LOG_WARN("fail to write runtime slog to stream", K(ret));
   } else {
     switch (sub_type) {
+      case ObRedoLogSubType::OB_REDO_LOG_UPDATE_SERVER_RESOURCES: {
+        share::ObServerRuntimeConfig config;
+        ObUpdateServerResourcesLog entry(config);
+        ret = ObStorageLogReplayer::print_slog(buf, len, "update server resources slog: ", entry, stream);
+        break;
+      }
       case ObRedoLogSubType::OB_REDO_LOG_UPDATE_LS: {
         ObLSMetaLog slog_entry;
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update ls slog: ");
@@ -777,13 +793,12 @@ int ObLocalStorageCheckpointSlogHandler::parse(
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::replay_over()
+int CheckpointSlogHandler::replay_over()
 {
   return OB_SUCCESS; // nothing to do.
 }
 
-
-int ObLocalStorageCheckpointSlogHandler::read_from_slog(const ObMetaDiskAddr &addr,
+int CheckpointSlogHandler::read_from_slog(const ObMetaDiskAddr &addr,
     char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -815,7 +830,7 @@ int ObLocalStorageCheckpointSlogHandler::read_from_slog(const ObMetaDiskAddr &ad
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::read_empty_shell_file(
+int CheckpointSlogHandler::read_empty_shell_file(
     const ObMetaDiskAddr &addr,
     common::ObArenaAllocator &allocator,
     char *&buf,
@@ -841,8 +856,8 @@ int ObLocalStorageCheckpointSlogHandler::read_empty_shell_file(
   return ret;
 }
 
-[[nodiscard]] ObLocalStorageCheckpointSlogHandler::ObCkptSlogROptLockGuard::ObCkptSlogROptLockGuard(
-    const ObLocalStorageCheckpointSlogHandler &ckpt_slog_hdl)
+[[nodiscard]] CheckpointSlogHandler::ObCkptSlogROptLockGuard::ObCkptSlogROptLockGuard(
+    const CheckpointSlogHandler &ckpt_slog_hdl)
   : ckpt_slog_hdl_(ckpt_slog_hdl),
     ret_(OB_NOT_INIT),
     slot_id_(0)
@@ -852,7 +867,7 @@ int ObLocalStorageCheckpointSlogHandler::read_empty_shell_file(
   }
 }
 
-ObLocalStorageCheckpointSlogHandler::ObCkptSlogROptLockGuard::~ObCkptSlogROptLockGuard()
+CheckpointSlogHandler::ObCkptSlogROptLockGuard::~ObCkptSlogROptLockGuard()
 {
   if (OB_LIKELY(OB_SUCCESS == ret_)) {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = const_cast<TCRWLock&>(ckpt_slog_hdl_.slog_ckpt_lock_).rdunlock(slot_id_)))) {
@@ -860,7 +875,6 @@ ObLocalStorageCheckpointSlogHandler::ObCkptSlogROptLockGuard::~ObCkptSlogROptLoc
     }
   }
 }
-
 
 }  // end namespace storage
 }  // namespace oceanbase

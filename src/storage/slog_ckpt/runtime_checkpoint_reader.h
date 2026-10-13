@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef OB_STORAGE_CKPT_SERVER_CHECKPOINT_LOG_READER_H
-#define OB_STORAGE_CKPT_SERVER_CHECKPOINT_LOG_READER_H
+#pragma once
 
 #include "common/log/ob_log_cursor.h"
 #include "storage/slog_ckpt/ob_linked_macro_block_reader.h"
@@ -24,13 +23,13 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObServerCheckpointReader final
+class RuntimeCheckpointReader final
 {
 public:
-  ObServerCheckpointReader() = default;
-  ~ObServerCheckpointReader() = default;
-  ObServerCheckpointReader(const ObServerCheckpointReader &) = delete;
-  ObServerCheckpointReader &operator=(const ObServerCheckpointReader &) = delete;
+  RuntimeCheckpointReader() = default;
+  ~RuntimeCheckpointReader() = default;
+  RuntimeCheckpointReader(const RuntimeCheckpointReader &) = delete;
+  RuntimeCheckpointReader &operator=(const RuntimeCheckpointReader &) = delete;
 
   int read_checkpoint(const ObServerSuperBlock &super_block);
   common::ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
@@ -50,5 +49,3 @@ private:
 
 }  // end namespace storage
 }  // end namespace oceanbase
-
-#endif  // OB_STORAGE_CKPT_SERVER_CHECKPOINT_LOG_READER_H

@@ -189,9 +189,7 @@ int ObStorageLogReplayer::replay(
     }
     FLOG_INFO("slog replay stat: ", K(ret),
         "local storage log cnt", replay_cnt[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_LOCAL_STORAGE)],
-        "local storage log cost", replay_cost[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_LOCAL_STORAGE)],
-        "server runtime log cnt", replay_cnt[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_SERVER_RUNTIME)],
-        "server runtime log cost", replay_cost[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_SERVER_RUNTIME)]
+        "local storage log cost", replay_cost[static_cast<int>(ObRedoLogMainType::OB_REDO_LOG_LOCAL_STORAGE)]
         );
   }
 

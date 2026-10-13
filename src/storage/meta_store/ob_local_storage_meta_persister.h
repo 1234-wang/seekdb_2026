@@ -26,7 +26,7 @@ namespace storage
 class ObLSMeta;
 class ObStorageLogger;
 class ObTabletHandle;
-class ObLocalStorageCheckpointSlogHandler;
+class CheckpointSlogHandler;
 
 class ObLocalStorageMetaPersister
 {
@@ -38,7 +38,7 @@ public:
   ObLocalStorageMetaPersister &operator=(const ObLocalStorageMetaPersister &) = delete;
 
   int init(ObStorageLogger &slogger,
-           ObLocalStorageCheckpointSlogHandler &ckpt_slog_handler);
+           CheckpointSlogHandler &ckpt_slog_handler);
   void destroy();
 
   int update_ls_meta(const ObLSMeta &ls_meta);
@@ -59,7 +59,7 @@ private:
 private:
   bool is_inited_;
   storage::ObStorageLogger *slogger_;
-  ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler_;
+  CheckpointSlogHandler *ckpt_slog_handler_;
 
 };
 

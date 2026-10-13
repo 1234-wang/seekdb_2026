@@ -23,7 +23,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/slog_ckpt/ob_local_storage_checkpoint_reader.h"
 #include "share/ob_io_device_helper.h"
-#include "storage/slog_ckpt/ob_local_storage_checkpoint_slog_handler.h"
+#include "storage/slog_ckpt/checkpoint_slog_handler.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
 
 namespace oceanbase
@@ -44,7 +44,7 @@ ObLocalStorageCheckpointWriter::ObLocalStorageCheckpointWriter()
 }
 
 int ObLocalStorageCheckpointWriter::init(
-    ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler)
+    CheckpointSlogHandler *ckpt_slog_handler)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr(ObModIds::OB_CHECKPOINT);

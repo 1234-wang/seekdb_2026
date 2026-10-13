@@ -34,18 +34,6 @@ bool ObUpdateServerResourcesLog::is_valid() const
 
 OB_SERIALIZE_MEMBER(ObUpdateServerResourcesLog, runtime_config_);
 
-ObUpdateRuntimeSuperBlockLog::ObUpdateRuntimeSuperBlockLog(ObServerRuntimeSuperBlock &super_block)
-  : super_block_(super_block)
-{
-}
-
-bool ObUpdateRuntimeSuperBlockLog::is_valid() const
-{
-  return super_block_.is_valid();
-}
-
-OB_SERIALIZE_MEMBER(ObUpdateRuntimeSuperBlockLog, super_block_);
-
 ObLSMetaLog::ObLSMetaLog(const ObLSMeta &ls_meta)
   : ls_meta_(ls_meta)
 {
@@ -55,7 +43,6 @@ bool ObLSMetaLog::is_valid() const
 {
   return ls_meta_.is_valid();
 }
-
 
 DEF_TO_STRING(ObLSMetaLog)
 {

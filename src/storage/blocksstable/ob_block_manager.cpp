@@ -23,7 +23,7 @@
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
 #include "share/io/ob_io_calibration.h"
@@ -1180,7 +1180,7 @@ int ObBlockManager::mark_server_meta_blocks(
   ObArray<MacroBlockId> macro_block_list;
 
   if (OB_FAIL(macro_block_list.reserve(DEFAULT_PENDING_FREE_COUNT))) {
-  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.get_meta_block_list(
+  } else if (OB_FAIL(STORAGE_META_SERVICE.get_meta_block_list(
                  macro_block_list))) {
   } else if (OB_FAIL(
                  update_mark_info(macro_block_list, macro_id_set, mark_info))) {
@@ -1358,11 +1358,11 @@ int ObBlockManager::InspectBadBlockTask::check_block(
 
 int ObBlockManager::extend_file_size_if_need() {
   int ret = OB_SUCCESS;
-  int64_t reserved_size = ObServerStorageMetaService::SLOG_RESERVED_DISK_SIZE;
+  int64_t reserved_size = StorageMetaService::SLOG_RESERVED_DISK_SIZE;
 
   if (OB_ISNULL(io_device_)) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(
+  } else if (OB_FAIL(STORAGE_META_SERVICE.get_reserved_size(
                  reserved_size))) {
   } else if (!check_can_be_extend(reserved_size)) {
     ret = OB_SERVER_OUTOF_DISK_SPACE;

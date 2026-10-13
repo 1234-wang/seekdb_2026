@@ -72,7 +72,7 @@ int ObServer::get_lower_bound_freeze_info(const int64_t snapshot_version, share:
 #include "storage/multi_data_source/ob_mds_event_buffer.h"
 #include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "storage/blocksstable/ob_io_bench_controller.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "observer/schema/ob_schema_service_sql_impl.h"
@@ -838,7 +838,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObLogAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(startup_accel_handler_.init())) {
       LOG_ERROR("init server startup task handler failed", KR(ret));
-    } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.init(server_runtime_controller_))) {
+    } else if (OB_FAIL(STORAGE_META_SERVICE.init(server_runtime_controller_))) {
       LOG_ERROR("init server storage meta handler failed", KR(ret));
     } else if (OB_FAIL(init_server_runtime())) {
       LOG_ERROR("init server runtime failed", KR(ret));
@@ -1046,7 +1046,7 @@ void ObServer::destroy()
     FLOG_INFO("io manager destroyed");
 
     FLOG_INFO("begin to destroy server storage meta service");
-    SERVER_STORAGE_META_SERVICE.destroy();
+    STORAGE_META_SERVICE.destroy();
     FLOG_INFO("server storage meta service destroyed");
 
     FLOG_INFO("begin to destroy memory dump");
@@ -1167,7 +1167,7 @@ int ObServer::start()
     int64_t slog_reserved_size = 0;
     int64_t effective_log_disk_size = storage_env_.log_disk_size_;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(slog_reserved_size))) {
+    } else if (OB_FAIL(STORAGE_META_SERVICE.get_reserved_size(slog_reserved_size))) {
       LOG_WARN("fail to get slog reserved size", KR(ret), K(slog_reserved_size));
     } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(slog_reserved_size))) {
       LOG_ERROR("start storage object mgr fail", KR(ret), K(slog_reserved_size));
@@ -1189,7 +1189,7 @@ int ObServer::start()
     } else {
       FLOG_INFO("success to start server runtime");
     }
-    if (FAILEDx(SERVER_STORAGE_META_SERVICE.start())) {
+    if (FAILEDx(STORAGE_META_SERVICE.start())) {
       LOG_ERROR("fail to start server storage meta service", KR(ret));
     } else {
       FLOG_INFO("success to start server storage meta service");
@@ -1241,16 +1241,14 @@ int ObServer::start()
       } else if (server_runtime_controller_.is_hidden()) {
         ret = OB_STATE_NOT_MATCH;
         LOG_ERROR("hidden runtime cannot commit bootstrap", KR(ret));
-      } else if (OB_FAIL(local_meta_service->write_checkpoint(true /*is_force*/))) {
+      } else if (OB_FAIL(STORAGE_META_SERVICE.write_checkpoint(true /*is_force*/))) {
         LOG_ERROR("failed to write bootstrap local checkpoint", KR(ret));
       } else if (storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK ==
                  server_runtime_controller_.get_super_block().ls_meta_entry_) {
         ret = OB_STATE_NOT_MATCH;
         LOG_ERROR("bootstrap local checkpoint has no LS metadata", KR(ret));
-      } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.write_checkpoint(true /*is_force*/))) {
-        LOG_ERROR("failed to write bootstrap server checkpoint", KR(ret));
       } else {
-        FLOG_INFO("bootstrap checkpoints committed");
+        FLOG_INFO("bootstrap checkpoint committed");
       }
     }
     if (OB_SUCC(ret)) {
@@ -1638,7 +1636,7 @@ int ObServer::stop()
     //FLOG_INFO("partition scheduler stopped", KR(ret));
 
     FLOG_INFO("begin to stop server storage meta service");
-    SERVER_STORAGE_META_SERVICE.stop();
+    STORAGE_META_SERVICE.stop();
     FLOG_INFO("server storage meta service stopped");
 
     FLOG_INFO("begin to stop server startup task handler");
@@ -1652,6 +1650,7 @@ int ObServer::stop()
       // Join workers and stop/wait storage modules before destroying their owners.
       server_runtime_controller_.wait();
     }
+    STORAGE_META_SERVICE.wait();
     FLOG_INFO("server runtime stopped");
     FLOG_INFO("begin to stop ob_service");
     if (OB_NOT_NULL(standby_module_)) {
@@ -2117,7 +2116,7 @@ int ObServer::init_io()
                 storage_env_.default_block_size_,
                 storage_env_.data_disk_percentage_,
                 storage_env_.data_disk_size_,
-                SERVER_STORAGE_META_SERVICE))) {
+                STORAGE_META_SERVICE))) {
           } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(&LOCAL_DEVICE_INSTANCE,
                                                                             io_config.disk_io_thread_count_,
                                                                             io_config.sync_io_thread_count_,

@@ -137,7 +137,6 @@ public:
   bool is_valid() const;
 
   TO_STRING_KV(
-               K_(replay_start_point),
                K_(ls_meta_entry),
                K_(is_hidden),
                K_(version));
@@ -146,7 +145,6 @@ public:
 public:
   
   // Local recovery state for LS and tablet metadata.
-  common::ObLogCursor replay_start_point_;
   blocksstable::MacroBlockId ls_meta_entry_;
 
   bool is_hidden_;

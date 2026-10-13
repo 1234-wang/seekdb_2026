@@ -2690,7 +2690,7 @@ int ObLSTabletService::safe_update_cas_tablet(
 {
   int ret = OB_SUCCESS;
   ObUpdateTabletPointerParam param;
-  ObLocalStorageCheckpointSlogHandler::ObCkptSlogROptLockGuard guard(
+  CheckpointSlogHandler::ObCkptSlogROptLockGuard guard(
       ::oceanbase::share::server_service<::oceanbase::storage::ObLocalStorageMetaService>()->get_ckpt_slog_hdl());
   if (OB_FAIL(guard.get_ret())) {
   } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
@@ -2716,7 +2716,7 @@ int ObLSTabletService::safe_update_cas_empty_shell(
   ObMetaDiskAddr addr;
   ObUpdateTabletPointerParam param;
   ObTablet *tablet = new_handle.get_obj();
-  ObLocalStorageCheckpointSlogHandler::ObCkptSlogROptLockGuard guard(::oceanbase::share::server_service<::oceanbase::storage::ObLocalStorageMetaService>()->get_ckpt_slog_hdl());
+  CheckpointSlogHandler::ObCkptSlogROptLockGuard guard(::oceanbase::share::server_service<::oceanbase::storage::ObLocalStorageMetaService>()->get_ckpt_slog_hdl());
   if (OB_FAIL(guard.get_ret())) {
   } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
   } else if (OB_FAIL(LOCAL_STORAGE_META_PERSISTER.write_empty_shell_tablet(tablet, addr))) {
@@ -2741,7 +2741,7 @@ int ObLSTabletService::safe_create_cas_tablet(
 {
   int ret = OB_SUCCESS;
   ObUpdateTabletPointerParam param;
-  ObLocalStorageCheckpointSlogHandler::ObCkptSlogROptLockGuard guard(
+  CheckpointSlogHandler::ObCkptSlogROptLockGuard guard(
       ::oceanbase::share::server_service<::oceanbase::storage::ObLocalStorageMetaService>()->get_ckpt_slog_hdl());
   if (OB_FAIL(guard.get_ret())) {
   } else if (OB_FAIL(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {

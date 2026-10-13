@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef OCEANBASE_STORAGE_SLOG_CKPT_OB_LOCAL_STORAGE_CHECKPOINT_SLOG_HANDLER_H_
-#define OCEANBASE_STORAGE_SLOG_CKPT_OB_LOCAL_STORAGE_CHECKPOINT_SLOG_HANDLER_H_
+#pragma once
 
 #include "common/log/ob_log_cursor.h"
 #include "lib/task/ob_timer.h"
@@ -24,6 +23,7 @@
 #include "storage/slog_ckpt/ob_local_storage_checkpoint_reader.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/ob_super_block_struct.h"
+#include "storage/meta_store/ob_server_runtime_meta.h"
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/ls/ob_ls_meta.h"
 
@@ -64,7 +64,7 @@ public:
   blocksstable::MacroBlockId tablet_meta_entry_;
 };
 
-class ObLocalStorageCheckpointSlogHandler : public ObIRedoModule
+class CheckpointSlogHandler : public ObIRedoModule
 {
 public:
   class ObWriteCheckpointTask : public common::ObTimerTask
@@ -75,7 +75,7 @@ public:
     static const int64_t RETRY_WRITE_CHECKPOINT_MIN_INTERVAL = 1000L * 1000L * 300L;     // 5min
     static const int64_t MIN_WRITE_CHECKPOINT_LOG_CNT = 10000; // TODO(fenggu)
 
-    explicit ObWriteCheckpointTask(ObLocalStorageCheckpointSlogHandler *handler) : handler_(handler)
+    explicit ObWriteCheckpointTask(CheckpointSlogHandler *handler) : handler_(handler)
     {
       disable_timeout_check();
     }
@@ -83,26 +83,26 @@ public:
     virtual void runTimerTask() override;
 
   private:
-    ObLocalStorageCheckpointSlogHandler *handler_;
+    CheckpointSlogHandler *handler_;
   };
   class ObCkptSlogROptLockGuard
   {
   public:
-    [[nodiscard]] explicit ObCkptSlogROptLockGuard(const ObLocalStorageCheckpointSlogHandler &ckpt_slog_hdl);
+    [[nodiscard]] explicit ObCkptSlogROptLockGuard(const CheckpointSlogHandler &ckpt_slog_hdl);
     ~ObCkptSlogROptLockGuard();
     inline int get_ret() const { return ret_; }
   private:
-    const ObLocalStorageCheckpointSlogHandler &ckpt_slog_hdl_;
+    const CheckpointSlogHandler &ckpt_slog_hdl_;
     int ret_;
     int64_t slot_id_;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObCkptSlogROptLockGuard);
   };
 
-  ObLocalStorageCheckpointSlogHandler();
-  ~ObLocalStorageCheckpointSlogHandler() = default;
-  ObLocalStorageCheckpointSlogHandler(const ObLocalStorageCheckpointSlogHandler &) = delete;
-  ObLocalStorageCheckpointSlogHandler &operator=(const ObLocalStorageCheckpointSlogHandler &) = delete;
+  CheckpointSlogHandler();
+  ~CheckpointSlogHandler() = default;
+  CheckpointSlogHandler(const CheckpointSlogHandler &) = delete;
+  CheckpointSlogHandler &operator=(const CheckpointSlogHandler &) = delete;
 
   int init(ObStorageLogger &slogger);
   int start();
@@ -120,7 +120,7 @@ public:
   int write_checkpoint(bool is_force);
   int read_empty_shell_file(const ObMetaDiskAddr &phy_addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
 private:
-  int get_cur_cursor();
+  int get_cur_cursor(omt::ObServerRuntimeMeta &meta);
   void clean_copy_status();
   virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
   int replay_checkpoint_and_slog(const ObServerRuntimeSuperBlock &super_block);
@@ -167,5 +167,3 @@ private:
 
 }  // end namespace storage
 }  // namespace oceanbase
-
-#endif // OCEANBASE_STORAGE_SLOG_CKPT_OB_LOCAL_STORAGE_CHECKPOINT_SLOG_HANDLER_H_

@@ -20,7 +20,7 @@
 
 #include "logservice/ob_log_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "logservice/ob_server_log_block_mgr.h"

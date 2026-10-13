@@ -19,7 +19,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/slog/ob_storage_logger.h"
-#include "storage/slog_ckpt/ob_local_storage_checkpoint_slog_handler.h"
+#include "storage/slog_ckpt/checkpoint_slog_handler.h"
 
 namespace oceanbase
 {
@@ -29,7 +29,7 @@ namespace storage
 
 int ObLocalStorageMetaPersister::init(
     ObStorageLogger &slogger,
-    ObLocalStorageCheckpointSlogHandler &ckpt_slog_handler)
+    CheckpointSlogHandler &ckpt_slog_handler)
 {
   int ret = OB_SUCCESS;
 

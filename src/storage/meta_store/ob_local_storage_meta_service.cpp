@@ -18,7 +18,7 @@
 #include "config_bridge.h"
 #include "ob_local_storage_meta_service.h"
 #include "share/rc/ob_server_runtime.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 #include "storage/api/storage/runtime/ob_i_server_runtime.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
@@ -31,12 +31,10 @@ namespace storage
 {
 
 ObLocalStorageMetaService::ObLocalStorageMetaService()
-    : is_inited_(false),
-      is_started_(false),
-      ckpt_slog_handler_(),
-    slogger_(),
+  : is_inited_(false),
+    is_started_(false),
+    ckpt_slog_handler_(),
     persister_(),
-    replayer_(),
     object_rwriter_(),
     object_raw_rwriter_()
 {}
@@ -55,13 +53,8 @@ int ObLocalStorageMetaService::init()
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(slogger_.init(
-        OB_FILE_SYSTEM_ROUTER.get_slog_dir(),
-        ObLogConstants::MAX_LOG_FILE_SIZE,
-        OB_FILE_SYSTEM_ROUTER.get_slog_file_spec()))) {
-  } else if (OB_FAIL(ckpt_slog_handler_.init(slogger_))) {
-  } else if (OB_FAIL(persister_.init(slogger_, ckpt_slog_handler_))) {
-  } else if (OB_FAIL(replayer_.init(ckpt_slog_handler_))) {
+  } else if (OB_FAIL(ckpt_slog_handler_.init(STORAGE_META_SERVICE.get_slogger()))) {
+  } else if (OB_FAIL(persister_.init(STORAGE_META_SERVICE.get_slogger(), ckpt_slog_handler_))) {
   } else if (OB_FAIL(object_rwriter_.init())) {
   } else if (OB_FAIL(object_raw_rwriter_.init())) {
   } else {
@@ -73,48 +66,38 @@ int ObLocalStorageMetaService::init()
 int ObLocalStorageMetaService::start()
 {
   int ret = OB_SUCCESS;
-  ObIServerRuntime *runtime = ::oceanbase::share::server_service<::oceanbase::storage::ObIServerRuntime>();
-  const ObServerRuntimeSuperBlock super_block = runtime->get_super_block();
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(slogger_.start())) {
   } else if (OB_FAIL(ckpt_slog_handler_.start())) {
-  } else if (OB_FAIL(replayer_.start_replay(super_block))) {
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     is_started_ = true;
   }
-  FLOG_INFO("finish start ObLocalStorageMetaService", K(ret));
   return ret;
+}
+
+int ObLocalStorageMetaService::replay(const ObServerRuntimeSuperBlock &super_block)
+{
+  return ckpt_slog_handler_.start_replay(super_block);
 }
 
 void ObLocalStorageMetaService::stop()
 {
   if (IS_INIT) {
-     {
-      slogger_.stop();
-      ckpt_slog_handler_.stop();
-    }
+    ckpt_slog_handler_.stop();
   }
 }
 
 void ObLocalStorageMetaService::wait()
 {
   if (IS_INIT) {
-     {
-      slogger_.wait();
-      ckpt_slog_handler_.wait();
-    }
+    ckpt_slog_handler_.wait();
   }
 }
 
 void ObLocalStorageMetaService::destroy()
 {
-  slogger_.destroy();
   ckpt_slog_handler_.destroy();
   persister_.destroy();
-  replayer_.destroy();
   object_rwriter_.reset();
   object_raw_rwriter_.reset();
 

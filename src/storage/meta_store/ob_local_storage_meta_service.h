@@ -19,9 +19,8 @@
 #include <stdint.h>
 #include "share/rc/ob_server_runtime.h"
 #include "storage/meta_store/ob_local_storage_meta_persister.h"
-#include "storage/meta_store/ob_local_storage_meta_replayer.h"
 #include "storage/blockstore/ob_object_reader_writer.h"
-#include "storage/slog_ckpt/ob_local_storage_checkpoint_slog_handler.h"
+#include "storage/slog_ckpt/checkpoint_slog_handler.h"
 #include "storage/slog/ob_storage_logger.h"
 
 namespace oceanbase
@@ -41,12 +40,12 @@ public:
   static int server_module_init(ObLocalStorageMetaService *&meta_service);
   int init();
   int start();
+  int replay(const ObServerRuntimeSuperBlock &super_block);
   void stop();
   void wait();
   void destroy();
   bool is_started() { return is_started_; }
   ObLocalStorageMetaPersister &get_persister() { return persister_; }
-  ObLocalStorageMetaReplayer &get_replayer() { return replayer_; }
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   int write_checkpoint(bool is_force);
   int read_from_disk(
@@ -59,19 +58,16 @@ public:
       common::ObArenaAllocator &allocator,
       char *&buf,
       int64_t &buf_len);
-  const ObLocalStorageCheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
+  const CheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
 
   ObObjectReaderWriter &get_object_reader_writer() { return object_rwriter_; }
   ObObjectReaderWriter &get_object_raw_reader_writer() { return object_raw_rwriter_; }
-  storage::ObStorageLogger &get_slogger() { return slogger_; }
 
 private:
   bool is_inited_;
   bool is_started_;
-  ObLocalStorageCheckpointSlogHandler ckpt_slog_handler_;
-  storage::ObStorageLogger slogger_;
+  CheckpointSlogHandler ckpt_slog_handler_;
   ObLocalStorageMetaPersister persister_;
-  ObLocalStorageMetaReplayer replayer_;
   ObObjectReaderWriter object_rwriter_;
   ObObjectReaderWriter object_raw_rwriter_;
 

@@ -19,6 +19,8 @@
 
 namespace oceanbase
 {
+namespace common { class ObLogCursor; }
+namespace share { struct ObServerRuntimeConfig; }
 namespace omt
 {
 struct ObServerRuntimeMeta;
@@ -26,6 +28,7 @@ struct ObServerRuntimeMeta;
 namespace storage
 {
 struct ObServerRuntimeSuperBlock;
+class ObStorageLogger;
 
 // Storage's narrow view of the process-owned runtime. Observer owns and
 // injects the implementation so Storage never depends on concrete OMT types.
@@ -36,8 +39,9 @@ public:
 
   virtual int create_runtime(const omt::ObServerRuntimeMeta &meta) = 0;
   virtual void set_synced() = 0;
-  virtual int get_runtime_meta_for_ckpt(
-      omt::ObServerRuntimeMeta &meta, bool &exist) = 0;
+  virtual int capture_checkpoint(ObStorageLogger &logger,
+      omt::ObServerRuntimeMeta &meta, common::ObLogCursor &cursor) = 0;
+  virtual int replay_server_resources(const share::ObServerRuntimeConfig &config) = 0;
   virtual bool has_runtime() const = 0;
   virtual int get_server_log_disk_size(int64_t &log_disk_size) = 0;
   virtual ObServerRuntimeSuperBlock get_super_block() = 0;

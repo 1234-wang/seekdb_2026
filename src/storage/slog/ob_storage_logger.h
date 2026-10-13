@@ -25,7 +25,6 @@
 #include "common/log/ob_log_generator.h"
 #include "common/log/ob_log_data_writer.h"
 #include "storage/slog/ob_storage_log_writer.h"
-#include "storage/slog/ob_server_slog_writer.h"
 #include "storage/slog/ob_storage_log_entry.h"
 #include "common/log/ob_log_constants.h"
 #include "lib/ob_define.h"
@@ -45,8 +44,7 @@ public:
   int init(
       const char *root_dir,
       const int64_t max_log_file_size,
-      const blocksstable::ObLogFileSpec &log_file_spec,
-      const bool is_server = false);
+      const blocksstable::ObLogFileSpec &log_file_spec);
   int start();
   void stop();
   void wait();
@@ -89,9 +87,7 @@ private:
 
 private:
   bool is_inited_;
-  ObStorageLogWriter *log_writer_;
-  ObStorageLogWriter local_log_writer_;
-  ObServerSlogWriter server_log_writer_;
+  ObStorageLogWriter log_writer_;
   char slog_dir_[MAX_PATH_SIZE];
   // When we write logs with multiple threads, log_writer_'s cursor may not be the newest
   // In other word, the log_writer_'s cursor is only updated when the backup thread flushes
