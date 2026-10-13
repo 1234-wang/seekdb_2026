@@ -27,7 +27,6 @@ struct SeekdbEngineImpl {
   std::condition_variable condition;
   std::thread thread;
   std::vector<std::string> arguments;
-  std::vector<const char *> argv;
   bool ready = false;
   bool closing = false;
   int result = OB_SUCCESS;
@@ -62,6 +61,21 @@ int acquire_pid_file(int &fd)
   return ::write(fd, pid, length) == length ? OB_SUCCESS : OB_IO_ERROR;
 }
 
+// The parser only borrows this pointer array during the call. The strings
+// remain owned by the engine for options that retain references to arguments.
+int parse_engine_arguments(const std::vector<std::string> &arguments, ObServerOptions &options)
+{
+  try {
+    std::vector<const char *> argv;
+    argv.reserve(arguments.size());
+    for (const auto &argument : arguments) { argv.push_back(argument.c_str()); }
+    ObCommandLineParser parser;
+    return parser.parse_args(static_cast<int>(argv.size()), argv.data(), options, false);
+  } catch (const std::bad_alloc &) {
+    return OB_ALLOCATE_MEMORY_FAILED;
+  }
+}
+
 void run_engine(SeekdbEngineHandle engine)
 {
   lib::ObStackHeaderGuard stack_guard;
@@ -77,11 +91,10 @@ void run_engine(SeekdbEngineHandle engine)
   options.log_level_ = DEFAULT_LOG_LEVEL;
   options.in_process_ = true;
   options.nodaemon_ = true;
-  const auto &argv = engine->argv;
-  ObCommandLineParser parser;
+
   if (nullptr == getcwd(previous_directory, sizeof(previous_directory))) {
     ret = OB_IO_ERROR;
-  } else if (OB_FAIL(parser.parse_args(static_cast<int>(argv.size()), argv.data(), options, false))) {
+  } else if (OB_FAIL(parse_engine_arguments(engine->arguments, options))) {
   } else if (OB_FAIL(ObServerUtils::prepare_directories(options))) {
   } else if (::chdir(options.base_dir_.ptr()) != 0) {
     ret = OB_IO_ERROR;
@@ -167,7 +180,6 @@ SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *e
         // The internal command-line parser expects a program name at argv[0].
         engine->arguments.emplace_back("seekdb");
         for (int i = 0; i < argc; ++i) { engine->arguments.emplace_back(argv[i]); }
-        for (const auto &argument : engine->arguments) { engine->argv.push_back(argument.c_str()); }
         engine->thread = std::thread(run_engine, engine);
         std::unique_lock<std::mutex> guard(engine->mutex);
         engine->condition.wait(guard, [engine] { return engine->ready; });
