@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef SEEKDB_LIB_RESOURCE_WASM_MEMORY_H_
-#define SEEKDB_LIB_RESOURCE_WASM_MEMORY_H_
+#pragma once
 
 #ifdef __EMSCRIPTEN__
 #include <cerrno>
@@ -40,6 +39,13 @@ inline void *allocate_wasm_memory(uint64_t size, size_t alignment)
   // The allocation is aligned up front; Wasm cannot partially unmap a malloc
   // allocation to trim its prefix/suffix like the native mmap path does.
   void *ptr = emscripten_builtin_memalign(alignment, static_cast<size_t>(size));
+  if (ptr == nullptr) {
+    ptr = emscripten_builtin_malloc(static_cast<size_t>(size));
+    if (ptr != nullptr && (reinterpret_cast<uintptr_t>(ptr) & (alignment - 1)) != 0) {
+      emscripten_builtin_free(ptr);
+      ptr = nullptr;
+    }
+  }
   if (ptr != nullptr) {
     memset(ptr, 0, static_cast<size_t>(size));
   } else {
@@ -63,5 +69,4 @@ inline int release_wasm_pages(size_t length)
 }
 } // namespace lib
 } // namespace oceanbase
-#endif
 #endif

@@ -2,7 +2,7 @@
 // A single JS owner drives the copying, nonblocking memory-transport ABI.
 const pause = () => new Promise(resolve => setTimeout(resolve, 1));
 
-export class WasmMemoryTransport {
+export class MemoryTransport {
   #module;
   #client;
   #buffer;

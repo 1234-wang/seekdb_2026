@@ -1,6 +1,6 @@
 // Copyright (c) 2026 OceanBase. SPDX-License-Identifier: Apache-2.0
 import {MySQLConnection} from './mysql-client.mjs';
-import {WasmMemoryTransport} from './mysql-transport.mjs';
+import {MemoryTransport} from './mysql-transport.mjs';
 
 export function runtimeArguments(options = {}) {
   const defaults = {memoryMiB: 1024, allocatorMiB: 1536, cacheMiB: 64,
@@ -17,10 +17,65 @@ export function runtimeArguments(options = {}) {
   return Object.values(budget).map(String);
 }
 
+export const STORAGE_MODES = ['memory', 'opfs'];
+
+export function storageMode(storage = 'memory') {
+  if (!STORAGE_MODES.includes(storage)) throw new TypeError(`Unknown storage: ${storage}`);
+  return storage;
+}
+
+// The engine keeps its files in this directory of the origin private file
+// system (database_runtime.cpp); other entries of the origin are left alone.
+export const OPFS_DIRECTORY = 'seekdb';
+
+export function persistentStorageAvailable() {
+  return typeof navigator !== 'undefined' && typeof navigator.storage?.getDirectory === 'function';
+}
+
+// Sync access handles are exclusive per file, and the previous owner of the
+// data directory may still be releasing them when this Worker starts.
+async function waitForUnlockedFiles(deadline = 3000) {
+  const files = [];
+  async function collect(directory) {
+    for await (const handle of directory.values()) {
+      if (handle.kind === 'directory') await collect(handle);
+      else files.push(handle);
+    }
+  }
+  try {
+    await collect(await (await navigator.storage.getDirectory()).getDirectoryHandle(OPFS_DIRECTORY));
+  } catch (error) {
+    if (error?.name !== 'NotFoundError') throw error;
+  }
+  const until = Date.now() + deadline;
+  for (const file of files) {
+    for (;;) {
+      let access;
+      try {
+        access = await file.createSyncAccessHandle();
+      } catch (error) {
+        if (!['NoModificationAllowedError', 'InvalidStateError'].includes(error?.name)) {
+          throw new Error(`Stored database file ${file.name} cannot be opened: ${error?.message ?? error}`);
+        }
+        if (Date.now() >= until) throw new Error(`Stored database file ${file.name} did not become available: ${error.name}: ${error.message}`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        continue;
+      }
+      access.close();
+      break;
+    }
+  }
+}
+
 // Internal owner-side API. All calls occur in one Worker. Runtime exit, rather
 // than just a stop flag, acknowledges that ObServer has joined and destroyed.
-export async function openRuntime(factory, {budgets, onFatal = () => {}} = {}) {
-  const args = runtimeArguments(budgets);
+export async function openRuntime(factory, {budgets, storage, wasmURL, compiledModule,
+  onCompiledModule = () => {}, onFatal = () => {}} = {}) {
+  const args = [...runtimeArguments(budgets), storageMode(storage)];
+  if (args.at(-1) === 'opfs') {
+    if (!persistentStorageAvailable()) throw new Error('Persistent storage (OPFS) is not available in this Worker');
+    await waitForUnlockedFiles();
+  }
   let terminal;
   let finish;
   const exited = new Promise(resolve => { finish = resolve; });
@@ -31,9 +86,36 @@ export async function openRuntime(factory, {budgets, onFatal = () => {}} = {}) {
       if (result.error) onFatal(result.error);
     }
   };
-  const module = await factory({arguments: args,
+  const options = {arguments: args,
     onExit: code => end({code}),
-    onAbort: reason => end({error: new Error(`WASM runtime aborted: ${reason}`)})});
+    onAbort: reason => end({error: new Error(`WASM runtime aborted: ${reason}`)})};
+  let instantiationFailed;
+  if (wasmURL !== undefined) {
+    instantiationFailed = new Promise((_, reject) => {
+      options.instantiateWasm = (imports, receive) => {
+        void (async () => {
+          let instance;
+          if (compiledModule) {
+            instance = new WebAssembly.Instance(compiledModule, imports);
+          } else {
+            const response = await fetch(wasmURL);
+            if (!response.ok) throw new Error(`Could not load WebAssembly: HTTP ${response.status}`);
+            const streaming = typeof WebAssembly.instantiateStreaming === 'function'
+              && response.headers.get('Content-Type')?.split(';', 1)[0].trim() === 'application/wasm';
+            const result = streaming
+              ? await WebAssembly.instantiateStreaming(response, imports)
+              : await WebAssembly.instantiate(await response.arrayBuffer(), imports);
+            instance = result.instance;
+            compiledModule = result.module;
+          }
+          receive(instance, compiledModule);
+          onCompiledModule(compiledModule);
+        })().catch(reject);
+      };
+    });
+  }
+  const initialized = factory(options);
+  const module = await (instantiationFailed ? Promise.race([initialized, instantiationFailed]) : initialized);
   while (!terminal && module._seekdb_runtime_state() !== 1) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
@@ -48,7 +130,7 @@ export async function openRuntime(factory, {budgets, onFatal = () => {}} = {}) {
           || !Number.isSafeInteger(maxPacketBytes) || maxPacketBytes < 1 || maxPacketBytes > 0xffffffff) {
         throw new RangeError('Invalid connection buffer limit');
       }
-      const transport = new WasmMemoryTransport(module, module._seekdb_runtime_connect(capacity), {chunkBytes});
+      const transport = new MemoryTransport(module, module._seekdb_runtime_connect(capacity), {chunkBytes});
       let client;
       try { client = new MySQLConnection(transport, {maxPacketBytes}); }
       catch (error) { transport.close(); throw error; }

@@ -1,6 +1,20 @@
-/* Copyright (c) 2026 OceanBase. SPDX-License-Identifier: Apache-2.0 */
-#ifndef SEEKDB_NIO_MEMORY_H
-#define SEEKDB_NIO_MEMORY_H
+/*
+ * Copyright (c) 2026 OceanBase.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
 
 #include "nio.h"
 
@@ -23,7 +37,7 @@ typedef struct MemoryClient nio_memory_client;
  * on_connect can still reject it, in which case read eventually returns EOF.
  * reactor must remain live during this call; destruction must not race it.
  */
-nio_memory_client *nio_memory_connect(const nio_reactor *reactor, size_t capacity);
+nio_memory_client *nio_memory_connect(const NioReactor *reactor, size_t capacity);
 
 /* Nonblocking, copying byte IO. Positive = bytes transferred (may be partial),
  * -2 = would block, -1 = invalid argument or closed/error. read returns 0 at EOF
@@ -43,5 +57,4 @@ void nio_memory_close(nio_memory_client *client);
 
 #ifdef __cplusplus
 }
-#endif
 #endif

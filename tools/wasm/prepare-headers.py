@@ -9,9 +9,18 @@ from pathlib import Path
 import shutil
 
 
+def header_variant(patch, digest, fields):
+    # Native bundles for different hosts may carry differently packaged copies.
+    for variant in [patch] + patch.get("variants", []):
+        if digest in (variant[name] for name in fields):
+            return variant
+    return None
+
+
 def copy_headers(source, include, manifest, target_prefix=None):
     patches = [manifest["boost_mpl_backport"], manifest["s2_wasm_port"]]
     patches += manifest["boost_numeric_backport"]["headers"]
+    patches += manifest["boost_geometry_math"]["headers"]
     patched = {patch["path"]: patch for patch in patches}
     trees = [(name, name) for name in (
         "fast_float", "s2", "absl", "rapidjson", "roaring", "vsag", "curl",
@@ -34,10 +43,11 @@ def copy_headers(source, include, manifest, target_prefix=None):
             dst = include / relative
             patch = patched.get(relative.as_posix())
             if patch:
-                if hashlib.sha256(src.read_bytes()).hexdigest() not in (
-                        patch["input_sha256"], patch["output_sha256"]):
+                variant = header_variant(patch, hashlib.sha256(src.read_bytes()).hexdigest(),
+                                         ("input_sha256", "output_sha256"))
+                if not variant:
                     raise SystemExit(f"Unverified source header: {src}")
-                if dst.exists() and hashlib.sha256(dst.read_bytes()).hexdigest() == patch["output_sha256"]:
+                if dst.exists() and hashlib.sha256(dst.read_bytes()).hexdigest() == variant["output_sha256"]:
                     continue
             elif dst.exists():
                 src_stat, dst_stat = src.stat(), dst.stat()
@@ -52,16 +62,17 @@ def apply_header(include, patch, replacements):
     header = include / patch["path"]
     data = header.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
-    if digest == patch["output_sha256"]:
+    if header_variant(patch, digest, ("output_sha256",)):
         return
-    if digest != patch["input_sha256"]:
+    variant = header_variant(patch, digest, ("input_sha256",))
+    if not variant:
         raise SystemExit(f"Unverified dependency header {header}: {digest}; update the dependency adaptation explicitly")
     updated = data
     for old, new in replacements:
         if old not in updated:
             raise SystemExit(f"Unexpected header adaptation context: {header}")
         updated = updated.replace(old, new)
-    if hashlib.sha256(updated).hexdigest() != patch["output_sha256"]:
+    if hashlib.sha256(updated).hexdigest() != variant["output_sha256"]:
         raise SystemExit(f"Unexpected header adaptation result: {header}")
     header.write_bytes(updated)
 
@@ -87,6 +98,11 @@ def main():
         apply_header(args.include, patch, [
             (b'"boost/mpl/integral_c.hpp"', b'"boost/type_traits/integral_constant.hpp"'),
             (b"mpl::integral_c<", b"boost::integral_constant<"),
+        ])
+
+    for patch in manifest["boost_geometry_math"]["headers"]:
+        apply_header(args.include, patch, [
+            (old.encode(), new.encode()) for old, new in patch["replacements"]
         ])
 
     # S2's fallback conflicts with musl when another header included byteswap.h.

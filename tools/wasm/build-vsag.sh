@@ -2,16 +2,16 @@
 # Copyright (c) 2026 OceanBase.
 # SPDX-License-Identifier: Apache-2.0
 set -euo pipefail
-seekdb_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-seekdb_prefix="${1:-${seekdb_root}/build_wasm_deps}"
-mkdir -p "${seekdb_prefix}"
-seekdb_prefix="$(cd "${seekdb_prefix}" && pwd)"
-seekdb_version="$(cat "${seekdb_root}/tools/wasm/emscripten-version")"
-if ! emcc --version | head -n 1 | grep -Eq " ${seekdb_version//./\\.}( |$)"; then
-  echo "Activate Emscripten ${seekdb_version} before building Wasm dependencies." >&2
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+install_prefix="${1:-${repo_root}/build_wasm_deps}"
+mkdir -p "${install_prefix}"
+install_prefix="$(cd "${install_prefix}" && pwd)"
+sdk_version="$(cat "${repo_root}/tools/wasm/emscripten-version")"
+if ! emcc --version | head -n 1 | grep -Eq " ${sdk_version//./\\.}([ -]|$)"; then
+  echo "Activate Emscripten ${sdk_version} before building Wasm dependencies." >&2
   exit 1
 fi
-python3 - "${seekdb_root}" "${seekdb_prefix}" "${2:-build}" <<'PY'
+python3 - "${repo_root}" "${install_prefix}" "${2:-build}" <<'PY'
 import hashlib
 import json
 from pathlib import Path

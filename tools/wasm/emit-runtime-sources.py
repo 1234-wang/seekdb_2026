@@ -64,13 +64,13 @@ def main():
 
     args.output.write_text(
         "# Generated from Bazel OBLib and SQL source inventories; do not hand-edit.\n"
-        + "set(SEEKDB_WASM_ALLOCATOR_SOURCES\n"
+        + "set(ALLOCATOR_SOURCES\n"
         + "".join("  " + cmake_path(source) + "\n" for source in sources)
-        + ")\nset(SEEKDB_WASM_RUNTIME_SUPPORT_SOURCES\n"
+        + ")\nset(RUNTIME_SUPPORT_SOURCES\n"
         + "".join("  " + cmake_path(source) + "\n" for source in sorted(support))
-        + ")\nset(SEEKDB_WASM_PARSER_SOURCES\n"
+        + ")\nset(PARSER_SOURCES\n"
         + "".join("  " + cmake_path(source) + "\n" for source in parser_sources)
-        + ")\nset(SEEKDB_WASM_CHARSET_SOURCES\n"
+        + ")\nset(CHARSET_SOURCES\n"
         + "".join("  " + cmake_path(source) + "\n" for source in charset_sources)
         + ")\n"
     )

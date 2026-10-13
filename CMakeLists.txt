@@ -8,6 +8,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   include(cmake/IOS.cmake)
 endif()
 include(cmake/Env.cmake)
+include(cmake/clang_warnings.cmake)
 
 project("OceanBase"
   VERSION 1.4.0.0

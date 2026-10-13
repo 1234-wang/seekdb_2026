@@ -12,17 +12,17 @@ parser.add_argument("--record", action="store_true")
 args = parser.parse_args()
 repo = Path(__file__).resolve().parents[2]
 build = args.build_dir.resolve()
-archive = build / "target/wasm32-unknown-emscripten/release/libsql_nio.a"
+archives = {name: build / "exports" / f"lib{name}.a" for name in ("sql_nio", "config", "local")}
 manifest = build / "nio-build-manifest.json"
 paths = [
-    *sorted((repo / "rust/sql-nio/src").glob("*.rs")),
-    *sorted((repo / "rust/sql-nio/include").glob("*.h")),
+    *sorted(path for crate in ("sql-nio", "config", "kv", "local")
+            for pattern in ("src/**/*.rs", "include/*.h", "*.toml", "*.rs", "*.yaml")
+            for path in (repo / "rust" / crate).glob(pattern)),
     *(repo / name for name in (
-        "rust/Cargo.toml", "rust/Cargo.lock", "rust/sql-nio/Cargo.toml",
+        "rust/Cargo.toml", "rust/Cargo.lock", "rust/build.py", "rust/exports.json",
         "tools/wasm/rust-toolchain-version", "tools/wasm/emscripten-version",
         "tools/wasm/build-rust-nio.sh", "tools/wasm/rust-build-env.sh",
         "tools/wasm/prepare-rust-sysroot.py", "tools/wasm/rust-nio-manifest.py",
-        "unittest/wasm/test_wasm_nio_memory.cpp",
     )),
 ]
 
@@ -42,7 +42,7 @@ try:
         "rustflags": "-Ctarget-feature=+atomics,+bulk-memory,+mutable-globals -Cpanic=abort",
         "inputs": {str(path.relative_to(repo)): digest(path) for path in paths},
         "std_patch": std_patch,
-        "archive_sha256": digest(archive),
+        "archive_sha256": {name: digest(path) for name, path in archives.items()},
     }
     if args.record:
         manifest.write_text(json.dumps(current, indent=2) + "\n")

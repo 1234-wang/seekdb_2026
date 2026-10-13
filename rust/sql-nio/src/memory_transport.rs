@@ -1,5 +1,17 @@
 // Copyright (c) 2026 OceanBase.
-// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Bounded, nonblocking in-process byte streams for the existing NIO reactor.
 //! Notifications use a condition variable; no OS socket or browser proxy is used.
 use crate::*;
@@ -403,11 +415,23 @@ impl Drop for MemoryClient {
     }
 }
 
+// A caller buffer length that is non-negative, fits isize, and does not wrap the
+// address space; a non-empty buffer must not be null.
+fn checked_bytes_len(data: *const c_char, len: i64) -> Option<usize> {
+    let len = usize::try_from(len).ok()?;
+    if len > isize::MAX as usize
+        || (len != 0 && (data.is_null() || (data as usize).checked_add(len).is_none()))
+    {
+        return None;
+    }
+    Some(len)
+}
+
 /// # Safety
 /// The reactor remains live during this call; its destruction cannot race it.
 #[no_mangle]
 pub unsafe extern "C" fn nio_memory_connect(
-    reactor: *const reactor::Reactor,
+    reactor: *const reactor::NioReactor,
     capacity: usize,
 ) -> *mut MemoryClient {
     let Some(reactor) = (unsafe { reactor.as_ref() }) else {
@@ -464,7 +488,7 @@ pub unsafe extern "C" fn nio_memory_write(
     let Some(client) = (unsafe { client.as_ref() }) else {
         return -1;
     };
-    let Some(length) = crate::ffi_check::checked_bytes_len(buffer, length) else {
+    let Some(length) = checked_bytes_len(buffer, length) else {
         return -1;
     };
     if length == 0 {
@@ -485,7 +509,7 @@ pub unsafe extern "C" fn nio_memory_read(
     let Some(client) = (unsafe { client.as_ref() }) else {
         return -1;
     };
-    let Some(length) = crate::ffi_check::checked_bytes_len(buffer, length) else {
+    let Some(length) = checked_bytes_len(buffer, length) else {
         return -1;
     };
     if length == 0 {
