@@ -2,6 +2,7 @@
 #include "observer/include/seekdb_engine.h"
 #include "observer/ob_command_line_parser.h"
 #include "observer/ob_server.h"
+#include "observer/ob_server_utils.h"
 #include "share/ob_errno.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/thread/protected_stack_allocator.h"
@@ -81,6 +82,7 @@ void run_engine(SeekdbEngineHandle engine)
   if (nullptr == getcwd(previous_directory, sizeof(previous_directory))) {
     ret = OB_IO_ERROR;
   } else if (OB_FAIL(parser.parse_args(static_cast<int>(argv.size()), argv.data(), options, false))) {
+  } else if (OB_FAIL(ObServerUtils::prepare_directories(options))) {
   } else if (::chdir(options.base_dir_.ptr()) != 0) {
     ret = OB_IO_ERROR;
   } else {
