@@ -27,13 +27,10 @@ using namespace share;
 using namespace transaction;
 namespace storage
 {
-typedef ObFunction<int(const ObLSMeta &)> WriteSlog;
-WriteSlog ObLSMeta::write_slog_ = [](const ObLSMeta &ls_meta) {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(LOCAL_STORAGE_META_PERSISTER.update_ls_meta(ls_meta))) {
-  }
-  return ret;
-};
+int ObLSMeta::persist(const ObLSMeta &meta)
+{
+  return STORAGE_META_SERVICE.update_ls_meta(meta);
+}
 
 ObLSMeta::ObLSMeta()
   : rw_lock_(),
@@ -62,23 +59,44 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
 
 int ObLSMeta::set_start_work_state()
 {
+  int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
-  ObReentrantWLockGuard guard(rw_lock_);
-  return ls_persistent_state_.start_work();
+  ObLSMeta next(*this);
+  if (OB_FAIL(next.ls_persistent_state_.start_work())) {
+  } else if (OB_FAIL(persist(next))) {
+  } else {
+    ObReentrantWLockGuard guard(rw_lock_);
+    ls_persistent_state_ = next.ls_persistent_state_;
+  }
+  return ret;
 }
 
 int ObLSMeta::set_start_restore_state()
 {
+  int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
-  ObReentrantWLockGuard guard(rw_lock_);
-  return ls_persistent_state_.start_restore();
+  ObLSMeta next(*this);
+  if (OB_FAIL(next.ls_persistent_state_.start_restore())) {
+  } else if (OB_FAIL(persist(next))) {
+  } else {
+    ObReentrantWLockGuard guard(rw_lock_);
+    ls_persistent_state_ = next.ls_persistent_state_;
+  }
+  return ret;
 }
 
 int ObLSMeta::set_remove_state()
 {
+  int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
-  ObReentrantWLockGuard guard(rw_lock_);
-  return ls_persistent_state_.remove();
+  ObLSMeta next(*this);
+  if (OB_FAIL(next.ls_persistent_state_.remove())) {
+  } else if (OB_FAIL(persist(next))) {
+  } else {
+    ObReentrantWLockGuard guard(rw_lock_);
+    ls_persistent_state_ = next.ls_persistent_state_;
+  }
+  return ret;
 }
 
 const ObLSPersistentState &ObLSMeta::get_persistent_state() const
@@ -128,7 +146,7 @@ SCN ObLSMeta::get_clog_checkpoint_scn() const
 
 int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
                                   const SCN &clog_checkpoint_scn,
-                                  const bool write_slog)
+                                  const bool persist_change)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -138,14 +156,16 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
     tmp.clog_base_lsn_ = clog_checkpoint_lsn;
     tmp.clog_checkpoint_scn_ = clog_checkpoint_scn;
 
-    if (write_slog) {
-      if (OB_FAIL(write_slog_(tmp))) {
+    if (persist_change) {
+      if (OB_FAIL(persist(tmp))) {
       }
     }
 
-    ObReentrantWLockGuard guard(rw_lock_);
-    clog_base_lsn_ = clog_checkpoint_lsn;
-    clog_checkpoint_scn_ = clog_checkpoint_scn;
+    if (OB_SUCC(ret)) {
+      ObReentrantWLockGuard guard(rw_lock_);
+      clog_base_lsn_ = clog_checkpoint_lsn;
+      clog_checkpoint_scn_ = clog_checkpoint_scn;
+    }
   }
 
   return ret;
@@ -170,7 +190,7 @@ int ObLSMeta::set_tablet_change_checkpoint_scn(
     ObLSMeta tmp(*this);
     tmp.tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn;
 
-    if (OB_FAIL(write_slog_(tmp))) {
+    if (OB_FAIL(persist(tmp))) {
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
       LOG_INFO("update tablet change checkpoint scn",
@@ -203,7 +223,7 @@ int ObLSMeta::set_restore_status(const ObRestoreStatus &restore_status)
     if (restore_status.is_none() && !tmp.ls_persistent_state_.is_normal_state()
         && OB_FAIL(tmp.ls_persistent_state_.finish_restore())) {
       LOG_WARN("failed to switch tmp ls meta to finish restore state", KR(ret), K(tmp));
-    } else if (OB_FAIL(write_slog_(tmp))) {
+    } else if (OB_FAIL(persist(tmp))) {
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
       ls_persistent_state_ = tmp.ls_persistent_state_;
@@ -243,7 +263,7 @@ int ObLSMeta::update_for_physical_restore(
     ObLSMeta tmp(*this);
     tmp.tablet_change_checkpoint_scn_ = source_meta.tablet_change_checkpoint_scn_;
     tmp.all_id_meta_.update_all_id_meta(source_meta.all_id_meta_);
-    if (OB_FAIL(write_slog_(tmp))) {
+    if (OB_FAIL(persist(tmp))) {
       LOG_WARN("failed to persist physical restore ls meta", K(ret), K(tmp));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
@@ -277,24 +297,26 @@ int ObLSMeta::init(
 int ObLSMeta::update_id_meta(const int64_t service_type,
                              const int64_t limited_id,
                              const SCN &latest_scn,
-                             const bool write_slog)
+                             const bool persist_change)
 {
   int ret = OB_SUCCESS;
 
   ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
   } else {
-    // TODO: write slog may failed, but the content is updated.
+    // Publish the complete LS state before advancing the in-memory state.
     ObLSMeta tmp(*this);
     tmp.all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
     update_guard.click();
-    if (write_slog) {
-      if (OB_FAIL(write_slog_(tmp))) {
+    if (persist_change) {
+      if (OB_FAIL(persist(tmp))) {
       }
     }
-    ObReentrantWLockGuard guard(rw_lock_);
-    update_guard.click();
-    all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
+    if (OB_SUCC(ret)) {
+      ObReentrantWLockGuard guard(rw_lock_);
+      update_guard.click();
+      all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
+    }
   }
   LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id), K(latest_scn),
            K(*this));

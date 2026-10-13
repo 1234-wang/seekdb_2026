@@ -17,7 +17,6 @@
 #ifndef OB_STORAGE_SUPER_BLOCK_STRUCT_H_
 #define OB_STORAGE_SUPER_BLOCK_STRUCT_H_
 
-#include "common/log/ob_log_cursor.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
@@ -69,9 +68,6 @@ public:
 
   int64_t total_macro_block_count_;
   int64_t total_file_size_;
-  // Local recovery cursor and checkpoint entry for the process-wide server runtime.
-  common::ObLogCursor replay_start_point_;
-  blocksstable::MacroBlockId runtime_meta_entry_;
 
   ServerSuperBlockBody();
   bool is_valid() const;
@@ -82,9 +78,7 @@ public:
                K_(modify_timestamp),
                K_(macro_block_size),
                K_(total_macro_block_count),
-               K_(total_file_size),
-               K_(replay_start_point),
-               K_(runtime_meta_entry));
+               K_(total_file_size));
 
   OB_UNIS_VERSION(SUPER_BLOCK_BODY_VERSION);
 };
@@ -123,37 +117,7 @@ public:
   ServerSuperBlockBody body_;
 };
 
-struct ObServerRuntimeSuperBlock final
-{
-public:
-  static const int64_t SERVER_RUNTIME_SUPER_BLOCK_VERSION = 4;
-  ObServerRuntimeSuperBlock();
-  ObServerRuntimeSuperBlock(const bool is_hidden);
-  ~ObServerRuntimeSuperBlock() = default;
-  ObServerRuntimeSuperBlock(const ObServerRuntimeSuperBlock &other);
-  ObServerRuntimeSuperBlock &operator==(const ObServerRuntimeSuperBlock &other) = delete;
-  ObServerRuntimeSuperBlock &operator!=(const ObServerRuntimeSuperBlock &other) = delete;
-  void reset();
-  bool is_valid() const;
-
-  TO_STRING_KV(
-               K_(ls_meta_entry),
-               K_(is_hidden),
-               K_(version));
-
-  OB_UNIS_VERSION(SERVER_RUNTIME_SUPER_BLOCK_VERSION);
-public:
-  
-  // Local recovery state for LS and tablet metadata.
-  blocksstable::MacroBlockId ls_meta_entry_;
-
-  bool is_hidden_;
-  int64_t version_;
-};
-
 #define IS_EMPTY_BLOCK_LIST(entry_block) (entry_block == oceanbase::storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK)
-// Due to the design of slog, the log_id_'s initial value must be 1
-#define SET_FIRST_VALID_SLOG_CURSOR(cursor) (set_cursor(cursor, 1/*file_id*/, 1/*log_id*/, 0/*offset*/))
 
 }  // end namespace storage
 }  // end namespace oceanbase

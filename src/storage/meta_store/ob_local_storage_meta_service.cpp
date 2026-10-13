@@ -33,8 +33,6 @@ namespace storage
 ObLocalStorageMetaService::ObLocalStorageMetaService()
   : is_inited_(false),
     is_started_(false),
-    ckpt_slog_handler_(),
-    persister_(),
     object_rwriter_(),
     object_raw_rwriter_()
 {}
@@ -53,8 +51,6 @@ int ObLocalStorageMetaService::init()
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(ckpt_slog_handler_.init(STORAGE_META_SERVICE.get_slogger()))) {
-  } else if (OB_FAIL(persister_.init(STORAGE_META_SERVICE.get_slogger(), ckpt_slog_handler_))) {
   } else if (OB_FAIL(object_rwriter_.init())) {
   } else if (OB_FAIL(object_raw_rwriter_.init())) {
   } else {
@@ -68,64 +64,28 @@ int ObLocalStorageMetaService::start()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ckpt_slog_handler_.start())) {
   } else {
     is_started_ = true;
   }
   return ret;
 }
 
-int ObLocalStorageMetaService::replay(const ObServerRuntimeSuperBlock &super_block)
-{
-  return ckpt_slog_handler_.start_replay(super_block);
-}
-
 void ObLocalStorageMetaService::stop()
 {
   if (IS_INIT) {
-    ckpt_slog_handler_.stop();
+    is_started_ = false;
   }
 }
 
-void ObLocalStorageMetaService::wait()
-{
-  if (IS_INIT) {
-    ckpt_slog_handler_.wait();
-  }
-}
+void ObLocalStorageMetaService::wait() {}
 
 void ObLocalStorageMetaService::destroy()
 {
-  ckpt_slog_handler_.destroy();
-  persister_.destroy();
   object_rwriter_.reset();
   object_raw_rwriter_.reset();
 
   is_started_ = false;
   is_inited_ = false;
-}
-
-int ObLocalStorageMetaService::get_meta_block_list(
-    ObIArray<blocksstable::MacroBlockId> &meta_block_list)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    if (OB_FAIL(ckpt_slog_handler_.get_meta_block_list(meta_block_list))) {
-    }
-  }
-  return ret;
-}
-
-int ObLocalStorageMetaService::write_checkpoint(bool is_force)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ckpt_slog_handler_.write_checkpoint(is_force))) {
-  }
-  return ret;
 }
 
 int ObLocalStorageMetaService::read_from_disk(
@@ -135,8 +95,8 @@ int ObLocalStorageMetaService::read_from_disk(
     int64_t &buf_len)
 {
   int ret = OB_SUCCESS;
-  if (ObMetaDiskAddr::DiskType::FILE == addr.type()) {
-    if (OB_FAIL(ckpt_slog_handler_.read_empty_shell_file(addr, allocator, buf, buf_len))) {
+  if (addr.is_local()) {
+    if (OB_FAIL(STORAGE_META_SERVICE.read_empty_shell(addr, allocator, buf, buf_len))) {
     }
   } else {
     if (OB_FAIL(read_from_block(addr, allocator, buf, buf_len))) {

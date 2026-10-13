@@ -15,13 +15,11 @@
  * limitations under the License.
  */
 
-#ifndef OB_STORAGE_SLOG_CKPT_TBALET_REPLAY_CREATE_HANDLER_H
-#define OB_STORAGE_SLOG_CKPT_TBALET_REPLAY_CREATE_HANDLER_H
+#pragma once
 
 #include "storage/meta_mem/ob_tablet_map_key.h"
-#include "storage/slog_ckpt/ob_startup_accel_task_handler.h"
+#include "storage/meta_store/ob_startup_accel_task_handler.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-
 
 namespace oceanbase
 {
@@ -34,27 +32,27 @@ class SCN;
 namespace storage
 {
 class ObLS;
-class ObTabletReplayCreateHandler;
+class TabletLoader;
 class ObLSTabletService;
 
-struct ObTabletReplayItem
+struct TabletLoadItem
 {
 public:
-  ObTabletReplayItem(const ObTabletMapKey &key, const ObMetaDiskAddr &addr)
+  TabletLoadItem(const ObTabletMapKey &key, const ObMetaDiskAddr &addr)
     : key_(key), addr_(addr) {}
-  ObTabletReplayItem()
+  TabletLoadItem()
     : key_(), addr_() {}
-  ~ObTabletReplayItem() {}
-  bool operator<(const ObTabletReplayItem &r) const;
+  ~TabletLoadItem() {}
+  bool operator<(const TabletLoadItem &r) const;
   TO_STRING_KV(K_(key), K_(addr));
 
   ObTabletMapKey key_;
   ObMetaDiskAddr addr_;
 };
 
-using ObTabletReplayItemRange = std::pair<int64_t, int64_t>; // record the start_item_idx and end_item_idx in total_tablet_item_arr
+using TabletLoadRange = std::pair<int64_t, int64_t>; // record the start_item_idx and end_item_idx in total_tablet_item_arr
 
-class ObTabletReplayCreateTask : public storage::ObStartupAccelTask
+class TabletLoadTask : public storage::ObStartupAccelTask
 {
 public:
   enum Type
@@ -63,7 +61,7 @@ public:
     AGGREGATE = 1,
     MAX = 2,
   };
-  ObTabletReplayCreateTask()
+  TabletLoadTask()
     : is_inited_(false),
       idx_(-1),
       type_(Type::MAX),
@@ -71,19 +69,18 @@ public:
       tablet_cnt_(0),
       handler_(nullptr) {}
 
-  virtual ~ObTabletReplayCreateTask()
+  virtual ~TabletLoadTask()
   {
     destroy();
   }
-  int init(const int64_t task_idx, const ObTabletReplayCreateTask::Type type,
-      ObTabletReplayCreateHandler *handler);
+  int init(const int64_t task_idx, const TabletLoadTask::Type type,
+      TabletLoader *handler);
 
   int execute() override;
-  int add_item_range(const ObTabletReplayItemRange &range, bool &is_enough);
+  int add_item_range(const TabletLoadRange &range, bool &is_enough);
 
   VIRTUAL_TO_STRING_KV(K_(idx), K_(type), KP(this),
       "range_count", replay_item_range_arr_.count(), K_(tablet_cnt));
-
 
 private:
   static const int64_t MAX_DISCRETE_TABLET_CNT_PER_TASK = 200;
@@ -94,26 +91,25 @@ private:
   bool is_inited_;
   int64_t idx_;
   Type type_;
-  common::ObSEArray<ObTabletReplayItemRange, MAX_DISCRETE_TABLET_CNT_PER_TASK> replay_item_range_arr_;
+  common::ObSEArray<TabletLoadRange, MAX_DISCRETE_TABLET_CNT_PER_TASK> replay_item_range_arr_;
   int64_t tablet_cnt_;
-  ObTabletReplayCreateHandler *handler_;
+  TabletLoader *handler_;
 };
 
+//============================= TabletLoader ==============================//
 
-//============================= ObTabletReplayCreateHandler ==============================//
-
-class ObTabletReplayCreateHandler
+class TabletLoader
 {
 public:
-  ObTabletReplayCreateHandler();
-  ~ObTabletReplayCreateHandler() {}
+  TabletLoader();
+  ~TabletLoader() {}
 
   int init(
-      const common::hash::ObHashMap<ObTabletMapKey, ObMetaDiskAddr> &tablet_item_map);
-  int concurrent_replay(storage::ObStartupAccelTaskHandler* startup_accel_handler);
+      const common::ObIArray<TabletLoadItem> &tablets);
+  int load(storage::ObStartupAccelTaskHandler* startup_accel_handler);
 
-  int replay_discrete_tablets(const ObIArray<ObTabletReplayItemRange> &range_arr);
-  int replay_aggregate_tablets(const ObIArray<ObTabletReplayItemRange> &range_arr);
+  int load_discrete_tablets(const ObIArray<TabletLoadRange> &range_arr);
+  int load_aggregate_tablets(const ObIArray<TabletLoadRange> &range_arr);
 
   void inc_inflight_task_cnt() { ATOMIC_INC(&inflight_task_cnt_); }
   void dec_inflight_task_cnt() { ATOMIC_DEC(&inflight_task_cnt_); }
@@ -125,16 +121,15 @@ private:
   {
     return tablet_cnt_in_block > AGGREGATE_CNT_THRESHOLD && valid_size_in_block > AGGREGATE_SIZE_THRESHOLD; 
   }
-  static int replay_create_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len);
+  static int replay_create_tablet(const TabletLoadItem &replay_item, const char *buf, const int64_t buf_len);
   static int get_tablet_svr_(ObLSTabletService *&ls_tablet_svr, ObLS *&tenant_ls);
   int add_item_range_to_task_(
       storage::ObStartupAccelTaskHandler* startup_accel_handler,
-      const ObTabletReplayCreateTask::Type type,
-      const ObTabletReplayItemRange &range, ObTabletReplayCreateTask *&task);
+      const TabletLoadTask::Type type,
+      const TabletLoadRange &range, TabletLoadTask *&task);
   int add_task_(
       storage::ObStartupAccelTaskHandler* startup_accel_handler,
-      ObTabletReplayCreateTask *task);
-
+      TabletLoadTask *task);
 
 private:
   static const int64_t AGGREGATE_CNT_THRESHOLD = 16;
@@ -146,14 +141,11 @@ private:
   int64_t inflight_task_cnt_;
   int64_t finished_tablet_cnt_;
   int errcode_;
-  ObTabletReplayItem *total_tablet_item_arr_;
+  TabletLoadItem *total_tablet_item_arr_;
   int64_t total_tablet_cnt_;
-  ObTabletReplayCreateTask *aggrgate_task_;
-  ObTabletReplayCreateTask *discrete_task_;
+  TabletLoadTask *aggrgate_task_;
+  TabletLoadTask *discrete_task_;
 };
-
 
 } // namespace storage
 } // namespace oceanbase
-
-#endif

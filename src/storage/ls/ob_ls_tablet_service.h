@@ -26,7 +26,6 @@
 #include "share/schema/ob_table_schema.h"
 #include "storage/ob_dml_common.h"
 #include "storage/ob_relative_table.h"
-#include "storage/slog/ob_storage_log.h"
 #include "storage/ob_tablet_local_status.h"
 #include "storage/tablelock/ob_lock_memtable_mgr.h"
 #include "storage/tx_table/ob_tx_ctx_memtable_mgr.h"
@@ -86,7 +85,6 @@ class ObLSTabletIterator;
 class ObLSTabletAddrIterator;
 class ObLSTabletFastIter;
 class ObTabletMapKey;
-struct ObStorageLogParam;
 struct ObTabletCreateSSTableParam;
 struct ObUpdateTableStoreParam;
 class ObTableScanRange;
@@ -184,11 +182,6 @@ public:
   int64_t get_tablet_count() const;
 
   // update tablet
-  int update_tablet_checkpoint(
-    const ObTabletMapKey &key,
-    const ObMetaDiskAddr &old_addr,
-    const ObMetaDiskAddr &new_addr,
-    ObTabletHandle &new_handle);
   int update_tablet_table_store(
       const common::ObTabletID &tablet_id,
       const ObUpdateTableStoreParam &param,
@@ -445,10 +438,6 @@ private:
     DISALLOW_COPY_AND_ASSIGN(ObUpdateDDLCommitSCN);
   };
 private:
-  static int refresh_memtable_for_ckpt(
-      const ObMetaDiskAddr &old_addr,
-      const ObMetaDiskAddr &cur_addr,
-      ObTabletHandle &new_tablet_handle);
   static int safe_update_cas_tablet(
       const ObTabletMapKey &key,
       const ObMetaDiskAddr &addr,

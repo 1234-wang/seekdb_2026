@@ -6385,6 +6385,44 @@ def_table_schema(
   ],
 )
 
+def_local_table(
+  table_name = '__all_storage_runtime',
+  table_id = '12565',
+  namespace = 'storage_runtime',
+  namespace_id = 6,
+  columns = [
+    ('id', 'int', 'false'),
+    ('initialized', 'int', 'false'),
+    ('payload', 'varbinary:65536', 'false'),
+  ],
+  primary_key = ['id'],
+)
+
+def_local_table(
+  table_name = '__all_storage_ls',
+  table_id = '12566',
+  namespace = 'storage_ls',
+  namespace_id = 7,
+  columns = [
+    ('id', 'int', 'false'),
+    ('payload', 'varbinary:65536', 'false'),
+  ],
+  primary_key = ['id'],
+)
+
+def_local_table(
+  table_name = '__all_storage_tablet',
+  table_id = '12567',
+  namespace = 'storage_tablet',
+  namespace_id = 8,
+  columns = [
+    ('tablet_id', 'int', 'false'),
+    ('kind', 'int', 'false'),
+    ('payload', 'varbinary:1048576', 'false'),
+  ],
+  primary_key = ['tablet_id'],
+)
+
 # Reserved position (placeholder before this line)
 # Placeholder suggestion for this section: Use actual table names for placeholders
 ################################################################################

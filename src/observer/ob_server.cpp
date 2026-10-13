@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
+#include "share/ob_io_device_helper.h"
 #include "config_bridge.h"
 #include "config_checkers.h"
 #ifndef _WIN32
@@ -838,7 +839,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObLogAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(startup_accel_handler_.init())) {
       LOG_ERROR("init server startup task handler failed", KR(ret));
-    } else if (OB_FAIL(STORAGE_META_SERVICE.init(server_runtime_controller_))) {
+    } else if (OB_FAIL(STORAGE_META_SERVICE.init(server_runtime_controller_, local_store_))) {
       LOG_ERROR("init server storage meta handler failed", KR(ret));
     } else if (OB_FAIL(init_server_runtime())) {
       LOG_ERROR("init server runtime failed", KR(ret));
@@ -1164,22 +1165,15 @@ int ObServer::start()
     } else {
       FLOG_INFO("success to start io manager");
     }
-    int64_t slog_reserved_size = 0;
+    int64_t metadata_reserved_size = 0;
     int64_t effective_log_disk_size = storage_env_.log_disk_size_;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(STORAGE_META_SERVICE.get_reserved_size(slog_reserved_size))) {
-      LOG_WARN("fail to get slog reserved size", KR(ret), K(slog_reserved_size));
-    } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(slog_reserved_size))) {
-      LOG_ERROR("start storage object mgr fail", KR(ret), K(slog_reserved_size));
+    } else if (OB_FAIL(STORAGE_META_SERVICE.get_reserved_size(metadata_reserved_size))) {
+      LOG_WARN("fail to get local metadata reserved size", KR(ret), K(metadata_reserved_size));
+    } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.start(metadata_reserved_size))) {
+      LOG_ERROR("start storage object mgr fail", KR(ret), K(metadata_reserved_size));
     } else {
       FLOG_INFO("success to start storage object manager");
-    }
-    if (OB_SUCC(ret) && !need_bootstrap_ &&
-        storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK ==
-            OB_STORAGE_OBJECT_MGR.get_server_super_block().body_.runtime_meta_entry_) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_ERROR("server checkpoint is incomplete; recreate the data and redo directories before restart",
-          KR(ret));
     }
     if (FAILEDx(standby_module_->prepare_storage_replay())) {
       LOG_ERROR("fail to restore server role before runtime and storage replay", KR(ret));
@@ -1189,7 +1183,7 @@ int ObServer::start()
     } else {
       FLOG_INFO("success to start server runtime");
     }
-    if (FAILEDx(STORAGE_META_SERVICE.start())) {
+    if (FAILEDx(STORAGE_META_SERVICE.start(need_bootstrap_))) {
       LOG_ERROR("fail to start server storage meta service", KR(ret));
     } else {
       FLOG_INFO("success to start server storage meta service");
@@ -1241,14 +1235,10 @@ int ObServer::start()
       } else if (server_runtime_controller_.is_hidden()) {
         ret = OB_STATE_NOT_MATCH;
         LOG_ERROR("hidden runtime cannot commit bootstrap", KR(ret));
-      } else if (OB_FAIL(STORAGE_META_SERVICE.write_checkpoint(true /*is_force*/))) {
-        LOG_ERROR("failed to write bootstrap local checkpoint", KR(ret));
-      } else if (storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK ==
-                 server_runtime_controller_.get_super_block().ls_meta_entry_) {
-        ret = OB_STATE_NOT_MATCH;
-        LOG_ERROR("bootstrap local checkpoint has no LS metadata", KR(ret));
+      } else if (OB_FAIL(STORAGE_META_SERVICE.commit_bootstrap())) {
+        LOG_ERROR("failed to commit bootstrap storage metadata", KR(ret));
       } else {
-        FLOG_INFO("bootstrap checkpoint committed");
+        FLOG_INFO("bootstrap storage metadata committed");
       }
     }
     if (OB_SUCC(ret)) {
@@ -1372,7 +1362,7 @@ int ObServer::initialize_server_runtime()
     if (OB_SERVER_RUNTIME_NOT_READY == ret) {
       if (!need_bootstrap_) {
         ret = OB_STATE_NOT_MATCH;
-        LOG_ERROR("server checkpoint has no runtime; clear the data and redo directories before restart",
+        LOG_ERROR("local storage has no initialized runtime; clear the data and redo directories before restart",
             KR(ret));
       } else {
         ret = OB_SUCCESS;
@@ -1382,12 +1372,6 @@ int ObServer::initialize_server_runtime()
     } else {
       LOG_ERROR("fail to get server runtime", KR(ret));
     }
-  } else if (!need_bootstrap_ &&
-             storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK ==
-                 server_runtime_controller_.get_super_block().ls_meta_entry_) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_ERROR("runtime checkpoint has no LS metadata; clear the data and redo directories before restart",
-        KR(ret));
   } else if (OB_FAIL(server_runtime_controller_.refresh_runtime_resources())) {
   }
   runtime = nullptr;
@@ -1650,7 +1634,6 @@ int ObServer::stop()
       // Join workers and stop/wait storage modules before destroying their owners.
       server_runtime_controller_.wait();
     }
-    STORAGE_META_SERVICE.wait();
     FLOG_INFO("server runtime stopped");
     FLOG_INFO("begin to stop ob_service");
     if (OB_NOT_NULL(standby_module_)) {
@@ -2073,8 +2056,6 @@ int ObServer::init_io()
         storage_env_.default_block_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;  // 2MB
 
         // log
-        storage_env_.log_spec_.log_dir_ = OB_FILE_SYSTEM_ROUTER.get_slog_dir();
-        storage_env_.log_spec_.max_log_file_size_ = ObLogConstants::MAX_LOG_FILE_SIZE;
         storage_env_.clog_dir_ = OB_FILE_SYSTEM_ROUTER.get_clog_dir();
 
         // cache
@@ -2082,7 +2063,6 @@ int ObServer::init_io()
 
         // policy
         storage_env_.clog_file_spec_ = OB_FILE_SYSTEM_ROUTER.get_clog_file_spec();
-        storage_env_.slog_file_spec_ = OB_FILE_SYSTEM_ROUTER.get_slog_file_spec();
 
         int64_t data_disk_size = 0;
         int64_t log_disk_size = 0;

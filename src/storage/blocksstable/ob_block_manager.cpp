@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX STORAGE_BLKMGR
 
+#include "share/ob_io_device_helper.h"
 #include "config_bridge.h"
 #include "ob_block_manager.h"
 #include "ob_io_bench_controller.h"
@@ -979,7 +980,6 @@ int ObBlockManager::mark_macro_blocks(
     tmp_status.mark_finished_ = false;
     LOG_INFO("no block alloc/free, no need to mark blocks", K(ret));
   } else if (OB_FAIL(mark_tmp_file_blocks(mark_info, macro_id_set, tmp_status))) {
-  } else if (OB_FAIL(mark_server_meta_blocks(mark_info, macro_id_set, tmp_status))) {
   } else {
     MacroBlockId macro_id;
     if (OB_FAIL(mark_local_storage_blocks(mark_info, macro_id_set, tmp_status))) {
@@ -1034,8 +1034,6 @@ int ObBlockManager::mark_local_storage_blocks(
   ObStorageMetaMemMgr *t3m = ::oceanbase::share::server_service<::oceanbase::storage::ObStorageMetaMemMgr>();
   if (OB_ISNULL(t3m) || OB_ISNULL(meta_service)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(mark_local_checkpoint_blocks(mark_info, macro_id_set,
-                                                  *meta_service, tmp_status))) {
   } else {
     ObArenaAllocator iter_allocator("MarkIter", OB_MALLOC_NORMAL_BLOCK_SIZE);
     ObTabletIterator tablet_iter(*t3m, iter_allocator, nullptr /*no op*/);
@@ -1134,26 +1132,6 @@ int ObBlockManager::do_mark_tablet_block(
   return ret;
 }
 
-int ObBlockManager::mark_local_checkpoint_blocks(
-    MacroBlkIdMap &mark_info,
-    common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode>
-        &macro_id_set,
-    ObLocalStorageMetaService &meta_service,
-    ObMacroBlockMarkerStatus &tmp_status) {
-  int ret = OB_SUCCESS;
-  ObArray<MacroBlockId> macro_block_list;
-
-  if (OB_FAIL(macro_block_list.reserve(DEFAULT_PENDING_FREE_COUNT))) {
-  } else if (OB_FAIL(meta_service.get_meta_block_list(macro_block_list))) {
-  } else if (OB_FAIL(
-                 update_mark_info(macro_block_list, macro_id_set, mark_info))) {
-  } else {
-    tmp_status.linked_block_count_ += macro_block_list.count();
-    tmp_status.hold_count_ -= macro_block_list.count();
-  }
-  return ret;
-}
-
 int ObBlockManager::mark_tmp_file_blocks(
     MacroBlkIdMap &mark_info,
     common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode>
@@ -1166,26 +1144,6 @@ int ObBlockManager::mark_tmp_file_blocks(
   } else if (OB_FAIL(update_mark_info(macro_block_list, macro_id_set, mark_info))){
   } else {
     tmp_status.tmp_file_count_ += macro_block_list.count();
-    tmp_status.hold_count_ -= macro_block_list.count();
-  }
-  return ret;
-}
-
-int ObBlockManager::mark_server_meta_blocks(
-    MacroBlkIdMap &mark_info,
-    common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode>
-        &macro_id_set,
-    ObMacroBlockMarkerStatus &tmp_status) {
-  int ret = OB_SUCCESS;
-  ObArray<MacroBlockId> macro_block_list;
-
-  if (OB_FAIL(macro_block_list.reserve(DEFAULT_PENDING_FREE_COUNT))) {
-  } else if (OB_FAIL(STORAGE_META_SERVICE.get_meta_block_list(
-                 macro_block_list))) {
-  } else if (OB_FAIL(
-                 update_mark_info(macro_block_list, macro_id_set, mark_info))) {
-  } else {
-    tmp_status.linked_block_count_ += macro_block_list.count();
     tmp_status.hold_count_ -= macro_block_list.count();
   }
   return ret;
@@ -1358,7 +1316,7 @@ int ObBlockManager::InspectBadBlockTask::check_block(
 
 int ObBlockManager::extend_file_size_if_need() {
   int ret = OB_SUCCESS;
-  int64_t reserved_size = StorageMetaService::SLOG_RESERVED_DISK_SIZE;
+  int64_t reserved_size = 0;
 
   if (OB_ISNULL(io_device_)) {
     ret = OB_NOT_INIT;

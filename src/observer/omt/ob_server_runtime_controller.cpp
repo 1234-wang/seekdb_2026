@@ -263,15 +263,13 @@ int ObServerRuntimeController::construct_bootstrap_meta(ObServerRuntimeMeta &met
 {
   int ret = OB_SUCCESS;
 
-
-  ObServerRuntimeSuperBlock super_block(true/*is_hidden*/);
   share::ObServerRuntimeConfig runtime_config;
   share::ObServerResourceConfig resource_config;
   if (OB_ISNULL(log_block_mgr_)) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(resource_config.generate_default(log_block_mgr_->get_log_disk_size()))) {
   } else if (OB_FAIL(runtime_config.init(resource_config))) {
-  } else if (OB_FAIL(meta.build(runtime_config, super_block))) {
+  } else if (OB_FAIL(meta.build(runtime_config, true /*is_hidden*/))) {
   }
 
   return ret;
@@ -315,13 +313,9 @@ int ObServerRuntimeController::activate_runtime(const ObServerRuntimeConfig &run
   } else if (!runtime->is_hidden()) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    HEAP_VAR(ObServerRuntimeSuperBlock, new_super_block) {
-      new_super_block = runtime->get_super_block();
-      new_super_block.is_hidden_ = false;
-      if (OB_FAIL(update_server_resources_no_lock(runtime_config))) {
-      } else {
-        runtime->set_server_super_block(new_super_block);
-      }
+    if (OB_FAIL(update_server_resources_no_lock(runtime_config))) {
+    } else {
+      runtime->activate();
     }
   }
 
@@ -462,7 +456,7 @@ int ObServerRuntimeController::update_server_resources_no_lock(const ObServerRun
                                                    max_cpu, min_cpu,
                                                    runtime_config,
                                                    allowed_runtime_config))) {
-  } else if (FALSE_IT(need_persist_config = !(old_runtime_config == allowed_runtime_config))) {
+  } else if (FALSE_IT(need_persist_config = runtime->is_hidden() || !(old_runtime_config == allowed_runtime_config))) {
   } else if (need_persist_config
              && OB_FAIL(STORAGE_META_SERVICE.write_resources(allowed_runtime_config))) {
   } else {
@@ -673,54 +667,6 @@ int ObServerRuntimeController::get_server_log_disk_size(int64_t &log_disk_size)
   return ret;
 }
 
-int ObServerRuntimeController::capture_checkpoint(
-    storage::ObStorageLogger &logger, ObServerRuntimeMeta &meta, common::ObLogCursor &cursor)
-{
-  int ret = OB_SUCCESS;
-  // A resource slog written before the cursor must also be reflected in the snapshot.
-  lib::ObMutexGuard guard(resource_conf_lock_);
-  if (OB_ISNULL(runtime_) || !runtime_active_) {
-    ret = OB_SERVER_RUNTIME_NOT_READY;
-  } else if (OB_FAIL(logger.get_active_cursor(cursor))) {
-  } else {
-    meta = runtime_->get_runtime_meta();
-  }
-  return ret;
-}
-
-int ObServerRuntimeController::replay_server_resources(const ObServerRuntimeConfig &config)
-{
-  int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(resource_conf_lock_);
-  ObLogService *log_service = share::server_service<ObLogService>();
-  if (OB_ISNULL(runtime_) || OB_ISNULL(log_service)) {
-    ret = OB_SERVER_RUNTIME_NOT_READY;
-  } else if (!config.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(config.resource_config_.log_disk_size()))) {
-  } else {
-    runtime_->set_min_cpu(config.resource_config_.min_cpu());
-    runtime_->set_max_cpu(config.resource_config_.max_cpu());
-    runtime_->set_memory_size(config.resource_config_.memory_size());
-    set_req_chunkmgr_parallel(ObCtxIds::DEFAULT_CTX_ID, config.resource_config_.min_cpu() * 8);
-    runtime_->set_server_resources(config);
-    if (OB_FAIL(modify_server_io(config.resource_config_))) {
-    }
-  }
-  return ret;
-}
-
-storage::ObServerRuntimeSuperBlock ObServerRuntimeController::get_super_block()
-{
-  return runtime_->get_super_block();
-}
-
-void ObServerRuntimeController::set_server_super_block(
-    const storage::ObServerRuntimeSuperBlock &super_block)
-{
-  runtime_->set_server_super_block(super_block);
-}
-
 bool ObServerRuntimeController::is_hidden()
 {
   return runtime_->is_hidden();
@@ -922,8 +868,8 @@ int ObServerRuntimeController::refresh_server_config_()
   ObServerRuntimeConfig runtime_config;
   ObCurTraceId::init(GCTX.self_addr());
   if (!STORAGE_META_SERVICE.is_started()) {
-    // do nothing if not finish replaying slog
-    LOG_INFO("server slog not finish replaying, need wait");
+    // Wait until local storage recovery completes.
+    LOG_INFO("local storage recovery is not finished");
     ret = OB_NEED_RETRY;
   } else if (OB_FAIL(build_server_resource_config_(runtime_config))) {
   } else if (OB_FAIL(apply_server_resource_config_(runtime_config))) {

@@ -96,8 +96,7 @@ bool ServerSuperBlockBody::is_valid() const
 {
   return create_timestamp_ > 0 && modify_timestamp_ >= create_timestamp_ &&
     macro_block_size_ > 0 && total_macro_block_count_ > 0 &&
-    total_file_size_ >= macro_block_size_ && replay_start_point_.is_valid() &&
-    runtime_meta_entry_.is_valid();
+    total_file_size_ >= macro_block_size_;
 }
 
 void ServerSuperBlockBody::reset()
@@ -107,8 +106,6 @@ void ServerSuperBlockBody::reset()
   macro_block_size_ = 0;
   total_macro_block_count_ = 0;
   total_file_size_ = 0;
-  replay_start_point_.reset();
-  runtime_meta_entry_.reset();
 }
 
 OB_UNIS_SERIALIZE(ServerSuperBlockBody);                                         
@@ -118,24 +115,21 @@ int ServerSuperBlockBody::serialize_(char *buf, const int64_t buf_len, int64_t &
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE, create_timestamp_,
-      modify_timestamp_, macro_block_size_, total_macro_block_count_, total_file_size_,
-      replay_start_point_, runtime_meta_entry_);
+      modify_timestamp_, macro_block_size_, total_macro_block_count_, total_file_size_);
   return ret;
 }
 int ServerSuperBlockBody::deserialize_(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE, create_timestamp_,
-      modify_timestamp_, macro_block_size_, total_macro_block_count_, total_file_size_,
-      replay_start_point_, runtime_meta_entry_);
+      modify_timestamp_, macro_block_size_, total_macro_block_count_, total_file_size_);
   return ret;
 }
 int64_t ServerSuperBlockBody::get_serialize_size_(void) const
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, create_timestamp_,
-      modify_timestamp_, macro_block_size_, total_macro_block_count_, total_file_size_,
-      replay_start_point_, runtime_meta_entry_);
+      modify_timestamp_, macro_block_size_, total_macro_block_count_, total_file_size_);
   return len;
 }
 
@@ -241,8 +235,6 @@ int ObServerSuperBlock::format_startup_super_block(
     body_.macro_block_size_ = macro_block_size;
     body_.total_macro_block_count_ = data_file_size / macro_block_size;
     body_.total_file_size_ = lower_align(data_file_size, macro_block_size);
-    body_.runtime_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
-    SET_FIRST_VALID_SLOG_CURSOR(body_.replay_start_point_);
 
     if (OB_FAIL(construct_header())) {
     } else {
@@ -252,120 +244,5 @@ int ObServerSuperBlock::format_startup_super_block(
   return ret;
 }
 
-// ========================== ObServerRuntimeSuperBlock ==============================
-ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock()
-{
-  reset();
-}
-
-ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock(const bool is_hidden)
-  : is_hidden_(is_hidden), version_(SERVER_RUNTIME_SUPER_BLOCK_VERSION)
-{
-  ls_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
-}
-
-ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock(const ObServerRuntimeSuperBlock &other)
-{
-  *this = other;
-}
-
-void ObServerRuntimeSuperBlock::reset()
-{
-  
-  ls_meta_entry_.reset();
-  is_hidden_= false;
-  version_ = SERVER_RUNTIME_SUPER_BLOCK_VERSION;
-}
-
-bool ObServerRuntimeSuperBlock::is_valid() const
-{
-  bool is_valid = true
-                  && ls_meta_entry_.is_valid()
-                  && version_ == SERVER_RUNTIME_SUPER_BLOCK_VERSION;
-  return is_valid;
-}
-
-int ObServerRuntimeSuperBlock::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  OB_UNIS_ENCODE(UNIS_VERSION);
-  if (OB_SUCC(ret)) {
-    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
-    int64_t pos_bak = (pos += size_nbytes);
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
-      }
-    }
-    int64_t serial_size = pos - pos_bak;
-    int64_t tmp_pos = 0;
-    int64_t expect_size = get_serialize_size_();
-    assert(expect_size >= serial_size);
-    if (OB_SUCC(ret)) {
-      ret = common::serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
-    }
-  }
-  return ret;
-}
-
-int ObServerRuntimeSuperBlock::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE,
-      ls_meta_entry_,
-      is_hidden_);
-  return ret;
-}
-
-int ObServerRuntimeSuperBlock::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  int64_t len = 0;
-  OB_UNIS_DECODE(version_);
-  OB_UNIS_DECODE(len);
-  if (OB_SUCC(ret)) {
-    if (UNIS_VERSION != version_) {
-      ret = ::oceanbase::common::OB_NOT_SUPPORTED;
-    } else if (len < 0) {
-      ret = ::oceanbase::common::OB_ERR_UNEXPECTED;
-    } else if (data_len < len + pos) {
-      ret = ::oceanbase::common::OB_DESERIALIZE_ERROR;
-    } else {
-      int64_t pos_orig = pos;
-      pos = 0;
-      if (OB_FAIL(deserialize_(buf + pos_orig, len, pos))) {
-      }
-      pos = pos_orig + len;
-    }
-  }
-  return ret;
-}
-
-int ObServerRuntimeSuperBlock::deserialize_(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE,
-      
-      ls_meta_entry_,
-      is_hidden_);
-  return ret;
-}
-
-int64_t ObServerRuntimeSuperBlock::get_serialize_size(void) const
-{
-  int64_t len = get_serialize_size_();
-  SERIALIZE_SIZE_HEADER(UNIS_VERSION);
-  return len;
-}
-
-int64_t ObServerRuntimeSuperBlock::get_serialize_size_(void) const
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-      ls_meta_entry_,
-      is_hidden_);
-  return len;
-}
-
-
-}  // end namespace storage
-}  // end namespace oceanbase
+} // namespace storage
+} // namespace oceanbase

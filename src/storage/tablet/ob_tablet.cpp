@@ -38,7 +38,7 @@
 #include "storage/compaction/ob_medium_list_checker.h"
 #include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
+#include "storage/blockstore/ob_linked_macro_block_writer.h"
 #include "storage/tablet/ob_mds_scan_param_helper.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet_binding_info.h"
@@ -4574,29 +4574,6 @@ int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
     J_OBJ_END();
   }
   return pos;
-}
-
-int ObTablet::refresh_memtable_and_update_seq(const uint64_t seq)
-{
-  int ret = OB_SUCCESS;
-  if (table_store_addr_.is_memory_object()) {
-    table_store_addr_.get_ptr()->clear_memtables();
-  }
-  reset_memtable();
-  if (OB_FAIL(pull_memtables_without_ddl())) {
-  } else {
-    tablet_addr_.set_seq(seq);
-    table_store_addr_.addr_.set_seq(seq);
-    if (table_store_addr_.is_memory_object()) {
-      ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
-      if (OB_FAIL(inner_get_memtables(memtable_array))) {
-      } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
-      } else {
-       LOG_INFO("table store update memtable success", KPC(table_store_addr_.get_ptr()), KP(this));
-      }
-    }
-  }
-  return ret;
 }
 
 int ObTablet::pull_memtables(ObArenaAllocator &allocator)

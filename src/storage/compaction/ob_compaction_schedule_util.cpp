@@ -68,7 +68,7 @@ bool ObBasicMergeScheduler::could_start_loop_task()
   if (!STORAGE_META_SERVICE.is_started()) {
     can_start = false;
     if (REACH_THREAD_TIME_INTERVAL(PRINT_SLOG_REPLAY_INVERVAL)) {
-      LOG_INFO("slog replay hasn't finished, cannot start loop task");
+      LOG_INFO("local storage recovery hasn't finished, cannot start loop task");
     }
   }
   return can_start;

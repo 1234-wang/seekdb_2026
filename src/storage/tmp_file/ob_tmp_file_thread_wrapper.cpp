@@ -266,7 +266,7 @@ int ObTmpFileFlushThread::try_work()
   if (0 == last_flush_timestamp_ || cur_time - last_flush_timestamp_ >= cal_idle_time() * 1000) {
     if (OB_UNLIKELY(!STORAGE_META_SERVICE.is_started())) {
       ret = OB_NOT_RUNNING;
-      LOG_INFO("ObTmpFileFlushThread does not work before server slog replay finished",
+      LOG_INFO("ObTmpFileFlushThread does not work before local storage recovery finished",
           KR(ret), KPC(this));
     } else if (OB_FAIL(do_work_())) {
     }

@@ -303,21 +303,7 @@ int ObLSService::replay_create_ls(const ObLSMeta &ls_meta)
   return ret;
 }
 
-int ObLSService::replay_update_ls(const ObLSMeta &ls_meta)
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(!ls_meta.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(replay_update_ls_(ls_meta))) {
-  }
-
-  return ret;
-}
-
-int ObLSService::gc_ls_after_replay_slog()
+int ObLSService::finish_ls_recovery()
 {
   // NOTE: we only gc the ls that not create finished or removed.
   // the migrate failed ls will be gc at ObGarbageCollector.
@@ -382,16 +368,6 @@ int ObLSService::online_ls()
     }
   }
 
-  return ret;
-}
-
-int ObLSService::replay_update_ls_(const ObLSMeta &ls_meta)
-{
-  int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  if (OB_FAIL(get_ls(ls))) {
-  } else if (OB_FAIL(ls->set_ls_meta(ls_meta))) {
-  }
   return ret;
 }
 
@@ -597,7 +573,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg)
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(!STORAGE_META_SERVICE.is_started())) {
     ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service does not service before slog replay finished", K(ret));
+    LOG_WARN("ls service does not service before local metadata recovery finishes", K(ret));
   } else if (OB_BREAK_FAIL(ObShareUtil::get_abs_timeout(DEFAULT_LOCK_TIMEOUT /* default timeout */,
                                                   abs_timeout_ts))) {
   } else {

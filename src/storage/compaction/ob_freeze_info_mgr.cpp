@@ -534,7 +534,7 @@ void ObFreezeInfoMgr::ReloadTask::runTimerTask()
   int tmp_ret = OB_SUCCESS;
   if (!STORAGE_META_SERVICE.is_started()) {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /* 10s */)) {
-      LOG_WARN_RET(tmp_ret, "slog replay hasn't finished, this task can't start");
+      LOG_WARN_RET(tmp_ret, "local storage recovery hasn't finished, this task can't start");
     }
   } else {
     if (OB_TMP_FAIL(refresh_merge_info())) {

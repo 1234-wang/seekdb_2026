@@ -15,59 +15,47 @@
  */
 #pragma once
 
-#include <stdint.h>
-#include "storage/slog_ckpt/ob_linked_macro_block_struct.h"
-#include "storage/meta_store/ob_server_runtime_meta.h"
-#include "lib/lock/ob_tc_rwlock.h"
-#include "storage/slog/ob_storage_logger.h"
+#include "share/storage/local_store.h"
 #include "share/ob_i_local_device_space_provider.h"
+#include "share/resource/ob_server_runtime_config.h"
+#include "storage/meta_mem/ob_meta_obj_struct.h"
 
-namespace oceanbase
-{
-namespace storage
-{
+namespace oceanbase { namespace storage {
 class ObIServerRuntime;
+class ObLSMeta;
+class ObTablet;
+class ObTabletHandle;
+
+// Process-owned recovery state; the LocalStore is supplied by Observer.
 class StorageMetaService : public share::ObILocalDeviceSpaceProvider
 {
 public:
   static StorageMetaService &get_instance();
-  int init(ObIServerRuntime &server_runtime);
-  int start();
-  void stop();
-  void wait();
+  int init(ObIServerRuntime &runtime, share::LocalStore &store);
+  int start(bool bootstrap);
+  void stop() { ATOMIC_STORE(&is_started_, false); }
   void destroy();
-  int write_resources(const share::ObServerRuntimeConfig &config);
   bool is_started() const { return ATOMIC_LOAD(&is_started_); }
-
-  int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
-  int get_reserved_size(int64_t &reserved_size) const override;
-  int write_checkpoint(bool is_force);
-  ObStorageLogger &get_slogger() { return slogger_; }
-  int publish_checkpoint(const omt::ObServerRuntimeMeta &meta, const common::ObLogCursor &cursor);
-
-  static constexpr int64_t SLOG_RESERVED_DISK_SIZE = 128 * 1024 * 1024L; // 128M
-
+  int get_reserved_size(int64_t &size) const override;
+  int commit_bootstrap();
+  int write_resources(const share::ObServerRuntimeConfig &config);
+  int update_ls_meta(const ObLSMeta &meta);
+  int update_tablet(const common::ObTabletID &id, const ObMetaDiskAddr &addr);
+  int write_empty_shell_tablet(ObTablet *tablet, ObMetaDiskAddr &addr);
+  int remove_tablet(const ObTabletHandle &tablet);
+  int remove_tablets(const common::ObIArray<common::ObTabletID> &ids);
+  int read_empty_shell(const ObMetaDiskAddr &addr, common::ObArenaAllocator &allocator,
+                       char *&buf, int64_t &len);
 private:
-  StorageMetaService();
-  ~StorageMetaService() = default;
-  StorageMetaService(const StorageMetaService &) = delete;
-  StorageMetaService &operator=(const StorageMetaService &) = delete;
-
-  int recover();
-  int get_using_disk_space(int64_t &using_space) const;
-  int check_log_disk(const char *data_dir, const char *log_dir);
-
-private:
-  bool is_inited_;
-  bool is_started_;
-  ObStorageLogger slogger_;
-  ObIServerRuntime *server_runtime_;
-  common::TCRWLock checkpoint_lock_;
-  ObMetaBlockListHandle runtime_block_handle_;
-  bool need_reserved_;
+  StorageMetaService() = default;
+  int recover(bool bootstrap);
+  int write_tablet(const common::ObTabletID &id, int64_t kind, const share::LocalValue &payload);
+  static int check_commit(int ret);
+  share::LocalStore *store_ = nullptr;
+  ObIServerRuntime *runtime_ = nullptr;
+  bool is_started_ = false;
+  bool need_reserved_ = false;
 };
 
 #define STORAGE_META_SERVICE (oceanbase::storage::StorageMetaService::get_instance())
-
-} // namespace storage
-} // namespace oceanbase
+} } // namespace oceanbase::storage

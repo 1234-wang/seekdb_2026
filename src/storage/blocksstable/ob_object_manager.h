@@ -93,8 +93,6 @@ public:
       const int64_t new_device_disk_percentage,
       const int64_t reserved_size);
   int check_disk_space_available();
-  int update_super_block(const common::ObLogCursor &replay_start_point,
-                         const blocksstable::MacroBlockId &runtime_meta_entry);
 
   static ObObjectManager &get_instance();
 

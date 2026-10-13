@@ -269,16 +269,16 @@ public:
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
                      const share::SCN &latest_scn,
-                     const bool write_slog)
+                     const bool persist_change)
   {
-    return ls_meta_.update_id_meta(service_type, limited_id, latest_scn, write_slog);
+    return ls_meta_.update_id_meta(service_type, limited_id, latest_scn, persist_change);
   }
   // protect in ls lock
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
                           const share::SCN &clog_checkpoint_scn,
-                          const bool write_slog)
+                          const bool persist_change)
   {
-    return ls_meta_.set_clog_checkpoint(clog_checkpoint_lsn, clog_checkpoint_scn, write_slog);
+    return ls_meta_.set_clog_checkpoint(clog_checkpoint_lsn, clog_checkpoint_scn, persist_change);
   }
   CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, share::SCN);
   DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN);
@@ -298,7 +298,6 @@ public:
   // @param [in] key, key of tablet that will be updated
   // @param [in] new_addr, new addr of the tablet
   // @param [out] new_handle, new tablet handle
-  DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_checkpoint, int);
   // get a tablet handle
   // @param [in] tablet_id, the tablet needed
   // @param [out] handle, store the tablet and inc ref.

@@ -1209,7 +1209,7 @@ int ObLS::finish_storage_meta_replay()
 
   if (OB_FAIL(running_state_.create_finish())) {
   } else {
-    // after slog replayed, the ls must be offlined state.
+    // after local metadata is loaded, the ls must be offlined state.
     update_state_seq_();
   }
   return ret;

@@ -51,7 +51,7 @@ public:
   palf::LSN get_clog_base_lsn() const;
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
                           const share::SCN &clog_checkpoint_scn,
-                          const bool write_slog);
+                          const bool persist_change);
   int set_restore_status(const ObRestoreStatus &restore_status);
   int get_restore_status(ObRestoreStatus &restore_status) const;
 
@@ -60,7 +60,7 @@ public:
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
                      const share::SCN &latest_scn,
-                     const bool write_slog);
+                     const bool persist_change);
   int get_all_id_meta(transaction::ObAllIDMeta &all_id_meta) const;
   int update_for_physical_restore(const ObLSMeta &source_meta);
   int check_ls_need_online(bool &need_online) const;
@@ -113,13 +113,11 @@ private:
   int check_can_update_();
 public:
   mutable common::ObLatch rw_lock_;     // only for atomic read/write in memory.
-  mutable common::ObLatch update_lock_; // only one process can update ls meta. both for write slog and memory
+  mutable common::ObLatch update_lock_; // only one process can update ls meta. both persistence and memory
   
 private:
   ObLSPersistentState ls_persistent_state_;
-  typedef common::ObFunction<int(const ObLSMeta &)> WriteSlog;
-  // for test
-  static WriteSlog write_slog_;
+  static int persist(const ObLSMeta &meta);
 
   // clog_checkpoint_scn_, meaning:
   // 1. dump points of all modules have exceeded clog_checkpoint_scn_

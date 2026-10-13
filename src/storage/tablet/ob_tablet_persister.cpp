@@ -21,7 +21,7 @@
 #include "share/rc/ob_server_runtime.h"
 #include "storage/tablet/ob_tablet_persister.h"
 #include "src/storage/ls/ob_ls.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
+#include "storage/blockstore/ob_linked_macro_block_writer.h"
 #include "storage/tablet/ob_tablet_block_aggregated_info.h"
 #include "storage/tablet/ob_tablet_block_header.h"
 #include "storage/tablet/ob_tablet_common.h"

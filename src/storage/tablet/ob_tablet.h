@@ -243,13 +243,11 @@ public:
       const ObTablet &old_tablet);
 
   bool is_valid() const;
-  // refresh memtable and update tablet_addr_ and table_store_addr_ sequence, only used by slog ckpt
-  int refresh_memtable_and_update_seq(const uint64_t seq);
   int32_t get_version() const { return version_; }
   void dec_macro_ref_cnt();
   int inc_macro_ref_cnt();
   // these interfaces is only for tiny mode
-  // load_$member: member will always exist in disk(slog file/macro block), so read from disk then deserialize
+  // load_$member: member will always exist in disk (local storage/macro block), so read from disk then deserialize
   // fetch_$member: member may exist in memory or disk, if in memory, get it directly, if in disk,
   //                read from disk then put into kv cache, and return kv cache handle for caller
   int fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const;
