@@ -2,6 +2,7 @@
 #include "observer/include/seekdb_engine.h"
 #include "observer/ob_command_line_parser.h"
 #include "observer/ob_server.h"
+#include "share/ob_errno.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/thread/protected_stack_allocator.h"
 #include "lib/worker.h"
@@ -141,7 +142,8 @@ void run_engine(SeekdbEngineHandle engine)
 }
 } // namespace
 
-SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *error_code)
+SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *error_code,
+                                     const char **error_message)
 {
   std::lock_guard<std::mutex> lifecycle_guard(engine_mutex);
   int ret = OB_SUCCESS;
@@ -190,6 +192,7 @@ SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *e
     }
   }
   if (error_code != nullptr) { *error_code = ret; }
+  if (error_message != nullptr) { *error_message = OB_SUCCESS == ret ? nullptr : ob_strerror(ret); }
   return engine;
 }
 

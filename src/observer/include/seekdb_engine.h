@@ -14,7 +14,12 @@ typedef struct SeekdbEngineImpl *SeekdbEngineHandle;
  * installs process signal handlers, or redirects stdout/stderr.
  *
  * Returns NULL on failure. Optional error_code receives zero or an OceanBase
- * error code. Help/version are invalid library arguments (they never exit).
+ * error code. Optional error_message receives NULL on success or a static,
+ * read-only description of the error code on failure. Do not modify or free
+ * this string; it remains valid until the library is unloaded, including
+ * after subsequent open/close calls. Details of startup failures are in the
+ * engine log. Either output parameter may be NULL.
+ * Help/version are invalid library arguments (they never exit).
  * One engine may be active per process. The current core supports one engine
  * lifetime per process; once core initialization has been attempted, another
  * open is rejected.
@@ -25,7 +30,8 @@ typedef struct SeekdbEngineImpl *SeekdbEngineHandle;
  * The host must not change cwd or rely on relative paths during this lifetime.
  * Sessions continue to use the normal MySQL socket/TCP protocol.
  */
-SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *error_code);
+SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *error_code,
+                                     const char **error_message);
 
 /* Stop, join and destroy the engine synchronously. Close client connections
  * before calling. Returns zero on success. The handle is consumed even when

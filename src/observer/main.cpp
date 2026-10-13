@@ -585,9 +585,10 @@ int inner_main(int argc, char *argv[])
     if (!restore_malloc_backend_after_fork()) { return OB_ERR_UNEXPECTED; }
   }
   MPRINT("Starting seekdb (%s).", PACKAGE_STRING);
-  SeekdbEngineHandle engine = seekdb_engine_open(argc - 1, argv + 1, &ret);
+  const char *error_message = nullptr;
+  SeekdbEngineHandle engine = seekdb_engine_open(argc - 1, argv + 1, &ret, &error_message);
   if (engine == nullptr) {
-    MPRINT("Failed to start seekdb, ret=%d", ret);
+    MPRINT("Failed to start seekdb, ret=%d, error=%s", ret, error_message);
     return ret;
   }
   (void)create_observer_softlink();

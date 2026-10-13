@@ -16,23 +16,31 @@
 int main(int argc, char **argv)
 {
   int error = 123;
+  const char *error_message = nullptr;
   REQUIRE(seekdb_engine_close(nullptr) == 0);
-  REQUIRE(seekdb_engine_open(-1, nullptr, &error) == nullptr && error != 0);
-  REQUIRE(seekdb_engine_open(1, nullptr, &error) == nullptr && error != 0);
+  REQUIRE(seekdb_engine_open(-1, nullptr, &error, &error_message) == nullptr && error != 0);
+  REQUIRE(error_message != nullptr && std::strcmp(error_message, "Invalid argument") == 0);
+  const char *saved_error_message = error_message;
+  REQUIRE(seekdb_engine_open(-1, nullptr, nullptr, nullptr) == nullptr);
+  error_message = nullptr;
+  REQUIRE(seekdb_engine_open(-1, nullptr, nullptr, &error_message) == nullptr);
+  REQUIRE(error_message != nullptr && std::strcmp(error_message, "Invalid argument") == 0);
+  REQUIRE(seekdb_engine_open(-1, nullptr, &error, nullptr) == nullptr && error != 0);
+  REQUIRE(seekdb_engine_open(1, nullptr, &error, &error_message) == nullptr && error != 0);
   const char *null_argument[] = {nullptr};
-  REQUIRE(seekdb_engine_open(1, null_argument, &error) == nullptr && error != 0);
+  REQUIRE(seekdb_engine_open(1, null_argument, &error, &error_message) == nullptr && error != 0);
   const int previous_optind = optind;
   optind = 37;
   const char *invalid[] = {"--not-a-seekdb-option"};
   for (int i = 0; i < 3; ++i) {
-    REQUIRE(seekdb_engine_open(1, invalid, &error) == nullptr && error != 0);
+    REQUIRE(seekdb_engine_open(1, invalid, &error, &error_message) == nullptr && error != 0);
   }
   REQUIRE(optind == 37);
   optind = previous_optind;
   const char *help[] = {"--help"};
-  REQUIRE(seekdb_engine_open(1, help, &error) == nullptr && error != 0);
+  REQUIRE(seekdb_engine_open(1, help, &error, &error_message) == nullptr && error != 0);
   const char *missing[] = {"--port"};
-  REQUIRE(seekdb_engine_open(1, missing, &error) == nullptr && error != 0);
+  REQUIRE(seekdb_engine_open(1, missing, &error, &error_message) == nullptr && error != 0);
   if (argc == 2 && std::strcmp(argv[1], "startup_failure") == 0) {
     char directory[] = "/tmp/seekdb-engine-failure-XXXXXX";
     REQUIRE(mkdtemp(directory) != nullptr);
@@ -40,9 +48,10 @@ int main(int argc, char **argv)
     REQUIRE(getcwd(original, sizeof(original)) != nullptr);
     const char *args[] = {"--base-dir", directory,
         "--parameter", "unknown_sdk_test_parameter=1"};
-    auto engine = seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error);
+    auto engine = seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error, &error_message);
     if (engine != nullptr) { seekdb_engine_close(engine); }
     REQUIRE(engine == nullptr && error != 0);
+    REQUIRE(error_message != nullptr && error_message[0] != '\0');
     char restored[4096];
     REQUIRE(getcwd(restored, sizeof(restored)) != nullptr);
     REQUIRE(std::strcmp(original, restored) == 0);
@@ -58,12 +67,13 @@ int main(int argc, char **argv)
     const char *args[] = {"--base-dir", directory, "--embedded", "--nodaemon",
         "--parameter", "memory_budget=1G", "--parameter", "log_disk_size=2G",
         "--parameter", "mysql_port_mode=disabled", "--parameter", "cpu_count=2"};
-    auto engine = seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error);
+    auto engine = seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error, &error_message);
     if (engine == nullptr) { std::fprintf(stderr, "open failed: %d (%s)\n", error, directory); }
     REQUIRE(engine != nullptr && error == 0);
+    REQUIRE(error_message == nullptr);
     REQUIRE(sigaction(SIGTERM, nullptr, &after) == 0);
     REQUIRE(before.sa_handler == after.sa_handler);
-    REQUIRE(seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error) == nullptr && error != 0);
+    REQUIRE(seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error, &error_message) == nullptr && error != 0);
     int client = socket(AF_UNIX, SOCK_STREAM, 0);
     REQUIRE(client >= 0);
     timeval timeout{10, 0};
@@ -88,9 +98,10 @@ int main(int argc, char **argv)
     REQUIRE(access(pid.c_str(), F_OK) != 0);
     // Until core singleton reuse is supported, fail explicitly instead of
     // reinitializing destroyed providers or terminating the host.
-    REQUIRE(seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error) == nullptr && error != 0);
+    REQUIRE(seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error, &error_message) == nullptr && error != 0);
     std::printf("Engine test data retained at %s\n", directory);
   }
+  REQUIRE(std::strcmp(saved_error_message, "Invalid argument") == 0);
   std::puts("SEEKDB_ENGINE_TEST_COMPLETED");
   return 0;
 }
