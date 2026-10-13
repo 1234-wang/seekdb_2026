@@ -15,6 +15,11 @@ project("OceanBase"
   HOMEPAGE_URL "https://www.oceanbase.ai"
   LANGUAGES CXX C ASM)
 
+option(SEEKDB_BUILD_ENGINE_TESTS "Build public engine API regression tests" OFF)
+if(SEEKDB_BUILD_ENGINE_TESTS)
+  enable_testing()
+endif()
+
 if(OB_MACOS27)
   include(CheckCXXSourceCompiles)
   # An empty main misses LLVM/SDK libc++ incompatibilities.

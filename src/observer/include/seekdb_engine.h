@@ -1,0 +1,40 @@
+/* Copyright (c) 2026 OceanBase. Licensed under the Apache License, Version 2.0. */
+#ifndef SEEKDB_ENGINE_H
+#define SEEKDB_ENGINE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct SeekdbEngineImpl *SeekdbEngineHandle;
+
+/* Start the engine and wait for startup to complete. argv[0] is the program
+ * name; remaining arguments use the seekdb command-line syntax. Arguments are
+ * copied and may be released after this call. The engine never daemonizes,
+ * installs process signal handlers, or redirects stdout/stderr.
+ *
+ * Returns NULL on failure. Optional error_code receives zero or an OceanBase
+ * error code. Help/version are invalid library arguments (they never exit).
+ * One engine may be active per process. The current core supports one engine
+ * lifetime per process; once core initialization has been attempted, another
+ * open is rejected.
+ * Argument-validation failures may be retried.
+ *
+ * The current core requires the process working directory to remain at
+ * --base-dir until close. It is restored on return from close or failed open.
+ * The host must not change cwd or rely on relative paths during this lifetime.
+ * Sessions continue to use the normal MySQL socket/TCP protocol.
+ */
+SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *error_code);
+
+/* Stop, join and destroy the engine synchronously. Close client connections
+ * before calling. Returns zero on success. The handle is consumed even when
+ * cleanup reports an error; do not reuse it. Passing NULL is a no-op.
+ * Do not call from a signal handler or from an engine callback.
+ */
+int seekdb_engine_close(SeekdbEngineHandle engine);
+
+#ifdef __cplusplus
+}
+#endif
+#endif

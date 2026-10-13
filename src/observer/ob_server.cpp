@@ -1340,7 +1340,7 @@ int ObServer::start()
     LOG_ERROR("failure occurs, stop observer startup", KR(ret));
     LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
                         DBA_STEP_INC_INFO(server_start),
-                        "observer start fail, the stop status is ", stop_, ". "
+                        "observer start fail, the stop status is ", stop_.load(), ". "
                         "you may find solutions in previous error logs or seek help from official technicians.");
 
     // Return the startup error to inner_main.  wait() terminates the process
@@ -1354,10 +1354,10 @@ int ObServer::start()
                     DBA_STEP_INC_INFO(server_start),
                     "observer start success.");
   } else {
-    FLOG_INFO("[OBSERVER_NOTICE] observer is set to stop", KR(ret), K_(stop));
+    FLOG_INFO("[OBSERVER_NOTICE] observer is set to stop", KR(ret), K(stop_.load()));
     LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_START_FAIL, ret,
                         DBA_STEP_INC_INFO(server_start),
-                        "observer start fail, the stop status is ", stop_, ". "
+                        "observer start fail, the stop status is ", stop_.load(), ". "
                         "you may find solutions in previous error logs or seek help from official technicians.");
   }
 
@@ -1433,10 +1433,10 @@ int ObServer::wait_for_server_runtime()
     }
   }
   if (OB_SUCC(ret) && !stop_
-      && OB_FAIL(standby_module_->wait_replay_ready([this]() { return stop_; }))) {
+      && OB_FAIL(standby_module_->wait_replay_ready([this]() { return stop_.load(); }))) {
     LOG_WARN("standby startup replay did not become ready", KR(ret));
   }
-  FLOG_INFO("wait for server runtime", KR(ret), K(stop_), K(synced), K(timestamp_ready));
+  FLOG_INFO("wait for server runtime", KR(ret), K(stop_.load()), K(synced), K(timestamp_ready));
   if (!stop_ && synced && timestamp_ready) {
     LOG_DBA_INFO_V2(OB_SERVER_WAIT_RUNTIME_READY_SUCCESS,
                     DBA_STEP_INC_INFO(server_start),
@@ -1444,7 +1444,7 @@ int ObServer::wait_for_server_runtime()
   } else {
     LOG_DBA_ERROR_V2(OB_SERVER_WAIT_RUNTIME_READY_FAIL, ret,
                      DBA_STEP_INC_INFO(server_start),
-                     "wait for server runtime failed, server stop status is ", stop_, ". "
+                     "wait for server runtime failed, server stop status is ", stop_.load(), ". "
                      "you may find solutions in previous error logs or seek help from official technicians.");
   }
   return ret;
@@ -1474,7 +1474,7 @@ int ObServer::check_if_schema_ready()
       ob_usleep(SLEEP_INTERVAL_US);
     }
   }
-  FLOG_INFO("check if schema ready", KR(ret), K(stop_), K(schema_ready),
+  FLOG_INFO("check if schema ready", KR(ret), K(stop_.load()), K(schema_ready),
             K(current_schema_version), K(baseline_schema_version));
   if (!stop_ && schema_ready) {
     LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_SUCCESS,
@@ -1483,7 +1483,7 @@ int ObServer::check_if_schema_ready()
   } else {
     LOG_DBA_ERROR_V2(OB_SERVER_WAIT_SCHEMA_READY_FAIL, ret,
                      DBA_STEP_INC_INFO(server_start),
-                     "wait schema ready fail, server stop status is ", stop_, ". "
+                     "wait schema ready fail, server stop status is ", stop_.load(), ". "
                      "you may find solutions in previous error logs or seek help from official technicians.");
   }
   return ret;
@@ -1504,7 +1504,7 @@ int ObServer::check_if_timezone_usable()
   } else {
     FLOG_INFO("success to start time zone manager");
   }
-  FLOG_INFO("check if timezone usable", KR(ret), K(stop_), K(timezone_usable));
+  FLOG_INFO("check if timezone usable", KR(ret), K(stop_.load()), K(timezone_usable));
   return ret;
 }
 void ObServer::prepare_stop()
@@ -1521,7 +1521,7 @@ bool ObServer::is_prepare_stopped()
 
 bool ObServer::is_stopped()
 {
-  return stop_;
+  return stop_.load();
 }
 
 void ObServer::set_stop()
@@ -1555,6 +1555,7 @@ int ObServer::stop()
   LOG_DBA_INFO_V2(OB_SERVER_STOP_BEGIN, "observer stop begin.");
 
   if (in_process_) {
+    schema_service_.cancel_refresh_waits();
     // DDL retries must observe cancellation while schema and SQL services are still available.
     // Otherwise session cleanup waits for a loader query that cannot publish its schema.
     stop_in_process_package_ddl(mods_ddl_service_launcher_, mods_system_package_load_service_);
@@ -1697,26 +1698,16 @@ int ObServer::wait_no_client()
   int ret = OB_SUCCESS;
 #ifdef _WIN32
   OVERLAPPED ov = {};
-  if (LockFileEx(clients_h_,
-                 LOCKFILE_EXCLUSIVE_LOCK,
+  if (!LockFileEx(clients_h_, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
                  0, MAXDWORD, MAXDWORD, &ov)) {
-    FLOG_INFO("no clients remaining, exiting");
-    net_frame_.sql_nio_stop();
-    _Exit(0);
-  } else {
-    ret = OB_ERROR;
-    LOG_ERROR("LockFileEx failed", "last_error", (int)GetLastError());
+    ret = ERROR_LOCK_VIOLATION == GetLastError() ? OB_EAGAIN : OB_ERROR;
   }
 #else
-  if (flock(clients_fd_, LOCK_EX) == 0) {
-    FLOG_INFO("no clients remaining, exiting");
-    net_frame_.sql_nio_stop();
-    _Exit(0);
-  } else {
-    ret = OB_ERROR;
-    LOG_ERROR("flock failed", K(errno));
+  if (flock(clients_fd_, LOCK_EX | LOCK_NB) != 0) {
+    ret = EWOULDBLOCK == errno || EINTR == errno ? OB_EAGAIN : OB_ERROR;
   }
 #endif
+  if (OB_SUCC(ret)) { set_stop(); }
   return ret;
 }
 
@@ -1728,7 +1719,11 @@ int ObServer::wait()
   // wait for stop flag
 
   if (!in_process_ && gctx_.is_embedded_mode()) {
-    std::thread([this]() { wait_no_client(); }).detach();
+    while (!stop_) {
+      const int client_ret = wait_no_client();
+      if (client_ret != OB_SUCCESS && client_ret != OB_EAGAIN) { return client_ret; }
+      if (!stop_) { ob_usleep(100000); }
+    }
   }
 
   FLOG_INFO("begin to wait observer setted to stop");
