@@ -6,6 +6,7 @@
 #include "lib/thread/protected_stack_allocator.h"
 #include "lib/worker.h"
 #include <curl/curl.h>
+#include <climits>
 #include <condition_variable>
 #include <mutex>
 #include <new>
@@ -145,7 +146,7 @@ SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *e
   std::lock_guard<std::mutex> lifecycle_guard(engine_mutex);
   int ret = OB_SUCCESS;
   SeekdbEngineHandle engine = nullptr;
-  if (argc < 1 || argv == nullptr || argv[0] == nullptr) {
+  if (argc < 0 || argc == INT_MAX || (argc > 0 && argv == nullptr)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (active_engine != nullptr) {
     ret = OB_INIT_TWICE;
@@ -159,6 +160,8 @@ SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *e
     if (OB_SUCC(ret)) {
       try {
         engine = new SeekdbEngineImpl;
+        // The internal command-line parser expects a program name at argv[0].
+        engine->arguments.emplace_back("seekdb");
         for (int i = 0; i < argc; ++i) { engine->arguments.emplace_back(argv[i]); }
         for (const auto &argument : engine->arguments) { engine->argv.push_back(argument.c_str()); }
         engine->thread = std::thread(run_engine, engine);

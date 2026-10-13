@@ -17,25 +17,28 @@ int main(int argc, char **argv)
 {
   int error = 123;
   REQUIRE(seekdb_engine_close(nullptr) == 0);
-  REQUIRE(seekdb_engine_open(0, nullptr, &error) == nullptr && error != 0);
+  REQUIRE(seekdb_engine_open(-1, nullptr, &error) == nullptr && error != 0);
+  REQUIRE(seekdb_engine_open(1, nullptr, &error) == nullptr && error != 0);
+  const char *null_argument[] = {nullptr};
+  REQUIRE(seekdb_engine_open(1, null_argument, &error) == nullptr && error != 0);
   const int previous_optind = optind;
   optind = 37;
-  const char *invalid[] = {"host", "--not-a-seekdb-option"};
+  const char *invalid[] = {"--not-a-seekdb-option"};
   for (int i = 0; i < 3; ++i) {
-    REQUIRE(seekdb_engine_open(2, invalid, &error) == nullptr && error != 0);
+    REQUIRE(seekdb_engine_open(1, invalid, &error) == nullptr && error != 0);
   }
   REQUIRE(optind == 37);
   optind = previous_optind;
-  const char *help[] = {"host", "--help"};
-  REQUIRE(seekdb_engine_open(2, help, &error) == nullptr && error != 0);
-  const char *missing[] = {"host", "--port"};
-  REQUIRE(seekdb_engine_open(2, missing, &error) == nullptr && error != 0);
+  const char *help[] = {"--help"};
+  REQUIRE(seekdb_engine_open(1, help, &error) == nullptr && error != 0);
+  const char *missing[] = {"--port"};
+  REQUIRE(seekdb_engine_open(1, missing, &error) == nullptr && error != 0);
   if (argc == 2 && std::strcmp(argv[1], "startup_failure") == 0) {
     char directory[] = "/tmp/seekdb-engine-failure-XXXXXX";
     REQUIRE(mkdtemp(directory) != nullptr);
     char original[4096];
     REQUIRE(getcwd(original, sizeof(original)) != nullptr);
-    const char *args[] = {"host", "--base-dir", directory,
+    const char *args[] = {"--base-dir", directory,
         "--parameter", "unknown_sdk_test_parameter=1"};
     auto engine = seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error);
     if (engine != nullptr) { seekdb_engine_close(engine); }
@@ -52,7 +55,7 @@ int main(int argc, char **argv)
     REQUIRE(getcwd(original, sizeof(original)) != nullptr);
     struct sigaction before, after;
     REQUIRE(sigaction(SIGTERM, nullptr, &before) == 0);
-    const char *args[] = {"host", "--base-dir", directory, "--embedded", "--nodaemon",
+    const char *args[] = {"--base-dir", directory, "--embedded", "--nodaemon",
         "--parameter", "memory_budget=1G", "--parameter", "log_disk_size=2G",
         "--parameter", "mysql_port_mode=disabled", "--parameter", "cpu_count=2"};
     auto engine = seekdb_engine_open(sizeof(args) / sizeof(args[0]), args, &error);

@@ -585,7 +585,7 @@ int inner_main(int argc, char *argv[])
     if (!restore_malloc_backend_after_fork()) { return OB_ERR_UNEXPECTED; }
   }
   MPRINT("Starting seekdb (%s).", PACKAGE_STRING);
-  SeekdbEngineHandle engine = seekdb_engine_open(argc, argv, &ret);
+  SeekdbEngineHandle engine = seekdb_engine_open(argc - 1, argv + 1, &ret);
   if (engine == nullptr) {
     MPRINT("Failed to start seekdb, ret=%d", ret);
     return ret;

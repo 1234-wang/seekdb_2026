@@ -7,8 +7,9 @@ extern "C" {
 
 typedef struct SeekdbEngineImpl *SeekdbEngineHandle;
 
-/* Start the engine and wait for startup to complete. argv[0] is the program
- * name; remaining arguments use the seekdb command-line syntax. Arguments are
+/* Start the engine and wait for startup to complete. argv contains only
+ * options in seekdb command-line syntax, without a program name or path.
+ * Pass argc = 0 and argv = NULL to use defaults. Arguments are
  * copied and may be released after this call. The engine never daemonizes,
  * installs process signal handlers, or redirects stdout/stderr.
  *
