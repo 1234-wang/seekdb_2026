@@ -55,27 +55,18 @@ int ObMergeInfoTableStorage::insert_or_update(const ObGlobalMergeInfo &global_me
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const auto upsert_request =
-      LocalRequest::insert(merge_info::schema(), {merge_info::FrozenScn, merge_info::GlobalBroadcastScn, merge_info::IsMergeError, merge_info::LastMergedScn, merge_info::MergeStatus, merge_info::ErrorType, merge_info::SuspendMerging, merge_info::MergeStartTime, merge_info::LastMergedTime}, true).set(merge_info::Id, int64_t(0));
+    const auto upsert_request = LocalRequest::upsert(merge_info::schema()).set(merge_info::Id, int64_t(0))
+        .set(merge_info::FrozenScn, global_merge_info.frozen_scn().get_val_for_inner_table_field())
+        .set(merge_info::GlobalBroadcastScn, global_merge_info.global_broadcast_scn().get_val_for_inner_table_field())
+        .set(merge_info::IsMergeError, global_merge_info.is_merge_error_.get_value())
+        .set(merge_info::LastMergedScn, global_merge_info.last_merged_scn().get_val_for_inner_table_field())
+        .set(merge_info::MergeStatus, global_merge_info.merge_status_.get_value())
+        .set(merge_info::ErrorType, global_merge_info.error_type_.get_value())
+        .set(merge_info::SuspendMerging, global_merge_info.suspend_merging_.get_value())
+        .set(merge_info::MergeStartTime, global_merge_info.merge_start_time_.get_value())
+        .set(merge_info::LastMergedTime, global_merge_info.last_merged_time_.get_value());
 
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_int64(global_merge_info.frozen_scn().get_val_for_inner_table_field());
-      b.bind_int64(global_merge_info.global_broadcast_scn().get_val_for_inner_table_field());
-      b.bind_int64(global_merge_info.is_merge_error_.get_value());
-      b.bind_int64(global_merge_info.last_merged_scn().get_val_for_inner_table_field());
-      b.bind_int64(global_merge_info.merge_status_.get_value());
-      b.bind_int64(global_merge_info.error_type_.get_value());
-      b.bind_int64(global_merge_info.suspend_merging_.get_value());
-      b.bind_int64(global_merge_info.merge_start_time_.get_value());
-      b.bind_int64(global_merge_info.last_merged_time_.get_value());
-      return OB_SUCCESS;
-    };
-
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(upsert_request, binder))) {
-    }
+    ret = store_->execute(upsert_request);
   }
   return ret;
 }
@@ -113,10 +104,7 @@ int ObMergeInfoTableStorage::get(ObGlobalMergeInfo &global_merge_info)
       return OB_SUCCESS;
     };
 
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_request, nullptr, row_processor))) {
+    if (OB_FAIL(store_->query(select_request, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       }
     }

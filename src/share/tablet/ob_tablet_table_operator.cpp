@@ -33,15 +33,15 @@ ObTabletTableOperator::~ObTabletTableOperator()
   reset();
 }
 
-int ObTabletTableOperator::init(share::LocalStore *pool)
+int ObTabletTableOperator::init(share::LocalStore *store)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
-  } else if (OB_ISNULL(pool)) {
+  } else if (OB_ISNULL(store)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    if (OB_FAIL(storage_.init(pool))) {
+    if (OB_FAIL(storage_.init(store))) {
     } else {
       inited_ = true;
       LOG_INFO("tablet table operator init success");
@@ -116,16 +116,14 @@ int ObTabletTableOperator::batch_update(
 }
 
 int ObTabletTableOperator::batch_update(
-    LocalConnection *conn,
+    LocalTransaction &tx,
     const ObIArray<ObTabletRuntimeInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(conn)) {
-    ret = OB_INVALID_ARGUMENT;
   } else {
-    ret = storage_.batch_update(conn, tablet_infos);
+    ret = storage_.batch_update(tx, tablet_infos);
     if (OB_FAIL(ret)) {
     }
   }
@@ -133,16 +131,14 @@ int ObTabletTableOperator::batch_update(
 }
 
 int ObTabletTableOperator::batch_remove(
-    LocalConnection *conn,
+    LocalTransaction &tx,
     const ObIArray<ObTabletRuntimeInfo> &tablet_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(conn)) {
-    ret = OB_INVALID_ARGUMENT;
   } else {
-    ret = storage_.batch_remove(conn, tablet_infos);
+    ret = storage_.batch_remove(tx, tablet_infos);
     if (OB_FAIL(ret)) {
     }
   }

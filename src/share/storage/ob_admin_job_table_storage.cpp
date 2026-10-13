@@ -55,28 +55,17 @@ int ObAdminJobTableStorage::create_job(const ObAdminJobEntry &entry)
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const auto insert_request =
-      LocalRequest::insert(admin_job::schema(), {admin_job::GmtCreate, admin_job::GmtModified, admin_job::JobId, admin_job::JobType, admin_job::JobStatus, admin_job::ResultCode}, false);
-
-    if (OB_SUCC(ret)) {
-      const int64_t now = ObTimeUtility::current_time();
-      const int64_t gmt_create = (entry.gmt_create_ > 0) ? entry.gmt_create_ : now;
-      const int64_t gmt_modified = (entry.gmt_modified_ > 0) ? entry.gmt_modified_ : gmt_create;
-      auto binder = [&](LocalBinder &b) -> int {
-        b.bind_int64(gmt_create);
-        b.bind_int64(gmt_modified);
-        b.bind_int64(entry.job_id_);
-        b.bind_text(entry.job_type_.empty() ? "" : entry.job_type_.ptr(), entry.job_type_.length());
-        b.bind_text(entry.job_status_.empty() ? "" : entry.job_status_.ptr(), entry.job_status_.length());
-        b.bind_int64(entry.result_code_);
-        return OB_SUCCESS;
-      };
-      LocalConnectionGuard guard(store_);
-      if (!guard) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->execute(insert_request, binder))) {
-      }
-    }
+    const int64_t now = ObTimeUtility::current_time();
+    const int64_t gmt_create = (entry.gmt_create_ > 0) ? entry.gmt_create_ : now;
+    const int64_t gmt_modified = (entry.gmt_modified_ > 0) ? entry.gmt_modified_ : gmt_create;
+    const auto insert_request = LocalRequest::insert(admin_job::schema())
+        .set(admin_job::GmtCreate, gmt_create)
+        .set(admin_job::GmtModified, gmt_modified)
+        .set(admin_job::JobId, entry.job_id_)
+        .set(admin_job::JobType, LocalValue::text(entry.job_type_.empty() ? "" : entry.job_type_.ptr(), entry.job_type_.length()))
+        .set(admin_job::JobStatus, LocalValue::text(entry.job_status_.empty() ? "" : entry.job_status_.ptr(), entry.job_status_.length()))
+        .set(admin_job::ResultCode, entry.result_code_);
+    ret = store_->execute(insert_request);
   }
   LOG_INFO("finish create job", KR(ret));
   return ret;
@@ -93,21 +82,13 @@ int ObAdminJobTableStorage::complete_job(
   } else if (job_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const auto update_request =
-      LocalRequest::update(admin_job::schema()).set(admin_job::GmtModified, local_param(0)).set(admin_job::JobStatus, local_param(1)).set(admin_job::ResultCode, local_param(2)).eq(admin_job::JobId, local_param(3));
     const int64_t gmt_modified = ObTimeUtility::current_time();
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_int64(gmt_modified);
-      b.bind_text(job_status.empty() ? "" : job_status.ptr(), job_status.length());
-      b.bind_int64(result_code);
-      b.bind_int64(job_id);
-      return OB_SUCCESS;
-    };
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(update_request, binder))) {
-    }
+    const auto update_request = LocalRequest::update(admin_job::schema())
+        .set(admin_job::GmtModified, gmt_modified)
+        .set(admin_job::JobStatus, LocalValue::text(job_status.empty() ? "" : job_status.ptr(), job_status.length()))
+        .set(admin_job::ResultCode, result_code)
+        .eq(admin_job::JobId, job_id);
+    ret = store_->execute(update_request);
   }
   LOG_INFO("finish complete job", KR(ret), K(job_id), K(job_status), K(result_code));
   return ret;
@@ -126,10 +107,7 @@ int ObAdminJobTableStorage::get_max_job_id(int64_t &max_job_id)
       max_job_id = reader.get_int64();
       return OB_ITER_END;
     };
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_request, nullptr, row_processor))) {
+    if (OB_FAIL(store_->query(select_request, row_processor))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         max_job_id = 0;
@@ -149,20 +127,14 @@ int ObAdminJobTableStorage::get_job_count(const common::ObString &job_type, int6
   } else if (OB_UNLIKELY(job_type.empty())) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const auto select_request =
-      LocalRequest::select(admin_job::schema(), {}).aggregate(local::Aggregate::Count).eq(admin_job::JobType, local_param(0));
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_text(job_type.ptr(), job_type.length());
-      return OB_SUCCESS;
-    };
+    const auto select_request = LocalRequest::select(admin_job::schema(), {})
+        .aggregate(local::Aggregate::Count)
+        .eq(admin_job::JobType, LocalValue::text(job_type.ptr(), job_type.length()));
     auto row_processor = [&](LocalRowReader &reader) -> int {
       job_count = reader.get_int64();
       return OB_ITER_END;
     };
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
+    if (OB_FAIL(store_->query(select_request, row_processor))) {
     }
   }
   LOG_INFO("finish get job count", KR(ret), K(job_type), K(job_count));
@@ -178,20 +150,14 @@ int ObAdminJobTableStorage::find_job(const common::ObString &job_type, int64_t &
   } else if (OB_UNLIKELY(job_type.empty())) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const auto select_request =
-      LocalRequest::select(admin_job::schema(), {admin_job::JobId}).eq(admin_job::JobStatus, "INPROGRESS").eq(admin_job::JobType, local_param(0));
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_text(job_type.ptr(), job_type.length());
-      return OB_SUCCESS;
-    };
+    const auto select_request = LocalRequest::select(admin_job::schema(), {admin_job::JobId})
+        .eq(admin_job::JobStatus, "INPROGRESS")
+        .eq(admin_job::JobType, LocalValue::text(job_type.ptr(), job_type.length()));
     auto row_processor = [&](LocalRowReader &reader) -> int {
       job_id = reader.get_int64();
       return OB_ITER_END;
     };
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
+    if (OB_FAIL(store_->query(select_request, row_processor))) {
     } else if (OB_UNLIKELY(job_id < 1)) {
       ret = OB_INVALID_ARGUMENT;
     }

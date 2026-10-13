@@ -114,10 +114,7 @@ int ObTabletLocalChecksumTableStorage::batch_get(
         return ret;
       };
 
-      LocalConnectionGuard guard(store_);
-      if (!guard) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->query(request, nullptr, row_processor))) {
+      if (OB_FAIL(store_->query(request, row_processor))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
         } else {
           ret = OB_SUCCESS; // No rows is acceptable
@@ -137,13 +134,8 @@ int ObTabletLocalChecksumTableStorage::get_row_count(
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const auto select_request =
-      LocalRequest::select(tablet_checksum::schema(), {tablet_checksum::RowCount}).eq(tablet_checksum::TabletId, local_param(0));
-
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_int64(tablet_id.id());
-      return OB_SUCCESS;
-    };
+    const auto select_request = LocalRequest::select(tablet_checksum::schema(), {tablet_checksum::RowCount})
+        .eq(tablet_checksum::TabletId, tablet_id.id());
 
     auto row_processor = [&](LocalRowReader &reader) -> int {
       int64_t value = reader.get_int64();
@@ -153,10 +145,7 @@ int ObTabletLocalChecksumTableStorage::get_row_count(
       return OB_SUCCESS;
     };
 
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
+    if (OB_FAIL(store_->query(select_request, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       } else {
         ret = OB_SUCCESS; // No rows is acceptable

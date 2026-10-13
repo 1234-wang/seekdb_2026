@@ -26,7 +26,7 @@
 // Forward declaration
 namespace oceanbase {
 namespace share {
-class LocalConnection;
+class LocalTransaction;
 class LocalStore;
 class ObTabletLocalChecksumTableStorage;
 }
@@ -121,7 +121,7 @@ class ObTabletLocalChecksumOperator
 {
 public:
   // Initialize local storage (called once at startup)
-  static int init(LocalStore *pool);
+  static int init(LocalStore *store);
 
   // Get a batch of checksum_items
   // Default: checksum_items' compaction_scn = @compaction_scn
@@ -133,11 +133,11 @@ public:
       const bool include_larger_than);
   // Update checksum items within a local transaction
   static int batch_update_with_trans(
-      share::LocalConnection *conn,
+      share::LocalTransaction &tx,
       const common::ObIArray<ObTabletLocalChecksumItem> &item);
   // Remove checksum items within a local transaction
   static int batch_remove_with_trans(
-      share::LocalConnection *conn,
+      share::LocalTransaction &tx,
       const common::ObIArray<ObTabletRuntimeInfo> &tablet_infos);
   static int get_tablet_checksums(const ObIArray<compaction::ObTabletCheckInfo> &pairs,
       ObLocalTabletChecksumArray &tablet_checksum_items);

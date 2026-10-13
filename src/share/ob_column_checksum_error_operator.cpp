@@ -49,7 +49,6 @@ bool ObColumnChecksumErrorInfo::is_valid() const
          && (data_table_id_ != OB_INVALID_ID) && (index_table_id_ != OB_INVALID_ID);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 
 int ObColumnChecksumErrorOperator::insert_column_checksum_err_info(
@@ -95,19 +94,11 @@ int ObColumnChecksumErrorOperator::delete_column_checksum_err_info_by_scn(
     ret = OB_INVALID_ARGUMENT;
   } else {
     // Use local storage - delete by exact frozen_scn
-    const auto delete_request =
-      LocalRequest::erase(checksum_error::schema()).eq(checksum_error::FrozenScn, local_param(0));
 
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_int64(compaction_scn);
-      return OB_SUCCESS;
-    };
+    const auto delete_request = LocalRequest::erase(checksum_error::schema())
+        .eq(checksum_error::FrozenScn, compaction_scn);
 
-    LocalConnectionGuard guard(local_store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(delete_request, binder))) {
-    }
+    ret = local_store_->execute(delete_request);
   }
   return ret;
 }
@@ -121,13 +112,9 @@ int ObColumnChecksumErrorOperator::check_exist_ckm_error_table(const int64_t com
   } else if (!storage_.is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const auto select_request =
-      LocalRequest::select(checksum_error::schema(), {}).aggregate(local::Aggregate::Count).eq(checksum_error::FrozenScn, local_param(0));
-
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_int64(compaction_scn);
-      return OB_SUCCESS;
-    };
+    const auto select_request = LocalRequest::select(checksum_error::schema(), {})
+        .aggregate(local::Aggregate::Count)
+        .eq(checksum_error::FrozenScn, compaction_scn);
 
     int64_t count = 0;
     auto row_processor = [&](LocalRowReader &reader) -> int {
@@ -135,10 +122,7 @@ int ObColumnChecksumErrorOperator::check_exist_ckm_error_table(const int64_t com
       return OB_SUCCESS;
     };
 
-    LocalConnectionGuard guard(local_store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
+    if (OB_FAIL(local_store_->query(select_request, row_processor))) {
     } else if (count > 0) {
       exist = true;
       LOG_INFO("exist ckm error info", K(count), K(compaction_scn));

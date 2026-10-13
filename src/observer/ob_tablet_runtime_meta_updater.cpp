@@ -18,7 +18,6 @@
 
 // Asynchronous persistence for local tablet runtime metadata.
 
-
 #include "share/ob_server_struct.h"
 #include "ob_tablet_runtime_meta_updater.h"
 #include "data_plane/report/ob_tablet_report.h"
@@ -626,18 +625,13 @@ int ObTabletRuntimeMetaUpdater::do_batch_remove_(
     ret = OB_NOT_INIT;
   } else {
     // Use local transaction for multi-table operations
-    share::LocalConnectionGuard guard(GCTX.local_store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      ret = guard->transaction([&]() -> int {
-        int ret = GCTX.tablet_operator_->batch_remove(guard.get_connection(), tablet_infos);
-        if (OB_SUCCESS == ret) {
-          ret = ObTabletLocalChecksumOperator::batch_remove_with_trans(guard.get_connection(), tablet_infos);
-        }
-        return ret;
-      });
-    }
+    ret = GCTX.local_store_->write([&](share::LocalTransaction &tx) -> int {
+      int ret = GCTX.tablet_operator_->batch_remove(tx, tablet_infos);
+      if (OB_SUCCESS == ret) {
+        ret = ObTabletLocalChecksumOperator::batch_remove_with_trans(tx, tablet_infos);
+      }
+      return ret;
+    });
 
     if (OB_FAIL(ret)) {
       (void) throttle_(ret, ObTimeUtility::current_time() - start_time);
@@ -673,18 +667,13 @@ int ObTabletRuntimeMetaUpdater::do_batch_update_(
       ret = OB_NOT_INIT;
     } else {
       // Use local transaction for multi-table operations
-      share::LocalConnectionGuard guard(GCTX.local_store_);
-      if (!guard) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        ret = guard->transaction([&]() -> int {
-          int ret = GCTX.tablet_operator_->batch_update(guard.get_connection(), tablet_infos);
-          if (OB_SUCCESS == ret) {
-            ret = ObTabletLocalChecksumOperator::batch_update_with_trans(guard.get_connection(), checksums);
-          }
-          return ret;
-        });
-      }
+      ret = GCTX.local_store_->write([&](share::LocalTransaction &tx) -> int {
+        int ret = GCTX.tablet_operator_->batch_update(tx, tablet_infos);
+        if (OB_SUCCESS == ret) {
+          ret = ObTabletLocalChecksumOperator::batch_update_with_trans(tx, checksums);
+        }
+        return ret;
+      });
 
     }
     if (OB_FAIL(ret)) {

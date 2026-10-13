@@ -54,7 +54,7 @@ public:
 
   // Batch update local tablet runtime metadata within an external transaction.
   int batch_update(
-      LocalConnection *conn,
+      LocalTransaction &tx,
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
 
   // Batch remove local tablet runtime metadata.
@@ -63,7 +63,7 @@ public:
 
   // Batch remove local tablet runtime metadata within an external transaction.
   int batch_remove(
-      LocalConnection *conn,
+      LocalTransaction &tx,
       const ObIArray<ObTabletRuntimeInfo> &tablet_infos);
 
   // Get data_size for a local tablet.

@@ -55,27 +55,18 @@ int ObColumnChecksumErrorInfoTableStorage::insert(const ObColumnChecksumErrorInf
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const auto insert_request =
-      LocalRequest::insert(checksum_error::schema(), {checksum_error::FrozenScn, checksum_error::IndexType, checksum_error::DataTableId, checksum_error::IndexTableId, checksum_error::DataTabletId, checksum_error::IndexTabletId, checksum_error::ColumnId, checksum_error::DataColumnChecksum, checksum_error::IndexColumnChecksum}, false);
+    const auto insert_request = LocalRequest::insert(checksum_error::schema())
+        .set(checksum_error::FrozenScn, error_info.frozen_scn_.get_val_for_inner_table_field())
+        .set(checksum_error::IndexType, error_info.is_global_index_ ? 1 : 0)
+        .set(checksum_error::DataTableId, error_info.data_table_id_)
+        .set(checksum_error::IndexTableId, error_info.index_table_id_)
+        .set(checksum_error::DataTabletId, error_info.data_tablet_id_.id())
+        .set(checksum_error::IndexTabletId, error_info.index_tablet_id_.id())
+        .set(checksum_error::ColumnId, error_info.column_id_)
+        .set(checksum_error::DataColumnChecksum, error_info.data_column_checksum_)
+        .set(checksum_error::IndexColumnChecksum, error_info.index_column_checksum_);
 
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_int64(error_info.frozen_scn_.get_val_for_inner_table_field());
-      b.bind_int64(error_info.is_global_index_ ? 1 : 0);
-      b.bind_int64(error_info.data_table_id_);
-      b.bind_int64(error_info.index_table_id_);
-      b.bind_int64(error_info.data_tablet_id_.id());
-      b.bind_int64(error_info.index_tablet_id_.id());
-      b.bind_int64(error_info.column_id_);
-      b.bind_int64(error_info.data_column_checksum_);
-      b.bind_int64(error_info.index_column_checksum_);
-      return OB_SUCCESS;
-    };
-
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->execute(insert_request, binder))) {
-    }
+    ret = store_->execute(insert_request);
   }
   return ret;
 }
@@ -88,35 +79,25 @@ int ObColumnChecksumErrorInfoTableStorage::insert_all(const ObIArray<ObColumnChe
   } else if (error_infos.empty()) {
     // do nothing
   } else {
-    const auto insert_request =
-      LocalRequest::insert(checksum_error::schema(), {checksum_error::FrozenScn, checksum_error::IndexType, checksum_error::DataTableId, checksum_error::IndexTableId, checksum_error::DataTabletId, checksum_error::IndexTabletId, checksum_error::ColumnId, checksum_error::DataColumnChecksum, checksum_error::IndexColumnChecksum}, false);
+    ret = store_->write([&](LocalTransaction &tx) -> int {
+      for (int64_t i = 0; OB_SUCC(ret) && i < error_infos.count(); ++i) {
+        const ObColumnChecksumErrorInfo &error_info = error_infos.at(i);
+        const auto insert_request = LocalRequest::insert(checksum_error::schema())
+            .set(checksum_error::FrozenScn, error_info.frozen_scn_.get_val_for_inner_table_field())
+            .set(checksum_error::IndexType, error_info.is_global_index_ ? 1 : 0)
+            .set(checksum_error::DataTableId, error_info.data_table_id_)
+            .set(checksum_error::IndexTableId, error_info.index_table_id_)
+            .set(checksum_error::DataTabletId, error_info.data_tablet_id_.id())
+            .set(checksum_error::IndexTabletId, error_info.index_tablet_id_.id())
+            .set(checksum_error::ColumnId, error_info.column_id_)
+            .set(checksum_error::DataColumnChecksum, error_info.data_column_checksum_)
+            .set(checksum_error::IndexColumnChecksum, error_info.index_column_checksum_);
 
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      ret = guard->transaction([&]() -> int {
-        for (int64_t i = 0; OB_SUCC(ret) && i < error_infos.count(); ++i) {
-          const ObColumnChecksumErrorInfo &error_info = error_infos.at(i);
-          auto binder = [&](LocalBinder &b) -> int {
-            b.bind_int64(error_info.frozen_scn_.get_val_for_inner_table_field());
-            b.bind_int64(error_info.is_global_index_ ? 1 : 0);
-            b.bind_int64(error_info.data_table_id_);
-            b.bind_int64(error_info.index_table_id_);
-            b.bind_int64(error_info.data_tablet_id_.id());
-            b.bind_int64(error_info.index_tablet_id_.id());
-            b.bind_int64(error_info.column_id_);
-            b.bind_int64(error_info.data_column_checksum_);
-            b.bind_int64(error_info.index_column_checksum_);
-            return OB_SUCCESS;
-          };
+        ret = tx.execute(insert_request);
+      }
 
-          ret = guard->execute(insert_request, binder);
-        }
-
-        return ret;
-      });
-    }
+      return ret;
+    });
   }
   return ret;
 }
@@ -135,18 +116,14 @@ int ObColumnChecksumErrorInfoTableStorage::get(
   if (!is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    const auto select_request =
-      LocalRequest::select(checksum_error::schema(), {checksum_error::FrozenScn, checksum_error::IndexType, checksum_error::DataTableId, checksum_error::IndexTableId, checksum_error::DataTabletId, checksum_error::IndexTabletId, checksum_error::ColumnId, checksum_error::DataColumnChecksum, checksum_error::IndexColumnChecksum}).eq(checksum_error::FrozenScn, local_param(0)).eq(checksum_error::IndexType, local_param(1)).eq(checksum_error::DataTableId, local_param(2)).eq(checksum_error::IndexTableId, local_param(3)).eq(checksum_error::DataTabletId, local_param(4)).eq(checksum_error::IndexTabletId, local_param(5)).order(checksum_error::ColumnId);
-
-    auto binder = [&](LocalBinder &b) -> int {
-      b.bind_int64(frozen_scn.get_val_for_inner_table_field());
-      b.bind_int64(is_global_index ? 1 : 0);
-      b.bind_int64(data_table_id);
-      b.bind_int64(index_table_id);
-      b.bind_int64(data_tablet_id.id());
-      b.bind_int64(index_tablet_id.id());
-      return OB_SUCCESS;
-    };
+    const auto select_request = LocalRequest::select(checksum_error::schema(), {checksum_error::FrozenScn, checksum_error::IndexType, checksum_error::DataTableId, checksum_error::IndexTableId, checksum_error::DataTabletId, checksum_error::IndexTabletId, checksum_error::ColumnId, checksum_error::DataColumnChecksum, checksum_error::IndexColumnChecksum})
+        .eq(checksum_error::FrozenScn, frozen_scn.get_val_for_inner_table_field())
+        .eq(checksum_error::IndexType, is_global_index ? 1 : 0)
+        .eq(checksum_error::DataTableId, data_table_id)
+        .eq(checksum_error::IndexTableId, index_table_id)
+        .eq(checksum_error::DataTabletId, data_tablet_id.id())
+        .eq(checksum_error::IndexTabletId, index_tablet_id.id())
+        .order(checksum_error::ColumnId);
 
     auto row_processor = [&](LocalRowReader &reader) -> int {
       ObColumnChecksumErrorInfo error_info;
@@ -175,10 +152,7 @@ int ObColumnChecksumErrorInfoTableStorage::get(
       return ret;
     };
 
-    LocalConnectionGuard guard(store_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->query(select_request, binder, row_processor))) {
+    if (OB_FAIL(store_->query(select_request, row_processor))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
       } else {
         ret = OB_SUCCESS; // No rows is acceptable
@@ -198,9 +172,7 @@ int ObColumnChecksumErrorInfoTableStorage::delete_expired(
   } else {
     const auto request = LocalRequest::erase(checksum_error::schema())
         .lt(checksum_error::FrozenScn, static_cast<int64_t>(frozen_scn_before.get_val_for_inner_table_field())).order(checksum_error::FrozenScn).take(limit);
-    LocalConnectionGuard guard(store_);
-    if (!guard) { ret = OB_ERR_UNEXPECTED; }
-    else { ret = guard->execute(request); }
+    ret = store_->execute(request);
   }
   return ret;
 }
