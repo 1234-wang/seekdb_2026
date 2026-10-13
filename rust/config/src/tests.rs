@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use super::*;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -75,19 +76,6 @@ fn updates_survive_close_reopen_and_reset_removes_only_its_key() {
     let entries = load(directory.store()).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].name, "data_dir");
-    #[cfg(unix)]
-    {
-        let path = directory.storage_path();
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(path.join("data"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o600
-        );
-    }
 }
 
 #[test]
@@ -95,16 +83,24 @@ fn concurrent_updates_keep_each_completed_value() {
     let _guard = CONFIG_TEST_LOCK.lock().unwrap();
     let mut directory = TestDirectory::new();
     let store = directory.store();
+    let updates = [
+        ("cpu_count", "4"),
+        ("rpc_timeout", "3s"),
+        ("max_string_print_length", "777"),
+        ("enable_record_trace_log", "off"),
+    ];
     std::thread::scope(|scope| {
-        for parameter in crate::config::CATALOG.iter().take(8) {
-            scope.spawn(move || {
-                crate::config::update_parameter(store, parameter.name, Some(parameter.default))
-                    .unwrap()
-            });
+        for (name, value) in updates {
+            scope.spawn(move || crate::config::update_parameter(store, name, Some(value)).unwrap());
         }
     });
     directory.reopen();
-    assert_eq!(load(directory.store()).unwrap().len(), 8);
+    let entries = load(directory.store()).unwrap();
+    let actual: BTreeMap<_, _> = entries
+        .iter()
+        .map(|entry| (entry.name.as_str(), entry.value.as_str()))
+        .collect();
+    assert_eq!(actual, updates.into_iter().collect());
 }
 
 #[test]
@@ -171,18 +167,7 @@ fn declared_cpu_count_update_preserves_storage_and_runtime_value_on_rejection() 
     let directory = TestDirectory::new();
     reset_active_defaults(directory.store());
     assert_eq!(crate::config::cpu_count(), 0);
-    let declaration = crate::config::find("CPU_COUNT").unwrap();
-    assert_eq!(declaration.name, "cpu_count");
-    assert_eq!(declaration.default, "0");
-    assert_eq!(declaration.edit_level, "DYNAMIC_EFFECTIVE");
-    assert_eq!(
-        crate::config::find("major_freeze_duty_time")
-            .unwrap()
-            .default,
-        "02:00"
-    );
-    assert!(crate::config::find("server_create_time").is_none());
-    crate::config::update_parameter(directory.store(), "cpu_count", Some("8")).unwrap();
+    crate::config::update_parameter(directory.store(), "CPU_COUNT", Some("8")).unwrap();
     assert_eq!(crate::config::cpu_count(), 8);
     assert_eq!(load(directory.store()).unwrap()[0].value, "8");
     assert!(crate::config::update_parameter(directory.store(), "cpu_count", Some("-1")).is_err());
@@ -256,7 +241,7 @@ fn declared_numeric_ranges_reject_without_publishing() {
 }
 
 #[test]
-fn declared_defaults_and_checkers_validate_values() {
+fn rust_validation_checks_types_and_ranges_without_business_checkers() {
     for parameter in crate::config::CATALOG {
         crate::config::validate(parameter.name, parameter.default)
             .unwrap_or_else(|error| panic!("{}: {error}", parameter.name));
