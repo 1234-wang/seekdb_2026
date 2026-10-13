@@ -1698,16 +1698,26 @@ int ObServer::wait_no_client()
   int ret = OB_SUCCESS;
 #ifdef _WIN32
   OVERLAPPED ov = {};
-  if (!LockFileEx(clients_h_, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+  if (LockFileEx(clients_h_,
+                 LOCKFILE_EXCLUSIVE_LOCK,
                  0, MAXDWORD, MAXDWORD, &ov)) {
-    ret = ERROR_LOCK_VIOLATION == GetLastError() ? OB_EAGAIN : OB_ERROR;
+    FLOG_INFO("no clients remaining, exiting");
+    net_frame_.sql_nio_stop();
+    _Exit(0);
+  } else {
+    ret = OB_ERROR;
+    LOG_ERROR("LockFileEx failed", "last_error", (int)GetLastError());
   }
 #else
-  if (flock(clients_fd_, LOCK_EX | LOCK_NB) != 0) {
-    ret = EWOULDBLOCK == errno || EINTR == errno ? OB_EAGAIN : OB_ERROR;
+  if (flock(clients_fd_, LOCK_EX) == 0) {
+    FLOG_INFO("no clients remaining, exiting");
+    net_frame_.sql_nio_stop();
+    _Exit(0);
+  } else {
+    ret = OB_ERROR;
+    LOG_ERROR("flock failed", K(errno));
   }
 #endif
-  if (OB_SUCC(ret)) { set_stop(); }
   return ret;
 }
 
@@ -1719,11 +1729,7 @@ int ObServer::wait()
   // wait for stop flag
 
   if (!in_process_ && gctx_.is_embedded_mode()) {
-    while (!stop_) {
-      const int client_ret = wait_no_client();
-      if (client_ret != OB_SUCCESS && client_ret != OB_EAGAIN) { return client_ret; }
-      if (!stop_) { ob_usleep(100000); }
-    }
+    std::thread([this]() { wait_no_client(); }).detach();
   }
 
   FLOG_INFO("begin to wait observer setted to stop");

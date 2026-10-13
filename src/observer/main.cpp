@@ -58,7 +58,6 @@ static void seekdb_cov_init_profile_file(int argc, char **argv)
 #include "lib/utility/ob_defer.h"
 #include "observer/ob_command_line_parser.h"
 #include "observer/ob_server.h"
-#include "observer/include/seekdb_engine.h"
 #include "share/ob_encryption_util.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_signal_handle.h"
@@ -474,6 +473,72 @@ static int create_observer_softlink()
 #endif
   return ret;
 }
+static void print_args(int argc, char *argv[])
+{
+  for (int i = 0; i < argc - 1; ++i) {
+    fprintf(stderr, "%s ", argv[i]);
+  }
+  fprintf(stderr, "%s\n", argv[argc - 1]);
+}
+
+/**
+ * Parse command-line arguments
+ * @details Parse command-line arguments，and initialize ObServerOptions。
+ * @param argc number of command-line arguments
+ * @param argv command-line arguments
+ * @param opts config options
+ */
+static int parse_args(int argc, char *argv[], ObServerOptions &opts)
+{
+  int ret = OB_SUCCESS;
+
+  ObCommandLineParser parser;
+  bool config_file_exists = false;
+
+  // Parse arguments and write the results directly into opts
+  ret = parser.parse_args(argc, argv, opts);
+  if (OB_ITER_END == ret) {
+    // Help/version are handled by the executable, never by the embedded API.
+#ifdef __APPLE__
+    _exit(0);
+#else
+    exit(0);
+#endif
+  }
+  if (OB_FAIL(ret)) {
+    MPRINT("Failed to parse command line arguments, ret=%d", ret);
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(opts.base_dir_.ptr()))) {
+    MPRINT("Failed to create base dir. path='%s', system error=%s", opts.base_dir_.ptr(), strerror(errno));
+  } else if (OB_FAIL(FileDirectoryUtils::to_absolute_path(opts.base_dir_))) {
+  }
+
+  return ret;
+}
+
+static int callback(struct dl_phdr_info *info, size_t size, void *data)
+{
+  UNUSED(size);
+  UNUSED(data);
+  if (OB_ISNULL(info)) {
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K(info));
+  } else {
+    _LOG_INFO("name=%s (%d segments)", info->dlpi_name, info->dlpi_phnum);
+#if defined(__APPLE__) || defined(_WIN32)
+    // macOS/Windows stub: dlpi_phdr is const void* and cannot be accessed
+#else
+    for (int j = 0; j < info->dlpi_phnum; j++) {
+      if (NULL != info->dlpi_phdr) {
+        _LOG_INFO(
+            "\t\t header %2d: address=%10p",
+            j,
+            (void *)(info->dlpi_addr + info->dlpi_phdr[j].p_vaddr));
+      }
+    }
+#endif
+  }
+  return 0;
+}
+
 #ifndef _WIN32
 static void print_limit(const char *name, const int resource)
 {
@@ -514,6 +579,39 @@ static void print_all_limits()
   (void)0;  // rlimit/getrlimit not available on Windows
 }
 #endif
+
+static int check_uid_before_start(const char *dir_path)
+{
+#ifdef _WIN32
+  (void)dir_path;
+  return OB_SUCCESS;  // skip uid check on Windows
+#else
+  int ret = OB_SUCCESS;
+  uid_t current_uid = UINT_MAX;
+#ifdef __APPLE__
+  struct stat dir_info;
+#else
+  struct stat64 dir_info;
+#endif
+
+  current_uid = getuid();
+#ifdef __APPLE__
+  if (0 != ::stat(dir_path, &dir_info)) {
+#else
+  if (0 != ::stat64(dir_path, &dir_info)) {
+#endif
+    /* do nothing */
+  } else {
+    if (current_uid != dir_info.st_uid) {
+      ret = OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
+      MPRINT("ERROR: current user(uid=%u) that starts seekdb is not the same with the original one(uid=%u), seekdb starts failed!",
+              current_uid, dir_info.st_uid);
+    }
+  }
+
+  return ret;
+#endif
+}
 
 // systemd dynamic loading
 static int safe_sd_notify(int unset_environment, const char *state)
@@ -556,60 +654,191 @@ static int safe_sd_notify(int unset_environment, const char *state)
 int inner_main(int argc, char *argv[])
 {
 #if defined(__APPLE__)
-  if (!configure_darwin_malloc_zone(get_ob_malloc_backend())) {
+  const ObMallocBackend startup_malloc_backend = get_ob_malloc_backend();
+  if (!configure_darwin_malloc_zone(startup_malloc_backend)) {
+    MPRINT("Failed to configure macOS malloc zone for backend '%s'.",
+           ob_malloc_backend_name(startup_malloc_backend));
     return OB_ERR_UNEXPECTED;
   }
 #endif
-  lib::ObStackHeaderGuard stack_guard;
-  lib::Worker worker;
-  lib::Worker::set_worker_to_thread_local(&worker);
-  DEFER(lib::Worker::set_worker_to_thread_local(nullptr));
-  ObServerOptions options;
-  options.log_level_ = DEFAULT_LOG_LEVEL;
-  ObCommandLineParser parser;
-  int ret = parser.parse_args(argc, argv, options);
-  if (OB_ITER_END == ret) { return OB_SUCCESS; }
-  if (OB_FAIL(ret)) {
-    MPRINT("Failed to parse command line arguments, ret=%d", ret);
-    return ret;
+  // LLVM removed: the LLVM symbolizer is gone; sanity (ASAN/UBSAN) builds keep
+  // backtrace_symbolize_func at its default (NULL) -> unsymbolized frames.
+#if defined(_WIN32) || defined(__ANDROID__)
+  snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "seekdb");
+#else
+  if (0 != pthread_getname_np(pthread_self(), ob_get_tname(), OB_THREAD_NAME_BUF_LEN)) {
+    snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "seekdb");
   }
-#ifndef _WIN32
-  if (OB_FAIL(ObSignalHandle::change_signal_mask())) { return ret; }
 #endif
+  ObStackHeaderGuard stack_header_guard;
+  int64_t memory_used = get_virtual_memory_used();
+
+  ObCurTraceId::SeqGenerator::seq_generator_  = ObTimeUtility::current_time();
+  static const int  LOG_FILE_SIZE             = DEFAULT_LOG_FILE_SIZE_MB * 1024 * 1024;
+  const char *const LOG_FILE_NAME             = "log/seekdb.log";
+  const char *const PID_FILE_NAME             = "run/seekdb.pid";
+  int               ret                       = OB_SUCCESS;
+
+  MPRINT("Starting seekdb (%s %s %s) source revision %s.",
+    OB_OCEANBASE_NAME, OB_SEEKDB_NAME, PACKAGE_VERSION, build_version());
+
+#ifndef _WIN32
+  // change signal mask first (POSIX only).
+  if (OB_FAIL(ObSignalHandle::change_signal_mask())) {
+    MPRINT("change signal mask failed, ret=%d", ret);
+  }
+#endif
+
+  lib::ObMemAttr mem_attr("ObserverAlloc");
+  ObServerOptions *opts = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(opts = OB_NEW(ObServerOptions, mem_attr))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    MPRINT("Failed to allocate memory for ObServerOptions.");
+  }
+
+  // no diagnostic info attach to main thread.
+  ObDisableDiagnoseGuard disable_guard;
   setlocale(LC_ALL, "");
+  // Set character classification type to C to avoid printf large string too
+  // slow.
   setlocale(LC_CTYPE, "C");
   setlocale(LC_TIME, "en_US.UTF-8");
   setlocale(LC_NUMERIC, "en_US.UTF-8");
-  if (!options.nodaemon_ && !options.initialize_) {
-    if (OB_FAIL(ob_daemonize())) { return ret; }
-    if (!restore_malloc_backend_after_fork()) { return OB_ERR_UNEXPECTED; }
+
+  opts->log_level_ = DEFAULT_LOG_LEVEL;
+  if (FAILEDx(parse_args(argc, argv, *opts))) {
   }
-  MPRINT("Starting seekdb (%s).", PACKAGE_STRING);
-  const char *error_message = nullptr;
-  SeekdbEngineHandle engine = seekdb_engine_open(argc - 1, argv + 1, &ret, &error_message);
-  if (engine == nullptr) {
-    MPRINT("Failed to start seekdb, ret=%d, error=%s", ret, error_message);
-    return ret;
-  }
-  (void)create_observer_softlink();
-  print_all_limits();
-  ObSignalHandle signals;
-  if (OB_FAIL(signals.start())) {
+
+  if (OB_FAIL(ret)) {
+  } else if (0 != chdir(opts->base_dir_.ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    MPRINT("Failed to change working directory to base dir. path='%s', system error='%s'",
+      opts->base_dir_.ptr(), strerror(errno));
   } else {
-    safe_sd_notify(0, "READY=1\nSTATUS=seekdb is ready and running\n");
-    // Only the executable interprets process signals and legacy client locks.
-    while (!options.initialize_ && OB_SUCC(ret) && !OBSERVER.is_stopped()) {
-      if (options.embedded_) {
-        ret = OBSERVER.wait_no_client();
-        if (OB_EAGAIN == ret) { ret = OB_SUCCESS; }
-      }
-      if (OB_SUCC(ret)) { ob_usleep(100000); }
+    MPRINT("Change working directory to base dir. path='%s'", opts->base_dir_.ptr());
+    fprintf(stderr, "The log file is in the directory: '");
+    fprintf(stderr, opts->base_dir_.ptr());
+    if (opts->base_dir_.ptr()[opts->base_dir_.length() - 1] != '/') {
+      fprintf(stderr, "/");
+    }
+    fprintf(stderr, "log/'\n");
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_uid_before_start(CONF_DIR))) {
+    MPRINT("Fail check_uid_before_start, please use the initial user to start seekdb!");
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(PID_DIR))) {
+    MPRINT("create pid dir fail: ./run/");
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(LOG_DIR))) {
+    MPRINT("create log dir fail: ./log/");
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(CONF_DIR))) {
+    MPRINT("create log dir fail: ./etc/");
+  } else if (FALSE_IT(create_observer_softlink())) {
+  } else if (OB_FAIL(ObEncryptionUtil::init_ssl_malloc())) {
+    MPRINT("failed to init crypto malloc");
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!opts->nodaemon_ && !opts->initialize_) {
+    MPRINT("The seekdb will be started as a daemon process. You can check the server status by client later.");
+    MPRINT("    Start seekdb with --nodaemon if you don't want to start as a daemon process.");
+    if (OB_FAIL(start_daemon(PID_FILE_NAME))) {
+      MPRINT("Start seekdb as a daemon failed. Did you started seekdb already?");
+    } else if (!restore_malloc_backend_after_fork()) {
+      ret = OB_ERR_UNEXPECTED;
+      MPRINT("Failed to restore malloc backend after starting daemon process.");
+    }
+  } else if (opts->nodaemon_) {
+    if (OB_FAIL(start_daemon(PID_FILE_NAME, true/*skip_daemon*/))) {
+      MPRINT("Start seekdb failed. Did you started seekdb already?");
     }
   }
-  signals.stop();
-  signals.wait();
-  const int close_ret = seekdb_engine_close(engine);
-  return OB_SUCC(ret) ? close_ret : ret;
+
+  if (OB_FAIL(ret)) {
+  } else {
+    ObCurTraceId::get_trace_id()->set("Y0-0000000000000001-0-0");
+    CURLcode curl_code = curl_global_init(CURL_GLOBAL_ALL);
+    OB_ASSERT(CURLE_OK == curl_code);
+
+    const char *syslog_file_info = ObServerUtils::build_syslog_file_info();
+    OB_LOGGER.set_log_level(opts->log_level_);
+    OB_LOGGER.set_max_file_size(LOG_FILE_SIZE);
+    OB_LOGGER.set_new_file_info(syslog_file_info);
+    OB_LOGGER.set_file_name(LOG_FILE_NAME, false/*no_redirect_flag*/);
+    ObPLogWriterCfg log_cfg;
+    LOG_INFO("succ to init logger",
+             "default file", LOG_FILE_NAME,
+             "max_log_file_size", LOG_FILE_SIZE,
+             "enable_async_log", OB_LOGGER.enable_async_log());
+    const ObMallocBackend malloc_backend = get_ob_malloc_backend();
+    if (0 == memory_used) {
+      _LOG_INFO("Get virtual memory info failed");
+    } else {
+#ifdef _WIN32
+      _LOG_INFO("Virtual memory : %15ld byte", memory_used);
+#else
+      _LOG_INFO("Virtual memory : %'15ld byte", memory_used);
+#endif
+    }
+    // print in log file.
+    LOG_INFO("Build basic information for each syslog file", "info", syslog_file_info);
+    print_all_limits();
+    dl_iterate_phdr(callback, NULL);
+
+#if defined(__APPLE__) || defined(__ANDROID__)
+    // macOS/Android don't support M_MMAP_MAX and M_ARENA_MAX
+#elif defined(__linux__)
+    if (is_ob_malloc_backend(malloc_backend)) {
+      static const int DEFAULT_MMAP_MAX_VAL = 1024 * 1024 * 1024;
+      mallopt(M_MMAP_MAX, DEFAULT_MMAP_MAX_VAL);
+      mallopt(M_ARENA_MAX, 1); // disable malloc multiple arena pool
+    }
+#endif
+
+    // turn warn log on so that there's a observer.log.wf file which
+    // records all WARN and ERROR logs in log directory.
+    ObWarningBuffer::set_warn_log_on(true);
+    if (OB_SUCC(ret)) {
+      const bool initialize = opts->initialize_;
+      lib::Worker worker;
+      lib::Worker::set_worker_to_thread_local(&worker);
+      ObServer &observer = ObServer::get_instance();
+      LOG_INFO("seekdb starts", "seekdb_version", PACKAGE_STRING, "embedded", opts->embedded_);
+      if (OB_FAIL(observer.init(*opts, log_cfg))) {
+      } else if (OB_MALLOC_BACKEND_UNKNOWN == malloc_backend) {
+        LOG_WARN("invalid malloc backend",
+                 "env", ob_malloc_backend_env_name(),
+                 "supported", "obmalloc, jemalloc");
+      } else {
+        LOG_INFO("malloc backend initialized",
+                 "backend", ob_malloc_backend_name(malloc_backend));
+      }
+      OB_DELETE(ObServerOptions, mem_attr, opts);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(observer.start())) {
+      } else {
+        safe_sd_notify(0, "READY=1\n"
+                       "STATUS=seekdb is ready and running\n");
+      }
+      if (initialize) {
+        LOG_INFO("seekdb starts in initialize mode, exit now", K(initialize));
+        _exit(OB_SUCC(ret) ? 0 : 1);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(observer.wait())) {
+      }
+
+      if (OB_FAIL(ret)) {
+        _exit(1);
+      }
+      observer.destroy();
+    }
+    curl_global_cleanup();
+    unlink(PID_FILE_NAME);
+  }
+
+  LOG_INFO("seekdb exits", "seekdb_version", PACKAGE_STRING);
+  return ret;
 }
 
 #ifdef _WIN32
