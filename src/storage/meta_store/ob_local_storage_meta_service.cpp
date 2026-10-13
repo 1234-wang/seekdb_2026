@@ -18,7 +18,6 @@
 #include "config_bridge.h"
 #include "ob_local_storage_meta_service.h"
 #include "share/rc/ob_server_runtime.h"
-#include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/api/storage/runtime/ob_i_server_runtime.h"
 #include "storage/ob_file_system_router.h"
@@ -62,7 +61,7 @@ int ObLocalStorageMetaService::init()
         OB_FILE_SYSTEM_ROUTER.get_slog_file_spec()))) {
   } else if (OB_FAIL(ckpt_slog_handler_.init(slogger_))) {
   } else if (OB_FAIL(persister_.init(slogger_, ckpt_slog_handler_))) {
-  } else if (OB_FAIL(replayer_.init(persister_, ckpt_slog_handler_))) {
+  } else if (OB_FAIL(replayer_.init(ckpt_slog_handler_))) {
   } else if (OB_FAIL(object_rwriter_.init())) {
   } else if (OB_FAIL(object_raw_rwriter_.init())) {
   } else {
@@ -123,16 +122,6 @@ void ObLocalStorageMetaService::destroy()
   is_inited_ = false;
 }
 
-int ObLocalStorageMetaService::get_active_cursor(common::ObLogCursor &log_cursor)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(slogger_.get_active_cursor(log_cursor))) {
-  }
-  return ret;
-}
-
 int ObLocalStorageMetaService::get_meta_block_list(
     ObIArray<blocksstable::MacroBlockId> &meta_block_list)
 {
@@ -152,48 +141,6 @@ int ObLocalStorageMetaService::write_checkpoint(bool is_force)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(ckpt_slog_handler_.write_checkpoint(is_force))) {
-  }
-  return ret;
-}
-
-int ObLocalStorageMetaService::add_snapshot(const ObServerSnapshotMeta &snapshot)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ckpt_slog_handler_.add_snapshot(snapshot))) {
-  }
-  return ret;
-}
-
-int ObLocalStorageMetaService::delete_snapshot(const share::ObServerSnapshotID &snapshot_id)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ckpt_slog_handler_.delete_snapshot(snapshot_id))) {
-  }
-  return ret;
-}
-
-int ObLocalStorageMetaService::swap_snapshot(const ObServerSnapshotMeta &snapshot)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ckpt_slog_handler_.swap_snapshot(snapshot))) {
-  }
-  return ret;
-}
-
-int ObLocalStorageMetaService::clone_ls(
-    ObStartupAccelTaskHandler* startup_accel_handler,
-    const blocksstable::MacroBlockId &tablet_meta_entry)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ckpt_slog_handler_.clone_ls(startup_accel_handler, tablet_meta_entry))) {
   }
   return ret;
 }

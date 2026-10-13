@@ -16,7 +16,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_local_storage_meta_persister.h"
-#include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/slog/ob_storage_logger.h"
@@ -55,7 +54,7 @@ void ObLocalStorageMetaPersister::destroy()
   }
 }
 
-int ObLocalStorageMetaPersister::update_ls_meta(const int64_t ls_epoch, const ObLSMeta &ls_meta)
+int ObLocalStorageMetaPersister::update_ls_meta(const ObLSMeta &ls_meta)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -64,49 +63,6 @@ int ObLocalStorageMetaPersister::update_ls_meta(const int64_t ls_epoch, const Ob
     if (OB_FAIL(write_update_ls_meta_slog_(ls_meta))) {
     }
   }
-  return ret;
-}
-
-int ObLocalStorageMetaPersister::batch_update_tablet(const ObIArray<ObUpdateTabletLog> &slog_arr)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObSArray<ObStorageLogParam> param_arr;
-    param_arr.set_attr(ObMemAttr("BatchUpdateTab"));
-    ObStorageLogParam log_param;
-    log_param.cmd_ = ObIRedoModule::gen_cmd(
-        ObRedoLogMainType::OB_REDO_LOG_LOCAL_STORAGE,
-        ObRedoLogSubType::OB_REDO_LOG_UPDATE_TABLET);
-    if (OB_FAIL(param_arr.reserve(slog_arr.count()))) {
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < slog_arr.count(); i++) {
-      log_param.data_ =(ObIBaseStorageLogEntry*)(&(slog_arr.at(i)));
-      if (OB_FAIL(param_arr.push_back(log_param))) {
-      }
-    }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(slogger_->write_log(param_arr))) {
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < param_arr.count(); i++) {
-        const ObStorageLogParam &log_param = param_arr.at(i);
-        const ObUpdateTabletLog *slog = reinterpret_cast<const ObUpdateTabletLog*>(log_param.data_);
-        const ObTabletMapKey tablet_key(slog->tablet_id_);
-        do {
-          if (OB_FAIL(ckpt_slog_handler_->report_slog(tablet_key, log_param.disk_addr_))) {
-            if (OB_ALLOCATE_MEMORY_FAILED != ret) {
-              LOG_WARN("fail to report slog", K(ret), K(tablet_key), K(log_param));
-            } else if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
-              LOG_WARN("fail to report slog due to memory limit", K(ret), K(tablet_key), K(log_param));
-            }
-          }
-        } while (OB_ALLOCATE_MEMORY_FAILED == ret);
-      }
-    }
-  }
-
   return ret;
 }
 

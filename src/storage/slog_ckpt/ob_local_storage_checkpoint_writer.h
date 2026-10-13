@@ -29,14 +29,6 @@ namespace storage
 {
 struct ObLSCkptMember;
 
-enum class ObLocalStorageMetaType
-{
-  CKPT = 0,
-  SNAPSHOT = 1,
-  CLONE = 2,
-  INVALID_TYPE
-};
-
 class ObLocalStorageCheckpointSlogHandler;
 
 class ObLocalStorageCheckpointWriter final
@@ -48,13 +40,11 @@ public:
   ~ObLocalStorageCheckpointWriter() = default;
   ObLocalStorageCheckpointWriter(const ObLocalStorageCheckpointWriter &) = delete;
   ObLocalStorageCheckpointWriter &operator=(const ObLocalStorageCheckpointWriter &) = delete;
-  int init(const ObLocalStorageMetaType meta_type,
-           ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler);
+  int init(ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler);
 
   // record meta for ckpt
   int record_meta(blocksstable::MacroBlockId &ls_meta_entry);
 
-  // record meta for snapshot
   int get_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int get_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int batch_compare_and_swap_tablet();
@@ -81,24 +71,19 @@ private:
 
   int write_item(const ObLSCkptMember &ls_ckpt_member);
   int close(blocksstable::MacroBlockId &ls_meta_entry);
-  int do_record_ls_meta(ObLS &ls, share::SCN &clog_max_scn);
+  int do_record_ls_meta(ObLS &ls);
   int get_tablet_with_addr(
       const TabletItemAddrInfo &addr_info,
       ObTabletHandle &tablet_handle);
   int record_ls_meta(blocksstable::MacroBlockId &ls_entry_block);
-  int record_tablet_meta(ObLS &ls, blocksstable::MacroBlockId &tablet_meta_entry, share::SCN &clog_max_scn);
+  int record_tablet_meta(ObLS &ls, blocksstable::MacroBlockId &tablet_meta_entry);
   int persist_and_copy_tablet(
       const ObTabletMapKey &tablet_key,
       const ObMetaDiskAddr &old_addr,
       char (&slog_buf)[sizeof(ObUpdateTabletLog)]);
-  int copy_tablet(
-      const ObTabletMapKey &tablet_key,
-      char (&slog_buf)[sizeof(ObUpdateTabletLog)],
-      share::SCN &clog_max_scn);
 
 private:
   bool is_inited_;
-  ObLocalStorageMetaType meta_type_;
   ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler_;
   common::ObArray<TabletItemAddrInfo> tablet_item_addr_info_arr_;
   ObLinkedMacroBlockItemWriter ls_item_writer_;

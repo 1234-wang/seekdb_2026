@@ -27,10 +27,10 @@ using namespace share;
 using namespace transaction;
 namespace storage
 {
-typedef ObFunction<int(const int64_t, const ObLSMeta &)> WriteSlog;
-WriteSlog ObLSMeta::write_slog_ = [](const int64_t ls_epoch, const ObLSMeta &ls_meta) {
+typedef ObFunction<int(const ObLSMeta &)> WriteSlog;
+WriteSlog ObLSMeta::write_slog_ = [](const ObLSMeta &ls_meta) {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(LOCAL_STORAGE_META_PERSISTER.update_ls_meta(ls_epoch, ls_meta))) {
+  if (OB_FAIL(LOCAL_STORAGE_META_PERSISTER.update_ls_meta(ls_meta))) {
   }
   return ret;
 };
@@ -42,10 +42,8 @@ ObLSMeta::ObLSMeta()
     clog_checkpoint_scn_(ObScnRange::MIN_SCN),
     clog_base_lsn_(PALF_INITIAL_LSN_VAL),
     restore_status_(ObRestoreStatus::Status::RESTORE_STATUS_MAX),
-    replayable_point_(),
     tablet_change_checkpoint_scn_(SCN::min_scn()),
-    all_id_meta_(),
-    saved_info_()
+    all_id_meta_()
 {
 }
 
@@ -56,9 +54,7 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     clog_checkpoint_scn_(ls_meta.clog_checkpoint_scn_),
     clog_base_lsn_(ls_meta.clog_base_lsn_),
     restore_status_(ls_meta.restore_status_),
-    replayable_point_(ls_meta.replayable_point_),
-    tablet_change_checkpoint_scn_(ls_meta.tablet_change_checkpoint_scn_),
-    saved_info_(ls_meta.saved_info_)
+    tablet_change_checkpoint_scn_(ls_meta.tablet_change_checkpoint_scn_)
 {
   int ret = OB_SUCCESS;
   all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
@@ -101,10 +97,8 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     clog_base_lsn_ = other.clog_base_lsn_;
     clog_checkpoint_scn_ = other.clog_checkpoint_scn_;
     restore_status_ = other.restore_status_;
-    replayable_point_ = other.replayable_point_;
     tablet_change_checkpoint_scn_ = other.tablet_change_checkpoint_scn_;
     all_id_meta_.update_all_id_meta(other.all_id_meta_);
-    saved_info_ = other.saved_info_;
   }
   return *this;
 }
@@ -117,9 +111,7 @@ void ObLSMeta::reset()
   clog_base_lsn_.reset();
   clog_checkpoint_scn_ = ObScnRange::MIN_SCN;
   restore_status_ = ObRestoreStatus::Status::RESTORE_STATUS_MAX;
-  replayable_point_.reset();
   tablet_change_checkpoint_scn_ = SCN::min_scn();
-  saved_info_.reset();
 }
 
 LSN ObLSMeta::get_clog_base_lsn() const
@@ -134,8 +126,7 @@ SCN ObLSMeta::get_clog_checkpoint_scn() const
  	return clog_checkpoint_scn_;
 }
 
-int ObLSMeta::set_clog_checkpoint(const int64_t ls_epoch,
-                                  const LSN &clog_checkpoint_lsn,
+int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
                                   const SCN &clog_checkpoint_scn,
                                   const bool write_slog)
 {
@@ -148,7 +139,7 @@ int ObLSMeta::set_clog_checkpoint(const int64_t ls_epoch,
     tmp.clog_checkpoint_scn_ = clog_checkpoint_scn;
 
     if (write_slog) {
-      if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+      if (OB_FAIL(write_slog_(tmp))) {
       }
     }
 
@@ -166,7 +157,7 @@ SCN ObLSMeta::get_tablet_change_checkpoint_scn() const
 }
 
 int ObLSMeta::set_tablet_change_checkpoint_scn(
-    const int64_t ls_epoch, const SCN &tablet_change_checkpoint_scn)
+    const SCN &tablet_change_checkpoint_scn)
 {
   ObReentrantWLockGuard update_guard(update_lock_);
   int ret = OB_SUCCESS;
@@ -179,7 +170,7 @@ int ObLSMeta::set_tablet_change_checkpoint_scn(
     ObLSMeta tmp(*this);
     tmp.tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn;
 
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    if (OB_FAIL(write_slog_(tmp))) {
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
       LOG_INFO("update tablet change checkpoint scn",
@@ -196,7 +187,7 @@ bool ObLSMeta::is_valid() const
   return restore_status_.is_valid();
 }
 
-int ObLSMeta::set_restore_status(const int64_t ls_epoch, const ObRestoreStatus &restore_status)
+int ObLSMeta::set_restore_status(const ObRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
   ObReentrantWLockGuard update_guard(update_lock_);
@@ -212,7 +203,7 @@ int ObLSMeta::set_restore_status(const int64_t ls_epoch, const ObRestoreStatus &
     if (restore_status.is_none() && !tmp.ls_persistent_state_.is_normal_state()
         && OB_FAIL(tmp.ls_persistent_state_.finish_restore())) {
       LOG_WARN("failed to switch tmp ls meta to finish restore state", KR(ret), K(tmp));
-    } else if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+    } else if (OB_FAIL(write_slog_(tmp))) {
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
       ls_persistent_state_ = tmp.ls_persistent_state_;
@@ -238,57 +229,7 @@ int ObLSMeta::get_restore_status(ObRestoreStatus &restore_status) const
   return ret;
 }
 
-int ObLSMeta::update_ls_replayable_point(const int64_t ls_epoch, const SCN &replayable_point)
-{
-  int ret = OB_SUCCESS;
-  ObReentrantWLockGuard update_guard(update_lock_);
-  if (OB_FAIL(check_can_update_())) {
-  } else if (!replayable_point.is_valid()
-             || (replayable_point_.is_valid() && replayable_point < replayable_point_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("replayable_point invalid", K(ret), K(replayable_point), K(replayable_point_));
-  } else if (replayable_point_ == replayable_point) {
-    // do nothing
-  } else {
-    ObLSMeta tmp(*this);
-    tmp.replayable_point_ = replayable_point;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
-    } else {
-      ObReentrantWLockGuard guard(rw_lock_);
-      replayable_point_ = replayable_point;
-    }
-  }
-  return ret;
-}
-
-int ObLSMeta::get_ls_replayable_point(SCN &replayable_point)
-{
-  int ret = OB_SUCCESS;
-  ObReentrantRLockGuard guard(rw_lock_);
-  if (!is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream meta is not valid, cannot get_gc_state", K(ret), K(*this));
-  } else {
-    replayable_point = replayable_point_;
-  }
-  return ret;
-}
-
-int ObLSMeta::get_saved_info(ObLSSavedInfo &saved_info)
-{
-  int ret = OB_SUCCESS;
-  ObReentrantRLockGuard guard(rw_lock_);
-  if (!is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream meta is not valid, cannot get_offline_ts_ns", K(ret), K(*this));
-  } else {
-    saved_info = saved_info_;
-  }
-  return ret;
-}
-
 int ObLSMeta::update_for_physical_restore(
-    const int64_t ls_epoch,
     const ObLSMeta &source_meta)
 {
   int ret = OB_SUCCESS;
@@ -300,67 +241,21 @@ int ObLSMeta::update_for_physical_restore(
     LOG_WARN("invalid source ls meta for physical restore", K(ret), K(source_meta));
   } else {
     ObLSMeta tmp(*this);
-    tmp.replayable_point_ = source_meta.replayable_point_;
     tmp.tablet_change_checkpoint_scn_ = source_meta.tablet_change_checkpoint_scn_;
     tmp.all_id_meta_.update_all_id_meta(source_meta.all_id_meta_);
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
-      LOG_WARN("failed to persist physical restore ls meta", K(ret), K(ls_epoch), K(tmp));
+    if (OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("failed to persist physical restore ls meta", K(ret), K(tmp));
     } else {
       ObReentrantWLockGuard guard(rw_lock_);
-      replayable_point_ = tmp.replayable_point_;
       tablet_change_checkpoint_scn_ = tmp.tablet_change_checkpoint_scn_;
       all_id_meta_.update_all_id_meta(tmp.all_id_meta_);
       LOG_INFO("updated ls meta for physical restore",
-          K(ls_epoch), K(source_meta), "local_meta", *this);
+          K(source_meta), "local_meta", *this);
     }
   }
   return ret;
 }
 
-
-int ObLSMeta::build_saved_info(const int64_t ls_epoch)
-{
-  int ret = OB_SUCCESS;
-  ObLSSavedInfo saved_info;
-
-  ObReentrantWLockGuard update_guard(update_lock_);
-  if (OB_FAIL(check_can_update_())) {
-  } else if (!saved_info_.is_empty()) {
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    saved_info.clog_checkpoint_scn_ = clog_checkpoint_scn_;
-    saved_info.clog_base_lsn_ = clog_base_lsn_;
-    saved_info.tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn_;
-    ObLSMeta tmp(*this);
-    tmp.saved_info_ = saved_info;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
-    } else {
-      ObReentrantWLockGuard guard(rw_lock_);
-      saved_info_ = saved_info;
-    }
-  }
-  return ret;
-}
-
-int ObLSMeta::clear_saved_info(const int64_t ls_epoch)
-{
-  int ret = OB_SUCCESS;
-  ObLSSavedInfo saved_info;
-
-  ObReentrantWLockGuard update_guard(update_lock_);
-  if (OB_FAIL(check_can_update_())) {
-  } else {
-    saved_info.reset();
-    ObLSMeta tmp(*this);
-    tmp.saved_info_ = saved_info;
-    if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
-    } else {
-      ObReentrantWLockGuard guard(rw_lock_);
-      saved_info_ = saved_info;
-    }
-  }
-  return ret;
-}
 
 int ObLSMeta::init(
     const ObRestoreStatus &restore_status,
@@ -379,8 +274,7 @@ int ObLSMeta::init(
   return ret;
 }
 
-int ObLSMeta::update_id_meta(const int64_t ls_epoch,
-                             const int64_t service_type,
+int ObLSMeta::update_id_meta(const int64_t service_type,
                              const int64_t limited_id,
                              const SCN &latest_scn,
                              const bool write_slog)
@@ -395,7 +289,7 @@ int ObLSMeta::update_id_meta(const int64_t ls_epoch,
     tmp.all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
     update_guard.click();
     if (write_slog) {
-      if (OB_FAIL(write_slog_(ls_epoch, tmp))) {
+      if (OB_FAIL(write_slog_(tmp))) {
       }
     }
     ObReentrantWLockGuard guard(rw_lock_);
@@ -522,10 +416,8 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     clog_checkpoint_scn_,
                     clog_base_lsn_,
                     restore_status_,
-                    replayable_point_,
                     tablet_change_checkpoint_scn_,
-                    all_id_meta_,
-                    saved_info_);
+                    all_id_meta_);
 
 }
 }

@@ -29,7 +29,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/ob_structured_event_logger.h"
 #include "storage/compaction/ob_tablet_scheduler.h"
-#include "storage/slog_ckpt/ob_server_snapshot_handler.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -156,8 +155,7 @@ ObLocalStorageCheckpointSlogHandler::ObLocalStorageCheckpointSlogHandler()
     tablet_block_handle_(),
     write_ckpt_timer_(),
     write_ckpt_task_(this),
-    replay_tablet_disk_addr_map_(),
-    super_block_mutex_()
+    replay_tablet_disk_addr_map_()
 {
 }
 
@@ -244,7 +242,6 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_and_slog(const ObServ
     ret = OB_NOT_INIT;
     LOG_WARN("ObLocalStorageCheckpointSlogHandler not init", K(ret));
   } else if (OB_FAIL(replay_tablet_disk_addr_map_.create(replay_tablet_cnt, mem_attr, mem_attr))) {
-  } else if (OB_FAIL(replay_snapshot(super_block))) {
   } else if (OB_FAIL(replay_checkpoint(super_block))) {
   } else if (OB_FAIL(replay_local_storage_slog(super_block.replay_start_point_))) {
   } else {
@@ -263,68 +260,6 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint(const ObServerRuntime
 
   LOG_INFO("finish replay runtime checkpoint", K(ret), K(super_block));
 
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::replay_snapshot(const ObServerRuntimeSuperBlock &super_block)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < super_block.snapshot_cnt_; i++) {
-    const ObServerSnapshotMeta &snapshot = super_block.snapshots_[i];
-    replay_tablet_disk_addr_map_.reuse();
-    if (OB_FAIL(do_replay_single_snapshot(snapshot.ls_meta_entry_))) {
-    }
-  }
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::do_replay_single_snapshot(const blocksstable::MacroBlockId &ls_meta_entry)
-{
-  int ret = OB_SUCCESS;
-  ObLocalStorageCheckpointReader ls_ckpt_reader;
-  ObSArray<MacroBlockId> ls_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("ReplaySnap"));
-  ObLocalStorageCheckpointReader::ObStorageMetaOp replay_snapshot_ls_op = std::bind(
-      &ObLocalStorageCheckpointSlogHandler::replay_snapshot_ls,
-      this,
-      std::placeholders::_1,
-      std::placeholders::_2,
-      std::placeholders::_3);
-  bool inc_ls_blocks_ref_succ = false;
-
-  if (OB_FAIL(ls_ckpt_reader.read_single_meta_item(
-      ls_meta_entry, replay_snapshot_ls_op, ls_block_list))) {
-  } else if (OB_FAIL(ObServerSnapshotHandler::inc_linked_block_ref(
-      ls_block_list, inc_ls_blocks_ref_succ))) {
-  } else {
-    ObTabletReplayCreateHandler handler;
-    if (OB_FAIL(handler.init(replay_tablet_disk_addr_map_, ObTabletRepalyOperationType::REPLAY_INC_MACRO_REF))) {
-    } else if (OB_FAIL(handler.concurrent_replay(::oceanbase::share::server_service<::oceanbase::storage::ObStartupAccelTaskHandler>()))) {
-    }
-  }
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::replay_snapshot_ls(
-    const ObMetaDiskAddr &addr,
-    const char *buf,
-    const int64_t buf_len)
-{
-  int ret = OB_SUCCESS;
-  ObLSCkptMember ls_ckpt_member;
-  int64_t pos = 0;
-  ObLocalStorageCheckpointReader tablet_ckpt_reader;
-  ObSArray<MacroBlockId> tablet_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("ReplaySnap"));
-  ObLocalStorageCheckpointReader::ObStorageMetaOp replay_tablet_op =
-      std::bind(&ObLocalStorageCheckpointSlogHandler::replay_checkpoint_tablet,
-      this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-  bool inc_tablet_blocks_ref_succ = false;
-
-  if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
-  } else if (OB_FAIL(tablet_ckpt_reader.iter_read_meta_item(
-      ls_ckpt_member.tablet_meta_entry_, replay_tablet_op, tablet_block_list))) {
-  } else if (OB_FAIL(ObServerSnapshotHandler::inc_linked_block_ref(
-      tablet_block_list, inc_tablet_blocks_ref_succ))) {
-  }
   return ret;
 }
 
@@ -366,7 +301,7 @@ int ObLocalStorageCheckpointSlogHandler::replay_checkpoint_ls(
       this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
   if (OB_FAIL(ls_ckpt_member.deserialize(buf, buf_len, pos))) {
-  } else if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::storage::ObLSService>()->replay_create_ls(0/*ls_epoch*/, ls_ckpt_member.ls_meta_))) {
+  } else if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::storage::ObLSService>()->replay_create_ls(ls_ckpt_member.ls_meta_))) {
   } else if (OB_FAIL(tablet_ckpt_reader.iter_read_meta_item(
       ls_ckpt_member.tablet_meta_entry_, replay_tablet_op, tmp_block_list))) {
   } else {
@@ -404,7 +339,7 @@ int ObLocalStorageCheckpointSlogHandler::replay_local_storage_slog(const common:
   } else if (OB_FAIL(replayer.replay(start_point, replay_finish_point))) {
   } else {
     ObTabletReplayCreateHandler handler;
-    if (OB_FAIL(handler.init(replay_tablet_disk_addr_map_, ObTabletRepalyOperationType::REPLAY_CREATE_TABLET))) {
+    if (OB_FAIL(handler.init(replay_tablet_disk_addr_map_))) {
     } else if (OB_FAIL(handler.concurrent_replay(::oceanbase::share::server_service<::oceanbase::storage::ObStartupAccelTaskHandler>()))) {
     }
   }
@@ -416,65 +351,6 @@ int ObLocalStorageCheckpointSlogHandler::replay_local_storage_slog(const common:
 
   LOG_INFO("finish replay runtime slog", K(ret), K(start_point), K(replay_finish_point));
 
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::clone_ls(ObStartupAccelTaskHandler* startup_accel_handler,
-                                            const blocksstable::MacroBlockId &tablet_meta_entry)
-{
-  int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr("SnapCreate");
-  const int64_t replay_tablet_cnt = 10003;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler not init", K(ret));
-  } else if (OB_ISNULL(startup_accel_handler)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("startup_accel_handler is unexpected nullptr", K(ret));
-  } else if (OB_FAIL(replay_tablet_disk_addr_map_.create(replay_tablet_cnt, mem_attr, mem_attr))) {
-  } else {
-    ObLocalStorageCheckpointReader tablet_snapshot_reader;
-    ObSArray<MacroBlockId> meta_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("SnapCreate"));
-    ObArenaAllocator arena_allocator("SnapRecovery", OB_MALLOC_NORMAL_BLOCK_SIZE);
-    ObLocalStorageCheckpointReader::ObStorageMetaOp clone_tablet_op = std::bind(
-        &ObLocalStorageCheckpointSlogHandler::clone_tablet,
-        this,
-        std::placeholders::_1,
-        std::placeholders::_2,
-        std::placeholders::_3);
-
-    if (OB_UNLIKELY(!tablet_meta_entry.is_valid() || IS_EMPTY_BLOCK_LIST(tablet_meta_entry))) {
-      ret = OB_INVALID_ARGUMENT;
-    } else if (OB_FAIL(tablet_snapshot_reader.iter_read_meta_item(
-        tablet_meta_entry, clone_tablet_op, meta_block_list))) {
-    } else {
-      ObTabletReplayCreateHandler handler;
-      if (OB_FAIL(handler.init(replay_tablet_disk_addr_map_, ObTabletRepalyOperationType::REPLAY_CLONE_TABLET))) {
-      } else if (OB_FAIL(handler.concurrent_replay(startup_accel_handler))) {
-      }
-    }
-    replay_tablet_disk_addr_map_.destroy();
-  }
-
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::clone_tablet(
-    const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len)
-{
-  int ret = OB_SUCCESS;
-  ObUpdateTabletLog slog;
-  ObTabletMapKey tablet_key;
-  int64_t pos = 0;
-  if (OB_FAIL(slog.deserialize(buf, buf_len, pos))) {
-  } else if (OB_UNLIKELY(!slog.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("slog is invalid", K(ret), K(slog));
-  } else {
-    tablet_key.tablet_id_ = slog.tablet_id_;
-    if (OB_FAIL(replay_tablet_disk_addr_map_.set_refactored(tablet_key, slog.disk_addr_, /*allow_override*/ 0))) {
-    }
-  }
   return ret;
 }
 
@@ -585,14 +461,12 @@ int ObLocalStorageCheckpointSlogHandler::write_checkpoint(bool is_force)
       DEBUG_SYNC(AFTER_CHECKPOINT_GET_CURSOR);
       super_block = last_super_block;
       super_block.replay_start_point_ = ckpt_cursor_;
-      if (OB_FAIL(local_storage_ckpt_writer.init(ObLocalStorageMetaType::CKPT, this))) {
+      if (OB_FAIL(local_storage_ckpt_writer.init(this))) {
       } else if (OB_FAIL(local_storage_ckpt_writer.record_meta(super_block.ls_meta_entry_))) {
       }
       clean_copy_status();
 
       if (OB_SUCC(ret)) {
-        lib::ObMutexGuard guard(super_block_mutex_);
-        super_block.copy_snapshots_from(runtime->get_super_block());
         if (OB_FAIL(SERVER_STORAGE_META_PERSISTER.update_runtime_super_block(super_block))) {
         } else {
           runtime->set_server_super_block(super_block);
@@ -631,64 +505,6 @@ int ObLocalStorageCheckpointSlogHandler::write_checkpoint(bool is_force)
   return ret;
 }
 
-int ObLocalStorageCheckpointSlogHandler::add_snapshot(const ObServerSnapshotMeta &snapshot)
-{
-  int ret = OB_SUCCESS;
-  ObIServerRuntime *runtime = ::oceanbase::share::server_service<::oceanbase::storage::ObIServerRuntime>();
-  lib::ObMutexGuard guard(super_block_mutex_);
-  ObServerRuntimeSuperBlock super_block = runtime->get_super_block();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler hasn't been inited", K(ret));
-  } else if (OB_UNLIKELY(!snapshot.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(super_block.add_snapshot(snapshot))) {
-  } else if (OB_FAIL(SERVER_STORAGE_META_PERSISTER.update_runtime_super_block(super_block))) {
-  } else {
-    runtime->set_server_super_block(super_block);
-  }
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::delete_snapshot(const ObServerSnapshotID &snapshot_id)
-{
-  int ret = OB_SUCCESS;
-  ObIServerRuntime *runtime = ::oceanbase::share::server_service<::oceanbase::storage::ObIServerRuntime>();
-  lib::ObMutexGuard guard(super_block_mutex_);
-  ObServerRuntimeSuperBlock super_block = runtime->get_super_block();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler hasn't been inited", K(ret));
-  } else if (OB_UNLIKELY(!snapshot_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(super_block.delete_snapshot(snapshot_id))) {
-  } else if (OB_FAIL(SERVER_STORAGE_META_PERSISTER.update_runtime_super_block(super_block))) {
-  } else {
-    runtime->set_server_super_block(super_block);
-  }
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::swap_snapshot(const ObServerSnapshotMeta &snapshot)
-{
-  int ret = OB_SUCCESS;
-  ObIServerRuntime *runtime = ::oceanbase::share::server_service<::oceanbase::storage::ObIServerRuntime>();
-  lib::ObMutexGuard guard(super_block_mutex_);
-  ObServerRuntimeSuperBlock super_block = runtime->get_super_block();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObLocalStorageCheckpointSlogHandler hasn't been inited", K(ret));
-  } else if (OB_UNLIKELY(!snapshot.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(super_block.delete_snapshot(snapshot.snapshot_id_))) {
-  } else if (OB_FAIL(super_block.add_snapshot(snapshot))) {
-  } else if (OB_FAIL(SERVER_STORAGE_META_PERSISTER.update_runtime_super_block(super_block))) {
-  } else {
-    runtime->set_server_super_block(super_block);
-  }
-  return ret;
-}
-
 int ObLocalStorageCheckpointSlogHandler::get_cur_cursor()
 {
   int ret = OB_SUCCESS;
@@ -714,15 +530,7 @@ int ObLocalStorageCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
 {
   int ret = OB_SUCCESS;
   ObIArray<MacroBlockId> *meta_block_list = nullptr;
-  // the two operations(update tablet_meta_addr and update tablet_block_handle) should be a
-  // transaction, so update_tablet_meta_addr is supposed to be placed within the lock, but this can
-  // lead to dead lock with read_tablet_checkpoint_by_addr which is called by t3m. the calling of
-  // read_tablet_checkpoint_by_addr involves two locks, one in t3m(as lock_A) and one in the current
-  // class (as lock_B). when t3m loads the tablet by address, lock A first and then lock B .
-  // howerver, update_tablet_meta_addr_and_block_list locks B first and then locks A in t3m to
-  // update the tablet addr. to resolve the dead lock, update_tablet_meta_addr is moved out of lock,
-  // but this may cause t3m read a new addr which is not in the tablet_block_handle_. when this
-  // happens, t3m needs to retry.
+  // Keep the old checkpoint blocks referenced until tablet addresses have been replaced.
   if (OB_FAIL(meta_writer.batch_compare_and_swap_tablet())) {
   }
 
@@ -738,19 +546,6 @@ int ObLocalStorageCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
     } while (OB_ALLOCATE_MEMORY_FAILED == ret);
   }
 
-  return ret;
-}
-
-int ObLocalStorageCheckpointSlogHandler::read_tablet_checkpoint_by_addr(
-  const ObMetaDiskAddr &addr, char *item_buf, int64_t &item_buf_len)
-{
-  // refer to the comments in update_tablet_meta_addr_and_block_list,
-  // this func may return OB_SEARCH_NOT_FOUND, and the caller need retry
-  int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_FAIL(ObLocalStorageCheckpointReader::read_tablet_checkpoint_by_addr(
-        tablet_block_handle_.get_meta_block_list(), addr, item_buf, item_buf_len))) {
-  }
   return ret;
 }
 
@@ -987,22 +782,6 @@ int ObLocalStorageCheckpointSlogHandler::replay_over()
   return OB_SUCCESS; // nothing to do.
 }
 
-
-int ObLocalStorageCheckpointSlogHandler::read_from_ckpt(const ObMetaDiskAddr &phy_addr,
-    char *buf, const int64_t buf_len, int64_t &r_len)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!phy_addr.is_valid()
-               || !phy_addr.is_block()
-               || buf_len < phy_addr.size())
-               || OB_ISNULL(buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(phy_addr), KP(buf), K(buf_len));
-  } else if (OB_FAIL(read_tablet_checkpoint_by_addr(phy_addr, buf, r_len))) {
-  }
-  return ret;
-}
 
 int ObLocalStorageCheckpointSlogHandler::read_from_slog(const ObMetaDiskAddr &addr,
     char *buf, const int64_t buf_len, int64_t &pos)

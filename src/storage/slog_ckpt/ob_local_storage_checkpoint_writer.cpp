@@ -36,7 +36,6 @@ using namespace oceanbase::blocksstable;
 
 ObLocalStorageCheckpointWriter::ObLocalStorageCheckpointWriter()
   : is_inited_(false),
-    meta_type_(ObLocalStorageMetaType::INVALID_TYPE),
     ckpt_slog_handler_(nullptr),
     tablet_item_addr_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("TabletCkptArr")),
     ls_item_writer_(),
@@ -45,7 +44,6 @@ ObLocalStorageCheckpointWriter::ObLocalStorageCheckpointWriter()
 }
 
 int ObLocalStorageCheckpointWriter::init(
-    const ObLocalStorageMetaType meta_type,
     ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler)
 {
   int ret = OB_SUCCESS;
@@ -53,14 +51,11 @@ int ObLocalStorageCheckpointWriter::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLocalStorageCheckpointWriter init twice", K(ret));
-  } else if (OB_UNLIKELY(ObLocalStorageMetaType::INVALID_TYPE == meta_type)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if ((OB_UNLIKELY(ObLocalStorageMetaType::CKPT == meta_type && nullptr == ckpt_slog_handler))) {
+  } else if (OB_ISNULL(ckpt_slog_handler)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(ls_item_writer_.init(false /*whether need addr*/, mem_attr))) {
   } else if (OB_FAIL(tablet_item_writer_.init(false /*whether need addr*/, mem_attr))) {
   } else {
-    meta_type_ = meta_type;
     ckpt_slog_handler_ = ckpt_slog_handler;
     is_inited_ = true;
   }
@@ -91,9 +86,8 @@ int ObLocalStorageCheckpointWriter::record_ls_meta(MacroBlockId &ls_entry_block)
   ObMemAttr mem_attr(ObModIds::OB_CHECKPOINT);
   if (OB_FAIL(ls_item_writer_.init(false /*whether need addr*/, mem_attr))) {
   } else {
-    share::SCN unused_scn;
     if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::storage::ObLSService>()->get_ls(tenant_ls))) {
-    } else if (OB_FAIL(do_record_ls_meta(*tenant_ls, unused_scn))) {
+    } else if (OB_FAIL(do_record_ls_meta(*tenant_ls))) {
     }
 
     if (OB_FAIL(ret)) {
@@ -106,7 +100,7 @@ int ObLocalStorageCheckpointWriter::record_ls_meta(MacroBlockId &ls_entry_block)
   return ret;
 }
 
-int ObLocalStorageCheckpointWriter::do_record_ls_meta(ObLS &ls, share::SCN &clog_max_scn)
+int ObLocalStorageCheckpointWriter::do_record_ls_meta(ObLS &ls)
 {
   int ret = OB_SUCCESS;
   ObLSCkptMember ls_ckpt_member;
@@ -117,7 +111,7 @@ int ObLocalStorageCheckpointWriter::do_record_ls_meta(ObLS &ls, share::SCN &clog
   }
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(record_tablet_meta(ls, ls_ckpt_member.tablet_meta_entry_, clog_max_scn))) {
+  } else if (OB_FAIL(record_tablet_meta(ls, ls_ckpt_member.tablet_meta_entry_))) {
   } else if (OB_FAIL(write_item(ls_ckpt_member))) {
   }
   return ret;
@@ -157,7 +151,7 @@ int ObLocalStorageCheckpointWriter::close(blocksstable::MacroBlockId &ls_meta_en
   return ret;
 }
 
-int ObLocalStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &tablet_meta_entry, share::SCN &clog_max_scn)
+int ObLocalStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &tablet_meta_entry)
 {
   int ret = OB_SUCCESS;
   const int64_t total_tablet_cnt = ls.get_tablet_svr()->get_tablet_count();
@@ -186,7 +180,7 @@ int ObLocalStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &t
       FLOG_INFO("skip MEM type", K(ret), K(tablet_key), K(addr));
     } else if (addr.is_none()) {
       ret = OB_NEED_RETRY;  // tablet slog has been written, but the addr hasn't been updated
-    } else if (ObLocalStorageMetaType::CKPT == meta_type_) {
+    } else {
       do {
         if (OB_FAIL(persist_and_copy_tablet(tablet_key, addr, slog_buf))) {
         }
@@ -197,7 +191,6 @@ int ObLocalStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &t
           FLOG_INFO("print checkpoint processing progress", K(ret), K(processed_cnt), K(total_tablet_cnt));
         }
       }
-    } else if (ObLocalStorageMetaType::SNAPSHOT == meta_type_ && OB_FAIL(copy_tablet(tablet_key, slog_buf, clog_max_scn))) {
     }
   }
 
@@ -228,7 +221,7 @@ int ObLocalStorageCheckpointWriter::persist_and_copy_tablet(
   ObUpdateTabletLog slog;
   slog.tablet_id_ = tablet_key.tablet_id_;
   bool has_slog = false;
-  const ObTabletPersisterParam param(0, tablet_key.tablet_id_);
+  const ObTabletPersisterParam param(tablet_key.tablet_id_);
 
   if (OB_FAIL(OB_E(EventTable::EN_SLOG_CKPT_ERROR) OB_SUCCESS)) {
   } else if (OB_FAIL(ckpt_slog_handler_->check_slog(tablet_key, has_slog))) {
@@ -266,70 +259,6 @@ int ObLocalStorageCheckpointWriter::persist_and_copy_tablet(
     }
   }
 
-  return ret;
-}
-
-int ObLocalStorageCheckpointWriter::copy_tablet(
-    const ObTabletMapKey &tablet_key,
-    char (&slog_buf)[sizeof(ObUpdateTabletLog)],
-    share::SCN &clog_max_scn)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("MetaSnapshot");
-  ObTabletHandle tablet_handle;
-  ObTabletHandle new_empty_shell_handle;
-  ObTablet *tablet = nullptr;
-  int64_t slog_buf_pos = 0;
-  MEMSET(slog_buf, 0, sizeof(ObUpdateTabletLog));
-  ObUpdateTabletLog slog;
-  slog.tablet_id_ = tablet_key.tablet_id_;
-  ObMetaDiskAddr old_addr;
-  const ObTabletPersisterParam param(0, tablet_key.tablet_id_);
-
-  if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::storage::ObStorageMetaMemMgr>()->get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, tablet_handle))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_INFO("skip writing snapshot for this tablet", K(tablet_key));
-    } else {
-    }
-  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (tablet->get_tablet_addr().is_file()) {
-    if (OB_UNLIKELY(!tablet->is_empty_shell())) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_empty_shell_handle))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        LOG_INFO("skip writing snapshot for this tablet", K(tablet_key));
-      } else {
-        LOG_ERROR("fail to persist and transform tablet", K(ret), K(tablet_key), KPC(tablet));
-      }
-    } else {
-      old_addr = tablet->get_tablet_addr();
-      tablet = new_empty_shell_handle.get_obj();
-    }
-  } else {
-    old_addr = tablet->get_tablet_addr();
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    }
-  } else if (FALSE_IT(slog.disk_addr_ = tablet->get_tablet_addr())) {
-  } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
-  } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
-  } else if (OB_FAIL(tablet->inc_macro_ref_cnt())) {
-  } else {
-    share::SCN tmp_scn = tablet->get_tablet_meta().clog_checkpoint_scn_;
-    clog_max_scn = tmp_scn > clog_max_scn ? tmp_scn : clog_max_scn;
-    TabletItemAddrInfo addr_info;
-    addr_info.tablet_key_ = tablet_key;
-    addr_info.old_addr_ = old_addr;
-    addr_info.new_addr_ = slog.disk_addr_;
-    addr_info.need_rollback_ = true;
-    addr_info.tablet_pool_type_ = ObTabletPoolType::TP_MAX; // only used by checkpoint, so we set it to TP_MAX here
-    if (OB_FAIL(tablet_item_addr_info_arr_.push_back(addr_info))) {
-    }
-  }
   return ret;
 }
 

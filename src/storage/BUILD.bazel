@@ -270,7 +270,6 @@ _STORAGE_RUNTIME_NATIVE_DEPS = [
     "//src/share:schema_model_interface",
     "//src/share:schema_registry",
     "//src/share:scn_interface",
-    "//src/share:server_snapshot_id",
     "//src/share:sql_persistence_support",
     "//src/share:statement_type",
     "//src/share:table_access_runtime",
@@ -432,14 +431,13 @@ cc_library(
         "//src/logservice:append_callback_interface",
         "//src/oblib:oblib_db_log_advanced",
         "//src/oblib:oblib_db_meta_runtime",
-        "//src/share:server_snapshot_id",
         "//src/share:time_wheel",
     ] + _STORAGE_INTERFACE_NON_SHARE_DEPS,
     implementation_deps = (
         [
             dep
             for dep in _STORAGE_INTERFACE_SHARE_DEPS
-            if dep not in ["//src/share:server_snapshot_id", "//src/share:time_wheel"]
+            if dep != "//src/share:time_wheel"
         ] +
         _STORAGE_INTERFACE_OBLIB_DEPS
     ),

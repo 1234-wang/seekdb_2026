@@ -252,49 +252,16 @@ int ObServerSuperBlock::format_startup_super_block(
   return ret;
 }
 
-// ========================== ObServerSnapshotMetaMeta ==============================
-int ObServerSnapshotMeta::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, ls_meta_entry_, snapshot_id_);
-  return ret;
-}
-
-int ObServerSnapshotMeta::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE, ls_meta_entry_, snapshot_id_);
-  return ret;
-}
-
-int64_t ObServerSnapshotMeta::get_serialize_size() const
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, ls_meta_entry_, snapshot_id_);
-  return len;
-}
-
-bool ObServerSnapshotMeta::is_valid() const
-{
-  return ls_meta_entry_.is_valid()
-         && snapshot_id_.is_valid();
-}
-
-
 // ========================== ObServerRuntimeSuperBlock ==============================
-OB_SERIALIZE_MEMBER(ObLSItem, ls_id_, epoch_, status_, min_macro_seq_, max_macro_seq_);
-
 ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock()
 {
   reset();
 }
 
 ObServerRuntimeSuperBlock::ObServerRuntimeSuperBlock(const bool is_hidden)
-  : is_hidden_(is_hidden), version_(SERVER_RUNTIME_SUPER_BLOCK_VERSION),
-    snapshot_cnt_(0), auto_inc_ls_epoch_(0), ls_cnt_(0)
+  : is_hidden_(is_hidden), version_(SERVER_RUNTIME_SUPER_BLOCK_VERSION)
 {
   SET_FIRST_VALID_SLOG_CURSOR(replay_start_point_);
-  tablet_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   ls_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
 }
 
@@ -308,20 +275,8 @@ void ObServerRuntimeSuperBlock::reset()
   
   replay_start_point_.reset();
   ls_meta_entry_.reset();
-  tablet_meta_entry_.reset();
   is_hidden_= false;
   version_ = SERVER_RUNTIME_SUPER_BLOCK_VERSION;
-  snapshot_cnt_ = 0;
-  auto_inc_ls_epoch_ = 0;
-  ls_cnt_ = 0;
-}
-
-void ObServerRuntimeSuperBlock::copy_snapshots_from(const ObServerRuntimeSuperBlock &other)
-{
-  snapshot_cnt_ = other.snapshot_cnt_;
-  for (int64_t i = 0; i < snapshot_cnt_; i++) {
-    snapshots_[i] = other.snapshots_[i];
-  }
 }
 
 bool ObServerRuntimeSuperBlock::is_valid() const
@@ -329,80 +284,8 @@ bool ObServerRuntimeSuperBlock::is_valid() const
   bool is_valid = true
                   && replay_start_point_.is_valid()
                   && ls_meta_entry_.is_valid()
-                  && tablet_meta_entry_.is_valid()
-                  && version_ == SERVER_RUNTIME_SUPER_BLOCK_VERSION
-                  && IS_EMPTY_BLOCK_LIST(tablet_meta_entry_)
-                  && snapshot_cnt_ >= 0
-                  && auto_inc_ls_epoch_ >= 0
-                  && ls_cnt_ >= 0;
+                  && version_ == SERVER_RUNTIME_SUPER_BLOCK_VERSION;
   return is_valid;
-}
-
-int ObServerRuntimeSuperBlock::get_snapshot(const ObServerSnapshotID &snapshot_id, ObServerSnapshotMeta &snapshot) const
-{
-  int ret = OB_SUCCESS;
-  bool found = false;
-
-  for (int64_t i = 0; OB_SUCC(ret) && !found && i < snapshot_cnt_; i++) {
-    if (snapshot_id == snapshots_[i].snapshot_id_) {
-      if (OB_UNLIKELY(!snapshots_[i].is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        snapshot = snapshots_[i];
-        found = true;
-      }
-    }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(!found)) {
-    ret = OB_ENTRY_NOT_EXIST;
-  }
-  return ret;
-}
-
-int ObServerRuntimeSuperBlock::add_snapshot(const ObServerSnapshotMeta &snapshot)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_new_snapshot(snapshot.snapshot_id_))) {
-  } else {
-    snapshots_[snapshot_cnt_] = snapshot;
-    snapshot_cnt_++;
-  }
-  return ret;
-}
-
-int ObServerRuntimeSuperBlock::check_new_snapshot(const ObServerSnapshotID &snapshot_id) const
-{
-  int ret = OB_SUCCESS;
-  if (snapshot_cnt_ >= MAX_SNAPSHOT_NUM) {
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < snapshot_cnt_; i++) {
-      if (snapshot_id == snapshots_[i].snapshot_id_) {
-        ret = OB_INVALID_ARGUMENT;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerRuntimeSuperBlock::delete_snapshot(const ObServerSnapshotID &snapshot_id)
-{
-  int ret = OB_SUCCESS;
-  int64_t index = -1;
-  for (int64_t i = 0; -1 == index && i < snapshot_cnt_; i++) {
-    if (snapshots_[i].snapshot_id_ == snapshot_id) {
-      index = i;
-    }
-  }
-  if (OB_UNLIKELY(index < 0)) {
-    ret = OB_ENTRY_NOT_EXIST;
-  } else {
-    for (int64_t i = index; i < snapshot_cnt_ - 1; i++) {
-      snapshots_[i] = snapshots_[i + 1];
-    }
-    snapshot_cnt_--;
-  }
-  return ret;
 }
 
 int ObServerRuntimeSuperBlock::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -433,13 +316,7 @@ int ObServerRuntimeSuperBlock::serialize_(char *buf, const int64_t buf_len, int6
   LST_DO_CODE(OB_UNIS_ENCODE,
       replay_start_point_,
       ls_meta_entry_,
-      tablet_meta_entry_,
-      is_hidden_,
-      snapshots_,
-      snapshot_cnt_,
-      auto_inc_ls_epoch_,
-      ls_item_arr_,
-      ls_cnt_);
+      is_hidden_);
   return ret;
 }
 
@@ -474,13 +351,7 @@ int ObServerRuntimeSuperBlock::deserialize_(const char *buf, const int64_t data_
       
       replay_start_point_,
       ls_meta_entry_,
-      tablet_meta_entry_,
-      is_hidden_,
-      snapshots_,
-      snapshot_cnt_,
-      auto_inc_ls_epoch_,
-      ls_item_arr_,
-      ls_cnt_);
+      is_hidden_);
   return ret;
 }
 
@@ -497,13 +368,7 @@ int64_t ObServerRuntimeSuperBlock::get_serialize_size_(void) const
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       replay_start_point_,
       ls_meta_entry_,
-      tablet_meta_entry_,
-      is_hidden_,
-      snapshots_,
-      snapshot_cnt_,
-      auto_inc_ls_epoch_,
-      ls_item_arr_,
-      ls_cnt_);
+      is_hidden_);
   return len;
 }
 

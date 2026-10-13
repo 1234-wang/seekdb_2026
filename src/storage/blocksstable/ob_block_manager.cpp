@@ -1077,7 +1077,7 @@ int ObBlockManager::mark_tablet_block(
     ObTabletMacroInfo *macro_info = nullptr;
     bool in_memory = true;
     ObMacroInfoIterator macro_iter;
-    if (OB_FAIL(tablet->load_macro_info(0,
+    if (OB_FAIL(tablet->load_macro_info(
                                         allocator, macro_info, in_memory))) {
     } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
     }

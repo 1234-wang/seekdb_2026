@@ -25,8 +25,7 @@ namespace omt
 
 OB_SERIALIZE_MEMBER(ObServerRuntimeMeta,
                     runtime_config_,
-                    super_block_,
-                    legacy_create_status_);
+                    super_block_);
 
 int ObServerRuntimeMeta::build(const share::ObServerRuntimeConfig &runtime_config,
                         const storage::ObServerRuntimeSuperBlock &super_block)
@@ -38,7 +37,6 @@ int ObServerRuntimeMeta::build(const share::ObServerRuntimeConfig &runtime_confi
   } else {
     runtime_config_ = runtime_config;
     super_block_ = super_block;
-    legacy_create_status_ = LEGACY_CREATE_STATUS_CREATED;
   }
 
   return ret;

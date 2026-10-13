@@ -18,7 +18,6 @@
 #include "lib/file/file_directory_utils.h"
 #include "ob_server_storage_meta_persister.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/ob_file_system_router.h"

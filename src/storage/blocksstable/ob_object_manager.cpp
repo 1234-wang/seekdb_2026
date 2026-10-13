@@ -258,22 +258,6 @@ int ObObjectManager::update_super_block(const common::ObLogCursor &replay_start_
   return ret;
 }
 
-int ObObjectManager::get_object_size(
-    const MacroBlockId &object_id,
-    const int64_t ls_epoch,
-    int64_t &object_size) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(!object_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    object_size = get_macro_object_size();
-  }
-  return ret;
-}
-
 int  ObObjectManager::read_or_format_super_block_(const bool need_format)
 {
   int ret = OB_SUCCESS;

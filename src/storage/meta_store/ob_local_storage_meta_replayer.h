@@ -28,7 +28,6 @@ class ObStorageObjectOpt;
 namespace storage
 {
 class ObServerRuntimeSuperBlock;
-class ObLocalStorageMetaPersister;
 class ObLocalStorageCheckpointSlogHandler;
 class ObLocalStorageMetaReplayer
 {
@@ -38,16 +37,12 @@ public:
   ObLocalStorageMetaReplayer(const ObLocalStorageMetaReplayer &) = delete;
   ObLocalStorageMetaReplayer &operator=(const ObLocalStorageMetaReplayer &) = delete;
 
-  int init(ObLocalStorageMetaPersister &persister,
-           ObLocalStorageCheckpointSlogHandler &ckpt_slog_handler);
+  int init(ObLocalStorageCheckpointSlogHandler &ckpt_slog_handler);
   void destroy();
   int start_replay(const ObServerRuntimeSuperBlock &super_block);
 
 private:
-
-private:
   bool is_inited_;
-  ObLocalStorageMetaPersister *persister_;
   ObLocalStorageCheckpointSlogHandler *ckpt_slog_handler_;
 };
 

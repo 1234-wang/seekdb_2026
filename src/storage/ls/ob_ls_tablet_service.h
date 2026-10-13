@@ -512,12 +512,6 @@ private:
 
   int mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&duplicated_rows);
 private:
-  static int replay_create_inner_tablet(
-      common::ObArenaAllocator &allocator,
-      const ObMetaDiskAddr &disk_addr,
-      const ObTabletMapKey &key,
-      const int64_t ls_epoch,
-      ObTabletHandle &tablet_handle);
   static int check_old_row_legitimacy(
       const blocksstable::ObStoreCmpFuncs &cmp_funcs,
       ObTabletHandle &data_tablet_handle,

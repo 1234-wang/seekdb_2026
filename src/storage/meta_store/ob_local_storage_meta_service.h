@@ -47,15 +47,8 @@ public:
   bool is_started() { return is_started_; }
   ObLocalStorageMetaPersister &get_persister() { return persister_; }
   ObLocalStorageMetaReplayer &get_replayer() { return replayer_; }
-  int get_active_cursor(common::ObLogCursor &log_cursor);
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   int write_checkpoint(bool is_force);
-  int add_snapshot(const ObServerSnapshotMeta &snapshot);
-  int delete_snapshot(const share::ObServerSnapshotID &snapshot_id);
-  int swap_snapshot(const ObServerSnapshotMeta &snapshot);
-  int clone_ls(
-      ObStartupAccelTaskHandler* startup_accel_handler,
-      const blocksstable::MacroBlockId &tablet_meta_entry);
   int read_from_disk(
       const ObMetaDiskAddr &addr,
       common::ObArenaAllocator &allocator,
@@ -72,25 +65,6 @@ public:
   ObObjectReaderWriter &get_object_raw_reader_writer() { return object_raw_rwriter_; }
   storage::ObStorageLogger &get_slogger() { return slogger_; }
 
-  class ObLSItemIterator final
-  {
-  public:
-    explicit ObLSItemIterator(const storage::ObServerRuntimeSuperBlock &super_block):
-      idx_(0),
-      runtime_super_block_(super_block)
-      {}
-    ~ObLSItemIterator() = default;
-    int get_next_ls_item(storage::ObLSItem &item);
-    TO_STRING_KV(K_(idx), K_(runtime_super_block));
-  private:
-    int64_t idx_;
-    const storage::ObServerRuntimeSuperBlock runtime_super_block_;
-    DISALLOW_COPY_AND_ASSIGN(ObLSItemIterator);
-  };
-  int get_ls_items_by_status(
-    const storage::ObLSItemStatus status,
-    ObIArray<storage::ObLSItem> &ls_items);
-private:
 private:
   bool is_inited_;
   bool is_started_;

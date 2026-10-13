@@ -631,7 +631,7 @@ int ObLSTabletService::update_tablet_table_store(
       ObTablet *tmp_tablet = nullptr;
       const ObTabletMapKey key(tablet_id);
       ObMetaDiskAddr disk_addr;
-      const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+      const ObTabletPersisterParam param(tablet_id);
 
       if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
       } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
@@ -688,7 +688,7 @@ int ObLSTabletService::update_tablet_table_store(
       time_guard.click("GetTablet");
       ObTablet *old_tablet = old_tablet_hdl.get_obj();
       ObMetaDiskAddr disk_addr;
-      const ObTabletPersisterParam persist_param(ls_->get_ls_epoch(), tablet_id);
+      const ObTabletPersisterParam persist_param(tablet_id);
       if (!is_mds_merge(param.compaction_info_.merge_type_) && OB_FAIL(tmp_tablet->init_for_merge(allocator, param, *old_tablet))) {
       } else if (is_mds_merge(param.compaction_info_.merge_type_)
           && OB_FAIL(tmp_tablet->init_with_mds_sstable(
@@ -734,7 +734,7 @@ int ObLSTabletService::update_tablet_to_empty_shell(const common::ObTabletID &ta
     ObTablet *tmp_tablet = tmp_tablet_handle.get_obj();
     ObTablet *new_tablet = nullptr;
     ObMetaDiskAddr disk_addr;
-    const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+    const ObTabletPersisterParam param(tablet_id);
     if (OB_FAIL(tmp_tablet->init_empty_shell(*tmp_tablet_handle.get_allocator(), *old_tablet))) {
     } else if (FALSE_IT(time_guard.click("InitNew"))) {
     } else if (OB_FAIL(ObTabletPersister::transform_empty_shell(param, *tmp_tablet, new_tablet_handle))) {
@@ -778,7 +778,7 @@ int ObLSTabletService::update_medium_compaction_info(
     ObTablet *old_tablet = old_tablet_handle.get_obj();
     const ObTabletMapKey key(tablet_id);
     ObMetaDiskAddr disk_addr;
-    const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+    const ObTabletPersisterParam param(tablet_id);
 
     if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -849,7 +849,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
         ObTablet *old_tablet = old_tablet_hdl.get_obj();
         ObTablet *tmp_tablet = tmp_tablet_hdl.get_obj();
         ObMetaDiskAddr disk_addr;
-        const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+        const ObTabletPersisterParam param(tablet_id);
         ObUpdateTableStoreParam mds_param(ctx.static_param_.version_range_.snapshot_version_,
                                           1/*multi_version_start*/,
                                           ObMdsSchemaHelper::get_instance().get_storage_schema(),
@@ -905,7 +905,7 @@ int ObLSTabletService::update_tablet_release_memtable_for_offline(
       ObStorageMetaMemMgr *t3m = ::oceanbase::share::server_service<::oceanbase::storage::ObStorageMetaMemMgr>();
       ObTabletHandle new_tablet_handle;
       ObUpdateTabletPointerParam param;
-      const ObTabletPersisterParam persist_param(ls_->get_ls_epoch(), tablet_id);
+      const ObTabletPersisterParam persist_param(tablet_id);
       if (OB_FAIL(ObTabletPersister::copy_from_old_tablet(persist_param, *tablet, new_tablet_handle))) {
       } else if (FALSE_IT(time_guard.click("CpTablet"))) {
       } else if (OB_FAIL(new_tablet_handle.get_obj()->rebuild_memtables(scn))) {
@@ -973,7 +973,7 @@ int ObLSTabletService::update_tablet_ddl_commit_scn(
     ObUpdateTabletPointerParam param;
     ObTabletHandle new_handle;
     const ObTablet &old_tablet = *old_handle.get_obj();
-    const ObTabletPersisterParam persist_param(ls_->get_ls_epoch(), tablet_id);
+    const ObTabletPersisterParam persist_param(tablet_id);
 
     if (OB_FAIL(ObTabletPersister::persist_and_transform_only_tablet_meta(persist_param, old_tablet, modifier, new_handle))) {
     } else if (FALSE_IT(time_guard.click("Persist"))) {
@@ -1018,7 +1018,7 @@ int ObLSTabletService::update_tablet_report_status(const common::ObTabletID &tab
     }
 
     if (need_report) {
-      const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+      const ObTabletPersisterParam param(tablet_id);
       if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle))) {
       } else if (FALSE_IT(time_guard.click("Persist"))) {
       } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
@@ -1056,7 +1056,7 @@ int ObLSTabletService::update_tablet_snapshot_version(
     ObTablet *old_tablet = old_tablet_handle.get_obj();
     const ObTabletMapKey key(tablet_id);
     ObMetaDiskAddr disk_addr;
-    const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+    const ObTabletPersisterParam param(tablet_id);
     if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_TABLET_NOT_EXIST;
@@ -1107,7 +1107,7 @@ int ObLSTabletService::update_tablet_restore_status(
     } else if (OB_FAIL(tablet->tablet_meta_.local_status_.set_restore_status(restore_status))) {
     } else {
       // TODO(jiahua.cjh) move check valid to tablet init after generate new version tablet.
-      const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+      const ObTabletPersisterParam param(tablet_id);
       if (OB_FAIL(tablet->check_valid())) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle))) {
       } else if (FALSE_IT(time_guard.click("Persist"))) {
@@ -1134,27 +1134,6 @@ int ObLSTabletService::update_tablet_restore_status(
   }
   return ret;
 }
-
-int ObLSTabletService::replay_create_inner_tablet(
-    common::ObArenaAllocator &allocator,
-    const ObMetaDiskAddr &disk_addr,
-    const ObTabletMapKey &key,
-    const int64_t ls_epoch,
-    ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  char *buf = nullptr;
-  int64_t buf_len = 0;
-  int64_t pos = 0;
-  ObTablet *tablet = tablet_handle.get_obj();
-  tablet->tablet_addr_ = disk_addr;
-  if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::storage::ObLocalStorageMetaService>()->read_from_disk(disk_addr, allocator, buf, buf_len))) {
-  } else if (OB_FAIL(tablet->deserialize_for_replay(allocator, buf, buf_len, pos))) {
-  } else if (OB_FAIL(tablet->init_shared_params(key.tablet_id_))) {
-  }
-  return ret;
-}
-
 
 int ObLSTabletService::replay_create_tablet(
     const ObMetaDiskAddr &disk_addr,
@@ -1411,7 +1390,7 @@ int ObLSTabletService::replace_tablet_for_physical_restore(
     LOG_WARN("invalid physical restore tablet", K(ret), K(tablet_meta), K(storage_schema));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-    const ObTabletPersisterParam persist_param(ls_->get_ls_epoch(), tablet_id);
+    const ObTabletPersisterParam persist_param(tablet_id);
     if (OB_FAIL(has_tablet(tablet_id, tablet_exists))) {
       LOG_WARN("failed to check restore tablet existence", K(ret), K(tablet_id));
     } else if (tablet_exists && OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
@@ -1458,7 +1437,7 @@ int ObLSTabletService::create_inner_tablet(
   ObFreezer *freezer = ls_->get_freezer();
   ObTabletHandle tmp_tablet_hdl;
   ObMetaDiskAddr disk_addr;
-  const ObTabletPersisterParam param(ls_->get_ls_epoch(), tablet_id);
+  const ObTabletPersisterParam param(tablet_id);
   ObTimeGuard time_guard("ObLSTabletService::create_inner_tablet", 10_ms);
   const share::SCN clog_checkpoint_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
   const share::SCN mds_checkpoint_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
@@ -2684,7 +2663,7 @@ int ObLSTabletService::build_tablet_with_batch_tables(
       ObTablet *old_tablet = old_tablet_handle.get_obj();
       ObTablet *tmp_tablet = nullptr;
       const ObTabletMapKey key(tablet_id);
-      const ObTabletPersisterParam persist_param(ls_->get_ls_epoch(), tablet_id);
+      const ObTabletPersisterParam persist_param(tablet_id);
 
       if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_handle))) {
       } else if (FALSE_IT(tmp_tablet = tmp_tablet_handle.get_obj())) {

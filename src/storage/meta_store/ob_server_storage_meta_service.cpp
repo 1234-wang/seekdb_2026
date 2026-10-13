@@ -134,23 +134,6 @@ int ObServerStorageMetaService::get_reserved_size(int64_t &reserved_size) const
   return ret;
 }
 
-int ObServerStorageMetaService::get_server_slogger(ObStorageLogger *&slogger) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    slogger = const_cast<ObStorageLogger *>(&server_slogger_);
-  }
-  return ret;
-}
-
-int ObServerStorageMetaService::set_need_reserved_for_test(const bool need_reserved)
-{
-  need_reserved_ = need_reserved;
-  return OB_SUCCESS;
-}
-
 int ObServerStorageMetaService::write_checkpoint(bool is_force)
 {
   int ret = OB_SUCCESS;

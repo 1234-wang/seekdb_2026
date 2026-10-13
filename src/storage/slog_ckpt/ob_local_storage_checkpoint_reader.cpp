@@ -100,20 +100,5 @@ int ObLocalStorageCheckpointReader::read_single_meta_item(
   return ret;
 }
 
-int ObLocalStorageCheckpointReader::read_tablet_checkpoint_by_addr(
-  const ObIArray<MacroBlockId> &block_list,
-  const ObMetaDiskAddr &addr,
-  char *item_buf,
-  int64_t &item_buf_len)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!addr.is_valid() || !addr.is_block() || nullptr == item_buf)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(
-               ObLinkedMacroBlockItemReader::read_item(block_list, addr, item_buf, item_buf_len))) {
-  }
-  return ret;
-}
-
 }  // end namespace storage
 }  // end namespace oceanbase

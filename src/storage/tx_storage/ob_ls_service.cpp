@@ -289,7 +289,7 @@ int ObLSService::post_create_ls_(const bool is_restore, ObLS *ls)
   return ret;
 }
 
-int ObLSService::replay_create_ls(const int64_t ls_epoch, const ObLSMeta &ls_meta)
+int ObLSService::replay_create_ls(const ObLSMeta &ls_meta)
 {
   int ret = OB_SUCCESS;
   lib::ObMutexGuard change_guard(change_lock_);
@@ -297,7 +297,7 @@ int ObLSService::replay_create_ls(const int64_t ls_epoch, const ObLSMeta &ls_met
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(!ls_meta.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(replay_create_ls_(ls_epoch, ls_meta))) {
+  } else if (OB_FAIL(replay_create_ls_(ls_meta))) {
   }
 
   return ret;
@@ -395,7 +395,7 @@ int ObLSService::replay_update_ls_(const ObLSMeta &ls_meta)
   return ret;
 }
 
-int ObLSService::replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_meta)
+int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -404,9 +404,8 @@ int ObLSService::replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_me
   if (OB_SUCCESS == (ret = get_ls(ls))) {
     ObLSLockGuard lock_ls(ls);
     if (OB_FAIL(ls->set_ls_meta(ls_meta))) {
-    } else if (OB_FAIL(ls->set_ls_epoch(ls_epoch))) {
     } else {
-      LOG_INFO("updated existing ls for replay", K(ls_epoch), K(ls_meta));
+      LOG_INFO("updated existing ls for replay", K(ls_meta));
     }
   } else if (OB_LS_NOT_EXIST != ret) {
     LOG_WARN("fail to get ls before replay create", K(ret), K(ls_meta));
@@ -419,7 +418,6 @@ int ObLSService::replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_me
     state = ObLSCreateState::CREATE_STATE_LS_ALLOCATED;
     ObLSLockGuard lock_ls(ls);
     if (OB_FAIL(ls->set_ls_meta(ls_meta))) {
-    } else if (OB_FAIL(ls->set_ls_epoch(ls_epoch))) {
     } else if (OB_FAIL(publish_ls_(ls))) {
     } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_PUBLISHED)) {
     } else if (OB_FAIL(ls->load_ls())) {
@@ -622,7 +620,6 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg)
       if (OB_BREAK_FAIL(publish_ls_(ls))) {
         LOG_WARN("publish log stream failed", K(ret), K(ls_meta));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_PUBLISHED)) {
-      } else if (OB_FAIL(ls->set_ls_epoch(0))) {
       } else if (OB_BREAK_FAIL(ls->create_ls(arg.palf_base_info_))) {
         LOG_WARN("enable ls palf failed", K(ret), K(ls_meta));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_PALF_ENABLED)) {

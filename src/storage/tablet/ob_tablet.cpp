@@ -1392,19 +1392,6 @@ int ObTablet::release_ref_cnt(
   return ret;
 }
 
-int ObTablet::inc_snapshot_ref_cnt(
-    common::ObArenaAllocator &allocator,
-    const char *buf,
-    const int64_t len,
-    int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(partial_deserialize(allocator, buf, len, pos))) {
-  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
-  }
-  return ret;
-}
-
 int ObTablet::partial_deserialize(
     common::ObArenaAllocator &allocator,
     const char *buf,
@@ -1909,7 +1896,6 @@ int ObTablet::parse_meta_addr(const ObMetaDiskAddr &addr, ObIArray<MacroBlockId>
 }
 
 int ObTablet::load_macro_info(
-    const int64_t ls_epoch,
     ObArenaAllocator &allocator,
     ObTabletMacroInfo *&tablet_macro_info,
     bool &in_memory) const
@@ -1988,7 +1974,7 @@ int ObTablet::inc_ref_with_aggregated_info()
     bool inc_other_ref = false;
     ObMacroInfoIterator info_iter;
 
-    if (OB_FAIL(load_macro_info(0, allocator, macro_info, in_memory))) {
+    if (OB_FAIL(load_macro_info(allocator, macro_info, in_memory))) {
     } else if (OB_FAIL(info_iter.init(ObTabletMacroType::MAX, *macro_info))) {
     } else if (OB_FAIL(inc_addr_ref_cnt(tablet_addr_, inc_tablet_ref))) {
     } else if (OB_FAIL(inc_ref_with_macro_iter(info_iter, inc_other_ref))) {
@@ -2160,7 +2146,7 @@ void ObTablet::dec_ref_with_aggregated_info()
     ObTabletMacroInfo *macro_info = nullptr;
     bool in_memory = true;
     ObMacroInfoIterator info_iter;
-    if (OB_FAIL(load_macro_info(0, allocator, macro_info, in_memory))) {
+    if (OB_FAIL(load_macro_info(allocator, macro_info, in_memory))) {
     } else if (OB_FAIL(info_iter.init(ObTabletMacroType::MAX, *macro_info))) {
     } else {
       dec_addr_ref_cnt(tablet_addr_);
@@ -2515,22 +2501,6 @@ int ObTablet::get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt)
   } else if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
   } else {
     max_column_cnt = protected_handle->get_max_column_cnt_from_storage_schema_recorder();
-  }
-  return ret;
-}
-
-int ObTablet::get_ls_epoch(int64_t &ls_epoch)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(!pointer_hdl_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    if (is_external_tablet()) {
-      LOG_ERROR("is_external_tablet, and pointer_hdl_ is invalid", K(lbt()));
-    }
-  } else {
-    ls_epoch = static_cast<ObTabletPointer *>(pointer_hdl_.get_resource_ptr())->get_ls()->get_ls_epoch();
   }
   return ret;
 }

@@ -18,7 +18,6 @@
 #include "storage/meta_store/ob_server_storage_meta_replayer.h"
 #include "share/rc/ob_server_runtime.h"
 #include "storage/api/storage/runtime/ob_i_server_runtime.h"
-#include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ls/ob_ls.h"

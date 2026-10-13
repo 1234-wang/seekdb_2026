@@ -42,9 +42,7 @@ public:
   
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
   int get_reserved_size(int64_t &reserved_size) const override;
-  int get_server_slogger(ObStorageLogger *&slogger) const;
   int write_checkpoint(bool is_force);
-  int set_need_reserved_for_test(const bool need_reserved);
 
   static constexpr int64_t SLOG_RESERVED_DISK_SIZE = 128 * 1024 * 1024L; // 128M
 

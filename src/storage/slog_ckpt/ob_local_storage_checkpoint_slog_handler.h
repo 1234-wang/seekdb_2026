@@ -111,36 +111,21 @@ public:
   void destroy();
   int start_replay(const ObServerRuntimeSuperBlock &super_block);
 
-  int add_snapshot(const ObServerSnapshotMeta &snapshot);
-  int delete_snapshot(const share::ObServerSnapshotID &snapshot_id);
-  int swap_snapshot(const ObServerSnapshotMeta &snapshot);
   int report_slog(const ObTabletMapKey &tablet_key, const ObMetaDiskAddr &slog_addr);
   int check_slog(const ObTabletMapKey &tablet_key, bool &has_slog);
-  int read_tablet_checkpoint_by_addr(
-    const ObMetaDiskAddr &addr, char *item_buf, int64_t &item_buf_len);
 
   int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list);
   virtual int replay(const ObRedoModuleReplayParam &param) override;
   virtual int replay_over() override;
   int write_checkpoint(bool is_force);
   int read_empty_shell_file(const ObMetaDiskAddr &phy_addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
-  int clone_ls(
-      ObStartupAccelTaskHandler* startup_accel_handler,
-      const blocksstable::MacroBlockId &tablet_meta_entry);
 private:
-  int clone_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int get_cur_cursor();
   void clean_copy_status();
   virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
   int replay_checkpoint_and_slog(const ObServerRuntimeSuperBlock &super_block);
   int replay_checkpoint(const ObServerRuntimeSuperBlock &super_block);
   int replay_checkpoint_meta(const ObServerRuntimeSuperBlock &super_block);
-  int replay_snapshot(const ObServerRuntimeSuperBlock &super_block);
-  int do_replay_single_snapshot(const blocksstable::MacroBlockId &ls_meta_entry);
-  int replay_snapshot_ls(
-      const ObMetaDiskAddr &addr,
-      const char *buf,
-      const int64_t buf_len);
   int replay_checkpoint_ls(
       const ObMetaDiskAddr &addr,
       const char *buf,
@@ -153,7 +138,6 @@ private:
   int inner_replay_update_tablet(const ObRedoModuleReplayParam &param);
   int inner_replay_delete_tablet(const ObRedoModuleReplayParam &param);
   int inner_replay_empty_shell_tablet(const ObRedoModuleReplayParam &param);
-  int read_from_ckpt(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, int64_t &r_len);
   int read_from_slog(const ObMetaDiskAddr &phy_addr, char *buf, const int64_t buf_len, int64_t &pos);
   int inner_replay_deserialize(
       const char *buf,
@@ -179,7 +163,6 @@ private:
   common::ObTimer write_ckpt_timer_;
   ObWriteCheckpointTask write_ckpt_task_;
   ReplayTabletDiskAddrMap replay_tablet_disk_addr_map_;
-  lib::ObMutex super_block_mutex_;
 };
 
 }  // end namespace storage

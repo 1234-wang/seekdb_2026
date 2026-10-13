@@ -141,8 +141,7 @@ ObTabletReplayCreateHandler::ObTabletReplayCreateHandler()
 }
 
 int ObTabletReplayCreateHandler::init(
-    const common::hash::ObHashMap<ObTabletMapKey, ObMetaDiskAddr> &tablet_item_map,
-    const ObTabletRepalyOperationType replay_type)
+    const common::hash::ObHashMap<ObTabletMapKey, ObMetaDiskAddr> &tablet_item_map)
 {
   int ret = OB_SUCCESS;
   int64_t cost_time_us = 0;
@@ -172,7 +171,6 @@ int ObTabletReplayCreateHandler::init(
   if (OB_SUCC(ret)) {
     cost_time_us = ObTimeUtility::current_time() - start_time;
     FLOG_INFO("finish init ObTabletReplayCreateHandler", K(ret), K(total_tablet_cnt_), K(cost_time_us));
-    replay_type_ = replay_type;
     is_inited_ = true;
   }
 
@@ -371,7 +369,7 @@ int ObTabletReplayCreateHandler::replay_discrete_tablets(const ObIArray<ObTablet
           if (OB_FAIL(::oceanbase::share::server_service<::oceanbase::storage::ObLocalStorageMetaService>()->read_from_disk(replay_item.addr_, io_allocator, buf, buf_len))) {
           }
         } while (OB_FAIL(ret) && OB_TIMEOUT == ret && max_retry_time-- > 0);
-        if (OB_SUCC(ret) && OB_FAIL(do_replay(replay_item, buf, buf_len, io_allocator))) {
+        if (OB_SUCC(ret) && OB_FAIL(replay_create_tablet(replay_item, buf, buf_len))) {
           LOG_ERROR("fail to do replay", K(ret), K(replay_item));
         }
       }
@@ -414,38 +412,11 @@ int ObTabletReplayCreateHandler::replay_aggregate_tablets(const ObIArray<ObTable
       const ObTabletReplayItem &replay_item = total_tablet_item_arr_[idx];
       if (OB_FAIL(ATOMIC_LOAD(&errcode_))) {
       } else if (OB_FAIL(ObObjectReaderWriter::parse_data_from_object(object_handle, replay_item.addr_, buf, buf_len))) {
-      } else if (OB_FAIL(do_replay(replay_item, buf, buf_len, io_allocator))) {
+      } else if (OB_FAIL(replay_create_tablet(replay_item, buf, buf_len))) {
       }
     }
   }
 
-  return ret;
-}
-
-int ObTabletReplayCreateHandler::do_replay(
-    const ObTabletReplayItem &replay_item,
-    const char *buf,
-    const int64_t buf_len,
-    ObArenaAllocator &allocator) const
-{
-  int ret = OB_SUCCESS;
-  switch (replay_type_) {
-    case ObTabletRepalyOperationType::REPLAY_CREATE_TABLET:
-      if (OB_FAIL(replay_create_tablet(replay_item, buf, buf_len))) {
-      }
-      break;
-    case ObTabletRepalyOperationType::REPLAY_INC_MACRO_REF:
-      if (OB_FAIL(replay_inc_macro_ref(replay_item, buf, buf_len, allocator))) {
-      }
-      break;
-    case ObTabletRepalyOperationType::REPLAY_CLONE_TABLET:
-      if (OB_FAIL(replay_clone_tablet(replay_item, buf, buf_len))) {
-      }
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      break;
-  }
   return ret;
 }
 
@@ -459,41 +430,6 @@ int ObTabletReplayCreateHandler::replay_create_tablet(const ObTabletReplayItem &
 
   if (OB_FAIL(get_tablet_svr_(ls_tablet_svr, tenant_ls))) {
   } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(addr, buf, buf_len, key.tablet_id_))) {
-  }
-  return ret;
-}
-
-int ObTabletReplayCreateHandler::replay_inc_macro_ref(
-    const ObTabletReplayItem &replay_item,
-    const char *buf,
-    const int64_t buf_len,
-    ObArenaAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  const ObTabletMapKey &key = replay_item.key_;
-  const ObMetaDiskAddr &addr = replay_item.addr_;
-  ObTablet tablet;
-  int64_t pos = 0;
-  tablet.set_tablet_addr(addr);
-  if (OB_FAIL(tablet.inc_snapshot_ref_cnt(allocator, buf, buf_len, pos))) {
-  }
-  return ret;
-}
-
-int ObTabletReplayCreateHandler::replay_clone_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len)
-{
-  int ret = OB_SUCCESS;
-  ObLSTabletService *ls_tablet_svr = nullptr;
-  ObLS *tenant_ls = nullptr;
-  const ObTabletMapKey &key = replay_item.key_;
-  const ObMetaDiskAddr &addr = replay_item.addr_;
-  ObTabletHandle tablet_handle;
-  if (OB_FAIL(get_tablet_svr_(ls_tablet_svr, tenant_ls))) {
-  } else if (OB_FAIL(ls_tablet_svr->replay_create_tablet(addr, buf, buf_len, key.tablet_id_))) {
-  } else if (OB_FAIL(ls_tablet_svr->get_tablet(key.tablet_id_,
-                                               tablet_handle,
-                                               ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US * 10,
-                                               ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
   }
   return ret;
 }

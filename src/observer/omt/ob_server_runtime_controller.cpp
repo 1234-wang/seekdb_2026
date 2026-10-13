@@ -266,14 +266,11 @@ int ObServerRuntimeController::construct_bootstrap_meta(ObServerRuntimeMeta &met
 
   ObServerRuntimeSuperBlock super_block(true/*is_hidden*/);
   share::ObServerRuntimeConfig runtime_config;
-  const bool has_memstore = true;
   share::ObServerResourceConfig resource_config;
   if (OB_ISNULL(log_block_mgr_)) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(resource_config.generate_default(log_block_mgr_->get_log_disk_size()))) {
-  } else if (OB_FAIL(runtime_config.init(resource_config,
-                        lib::Worker::CompatMode::MYSQL,
-                        has_memstore))) {
+  } else if (OB_FAIL(runtime_config.init(resource_config))) {
   } else if (OB_FAIL(meta.build(runtime_config, super_block))) {
   }
 
@@ -843,9 +840,7 @@ int ObServerRuntimeController::build_server_resource_config_(ObServerRuntimeConf
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(resource_config.generate_default(log_disk_size))) {
-  } else if (OB_FAIL(runtime_config.init(resource_config,
-                               lib::Worker::CompatMode::MYSQL/*compat_mode*/,
-                               true/*has_memstore*/))) {
+  } else if (OB_FAIL(runtime_config.init(resource_config))) {
   }
   return ret;
 }

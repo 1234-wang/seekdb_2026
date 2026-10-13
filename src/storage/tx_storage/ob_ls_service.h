@@ -60,9 +60,9 @@ public:
   int update_ls_meta_for_physical_restore(const ObLSMeta &source_meta);
 
   // create a LS for replay or update LS's meta
-  // @param [in] ls_epoch, the epoch increases monotonically in database scope when an LS is created
+  // @param [in] the epoch increases monotonically in database scope when an LS is created
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
-  int replay_create_ls(const int64_t ls_epoch, const ObLSMeta &ls_meta);
+  int replay_create_ls(const ObLSMeta &ls_meta);
   // create a LS for replay or update LS's meta
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
   int replay_update_ls(const ObLSMeta &ls_meta);
@@ -125,7 +125,7 @@ private:
   void free_ls_(ObLS *ls);
   void remove_ls_(ObLS *ls, const bool remove_from_disk);
   int stop_and_remove_ls_(ObLS *ls, const bool remove_from_disk);
-  int replay_create_ls_(const int64_t ls_epoch, const ObLSMeta &ls_meta);
+  int replay_create_ls_(const ObLSMeta &ls_meta);
   int replay_update_ls_(const ObLSMeta &ls_meta);
   int post_create_ls_(const bool is_restore, ObLS *ls);
   void del_ls_after_create_ls_failed_(ObLSCreateState& ls_create_state, ObLS *ls);

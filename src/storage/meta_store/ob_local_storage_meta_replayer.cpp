@@ -17,7 +17,6 @@
 
 #include "ob_local_storage_meta_replayer.h"
 #include "share/rc/ob_server_runtime.h"
-#include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/slog_ckpt/ob_local_storage_checkpoint_slog_handler.h"
 
@@ -27,7 +26,6 @@ using namespace omt;
 namespace storage
 {
 int ObLocalStorageMetaReplayer::init(
-    ObLocalStorageMetaPersister &persister,
     ObLocalStorageCheckpointSlogHandler &ckpt_slog_handler)
 {
   int ret = OB_SUCCESS;
@@ -35,7 +33,6 @@ int ObLocalStorageMetaReplayer::init(
     ret = OB_INIT_TWICE;
   } else {
 
-    persister_ = &persister;
     ckpt_slog_handler_ = &ckpt_slog_handler;
     is_inited_ = true;
   }
@@ -59,7 +56,6 @@ int ObLocalStorageMetaReplayer::start_replay(const ObServerRuntimeSuperBlock &su
 void ObLocalStorageMetaReplayer::destroy()
 {
 
-  persister_ = nullptr;
   ckpt_slog_handler_ = nullptr;
   is_inited_ = false;
 }

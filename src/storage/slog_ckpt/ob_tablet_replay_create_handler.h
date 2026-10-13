@@ -37,14 +37,6 @@ class ObLS;
 class ObTabletReplayCreateHandler;
 class ObLSTabletService;
 
-enum class ObTabletRepalyOperationType
-{
-  REPLAY_CREATE_TABLET = 0,
-  REPLAY_INC_MACRO_REF = 1,
-  REPLAY_CLONE_TABLET = 2,
-  INVALID_MODULE
-};
-
 struct ObTabletReplayItem
 {
 public:
@@ -117,8 +109,7 @@ public:
   ~ObTabletReplayCreateHandler() {}
 
   int init(
-      const common::hash::ObHashMap<ObTabletMapKey, ObMetaDiskAddr> &tablet_item_map,
-      const ObTabletRepalyOperationType replay_type);
+      const common::hash::ObHashMap<ObTabletMapKey, ObMetaDiskAddr> &tablet_item_map);
   int concurrent_replay(storage::ObStartupAccelTaskHandler* startup_accel_handler);
 
   int replay_discrete_tablets(const ObIArray<ObTabletReplayItemRange> &range_arr);
@@ -134,18 +125,7 @@ private:
   {
     return tablet_cnt_in_block > AGGREGATE_CNT_THRESHOLD && valid_size_in_block > AGGREGATE_SIZE_THRESHOLD; 
   }
-  int do_replay(
-      const ObTabletReplayItem &replay_item,
-      const char *buf,
-      const int64_t buf_len,
-      ObArenaAllocator &allocator) const;
   static int replay_create_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len);
-  static int replay_inc_macro_ref(
-      const ObTabletReplayItem &replay_item,
-      const char *buf,
-      const int64_t buf_len,
-      ObArenaAllocator &allocator);
-  static int replay_clone_tablet(const ObTabletReplayItem &replay_item, const char *buf, const int64_t buf_len);
   static int get_tablet_svr_(ObLSTabletService *&ls_tablet_svr, ObLS *&tenant_ls);
   int add_item_range_to_task_(
       storage::ObStartupAccelTaskHandler* startup_accel_handler,
@@ -168,7 +148,6 @@ private:
   int errcode_;
   ObTabletReplayItem *total_tablet_item_arr_;
   int64_t total_tablet_cnt_;
-  ObTabletRepalyOperationType replay_type_;
   ObTabletReplayCreateTask *aggrgate_task_;
   ObTabletReplayCreateTask *discrete_task_;
 };
