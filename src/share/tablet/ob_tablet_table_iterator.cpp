@@ -119,7 +119,7 @@ int ObCompactionTabletMetaIterator::next(ObTabletRuntimeInfo &tablet_info)
 }
 
 int ObCompactionTabletMetaIterator::init(
-    LocalStore &meta_db_pool,
+    LocalStore &store,
     const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
@@ -128,7 +128,7 @@ int ObCompactionTabletMetaIterator::init(
   } else if (OB_FAIL(ObTabletMetaIterator::inner_init())) {
   } else {
     batch_size_ = batch_size;
-    local_store_ = &meta_db_pool;
+    local_store_ = &store;
     is_inited_ = true;
   }
   return ret;

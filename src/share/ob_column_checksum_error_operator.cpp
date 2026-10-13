@@ -31,12 +31,12 @@ using namespace oceanbase::common::sqlclient;
 ObColumnChecksumErrorInfoTableStorage ObColumnChecksumErrorOperator::storage_;
 LocalStore *ObColumnChecksumErrorOperator::local_store_ = nullptr;
 
-int ObColumnChecksumErrorOperator::init(LocalStore &meta_db_pool)
+int ObColumnChecksumErrorOperator::init(LocalStore &store)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(storage_.init(&meta_db_pool))) {
+  if (OB_FAIL(storage_.init(&store))) {
   } else {
-    local_store_ = &meta_db_pool;
+    local_store_ = &store;
   }
   return ret;
 }

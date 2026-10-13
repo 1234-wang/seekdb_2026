@@ -1756,12 +1756,7 @@ int ObServer::init_config(const ObServerOptions &opts)
   int ret = OB_SUCCESS;
 
   // All modules share one Rust-owned local store, opened before configuration.
-  bool legacy_metadata = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists("./store/sstable/meta.db", legacy_metadata))) {
-  } else if (legacy_metadata) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("legacy local storage requires explicit migration before startup", K(ret));
-  } else if (OB_FAIL(local_store_.init("./store/local"))) {
+  if (OB_FAIL(local_store_.init("./store/local"))) {
   } else if (OB_FAIL(config_mgr_.init(local_store_))) {
   } else if (OB_FAIL(config_mgr_.got_version())) {
   } else if (OB_FAIL(DATA_VERSION_MGR.init())) {

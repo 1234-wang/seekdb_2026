@@ -66,7 +66,7 @@ class ObColumnChecksumErrorOperator
 {
 public:
   // Initialize local storage (called once at startup)
-  static int init(LocalStore &meta_db_pool);
+  static int init(LocalStore &store);
   static int insert_column_checksum_err_info(
       common::ObISQLClient &sql_client,
       const ObColumnChecksumErrorInfo &info);

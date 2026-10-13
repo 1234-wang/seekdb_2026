@@ -34,10 +34,10 @@ using namespace oceanbase::common::sqlclient;
 // Static storage instance
 ObMergeInfoTableStorage ObGlobalMergeTableOperator::storage_;
 
-int ObGlobalMergeTableOperator::init(LocalStore &meta_db_pool)
+int ObGlobalMergeTableOperator::init(LocalStore &store)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(storage_.init(&meta_db_pool))) {
+  if (OB_FAIL(storage_.init(&store))) {
   }
   return ret;
 }

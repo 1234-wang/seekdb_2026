@@ -50,7 +50,7 @@ public:
     const int64_t compaction_scn);
   ~ObCompactionTabletMetaIterator() override { reset(); }
   int init(
-    LocalStore &meta_db_pool,
+    LocalStore &store,
     const int64_t batch_size);
   virtual void reset() override;
   virtual int next(ObTabletRuntimeInfo &tablet_info) override;

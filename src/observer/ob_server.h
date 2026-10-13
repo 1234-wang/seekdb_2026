@@ -446,7 +446,7 @@ private:
   // The PL Engine
   pl::ObPL pl_engine_;
 
-  // Shared process-local persistent metadata store
+  // Shared process-local persistent store
   share::LocalStore local_store_;
 
   // The Oceanbase partition table relating to

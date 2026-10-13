@@ -581,11 +581,11 @@ public:
     common::ObIAllocator &allocator,
     ObIArray<ObString> &partition_names);
   static int get_tablet_data_size(
-    LocalStore &meta_db_pool,
+    LocalStore &store,
     const common::ObTabletID &tablet_id,
     int64_t &data_size);
   static int get_tablet_data_row_cnt(
-    LocalStore &meta_db_pool,
+    LocalStore &store,
     const common::ObTabletID &tablet_id,
     int64_t &data_row_cnt);
   static int get_ls_host_left_disk_space(
@@ -653,9 +653,7 @@ public:
   static int check_schema_version_refreshed(schema::ObMultiVersionSchemaService &schema_service,
                                             const int64_t target_schema_version);
   static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
-  static int check_table_compaction_checksum_error(schema::ObMultiVersionSchemaService &schema_service,
-                                                   common::ObISQLClient &sql_client,
-                                                   LocalStore &meta_db_pool,
+  static int check_table_compaction_checksum_error(common::ObISQLClient &sql_client,
                                                    const uint64_t table_id);
   static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
                                           const int64_t parallel,
