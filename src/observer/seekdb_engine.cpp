@@ -35,7 +35,7 @@ struct SeekdbEngineImpl {
 namespace {
 std::mutex engine_mutex;
 SeekdbEngineHandle active_engine = nullptr;
-bool core_used = false;
+bool core_init_attempted = false;
 
 // Unlike start_daemon(), retain the descriptor so close releases the PID lock.
 int acquire_pid_file(int &fd)
@@ -118,7 +118,7 @@ void run_engine(SeekdbEngineHandle engine)
         OB_LOGGER.set_log_level(options.log_level_);
         OB_LOGGER.set_file_name("log/seekdb.log", true /* no_redirect */, false);
         ObPLogWriterCfg log_config;
-        core_used = true;
+        core_init_attempted = true;
         entered_core = true;
         ObServer &server = ObServer::get_instance();
         if (OB_FAIL(server.init(options, log_config))) {
@@ -167,7 +167,7 @@ SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *e
     ret = OB_INVALID_ARGUMENT;
   } else if (active_engine != nullptr) {
     ret = OB_INIT_TWICE;
-  } else if (core_used) {
+  } else if (core_init_attempted) {
     // Do not pretend the current singleton graph can be initialized twice.
     ret = OB_NOT_SUPPORTED;
   } else {
