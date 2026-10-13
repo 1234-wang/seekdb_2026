@@ -7,6 +7,8 @@
 #include "lib/alloc/alloc_func.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/rc/context.h"
+#include "share/rc/ob_server_runtime.h"
+#include "share/roaringbitmap/ob_rb_memory_mgr.h"
 #include "storage/allocator/ob_vector_allocator.h"
 #include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 
@@ -40,6 +42,27 @@ public:
   }
 };
 
+class TestRbMemMgrGuard final
+{
+public:
+  TestRbMemMgrGuard()
+  {
+    EXPECT_EQ(OB_SUCCESS, mem_mgr_.init());
+    bind_server_service<ObRbMemMgr>(&mem_mgr_);
+    EXPECT_EQ(OB_SUCCESS, ObRbMemMgr::init_memory_hook());
+  }
+  ~TestRbMemMgrGuard()
+  {
+    unbind_server_service<ObRbMemMgr>();
+    mem_mgr_.destroy();
+  }
+
+  ObRbMemMgr &mem_mgr() { return mem_mgr_; }
+
+private:
+  ObRbMemMgr mem_mgr_;
+};
+
 struct TestMetaPoolObject
 {
   void reset() {}
@@ -61,23 +84,45 @@ TEST(TestVectorMemoryQuota, actual_bytes_and_dynamic_limit)
   EXPECT_EQ(0, quota.committed());
 }
 
-TEST(TestVectorMemoryQuota, memory_context_and_bitmap_share_one_admission_word)
+TEST(TestVectorMemoryQuota, production_bitmap_path_charges_and_releases_quota)
 {
   ObVectorAllocator allocator;
   MemoryQuota &quota = allocator.memory_quota();
-  quota.reset(128);
+  quota.reset(1L << 20);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  TestRbMemMgrGuard rb_mem_mgr_guard;
 
-  MemoryReservation context_allocation(&quota, 80);
-  ASSERT_TRUE(context_allocation.valid());
-  ASSERT_TRUE(context_allocation.reconcile(80));
+  roaring_bitmap_t *bitmap = nullptr;
+  {
+    oceanbase::lib::ObMallocHookAttrGuard attr_guard(
+        oceanbase::lib::ObMemAttr("VIBQuotaTest"));
+    bitmap = roaring_bitmap_create();
+    ASSERT_NE(nullptr, bitmap);
+    for (uint32_t value = 0; value < 4096; value += 2) {
+      roaring_bitmap_add(bitmap, value);
+    }
+  }
 
-  MemoryReservation bitmap_allocation(&quota, 49);
-  EXPECT_FALSE(bitmap_allocation.valid());
-  EXPECT_EQ(80, quota.committed());
+  const int64_t actual_charge = quota.committed();
+  EXPECT_EQ(2048, roaring_bitmap_get_cardinality(bitmap));
+  EXPECT_GT(actual_charge, 0);
+  EXPECT_EQ(actual_charge, rb_mem_mgr_guard.mem_mgr().get_vec_idx_used());
   EXPECT_EQ(0, quota.reserved());
 
-  quota.release(80);
+  roaring_bitmap_free(bitmap);
   EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+  EXPECT_EQ(0, rb_mem_mgr_guard.mem_mgr().get_vec_idx_used());
+
+  quota.set_limit(1);
+  {
+    oceanbase::lib::ObMallocHookAttrGuard attr_guard(
+        oceanbase::lib::ObMemAttr("VIBQuotaTest"));
+    EXPECT_THROW(roaring_bitmap_create(), std::bad_alloc);
+  }
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+  EXPECT_EQ(0, rb_mem_mgr_guard.mem_mgr().get_vec_idx_used());
 }
 
 TEST(TestVectorMemoryQuota, fifo_metadata_pages_use_vector_context_quota)
