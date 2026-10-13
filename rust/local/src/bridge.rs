@@ -233,7 +233,6 @@ pub fn open_storage(path: &str) -> Box<Store> {
             kv::Options {
                 // Cover a full tablet queue batch, including both table indexes.
                 max_transaction_pages: 16384,
-                ..kv::Options::default()
             },
         ),
     })
@@ -412,6 +411,9 @@ impl Cursor {
             Ok(None) => ffi::Code::End.repr as i32,
             Err(e) => code(e),
         };
+        if self.status != 0 {
+            self.cursor = None;
+        }
         self.status
     }
 }

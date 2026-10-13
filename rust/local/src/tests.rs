@@ -416,7 +416,6 @@ fn large_payload_batch_fits_the_transaction_budget() {
         &directory.0,
         kv::Options {
             max_transaction_pages: 16384,
-            ..kv::Options::default()
         },
     )
     .unwrap();
@@ -434,4 +433,62 @@ fn large_payload_batch_fits_the_transaction_budget() {
     assert!(commit.pages_written < 16384);
     assert_eq!(all(&store, Query::all(Table::Indexed.schema())).len(), 128);
     assert_eq!(all(&store, Query::all(Table::Mixed.schema())).len(), 128);
+}
+
+#[test]
+fn concurrent_bridge_cursors_keep_snapshots_and_release_them_at_end() {
+    let directory = Directory::new();
+    let store = crate::bridge::open_storage(directory.0.to_str().unwrap());
+    assert_eq!(store.status(), 0);
+    let schema = Table::Mixed.schema();
+    let query = ffi::Query {
+        schema: ffi::Schema {
+            namespace_id: schema.namespace_id,
+            columns: schema
+                .kinds
+                .iter()
+                .enumerate()
+                .map(|(i, &kind)| ffi::Column {
+                    kind,
+                    nullable: schema.nullable.contains(&i),
+                })
+                .collect(),
+            primary: schema.primary.iter().map(|&i| i as u32).collect(),
+            indexes: vec![],
+        },
+        columns: vec![0],
+        conditions: vec![],
+        order_column: -1,
+        limit: -1,
+        offset: 0,
+        aggregate: ffi::Aggregate::None,
+    };
+    let mut tx = store.kv().unwrap().begin().unwrap();
+    insert(Table::Mixed, record(Table::Mixed, 7), false)
+        .execute(&mut tx)
+        .unwrap();
+    tx.commit().unwrap();
+    let mut cursors: Vec<_> = (0..65)
+        .map(|_| {
+            let cursor = store.cursor_open(&query);
+            assert_eq!(cursor.status(), 0);
+            cursor
+        })
+        .collect();
+    assert!(store.kv().unwrap().get(b"unrelated").is_ok());
+    let mut tx = store.kv().unwrap().begin().unwrap();
+    insert(Table::Mixed, record(Table::Mixed, 8), false)
+        .execute(&mut tx)
+        .unwrap();
+    tx.commit().unwrap();
+    for cursor in &mut cursors {
+        assert_eq!(cursor.next(), 0);
+        assert_eq!(cursor.row()[0].integer, 7);
+        assert_eq!(cursor.next(), ffi::Code::End.repr as i32);
+        assert_eq!(cursor.next(), ffi::Code::End.repr as i32);
+    }
+    drop(store);
+    // Exhausted C++ bridge handles may remain alive without pinning the store.
+    let reopened = kv::Store::open(&directory.0).unwrap();
+    assert_eq!(all(&reopened, Query::all(schema)).len(), 2);
 }

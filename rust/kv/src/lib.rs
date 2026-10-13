@@ -56,7 +56,6 @@ pub enum Error {
     KeyTooLarge,
     ValueTooLarge,
     TransactionTooLarge,
-    TooManySnapshots,
     TransactionAborted,
     Poisoned,
     InvalidOptions,
@@ -71,7 +70,6 @@ impl fmt::Display for Error {
             Self::KeyTooLarge => output.write_str("KV key exceeds the size limit"),
             Self::ValueTooLarge => output.write_str("KV value exceeds the size limit"),
             Self::TransactionTooLarge => output.write_str("KV transaction exceeds the page limit"),
-            Self::TooManySnapshots => output.write_str("KV snapshot limit reached"),
             Self::TransactionAborted => output.write_str("KV transaction has a failed mutation"),
             Self::Poisoned => output.write_str("KV storage must be reopened after a write failure"),
             Self::InvalidOptions => output.write_str("KV limits must be nonzero"),
@@ -98,15 +96,12 @@ impl From<io::Error> for Error {
 pub struct Options {
     /// Maximum total allocated and retired pages tracked by one transaction.
     pub max_transaction_pages: usize,
-    /// Maximum live snapshots. A slow reader can retain old disk pages.
-    pub max_snapshots: usize,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
             max_transaction_pages: 4096,
-            max_snapshots: 64,
         }
     }
 }
@@ -184,7 +179,6 @@ struct Writer {
 struct Visible {
     root: Root,
     pins: BTreeMap<u64, usize>,
-    snapshots: usize,
 }
 
 impl Store {
@@ -193,7 +187,7 @@ impl Store {
     }
 
     pub fn open_with_options(directory: impl AsRef<Path>, options: Options) -> Result<Self> {
-        if options.max_transaction_pages == 0 || options.max_snapshots == 0 {
+        if options.max_transaction_pages == 0 {
             return Err(Error::InvalidOptions);
         }
         let files = file::open(directory.as_ref())?;
@@ -211,7 +205,6 @@ impl Store {
                 visible: Mutex::new(Visible {
                     root,
                     pins: BTreeMap::new(),
-                    snapshots: 0,
                 }),
                 poisoned: AtomicBool::new(false),
                 options,
@@ -245,12 +238,8 @@ impl Store {
     pub fn snapshot(&self) -> Result<Snapshot> {
         self.shared.check()?;
         let mut visible = self.shared.visible.lock().map_err(|_| Error::Poisoned)?;
-        if visible.snapshots >= self.shared.options.max_snapshots {
-            return Err(Error::TooManySnapshots);
-        }
         let root = visible.root;
         *visible.pins.entry(root.generation).or_default() += 1;
-        visible.snapshots += 1;
         Ok(Snapshot {
             shared: Arc::clone(&self.shared),
             root,
@@ -388,7 +377,6 @@ impl Drop for Snapshot {
             if *count == 0 {
                 visible.pins.remove(&self.root.generation);
             }
-            visible.snapshots -= 1;
         } else {
             self.shared.poisoned.store(true, Ordering::Release);
         }

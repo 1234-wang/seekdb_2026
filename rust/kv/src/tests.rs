@@ -309,13 +309,11 @@ fn limits_abort_the_whole_transaction_and_release_unpublished_pages() {
         &directory.0,
         Options {
             max_transaction_pages: 4,
-            max_snapshots: 1,
         },
     )
     .unwrap();
     write(&store, b"existing", b"old");
     let snapshot = store.snapshot().unwrap();
-    assert!(matches!(store.snapshot(), Err(Error::TooManySnapshots)));
     let mut transaction = store.begin().unwrap();
     transaction.put(b"existing", b"new").unwrap();
     assert!(matches!(
