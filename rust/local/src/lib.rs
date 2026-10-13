@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Process-local persistent metadata. KV owns durability and concurrency;
+//! Process-local persistent storage. KV owns durability and concurrency;
 //! records add typed fields, ordered keys and streaming selection, without SQL.
 mod bridge;
 mod records;

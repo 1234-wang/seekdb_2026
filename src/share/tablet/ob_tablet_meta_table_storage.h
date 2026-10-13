@@ -19,30 +19,12 @@
 
 #include "share/tablet/ob_tablet_info.h"
 #include "lib/container/ob_iarray.h"
-#include "share/storage/local_store.h"
+#include "share/inner_table/local_table_schema.h"
 
 namespace oceanbase
 {
 namespace share
 {
-namespace tablet_meta
-{
-enum Column : uint32_t { GmtCreate, GmtModified, TabletId, CompactionScn, DataSize, RequiredSize, ReportScn, Status };
-inline const local::Schema &schema()
-{
-  static const auto schema = local_schema(3, {
-    {local::Kind::Integer, true}, // gmt_create
-    {local::Kind::Integer, true}, // gmt_modified
-    {local::Kind::Integer, false}, // tablet_id
-    {local::Kind::Integer, false}, // compaction_scn
-    {local::Kind::Integer, false}, // data_size
-    {local::Kind::Integer, false}, // required_size
-    {local::Kind::Integer, false}, // report_scn
-    {local::Kind::Integer, false}, // status
-  }, {TabletId}, {CompactionScn});
-  return schema;
-}
-} // namespace tablet_meta
 
 class ObTabletRuntimeInfoConstructor
 {

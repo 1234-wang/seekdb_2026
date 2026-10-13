@@ -120,7 +120,7 @@ typedef ObArrayWithMap<share::ObTabletLocalChecksumItem> ObLocalTabletChecksumAr
 class ObTabletLocalChecksumOperator
 {
 public:
-  // Initialize local metadata storage (called once at startup)
+  // Initialize local storage (called once at startup)
   static int init(LocalStore *pool);
 
   // Get a batch of checksum_items
@@ -131,11 +131,11 @@ public:
       const SCN &compaction_scn,
       ObLocalTabletChecksumArray &items,
       const bool include_larger_than);
-  // Update checksum items within a local metadata transaction
+  // Update checksum items within a local transaction
   static int batch_update_with_trans(
       share::LocalConnection *conn,
       const common::ObIArray<ObTabletLocalChecksumItem> &item);
-  // Remove checksum items within a local metadata transaction
+  // Remove checksum items within a local transaction
   static int batch_remove_with_trans(
       share::LocalConnection *conn,
       const common::ObIArray<ObTabletRuntimeInfo> &tablet_infos);

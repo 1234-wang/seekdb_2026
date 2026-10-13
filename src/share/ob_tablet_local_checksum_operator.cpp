@@ -457,7 +457,7 @@ int ObTabletLocalChecksumOperator::batch_update_with_trans(
   } else if (!storage_.is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    // Use local metadata storage within the transaction
+    // Use local storage within the transaction
     // Note: The transaction is managed by the caller (ObTabletRuntimeMetaUpdater)
     const auto upsert_request =
       LocalRequest::insert(tablet_checksum::schema(), {tablet_checksum::TabletId, tablet_checksum::CompactionScn, tablet_checksum::RowCount, tablet_checksum::DataChecksum, tablet_checksum::ColumnChecksums, tablet_checksum::BColumnChecksums, tablet_checksum::DataChecksumType}, true);

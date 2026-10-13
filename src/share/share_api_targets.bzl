@@ -105,6 +105,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":core_types",
             ":scn_interface",
             ":local_storage_interface",
+            ":local_table_schema",
             ":tablet_replica_types",
             ":tenant_runtime",
             ":timezone_runtime",
@@ -119,6 +120,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         hdrs = ["storage/ob_admin_job_table_storage.h"],
         deps = [
             ":local_storage_interface",
+            ":local_table_schema",
             "//src/oblib:oblib_foundation",
         ],
     ),
@@ -189,6 +191,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":schema_registry",
             ":scn_interface",
             ":local_storage_interface",
+            ":local_table_schema",
             ":tablet_replica_types",
             "//src/oblib:oblib_foundation",
         ],
@@ -205,6 +208,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         ],
         deps = [
             ":local_storage_interface",
+            ":local_table_schema",
             ":cluster_version_interface",
             ":core_types",
             ":schema_model_interface",
@@ -709,6 +713,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         deps = [
             ":compaction_runtime",
             ":local_storage_interface",
+            ":local_table_schema",
             ":tablet_replica_types",
             "//src/oblib:oblib_foundation",
         ],

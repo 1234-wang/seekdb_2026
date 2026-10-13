@@ -1403,6 +1403,7 @@ _INNER_TABLE_SCHEMA_CPP_OUTS = inner_table_schema_cpp_outputs(
     SHARE_UNITY_GROUPS,
 )
 _INNER_TABLE_SCHEMA_HEADER_OUTS = [
+    _INNER_TABLE_GENERATED_DIR + "/local_table_schema.h",
     _INNER_TABLE_GENERATED_DIR + "/ob_inner_table_schema.h",
     _INNER_TABLE_GENERATED_DIR + "/ob_inner_table_schema_constants.h",
     _INNER_TABLE_GENERATED_DIR + "/ob_inner_table_schema_misc.ipp",
@@ -1489,6 +1490,15 @@ cc_library(
 )
 
 cc_library(
+    name = "local_table_schema",
+    hdrs = [_INNER_TABLE_GENERATED_DIR + "/local_table_schema.h"],
+    include_prefix = "share/inner_table",
+    strip_include_prefix = _INNER_TABLE_GENERATED_DIR,
+    deps = [":local_storage_interface"],
+    visibility = ["//src:__subpackages__"],
+)
+
+cc_library(
     name = "_generated_local_virtual_table_headers",
     hdrs = [
         _OBSERVER_GENERATED_DIR + "/ob_all_virtual_local_tables.h",
@@ -1547,6 +1557,7 @@ _SHARE_NATIVE_UNITY_SOURCES = share_unity_group_sources(
 )
 
 _SHARE_RUNTIME_DEPS = [
+    ":local_table_schema",
     ":_generated_inner_table_headers",
     ":_generated_inner_table_short_headers",
     ":cache",

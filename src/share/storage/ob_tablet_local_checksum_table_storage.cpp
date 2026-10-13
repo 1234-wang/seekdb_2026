@@ -16,7 +16,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-// local metadata storage for local tablet checksums.
+// local storage for local tablet checksums.
 
 #include "share/storage/ob_tablet_local_checksum_table_storage.h"
 #include "share/storage/local_store.h"

@@ -54,7 +54,7 @@
 #include "observer/virtual_table/ob_all_data_type_table.h"
 #include "observer/virtual_table/ob_all_virtual_memstore_usage.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_info.h"
-// All local metadata virtual tables are now in a unified header
+// All local virtual tables are now in a unified header
 #include "observer/virtual_table/ob_all_virtual_local_tables.h"
 #include "observer/virtual_table/ob_all_virtual_sys_parameter_stat.h"
 #include "observer/virtual_table/ob_all_virtual_memstore_info.h"

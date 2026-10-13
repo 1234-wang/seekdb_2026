@@ -625,7 +625,7 @@ int ObTabletRuntimeMetaUpdater::do_batch_remove_(
   } else if (OB_ISNULL(GCTX.local_store_)) {
     ret = OB_NOT_INIT;
   } else {
-    // Use local metadata transaction for multi-table operations
+    // Use local transaction for multi-table operations
     share::LocalConnectionGuard guard(GCTX.local_store_);
     if (!guard) {
       ret = OB_ERR_UNEXPECTED;
@@ -672,7 +672,7 @@ int ObTabletRuntimeMetaUpdater::do_batch_update_(
     if (OB_ISNULL(GCTX.local_store_)) {
       ret = OB_NOT_INIT;
     } else {
-      // Use local metadata transaction for multi-table operations
+      // Use local transaction for multi-table operations
       share::LocalConnectionGuard guard(GCTX.local_store_);
       if (!guard) {
         ret = OB_ERR_UNEXPECTED;

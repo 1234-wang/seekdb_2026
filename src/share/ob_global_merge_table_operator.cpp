@@ -85,7 +85,7 @@ int ObGlobalMergeTableOperator::update_partial_global_merge_info(
   if (!storage_.is_inited()) {
     ret = OB_NOT_INIT;
   } else {
-    // Use local metadata storage - partial update is same as full update for local metadata
+    // Use local storage - partial update is same as full update for local storage
     ret = storage_.insert_or_update(info);
     if (OB_FAIL(ret)) {
     }

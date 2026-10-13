@@ -18,42 +18,13 @@
 
 #include "lib/ob_define.h"
 #include "lib/container/ob_iarray.h"
-#include "share/storage/local_store.h"
+#include "share/inner_table/local_table_schema.h"
 #include <functional>
 
 namespace oceanbase
 {
 namespace share
 {
-namespace deadlock_history
-{
-enum Column : uint32_t { EventId, DetectorId, ReportTime, CycleIdx, CycleSize, Role, PriorityLevel, Priority, CreateTime, StartDelay, Module, Visitor, Object, ExtraName1, ExtraValue1, ExtraName2, ExtraValue2, ExtraName3, ExtraValue3 };
-inline const local::Schema &schema()
-{
-  static const auto schema = local_schema(2, {
-    {local::Kind::Integer, false}, // event_id
-    {local::Kind::Integer, false}, // detector_id
-    {local::Kind::Integer, false}, // report_time
-    {local::Kind::Integer, false}, // cycle_idx
-    {local::Kind::Integer, false}, // cycle_size
-    {local::Kind::Text, true}, // role
-    {local::Kind::Text, true}, // priority_level
-    {local::Kind::Integer, false}, // priority
-    {local::Kind::Integer, false}, // create_time
-    {local::Kind::Integer, false}, // start_delay
-    {local::Kind::Text, true}, // module
-    {local::Kind::Text, true}, // visitor
-    {local::Kind::Text, true}, // object
-    {local::Kind::Text, true}, // extra_name1
-    {local::Kind::Text, true}, // extra_value1
-    {local::Kind::Text, true}, // extra_name2
-    {local::Kind::Text, true}, // extra_value2
-    {local::Kind::Text, true}, // extra_name3
-    {local::Kind::Text, true}, // extra_value3
-  }, {EventId, DetectorId}, {ReportTime});
-  return schema;
-}
-} // namespace deadlock_history
 
 struct ObDeadlockEventHistoryEntry
 {

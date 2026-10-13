@@ -20,31 +20,12 @@
 #include "common/ob_tablet_id.h"
 #include "lib/container/ob_iarray.h"
 #include "share/scn.h"
-#include "share/storage/local_store.h"
+#include "share/inner_table/local_table_schema.h"
 
 namespace oceanbase
 {
 namespace share
 {
-namespace checksum_error
-{
-enum Column : uint32_t { FrozenScn, IndexType, DataTableId, IndexTableId, DataTabletId, IndexTabletId, ColumnId, DataColumnChecksum, IndexColumnChecksum };
-inline const local::Schema &schema()
-{
-  static const auto schema = local_schema(1, {
-    {local::Kind::Integer, false}, // frozen_scn
-    {local::Kind::Integer, false}, // index_type
-    {local::Kind::Integer, false}, // data_table_id
-    {local::Kind::Integer, false}, // index_table_id
-    {local::Kind::Integer, false}, // data_tablet_id
-    {local::Kind::Integer, false}, // index_tablet_id
-    {local::Kind::Integer, false}, // column_id
-    {local::Kind::Integer, false}, // data_column_checksum
-    {local::Kind::Integer, false}, // index_column_checksum
-  }, {FrozenScn, IndexType, DataTableId, IndexTableId, DataTabletId, IndexTabletId}, {});
-  return schema;
-}
-} // namespace checksum_error
 
 class ObColumnChecksumErrorInfo;
 class ObColumnChecksumErrorInfoTableStorage

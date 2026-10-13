@@ -17,7 +17,7 @@
 #ifndef OCEANBASE_SHARE_STORAGE_OB_TABLET_LOCAL_CHECKSUM_TABLE_STORAGE_H_
 #define OCEANBASE_SHARE_STORAGE_OB_TABLET_LOCAL_CHECKSUM_TABLE_STORAGE_H_
 
-#include "share/storage/local_store.h"
+#include "share/inner_table/local_table_schema.h"
 #include "lib/container/ob_iarray.h"
 #include "share/scn.h"
 #include "share/ob_tablet_local_checksum_operator.h"
@@ -27,23 +27,6 @@ namespace oceanbase
 {
 namespace share
 {
-namespace tablet_checksum
-{
-enum Column : uint32_t { TabletId, CompactionScn, RowCount, DataChecksum, ColumnChecksums, BColumnChecksums, DataChecksumType };
-inline const local::Schema &schema()
-{
-  static const auto schema = local_schema(4, {
-    {local::Kind::Integer, false}, // tablet_id
-    {local::Kind::Integer, false}, // compaction_scn
-    {local::Kind::Integer, false}, // row_count
-    {local::Kind::Integer, false}, // data_checksum
-    {local::Kind::Text, true}, // column_checksums
-    {local::Kind::Blob, true}, // b_column_checksums
-    {local::Kind::Integer, false}, // data_checksum_type
-  }, {TabletId}, {});
-  return schema;
-}
-} // namespace tablet_checksum
 
 class ObTabletLocalChecksumTableStorage
 {

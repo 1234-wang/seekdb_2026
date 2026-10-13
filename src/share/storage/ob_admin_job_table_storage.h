@@ -19,28 +19,12 @@
 
 #include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
-#include "share/storage/local_store.h"
+#include "share/inner_table/local_table_schema.h"
 
 namespace oceanbase
 {
 namespace share
 {
-namespace admin_job
-{
-enum Column : uint32_t { JobId, GmtCreate, GmtModified, JobType, JobStatus, ResultCode };
-inline const local::Schema &schema()
-{
-  static const auto schema = local_schema(5, {
-    {local::Kind::Integer, false}, // job_id
-    {local::Kind::Integer, true}, // gmt_create
-    {local::Kind::Integer, true}, // gmt_modified
-    {local::Kind::Text, false}, // job_type
-    {local::Kind::Text, false}, // job_status
-    {local::Kind::Integer, true}, // result_code
-  }, {JobId}, {});
-  return schema;
-}
-} // namespace admin_job
 
 struct ObAdminJobEntry
 {

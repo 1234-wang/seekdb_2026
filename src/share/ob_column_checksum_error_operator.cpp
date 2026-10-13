@@ -94,7 +94,7 @@ int ObColumnChecksumErrorOperator::delete_column_checksum_err_info_by_scn(
   } else if (OB_UNLIKELY(compaction_scn <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    // Use local metadata storage - delete by exact frozen_scn
+    // Use local storage - delete by exact frozen_scn
     const auto delete_request =
       LocalRequest::erase(checksum_error::schema()).eq(checksum_error::FrozenScn, local_param(0));
 

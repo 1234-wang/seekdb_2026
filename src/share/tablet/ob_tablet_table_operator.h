@@ -38,7 +38,7 @@ class ObTabletTableOperator
 public:
   ObTabletTableOperator();
   virtual ~ObTabletTableOperator();
-  // Initialize with local metadata storage
+  // Initialize with local storage
   int init(share::LocalStore *pool);
   void reset();
   int batch_get(

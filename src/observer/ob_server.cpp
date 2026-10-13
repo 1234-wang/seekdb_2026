@@ -1760,7 +1760,7 @@ int ObServer::init_config(const ObServerOptions &opts)
   if (OB_FAIL(FileDirectoryUtils::is_exists("./store/sstable/meta.db", legacy_metadata))) {
   } else if (legacy_metadata) {
     ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("legacy local metadata requires explicit migration before startup", K(ret));
+    LOG_ERROR("legacy local storage requires explicit migration before startup", K(ret));
   } else if (OB_FAIL(local_store_.init("./store/local"))) {
   } else if (OB_FAIL(config_mgr_.init(local_store_))) {
   } else if (OB_FAIL(config_mgr_.got_version())) {
