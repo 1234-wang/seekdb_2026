@@ -338,12 +338,12 @@ int ObCommandLineParser::parse_args(int argc, const char *const argv[], ObServer
   ParserOutputGuard output_guard(!command_line);
   help_requested_ = false;
   version_requested_ = false;
-  if (argc < 1 || argv == nullptr || argv[0] == nullptr) {
+  if (argc < 0 || (argc > 0 && argv == nullptr)) {
     return OB_INVALID_ARGUMENT;
   }
   // Keep parsing local to this call: getopt's process-global state belongs to
   // the host, and must not be changed by an embedded library.
-  for (int i = 1; OB_SUCC(ret) && i < argc; ++i) {
+  for (int i = 0; OB_SUCC(ret) && i < argc; ++i) {
     const char *arg = argv[i];
     if (arg == nullptr || arg[0] != '-' || arg[1] == '\0') {
       ret = OB_INVALID_ARGUMENT;

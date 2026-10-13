@@ -38,6 +38,7 @@ public:
    * @param opts 服务器选项，解析结果会直接设置到这里
    * @return 解析结果，OB_SUCCESS表示成功
    */
+  // argc/argv contain only options, without a program name; (0, nullptr) uses defaults.
   // OB_ITER_END means CLI help/version was printed; library mode never prints or exits.
   int parse_args(int argc, const char *const argv[], ObServerOptions& opts, bool command_line = true);
 

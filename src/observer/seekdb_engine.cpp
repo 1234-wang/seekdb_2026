@@ -177,8 +177,6 @@ SeekdbEngineHandle seekdb_engine_open(int argc, const char *const argv[], int *e
     if (OB_SUCC(ret)) {
       try {
         engine = new SeekdbEngineImpl;
-        // The internal command-line parser expects a program name at argv[0].
-        engine->arguments.emplace_back("seekdb");
         for (int i = 0; i < argc; ++i) { engine->arguments.emplace_back(argv[i]); }
         engine->thread = std::thread(run_engine, engine);
         std::unique_lock<std::mutex> guard(engine->mutex);
