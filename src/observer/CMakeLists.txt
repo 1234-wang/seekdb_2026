@@ -214,7 +214,3 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_GENERATOR MATCHES "Makefiles")
   install(DIRECTORY "${CMAKE_BINARY_DIR}/engine-sdk/"
     DESTINATION . COMPONENT engine-sdk EXCLUDE_FROM_ALL)
 endif()
-
-if(SEEKDB_BUILD_ENGINE_TESTS)
-  add_subdirectory("${CMAKE_SOURCE_DIR}/unittest/engine" "${CMAKE_BINARY_DIR}/unittest/engine")
-endif()
