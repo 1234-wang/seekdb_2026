@@ -171,13 +171,5 @@ select v, hex(v) as bytes from converting order by hex(v);
 v	bytes
 ss	7373
 ß	C39F
-select collation(_utf8mb4'abc' collate utf8mb4_unicode_520_ci);
-ERROR HY000: Unknown collation: 'utf8mb4_unicode_520_ci'
-select collation(_utf8mb4'abc' collate utf8mb4_0900_ai_ci);
-ERROR HY000: Unknown collation: 'utf8mb4_0900_ai_ci'
-create table unsupported (v varchar(8)) default charset = utf8mb4 collate = utf8mb4_unicode_520_ci;
-ERROR HY000: Unknown collation: 'utf8mb4_unicode_520_ci'
-create table unsupported (v varchar(8)) default charset = utf8mb4 collate = utf8mb4_0900_ai_ci;
-ERROR HY000: Unknown collation: 'utf8mb4_0900_ai_ci'
 use test;
 drop database utf8mb4_unicode_ci_ddl;

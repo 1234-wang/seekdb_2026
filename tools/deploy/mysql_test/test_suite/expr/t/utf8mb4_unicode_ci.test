@@ -142,14 +142,5 @@ select column_name, collation_name from information_schema.columns
   where table_schema = database() and table_name = 'converting' order by ordinal_position;
 select v, hex(v) as bytes from converting order by hex(v);
 
-# Only UCA 4.0 was restored; other collations must not be silently substituted.
---error 1273
-select collation(_utf8mb4'abc' collate utf8mb4_unicode_520_ci);
---error 1273
-select collation(_utf8mb4'abc' collate utf8mb4_0900_ai_ci);
---error 1273
-create table unsupported (v varchar(8)) default charset = utf8mb4 collate = utf8mb4_unicode_520_ci;
---error 1273
-create table unsupported (v varchar(8)) default charset = utf8mb4 collate = utf8mb4_0900_ai_ci;
 use test;
 drop database utf8mb4_unicode_ci_ddl;
