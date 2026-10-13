@@ -585,9 +585,6 @@ int ObTxCtx::commit(const MonotonicTs &commit_time,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  // Keep the context unlocked so a crash-recovery test can flush its redo
-  // while holding the committing client before any commit decision is logged.
-  DEBUG_SYNC(BEFORE_LOCAL_TX_COMMIT);
   CtxLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObTxCtx not inited");
