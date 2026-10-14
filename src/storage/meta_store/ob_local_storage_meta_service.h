@@ -17,48 +17,33 @@
 #define OCEANBASE_STORAGE_META_STORE_OB_LOCAL_STORAGE_META_SERVICE_H_
 
 #include <stdint.h>
-#include "share/rc/ob_server_runtime.h"
-#include "storage/meta_store/storage_meta_service.h"
 #include "storage/blockstore/ob_object_reader_writer.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-struct ObGCTabletMetaInfoList;
-class ObStartupAccelTaskHandler;
 class ObLocalStorageMetaService
 {
 public:
-  ObLocalStorageMetaService();
+  ObLocalStorageMetaService() = default;
   ~ObLocalStorageMetaService() = default;
   ObLocalStorageMetaService(const ObLocalStorageMetaService &) = delete;
   ObLocalStorageMetaService &operator=(const ObLocalStorageMetaService &) = delete;
 
   static int server_module_init(ObLocalStorageMetaService *&meta_service);
   int init();
-  int start();
-  void stop();
-  void wait();
   void destroy();
-  bool is_started() { return is_started_; }
   int read_from_disk(
       const ObMetaDiskAddr &addr,
       common::ObArenaAllocator &allocator,
       char *&buf,
       int64_t &buf_len);
-  int read_from_block(
-      const ObMetaDiskAddr &addr,
-      common::ObArenaAllocator &allocator,
-      char *&buf,
-      int64_t &buf_len);
-
   ObObjectReaderWriter &get_object_reader_writer() { return object_rwriter_; }
   ObObjectReaderWriter &get_object_raw_reader_writer() { return object_raw_rwriter_; }
 
 private:
-  bool is_inited_;
-  bool is_started_;
+  bool is_inited_ = false;
   ObObjectReaderWriter object_rwriter_;
   ObObjectReaderWriter object_raw_rwriter_;
 

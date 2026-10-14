@@ -363,10 +363,9 @@ int StorageMetaService::recover(bool bootstrap)
       });
       if (OB_ENTRY_NOT_EXIST == ret) { ret = OB_SUCCESS; }
     }
-    TabletLoader loader;
+    TabletLoader loader(tablets);
     ObLS *ls = nullptr;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(loader.init(tablets))) {
     } else if (OB_FAIL(loader.load(server_service<ObStartupAccelTaskHandler>()))) {
     } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.first_mark_device())) {
     } else if (OB_FAIL(server_service<ObLSService>()->get_ls(ls))) {

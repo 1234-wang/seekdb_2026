@@ -26,32 +26,24 @@ static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 thread_local! {
     static FAILURE: Cell<Option<&'static str>> = const { Cell::new(None) };
     static SKIP_CRASH: Cell<bool> = const { Cell::new(false) };
-    static PAUSE: RefCell<Option<Pause>> = const { RefCell::new(None) };
-}
-
-struct Pause {
-    stage: &'static str,
-    entered: mpsc::Sender<()>,
-    resume: mpsc::Receiver<()>,
+    static PAUSE: RefCell<Option<(mpsc::Sender<()>, mpsc::Receiver<()>)>> = const { RefCell::new(None) };
 }
 
 pub(super) fn is_crash_stage(stage: &str) -> bool {
-    !SKIP_CRASH.with(Cell::get)
+    !SKIP_CRASH.get()
         && std::env::var("KV_TEST_CRASH_STAGE").is_ok_and(|selected| selected == stage)
 }
 
 pub(super) fn at(stage: &str) -> Result<()> {
-    PAUSE.with(|pause| {
-        let mut pause = pause.borrow_mut();
-        if pause.as_ref().is_some_and(|pause| pause.stage == stage) {
-            let pause = pause.take().unwrap();
-            pause.entered.send(()).unwrap();
-            pause.resume.recv_timeout(Duration::from_secs(10)).unwrap();
-            if FAILURE.with(|failure| failure.get() == Some("panic")) {
+    if stage == "before-data-sync" {
+        if let Some((entered, resume)) = PAUSE.take() {
+            entered.send(()).unwrap();
+            resume.recv_timeout(Duration::from_secs(10)).unwrap();
+            if FAILURE.get() == Some("panic") {
                 panic!("injected publisher panic");
             }
         }
-    });
+    }
     if is_crash_stage(stage) {
         std::process::exit(91);
     }
@@ -69,13 +61,7 @@ fn concurrent_commits_prepare_while_another_commit_syncs() {
     let (resume, proceed) = mpsc::channel();
     let first_store = store.clone();
     let first = thread::spawn(move || {
-        PAUSE.with(|pause| {
-            *pause.borrow_mut() = Some(Pause {
-                stage: "before-data-sync",
-                entered,
-                resume: proceed,
-            })
-        });
+        PAUSE.set(Some((entered, proceed)));
         write(&first_store, b"first", b"value")
     });
     syncing.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -147,13 +133,7 @@ fn failed_publisher_wakes_writers_and_dependent_read_only_commits() {
         let (resume, proceed) = mpsc::channel();
         let first_store = store.clone();
         let first = thread::spawn(move || {
-            PAUSE.with(|pause| {
-                *pause.borrow_mut() = Some(Pause {
-                    stage: "before-data-sync",
-                    entered,
-                    resume: proceed,
-                })
-            });
+            PAUSE.set(Some((entered, proceed)));
             FAILURE.with(|failure| failure.set(Some(stage)));
             let mut tx = first_store.begin().unwrap();
             tx.put(b"first", b"value").unwrap();
@@ -228,14 +208,8 @@ fn group_crash_child() {
     let (resume, proceed) = mpsc::channel();
     let first_store = store.clone();
     let first = thread::spawn(move || {
-        SKIP_CRASH.with(|skip| skip.set(true));
-        PAUSE.with(|pause| {
-            *pause.borrow_mut() = Some(Pause {
-                stage: "before-data-sync",
-                entered,
-                resume: proceed,
-            })
-        });
+        SKIP_CRASH.set(true);
+        PAUSE.set(Some((entered, proceed)));
         write(&first_store, b"acknowledged", b"value")
     });
     syncing.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -302,13 +276,7 @@ fn pending_limit_allows_publisher_to_drain_waiting_writers() {
     let (resume, proceed) = mpsc::channel();
     let first_store = store.clone();
     let first = thread::spawn(move || {
-        PAUSE.with(|pause| {
-            *pause.borrow_mut() = Some(Pause {
-                stage: "before-data-sync",
-                entered,
-                resume: proceed,
-            })
-        });
+        PAUSE.set(Some((entered, proceed)));
         write(&first_store, b"first", b"value")
     });
     syncing.recv_timeout(Duration::from_secs(10)).unwrap();

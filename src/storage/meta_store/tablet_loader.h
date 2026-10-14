@@ -24,11 +24,6 @@
 namespace oceanbase
 {
 
-namespace share
-{
-class SCN;
-}
-
 namespace storage
 {
 class ObLS;
@@ -65,7 +60,7 @@ public:
     : is_inited_(false),
       idx_(-1),
       type_(Type::MAX),
-      replay_item_range_arr_(),
+      ranges_(),
       tablet_cnt_(0),
       handler_(nullptr) {}
 
@@ -80,7 +75,7 @@ public:
   int add_item_range(const TabletLoadRange &range, bool &is_enough);
 
   VIRTUAL_TO_STRING_KV(K_(idx), K_(type), KP(this),
-      "range_count", replay_item_range_arr_.count(), K_(tablet_cnt));
+      "range_count", ranges_.count(), K_(tablet_cnt));
 
 private:
   static const int64_t MAX_DISCRETE_TABLET_CNT_PER_TASK = 200;
@@ -91,7 +86,7 @@ private:
   bool is_inited_;
   int64_t idx_;
   Type type_;
-  common::ObSEArray<TabletLoadRange, MAX_DISCRETE_TABLET_CNT_PER_TASK> replay_item_range_arr_;
+  common::ObSEArray<TabletLoadRange, MAX_DISCRETE_TABLET_CNT_PER_TASK> ranges_;
   int64_t tablet_cnt_;
   TabletLoader *handler_;
 };
@@ -101,11 +96,8 @@ private:
 class TabletLoader
 {
 public:
-  TabletLoader();
-  ~TabletLoader() {}
-
-  int init(
-      const common::ObIArray<TabletLoadItem> &tablets);
+  // The caller owns the array; load() waits for every task before returning.
+  explicit TabletLoader(common::ObIArray<TabletLoadItem> &tablets);
   int load(storage::ObStartupAccelTaskHandler* startup_accel_handler);
 
   int load_discrete_tablets(const ObIArray<TabletLoadRange> &range_arr);
@@ -121,8 +113,7 @@ private:
   {
     return tablet_cnt_in_block > AGGREGATE_CNT_THRESHOLD && valid_size_in_block > AGGREGATE_SIZE_THRESHOLD; 
   }
-  static int replay_create_tablet(const TabletLoadItem &replay_item, const char *buf, const int64_t buf_len);
-  static int get_tablet_svr_(ObLSTabletService *&ls_tablet_svr, ObLS *&tenant_ls);
+  static int replay_create_tablet(const TabletLoadItem &item, const char *buf, const int64_t buf_len);
   int add_item_range_to_task_(
       storage::ObStartupAccelTaskHandler* startup_accel_handler,
       const TabletLoadTask::Type type,
@@ -135,15 +126,13 @@ private:
   static const int64_t AGGREGATE_CNT_THRESHOLD = 16;
   static const int64_t AGGREGATE_SIZE_THRESHOLD = 256 << 10; // 256K
 
-  bool is_inited_;
-  ObArenaAllocator allocator_;
   int64_t task_idx_;
   int64_t inflight_task_cnt_;
   int64_t finished_tablet_cnt_;
   int errcode_;
   TabletLoadItem *total_tablet_item_arr_;
   int64_t total_tablet_cnt_;
-  TabletLoadTask *aggrgate_task_;
+  TabletLoadTask *aggregate_task_;
   TabletLoadTask *discrete_task_;
 };
 

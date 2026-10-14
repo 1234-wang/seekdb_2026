@@ -1460,7 +1460,6 @@ int ObServer::obs_start_modules()
   if (OB_SUCC(ret) && OB_FAIL(server_module_start_default(mods_trans_service_))) { SERVER_LOG(WARN, "mods_trans_service_ fail", KR(ret)); }
   if (OB_SUCC(ret) && OB_FAIL(server_module_start_default(mods_log_service_))) { SERVER_LOG(WARN, "mods_log_service_ fail", KR(ret)); }
   if (OB_SUCC(ret) && OB_FAIL(server_module_start_default(mods_ls_service_))) { SERVER_LOG(WARN, "mods_ls_service_ fail", KR(ret)); }
-  if (OB_SUCC(ret) && OB_FAIL(server_module_start_default(mods_local_storage_meta_service_))) { SERVER_LOG(WARN, "mods_local_storage_meta_service_ fail", KR(ret)); }
   if (OB_SUCC(ret) && OB_FAIL(server_module_start_default(mods_tmp_file_manager_))) { SERVER_LOG(WARN, "mods_tmp_file_manager_ fail", KR(ret)); }
   if (OB_SUCC(ret) && OB_FAIL(server_module_start_default(mods_lock_wait_mgr_))) { SERVER_LOG(WARN, "mods_lock_wait_mgr_ fail", KR(ret)); }
   if (OB_SUCC(ret) && OB_FAIL(server_module_start_default(mods_table_lock_service_))) { SERVER_LOG(WARN, "mods_table_lock_service_ fail", KR(ret)); }
@@ -1519,7 +1518,6 @@ void ObServer::obs_stop_modules()
   server_module_stop_default(mods_lock_wait_mgr_);
   server_module_stop_default(mods_tablet_stat_mgr_);
   server_module_stop_default(mods_tmp_file_manager_);
-  server_module_stop_default(mods_local_storage_meta_service_);
   server_module_stop_default(mods_ls_service_);
   server_module_stop_default(mods_log_service_);
   server_module_stop_default(mods_trans_service_);
@@ -1560,7 +1558,6 @@ void ObServer::obs_wait_modules()
   server_module_wait_default(mods_lock_wait_mgr_);
   server_module_wait_default(mods_tablet_stat_mgr_);
   server_module_wait_default(mods_tmp_file_manager_);
-  server_module_wait_default(mods_local_storage_meta_service_);
   // Deferred memtable GC reads the LS log handler until all metadata is released.
   // Drain it before ObLSService::wait() frees the LS and its log handler.
   server_module_wait_default(mods_storage_meta_mem_mgr_);

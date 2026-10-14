@@ -17,32 +17,16 @@
 
 #include "config_bridge.h"
 #include "ob_local_storage_meta_service.h"
-#include "share/rc/ob_server_runtime.h"
 #include "storage/meta_store/storage_meta_service.h"
-#include "storage/api/storage/runtime/ob_i_server_runtime.h"
-#include "storage/ob_file_system_router.h"
-#include "storage/tablet/ob_tablet_macro_info_iterator.h"
-#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
-using namespace compaction;
 namespace storage
 {
 
-ObLocalStorageMetaService::ObLocalStorageMetaService()
-  : is_inited_(false),
-    is_started_(false),
-    object_rwriter_(),
-    object_raw_rwriter_()
-{}
-
 int ObLocalStorageMetaService::server_module_init(ObLocalStorageMetaService *&meta_service)
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(meta_service->init())) {
-  }
-  return ret;
+  return meta_service->init();
 }
 
 int ObLocalStorageMetaService::init()
@@ -59,32 +43,11 @@ int ObLocalStorageMetaService::init()
   return ret;
 }
 
-int ObLocalStorageMetaService::start()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    is_started_ = true;
-  }
-  return ret;
-}
-
-void ObLocalStorageMetaService::stop()
-{
-  if (IS_INIT) {
-    is_started_ = false;
-  }
-}
-
-void ObLocalStorageMetaService::wait() {}
-
 void ObLocalStorageMetaService::destroy()
 {
   object_rwriter_.reset();
   object_raw_rwriter_.reset();
 
-  is_started_ = false;
   is_inited_ = false;
 }
 
@@ -94,23 +57,9 @@ int ObLocalStorageMetaService::read_from_disk(
     char *&buf,
     int64_t &buf_len)
 {
-  int ret = OB_SUCCESS;
   if (addr.is_local()) {
-    if (OB_FAIL(STORAGE_META_SERVICE.read_empty_shell(addr, allocator, buf, buf_len))) {
-    }
-  } else {
-    if (OB_FAIL(read_from_block(addr, allocator, buf, buf_len))) {
-    }
+    return STORAGE_META_SERVICE.read_empty_shell(addr, allocator, buf, buf_len);
   }
-  return ret;
-}
-
-int ObLocalStorageMetaService::read_from_block(
-    const ObMetaDiskAddr &addr,
-    common::ObArenaAllocator &allocator,
-    char *&buf,
-    int64_t &buf_len)
-{
   int ret = OB_SUCCESS;
   ObObjectReadHandle read_handle(allocator);
   ObObjectReadInfo read_info;

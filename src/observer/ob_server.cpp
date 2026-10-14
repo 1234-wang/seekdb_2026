@@ -1227,15 +1227,7 @@ int ObServer::start()
     if (FAILEDx(standby_module_->prepare_service_start(need_bootstrap_))) {
       LOG_ERROR("fail to prepare server service start", KR(ret));
     } else if (need_commit_bootstrap) {
-      storage::ObLocalStorageMetaService *local_meta_service =
-          share::server_service<storage::ObLocalStorageMetaService>();
-      if (OB_ISNULL(local_meta_service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("local storage meta service is null at bootstrap commit", KR(ret));
-      } else if (server_runtime_controller_.is_hidden()) {
-        ret = OB_STATE_NOT_MATCH;
-        LOG_ERROR("hidden runtime cannot commit bootstrap", KR(ret));
-      } else if (OB_FAIL(STORAGE_META_SERVICE.commit_bootstrap())) {
+      if (OB_FAIL(STORAGE_META_SERVICE.commit_bootstrap())) {
         LOG_ERROR("failed to commit bootstrap storage metadata", KR(ret));
       } else {
         FLOG_INFO("bootstrap storage metadata committed");

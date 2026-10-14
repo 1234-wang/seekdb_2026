@@ -38,7 +38,6 @@
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tablet/ob_tablet_service_clog_replay_executor.h"
-#include "storage/meta_store/tablet_loader.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "data_plane/report/ob_tablet_report.h"
@@ -47,7 +46,7 @@
 #include "storage/api/storage/vector/ob_i_vector_index_runtime.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
-#include "storage/meta_store/ob_local_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
