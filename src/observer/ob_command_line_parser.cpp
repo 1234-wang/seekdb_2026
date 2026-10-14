@@ -27,29 +27,15 @@
 #include <unistd.h>
 #endif
 
-namespace {
-constexpr int no_argument = 0;
-constexpr int required_argument = 1;
-struct option { const char *name; int has_arg; int *flag; int val; };
-thread_local bool quiet_parser = false;
-struct ParserOutputGuard {
-  explicit ParserOutputGuard(bool quiet) : previous(quiet_parser) { quiet_parser = quiet; }
-  ~ParserOutputGuard() { quiet_parser = previous; }
-  bool previous;
-};
-}
-
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/ob_version.h"
 
-#define MPRINT(format, ...) do { if (!quiet_parser) fprintf(stderr, format "\n", ##__VA_ARGS__); } while (0)
+#define MPRINT(format, ...) do { if (!quiet_parser_) fprintf(stderr, format "\n", ##__VA_ARGS__); } while (0)
 
 namespace oceanbase {
 namespace observer {
-
-const char *COPYRIGHT  = "Copyright (c) 2011-present OceanBase Inc.";
 
 static int get_executable_name(ObSqlString &exe_name)
 {
@@ -116,38 +102,10 @@ enum ObCommandOption {
 #endif
 };
 
-// Define long options
-static struct option long_options[] = {
-  {"initialize", no_argument,       0, COMMAND_OPTION_INITIALIZE}, // TODO wangyunlai.wyl remove me before 2025-12-01
-  {"variable",   required_argument, 0, COMMAND_OPTION_VARIABLE},
-  {"port",       required_argument, 0, 'P'},
-  {"nodaemon",   no_argument,       0, COMMAND_OPTION_NODAEMON},
-  {"use-ipv6",   no_argument,       0, '6'},
-  {"base-dir",   required_argument, 0, COMMAND_OPTION_BASE_DIR},
-  {"data-dir",   required_argument, 0, COMMAND_OPTION_DATA_DIR},
-  {"redo-dir",   required_argument, 0, COMMAND_OPTION_REDO_DIR},
-  {"log-level",  required_argument, 0, COMMAND_OPTION_LOG_LEVEL},
-  {"parameter",  required_argument, 0, COMMAND_OPTION_PARAMETER},
-  {"role", required_argument, 0, COMMAND_OPTION_ROLE},
-  {"embedded",   no_argument,       0, COMMAND_OPTION_EMBEDDED},
-#ifdef _WIN32
-  {"install-service", no_argument, 0, COMMAND_OPTION_INSTALL_SERVICE},
-  {"remove-service",  no_argument, 0, COMMAND_OPTION_REMOVE_SERVICE},
-  {"service",         no_argument, 0, COMMAND_OPTION_SERVICE},
-#endif
-  {"version",    no_argument,       0, 'V'},
-  {"help",       no_argument,       0, 'h'},
-  {0, 0, 0, 0}
-};
-
-// Define short options string
-static const char* short_options = "P:Vh6";
-
-
 /**
  * Split string into key and value by '='
  */
-static int split_key_value(const ObString &str, ObString &key, ObString &value)
+int ObCommandLineParser::split_key_value(const ObString &str, ObString &key, ObString &value) const
 {
   int ret = OB_SUCCESS;
   if (str.prefix_match("-")) {
@@ -164,7 +122,7 @@ static int split_key_value(const ObString &str, ObString &key, ObString &value)
   return ret;
 }
 
-static int append_key_value(const char *value, ObServerOptions::KeyValueArray &array)
+int ObCommandLineParser::append_key_value(const char *value, ObServerOptions::KeyValueArray &array) const
 {
   int ret = OB_SUCCESS;
   if (nullptr == value) {
@@ -187,7 +145,7 @@ static int append_key_value(const char *value, ObServerOptions::KeyValueArray &a
   return ret;
 }
 
-static int handle_tilde(ObSqlString &dir)
+int ObCommandLineParser::handle_tilde(ObSqlString &dir) const
 {
   int ret = OB_SUCCESS;
   if ((dir.length() == 1 && dir.ptr()[0] == '~') || (dir.string().prefix_match("~/"))) {
@@ -335,7 +293,37 @@ int ObCommandLineParser::parse_args(int argc, const char *const argv[], ObServer
 {
   int ret = OB_SUCCESS;
 
-  ParserOutputGuard output_guard(!command_line);
+  constexpr int no_argument = 0;
+  constexpr int required_argument = 1;
+  struct option { const char *name; int has_arg; int *flag; int val; };
+  // Define long options
+  constexpr option long_options[] = {
+    {"initialize", no_argument,       0, COMMAND_OPTION_INITIALIZE}, // TODO wangyunlai.wyl remove me before 2025-12-01
+    {"variable",   required_argument, 0, COMMAND_OPTION_VARIABLE},
+    {"port",       required_argument, 0, 'P'},
+    {"nodaemon",   no_argument,       0, COMMAND_OPTION_NODAEMON},
+    {"use-ipv6",   no_argument,       0, '6'},
+    {"base-dir",   required_argument, 0, COMMAND_OPTION_BASE_DIR},
+    {"data-dir",   required_argument, 0, COMMAND_OPTION_DATA_DIR},
+    {"redo-dir",   required_argument, 0, COMMAND_OPTION_REDO_DIR},
+    {"log-level",  required_argument, 0, COMMAND_OPTION_LOG_LEVEL},
+    {"parameter",  required_argument, 0, COMMAND_OPTION_PARAMETER},
+    {"role", required_argument, 0, COMMAND_OPTION_ROLE},
+    {"embedded",   no_argument,       0, COMMAND_OPTION_EMBEDDED},
+#ifdef _WIN32
+    {"install-service", no_argument, 0, COMMAND_OPTION_INSTALL_SERVICE},
+    {"remove-service",  no_argument, 0, COMMAND_OPTION_REMOVE_SERVICE},
+    {"service",         no_argument, 0, COMMAND_OPTION_SERVICE},
+#endif
+    {"version",    no_argument,       0, 'V'},
+    {"help",       no_argument,       0, 'h'},
+    {0, 0, 0, 0}
+  };
+
+  // Define short options string
+  constexpr char short_options[] = "P:Vh6";
+
+  quiet_parser_ = !command_line;
   help_requested_ = false;
   version_requested_ = false;
   if (argc < 0 || (argc > 0 && argv == nullptr)) {
@@ -422,7 +410,7 @@ void ObCommandLineParser::print_help() const
   ObSqlString exe_name;
   (void) get_executable_name(exe_name);
 
-  MPRINT("%s", COPYRIGHT);
+  MPRINT("Copyright (c) 2011-present OceanBase Inc.");
   MPRINT();
   MPRINT("Usage: %s [OPTIONS]\n", exe_name.ptr());
   MPRINT("Options:");
@@ -456,7 +444,7 @@ void ObCommandLineParser::print_help() const
   MPRINT();
 }
 
-void ObCommandLineParser::print_version()
+void ObCommandLineParser::print_version() const
 {
   ObSqlString exe_name;
   (void) get_executable_name(exe_name);
@@ -466,7 +454,7 @@ void ObCommandLineParser::print_version()
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s", build_flags());
   MPRINT("BUILD_INFO: %s\n", build_info());
-  MPRINT("%s", COPYRIGHT);
+  MPRINT("Copyright (c) 2011-present OceanBase Inc.");
   MPRINT();
 }
 

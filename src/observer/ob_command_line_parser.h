@@ -50,16 +50,20 @@ public:
   /**
    * 打印版本信息
    */
-  static void print_version();
+  void print_version() const;
 
 
 private:
   // 处理选项值
   int handle_option(int option, const char* value, ObServerOptions& opts);
+  int split_key_value(const ObString &str, ObString &key, ObString &value) const;
+  int append_key_value(const char *value, ObServerOptions::KeyValueArray &array) const;
+  int handle_tilde(ObSqlString &dir) const;
   // 设置字符串到ObString
   int set_ob_string(ObIAllocator& allocator, const char* value, ObString& target);
 
 private:
+  bool quiet_parser_ = false;
   // 解析结果状态
   bool help_requested_    = false;
   bool version_requested_ = false;
