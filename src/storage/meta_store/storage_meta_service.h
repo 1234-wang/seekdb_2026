@@ -24,7 +24,6 @@ namespace oceanbase { namespace storage {
 class ObIServerRuntime;
 class ObLSMeta;
 class ObTablet;
-class ObTabletHandle;
 
 // Process-owned recovery state; the LocalStore is supplied by Observer.
 class StorageMetaService : public share::ObILocalDeviceSpaceProvider
@@ -42,8 +41,7 @@ public:
   int update_ls_meta(const ObLSMeta &meta);
   int update_tablet(const common::ObTabletID &id, const ObMetaDiskAddr &addr);
   int write_empty_shell_tablet(ObTablet *tablet, ObMetaDiskAddr &addr);
-  int remove_tablet(const ObTabletHandle &tablet);
-  int remove_tablets(const common::ObIArray<common::ObTabletID> &ids);
+  int remove_tablet(const common::ObTabletID &id);
   int read_empty_shell(const ObMetaDiskAddr &addr, common::ObArenaAllocator &allocator,
                        char *&buf, int64_t &len);
 private:

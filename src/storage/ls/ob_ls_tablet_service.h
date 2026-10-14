@@ -169,8 +169,9 @@ public:
       const int64_t retry_timeout_us,
       const ObMDSGetTabletMode mode = ObMDSGetTabletMode::READ_READABLE_COMMITED,
       const share::SCN &snapshot = share::SCN::max_scn());
-  int remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array);
-  // Exactly deletion compared with input tablets
+  // Remove the current tablet by ID; a missing tablet is already removed.
+  int remove_tablet(const common::ObTabletID &tablet_id);
+  // Remove only this object; return OB_EAGAIN if it has been replaced.
   int remove_tablet(const ObTabletHandle& tablet_handle);
   int get_ls_min_end_scn(
       share::SCN &min_end_scn_from_latest_tablets,

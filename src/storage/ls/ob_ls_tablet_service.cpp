@@ -269,7 +269,7 @@ int ObLSTabletService::remove_tablet(const ObTabletHandle& tablet_handle)
       ret = OB_EAGAIN;
       LOG_INFO("tablet object has been changed, need retry", K(ret), K(key), K(target_tablet), KPC(cur_tablet_handle.get_obj()));
     } else {
-      if (OB_FAIL(STORAGE_META_SERVICE.remove_tablet(tablet_handle))) {
+      if (OB_FAIL(STORAGE_META_SERVICE.remove_tablet(tablet_id))) {
       } else if (OB_FAIL(tablet_handle.get_obj()->wait_release_memtables())) {
       } else if (OB_FAIL(inner_remove_tablet(tablet_id))) {
         LOG_ERROR("failed to do remove tablet", K(ret), K(tablet_id));
@@ -283,83 +283,36 @@ int ObLSTabletService::remove_tablet(const ObTabletHandle& tablet_handle)
   return ret;
 }
 
-int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array)
+int ObLSTabletService::remove_tablet(const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t tablet_cnt = tablet_id_array.count();
-  ObSArray<uint64_t> all_tablet_id_hash_array;
-  ObSArray<ObTabletID> tablet_ids;
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(0 == tablet_cnt)) {
+  } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(all_tablet_id_hash_array.reserve(tablet_cnt))) {
-  } else if (OB_FAIL(tablet_ids.reserve(tablet_cnt))) {
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_cnt; ++i) {
-      const ObTabletID &tablet_id = tablet_id_array.at(i);
-      if (OB_FAIL(all_tablet_id_hash_array.push_back(tablet_id.hash()))) {
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+    const ObTabletMapKey key(tablet_id);
+    ObTabletHandle tablet_handle;
     ObMetaDiskAddr tablet_addr;
-    ObTimeGuard time_guard("ObLSTabletService::remove_tablets", 1_s);
-    ObMultiBucketLockGuard lock_guard(bucket_lock_, true/*is_write_lock*/);
-    if (OB_FAIL(lock_guard.lock_multi_buckets(all_tablet_id_hash_array))) {
-    } else {
-      time_guard.click("Lock");
-      ObTabletHandle tablet_handle;
-      ObTabletMapKey key;
-
-      // check tablet existence
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_cnt; ++i) {
-        const ObTabletID &tablet_id = tablet_id_array.at(i);
-        key.tablet_id_ = tablet_id;
-        tablet_addr.reset();
-        if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
-          if (OB_TABLET_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-            LOG_INFO("tablet does not exist, maybe already deleted", K(ret), K(key));
-          } else {
-          }
-        } else if (OB_FAIL(tablet_handle.get_obj()->wait_release_memtables())) {
-        } else if (OB_FAIL(tablet_handle.get_obj()->get_meta_disk_addr(tablet_addr))) {
-        } else if (!tablet_addr.is_disked()) {
-          if (OB_FAIL(inner_remove_tablet(tablet_id))) {
-          } else {
-            FLOG_INFO("succeeded to remove non disked tablet from memory", K(ret), K(key));
-          }
-        } else if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-        }
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+    if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("tablet does not exist, maybe already deleted", K(ret), K(key));
       }
-
-      // persist deletion before removing the in-memory tablet
-      if (OB_FAIL(ret)) {
-      } else if (tablet_ids.empty()) {
-        LOG_INFO("all tablets already deleted, do nothing", K(ret), K(tablet_id_array));
-      } else if (OB_FAIL(STORAGE_META_SERVICE.remove_tablets(tablet_ids))) {
-      } else {
-        time_guard.click("PersistMeta");
-        for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-          const ObTabletID &tablet_id = tablet_ids.at(i);
-          if (OB_FAIL(inner_remove_tablet(tablet_id))) {
-            LOG_ERROR("failed to do remove tablet", K(ret), K(tablet_id));
-            ob_usleep(1_s);
-            ob_abort();
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          report_tablet_to_rs(tablet_ids);
-          time_guard.click("ReportToRS");
-        }
+    } else if (OB_FAIL(tablet_handle.get_obj()->wait_release_memtables())) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_meta_disk_addr(tablet_addr))) {
+    } else if (tablet_addr.is_disked() && OB_FAIL(STORAGE_META_SERVICE.remove_tablet(tablet_id))) {
+    } else if (OB_FAIL(inner_remove_tablet(tablet_id))) {
+      if (tablet_addr.is_disked()) {
+        LOG_ERROR("failed to do remove tablet", K(ret), K(tablet_id));
+        ob_usleep(1_s);
+        ob_abort();
       }
+    } else if (tablet_addr.is_disked()) {
+      report_tablet_to_rs(tablet_id);
     }
   }
-
   return ret;
 }
 

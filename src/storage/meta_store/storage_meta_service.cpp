@@ -238,34 +238,17 @@ int StorageMetaService::write_empty_shell_tablet(ObTablet *tablet, ObMetaDiskAdd
   return ret;
 }
 
-int StorageMetaService::remove_tablet(const ObTabletHandle &tablet)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObTabletID, 1> ids;
-  if (!tablet.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(ids.push_back(tablet.get_obj()->get_tablet_meta().tablet_id_))) {
-  } else {
-    ret = remove_tablets(ids);
-  }
-  return ret;
-}
-
-int StorageMetaService::remove_tablets(const ObIArray<ObTabletID> &ids)
+int StorageMetaService::remove_tablet(const ObTabletID &id)
 {
   int ret = OB_SUCCESS;
   using namespace storage_tablet;
   if (store_ == nullptr) {
     ret = OB_NOT_INIT;
-  } else if (!ids.empty()) {
-    ret = check_commit(store_->write([&](LocalTransaction &tx) {
-      int result = OB_SUCCESS;
-      for (int64_t i = 0; OB_SUCCESS == result && i < ids.count(); ++i) {
-        result = ids.at(i).is_valid() ? tx.execute(LocalRequest::erase(storage_tablet::schema())
-            .eq(TabletId, static_cast<int64_t>(ids.at(i).id()))) : OB_INVALID_ARGUMENT;
-      }
-      return result;
-    }));
+  } else if (!id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    ret = check_commit(store_->execute(LocalRequest::erase(storage_tablet::schema())
+        .eq(TabletId, static_cast<int64_t>(id.id()))));
   }
   return ret;
 }

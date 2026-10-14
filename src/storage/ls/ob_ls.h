@@ -317,12 +317,7 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, build_tablet_iter, int);
   // update medium compaction info for tablet
   DELEGATE_WITH_RET(ls_tablet_svr_, update_medium_compaction_info, int);
-  // remove tablets
-  // @param [in] tbalet_ids ObIArray<ObTabletId>
-  // @param [out] null
-  // int remote_tablets(
-  //     const common::ObIArray<common::ObTabletID> &tablet_id_array);
-  DELEGATE_WITH_RET(ls_tablet_svr_, remove_tablets, int);
+  DELEGATE_WITH_RET(ls_tablet_svr_, remove_tablet, int);
   // create_ls_inner_tablet
   // @param [in] tablet_id
   // @param [in] frozen_timestamp
