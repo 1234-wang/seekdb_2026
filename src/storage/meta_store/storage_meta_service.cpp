@@ -257,18 +257,15 @@ int StorageMetaService::remove_tablets(const ObIArray<ObTabletID> &ids)
   using namespace storage_tablet;
   if (store_ == nullptr) {
     ret = OB_NOT_INIT;
-  } else {
-    // Batch deletion has no all-or-nothing contract. Bound each transaction's page use.
-    for (int64_t start = 0; OB_SUCC(ret) && start < ids.count(); start += 128) {
-      ret = check_commit(store_->write([&](LocalTransaction &tx) {
-        int result = OB_SUCCESS;
-        for (int64_t i = start; OB_SUCCESS == result && i < std::min(start + 128, ids.count()); ++i) {
-          result = ids.at(i).is_valid() ? tx.execute(LocalRequest::erase(storage_tablet::schema())
-              .eq(TabletId, static_cast<int64_t>(ids.at(i).id()))) : OB_INVALID_ARGUMENT;
-        }
-        return result;
-      }));
-    }
+  } else if (!ids.empty()) {
+    ret = check_commit(store_->write([&](LocalTransaction &tx) {
+      int result = OB_SUCCESS;
+      for (int64_t i = 0; OB_SUCCESS == result && i < ids.count(); ++i) {
+        result = ids.at(i).is_valid() ? tx.execute(LocalRequest::erase(storage_tablet::schema())
+            .eq(TabletId, static_cast<int64_t>(ids.at(i).id()))) : OB_INVALID_ARGUMENT;
+      }
+      return result;
+    }));
   }
   return ret;
 }
