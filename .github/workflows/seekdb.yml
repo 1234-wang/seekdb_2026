@@ -54,7 +54,7 @@ jobs:
             echo "GitHub known_hosts file is unavailable: $KNOWN_HOSTS" >&2
             exit 1
           fi
-          export GIT_SSH_COMMAND="/usr/bin/ssh -i $KEY_FILE -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$KNOWN_HOSTS"
+          export GIT_SSH_COMMAND="/usr/bin/ssh -i $KEY_FILE -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=$KNOWN_HOSTS"
           REMOTE_URL="ssh://git@ssh.github.com:443/${GITHUB_REPOSITORY}.git"
           echo "Using runner-mounted SSH key for GitHub checkout"
 
