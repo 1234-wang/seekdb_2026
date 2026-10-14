@@ -499,11 +499,8 @@ static int parse_args(int argc, char *argv[], ObServerOptions &opts)
   ret = parser.parse_args(argc - 1, argv + 1, opts);
   if (OB_ITER_END == ret) {
     // Help/version are handled by the executable, never by the embedded API.
-#ifdef __APPLE__
-    _exit(0);
-#else
-    exit(0);
-#endif
+    fflush(stderr);
+    _Exit(0);
   }
   if (OB_FAIL(ret)) {
     MPRINT("Failed to parse command line arguments, ret=%d", ret);
