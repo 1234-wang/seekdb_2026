@@ -14,11 +14,13 @@ typedef struct SeekdbEngineImpl *SeekdbEngineHandle;
  * installs process signal handlers, or redirects stdout/stderr.
  *
  * Returns NULL on failure. Optional error_code receives zero or an OceanBase
- * error code. Optional error_message receives NULL on success or a static,
- * read-only description of the error code on failure. Do not modify or free
- * this string; it remains valid until the library is unloaded, including
- * after subsequent open/close calls. Details of startup failures are in the
- * engine log. Either output parameter may be NULL.
+ * error code. Optional error_message receives NULL on success or a borrowed,
+ * read-only diagnostic on failure, including the startup stage and available
+ * system error details. Do not modify or free this string. It remains valid
+ * until the next open call on the same thread, thread exit, or library unload.
+ * Copy it to retain it longer. Calls on other threads do not overwrite it.
+ * Server-internal details may also require inspecting the engine log.
+ * Either output parameter may be NULL.
  * Help/version are invalid library arguments (they never exit).
  * One engine may be active per process. The current core supports one engine
  * lifetime per process; once core initialization has been attempted, another
