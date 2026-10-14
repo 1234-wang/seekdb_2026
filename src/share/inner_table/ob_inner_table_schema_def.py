@@ -4820,6 +4820,7 @@ def_table_schema(
 def_local_table(
   table_name = '__all_deadlock_event_history',
   table_id = '12209',
+  virtual_table = True,
   namespace = 'deadlock_history',
   namespace_id = 2,
   columns = [
@@ -4953,6 +4954,7 @@ def_table_schema(
 def_local_table(
   table_name = '__all_tablet_meta_table',
   table_id = '12240',
+  virtual_table = True,
   namespace = 'tablet_meta',
   namespace_id = 3,
   columns = [
@@ -5032,6 +5034,7 @@ def_table_schema(
 def_local_table(
   table_name = '__all_tablet_local_checksum',
   table_id = '12258',
+  virtual_table = True,
   namespace = 'tablet_checksum',
   namespace_id = 4,
   columns = [
@@ -5255,6 +5258,7 @@ def_table_schema(
 def_local_table(
   table_name = '__all_merge_info',
   table_id = '12291',
+  virtual_table = True,
   namespace = 'merge_info',
   namespace_id = 0,
   columns = [
@@ -5473,6 +5477,7 @@ def_table_schema(
 def_local_table(
   table_name = '__all_column_checksum_error_info',
   table_id = '12330',
+  virtual_table = True,
   namespace = 'checksum_error',
   namespace_id = 1,
   columns = [
@@ -6354,6 +6359,7 @@ def_table_schema(
 def_local_table(
   table_name = '__all_rootservice_job',
   table_id = '12563',
+  virtual_table = True,
   namespace = 'admin_job',
   namespace_id = 5,
   columns = [
@@ -6387,7 +6393,6 @@ def_table_schema(
 
 def_local_table(
   table_name = '__all_storage_runtime',
-  table_id = '12565',
   namespace = 'storage_runtime',
   namespace_id = 6,
   columns = [
@@ -6400,7 +6405,6 @@ def_local_table(
 
 def_local_table(
   table_name = '__all_storage_ls',
-  table_id = '12566',
   namespace = 'storage_ls',
   namespace_id = 7,
   columns = [
@@ -6412,7 +6416,6 @@ def_local_table(
 
 def_local_table(
   table_name = '__all_storage_tablet',
-  table_id = '12567',
   namespace = 'storage_tablet',
   namespace_id = 8,
   columns = [
