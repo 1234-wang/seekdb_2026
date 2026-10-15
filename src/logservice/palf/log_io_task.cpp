@@ -220,8 +220,7 @@ int64_t LogIOFlushLogTask::get_io_size_() const
 LogIOFlushMetaTask::LogIOFlushMetaTask(const int64_t palf_epoch) :
 	LogIOTask(palf_epoch),
 	flush_meta_cb_ctx_(),
-  buf_(NULL),
-  buf_len_(0),
+  meta_(),
   is_inited_(false)
 {
 }
@@ -231,23 +230,16 @@ LogIOFlushMetaTask::~LogIOFlushMetaTask()
   destroy();
 }
 
-int LogIOFlushMetaTask::init(const FlushMetaCbCtx &flush_meta_cb_ctx,
-                             const char *buf,
-                             const int64_t buf_len)
+int LogIOFlushMetaTask::init(const FlushMetaCbCtx &flush_meta_cb_ctx, const LogMeta &meta)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    PALF_LOG(ERROR, "LogIOFlushMetaTask has inited!!!", K(ret));
-  } else if (false == flush_meta_cb_ctx.is_valid()
-             || NULL == buf || 0 >= buf_len) {
+  } else if (!flush_meta_cb_ctx.is_valid() || !meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(flush_meta_cb_ctx),
-        KP(buf), K(buf_len));
   } else {
     flush_meta_cb_ctx_ = flush_meta_cb_ctx;
-		buf_ = buf;
-    buf_len_ = buf_len;
+    meta_ = meta;
     is_inited_ = true;
   }
   return ret;
@@ -255,15 +247,9 @@ int LogIOFlushMetaTask::init(const FlushMetaCbCtx &flush_meta_cb_ctx,
 
 void LogIOFlushMetaTask::destroy()
 {
-  if (IS_INIT) {
-    is_inited_ = false;
-    buf_len_ = 0;
-    if (NULL != buf_) {
-      server_free(const_cast<char*>(buf_));
-      buf_ = NULL;
-    }
-    flush_meta_cb_ctx_.reset();
-  }
+  is_inited_ = false;
+  meta_.reset();
+  flush_meta_cb_ctx_.reset();
 }
 
 int LogIOFlushMetaTask::do_task_(LogIOTaskCbThreadPool *cb_thread_pool, IPalfHandleImplGuard &guard)
@@ -272,7 +258,7 @@ int LogIOFlushMetaTask::do_task_(LogIOTaskCbThreadPool *cb_thread_pool, IPalfHan
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushMetaTask not inited!!!", K(ret));
-  } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_append_meta(buf_, buf_len_))) {
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_persist_meta(meta_))) {
   } else if (OB_FAIL(push_task_into_cb_thread_pool_(cb_thread_pool, this))) {
   } else {
   }

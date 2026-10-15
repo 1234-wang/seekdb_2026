@@ -21,6 +21,7 @@
 #include "lib/utility/ob_print_utils.h"          // TO_STRING_KV
 #include "share/log/palf/lsn.h"                                 // LSN
 #include "log_io_task_cb_utils.h"                // FlushLogCbCtx
+#include "log_meta.h"
 #include "log_writer_utils.h"                    // LogWriteBuf
 
 namespace oceanbase
@@ -135,9 +136,7 @@ public:
   ~LogIOFlushMetaTask() override;
 
 public:
-  int init(const FlushMetaCbCtx &flush_cb_ctx,
-           const char *buf,
-           const int64_t buf_len);
+  int init(const FlushMetaCbCtx &flush_cb_ctx, const LogMeta &meta);
   void destroy();
   INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(flush_meta_cb_ctx));
 
@@ -146,13 +145,12 @@ private:
   int after_consume_(IPalfHandleImplGuard &guard) override final;
   LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLUSH_META_TYPE; }
   void free_this_(IPalfEnvImpl *palf_env_impl) override final;
-  int64_t get_io_size_() const override final {return buf_len_;}
+  int64_t get_io_size_() const override final { return meta_.get_serialize_size(); }
   bool need_purge_throttling_() const override final {return true;}
 
 private:
   FlushMetaCbCtx flush_meta_cb_ctx_;
-  const char *buf_;
-  int64_t buf_len_;
+  LogMeta meta_;
   bool is_inited_;
 };
 

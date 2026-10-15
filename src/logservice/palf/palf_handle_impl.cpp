@@ -63,7 +63,7 @@ PalfHandleImpl::~PalfHandleImpl()
   destroy();
 }
 
-int PalfHandleImpl::init(const AccessMode &access_mode,
+int PalfHandleImpl::init(share::LocalStore &store, const AccessMode &access_mode,
                          const PalfBaseInfo &palf_base_info,
                          const char *log_dir,
                          ObILogAllocator *alloc_mgr,
@@ -100,8 +100,8 @@ int PalfHandleImpl::init(const AccessMode &access_mode,
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret));
-  } else if (OB_FAIL(log_engine_.init(log_dir, log_meta, alloc_mgr, log_block_pool, &log_cache_, \
-          log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE, io_adapter))) {
+  } else if (OB_FAIL(log_engine_.init(store, log_dir, log_meta, alloc_mgr, log_block_pool, &log_cache_, \
+          log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, io_adapter))) {
   } else if (OB_FAIL(do_init_mem_(palf_base_info, log_meta, log_dir, self,
           alloc_mgr, palf_env_impl))) {
   } else {
@@ -117,7 +117,7 @@ bool PalfHandleImpl::check_can_be_used() const
   return false == ATOMIC_LOAD(&has_set_deleted_);
 }
 
-int PalfHandleImpl::load(const char *log_dir,
+int PalfHandleImpl::load(share::LocalStore &store, const char *log_dir,
                          ObILogAllocator *alloc_mgr,
                          ILogBlockPool *log_block_pool,
                          LogIOWorker *log_io_worker,
@@ -144,9 +144,9 @@ int PalfHandleImpl::load(const char *log_dir,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(log_dir), K(alloc_mgr),
         K(log_io_worker), K(log_shared_queue_th));
-  } else if (OB_FAIL(log_engine_.load(log_dir, alloc_mgr, log_block_pool, &log_cache_,
+  } else if (OB_FAIL(log_engine_.load(store, log_dir, alloc_mgr, log_block_pool, &log_cache_,
         log_io_worker, log_shared_queue_th, &plugins_, last_group_entry_header_lsn, entry_header, palf_epoch, PALF_BLOCK_SIZE,
-        PALF_META_BLOCK_SIZE, io_adapter, is_integrity))) {
+        io_adapter, is_integrity))) {
   } else if (false == is_integrity) {
     PALF_LOG(INFO, "log stream is incomplete", KPC(this));
   } else if (FALSE_IT(snapshot_meta = log_engine_.get_log_meta().get_log_snapshot_meta())) {
@@ -673,21 +673,9 @@ int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
   return ret;
 }
 
-int PalfHandleImpl::inner_append_meta(const char *buf,
-                                      const int64_t buf_len)
+int PalfHandleImpl::inner_persist_meta(const LogMeta &meta)
 {
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(ERROR, "PalfHandleImpl not inited");
-  } else if (NULL == buf
-             || 0 >= buf_len) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument", K(ret), KPC(this), K(buf), K(buf_len));
-  } else if (OB_FAIL(log_engine_.append_meta(buf, buf_len))) {
-  } else {
-  }
-  return ret;
+  return IS_NOT_INIT ? OB_NOT_INIT : log_engine_.persist_meta(meta);
 }
 
 int PalfHandleImpl::inner_truncate_prefix_blocks(const LSN &lsn)
