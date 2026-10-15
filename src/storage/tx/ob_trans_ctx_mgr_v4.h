@@ -243,7 +243,7 @@ public:
   int block_normal(bool &is_all_tx_cleaned_up);
   int unblock_normal();
   int online();
-  int takeover_replayed_transactions();
+  int switch_to_leader();
 
   // Get the TxCtx count in this ObLSTxCtxMgr;
   int64_t get_tx_ctx_count() const { return get_tx_ctx_count_(); }

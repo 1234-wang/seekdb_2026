@@ -456,8 +456,8 @@ int ObLSTxService::activate()
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
-  } else if (OB_FAIL(mgr_->takeover_replayed_transactions())) {
-    TRANS_LOG(WARN, "failed to take over replayed local transactions", K(ret));
+  } else if (OB_FAIL(mgr_->switch_to_leader())) {
+    TRANS_LOG(WARN, "switch to leader failed", K(ret));
   } else if (OB_FAIL(mgr_->online())) {
     TRANS_LOG(WARN, "failed to admit local transactions", K(ret));
   }

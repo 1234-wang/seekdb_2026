@@ -164,7 +164,7 @@ public:
 
   int check_tx_status();
   // Called only after replay is drained and local log append is enabled.
-  int takeover_from_replay();
+  int switch_to_leader();
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
   int check_with_tx_data(ObITxDataCheckFunctor &fn);

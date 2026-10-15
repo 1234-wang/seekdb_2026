@@ -985,58 +985,6 @@ int ObTxCtx::gc_ctx_()
   return ret;
 }
 
-int ObTxCtx::takeover_from_replay()
-{
-  int ret = OB_SUCCESS;
-  CtxLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (!is_for_replay() || is_exiting_ || is_decided()) {
-    // Repeated activation must not change live local or finished transactions.
-  } else if (!replay_completeness_.is_complete() || is_logging_() || pending_write_) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "cannot take over an incomplete replay context", K(ret), KPC(this));
-  } else if (get_downstream_state() != ObTxState::INIT
-             && get_downstream_state() != ObTxState::REDO_COMPLETE) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "unexpected undecided replay transaction state", K(ret), KPC(this));
-  } else {
-    // INIT has no durable commit intent and its previous owner has gone away.
-    // As on OceanBase leader takeover, an undecided MDS table-lock transaction
-    // must abort even if its commit-info log has already been replayed.
-    const bool abort_tx = get_downstream_state() == ObTxState::INIT
-                          || is_contain_mds_type_(ObTxDataSourceType::TABLE_LOCK)
-                          || runtime_state_.is_force_abort();
-    commit_retry_timeout_ = get_commit_retry_interval_us_();
-    if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
-      (void)mt_ctx_.commit_to_replay();
-    } else if (OB_FAIL(register_timeout_task_(commit_retry_timeout_))) {
-      // Leave the context replay-only so activation can safely retry.
-      (void)mt_ctx_.commit_to_replay();
-    } else {
-      set_for_replay(false);
-      commit_cb_.disable();
-      if (abort_tx) {
-        part_trans_action_ = ObPartTransAction::ABORT;
-        runtime_state_.set_force_abort();
-        set_target_state(ObTxState::ABORT);
-        // The timeout is armed before the first attempt. It retries both the
-        // MDS TX_END notification and the durable abort if this attempt fails.
-        const int tmp_ret = do_local_tx_end_(TxEndAction::ABORT_TX);
-        if (OB_SUCCESS != tmp_ret) {
-          TRANS_LOG(WARN, "recovered transaction abort will retry", K(tmp_ret), KPC(this));
-        }
-      } else {
-        // Preserve the existing REDO_COMPLETE commit-recovery protocol. The
-        // timer also tolerates timestamp services becoming ready after LS online.
-        part_trans_action_ = ObPartTransAction::COMMIT;
-      }
-      TRANS_LOG(INFO, "replayed transaction taken over for local completion", K(abort_tx), KPC(this));
-    }
-  }
-  return ret;
-}
-
 int ObTxCtx::check_tx_status()
 {
   if (OB_SUCCESS == lock_.try_lock()) {
@@ -4282,6 +4230,71 @@ bool ObTxCtx::is_committing_() const
 {
   return ObTxState::INIT != exec_info_.state_ || ObPartTransAction::COMMIT == part_trans_action_
          || ObPartTransAction::ABORT == part_trans_action_;
+}
+
+int ObTxCtx::switch_to_leader()
+{
+  int ret = OB_SUCCESS;
+
+  common::ObTimeGuard timeguard("switch to leader", 10 * 1000);
+  CtxLockGuard guard(lock_);
+  timeguard.click();
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTxCtx not inited");
+    ret = OB_NOT_INIT;
+  } else if (!is_for_replay() || is_exiting_ || is_decided()) {
+    // Repeated activation must not change live local or finished transactions.
+  } else if (!replay_completeness_.is_complete() || is_logging_() || pending_write_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "incomplete replayed ctx should not switch to leader", K(ret), KPC(this));
+    print_trace_log_();
+  } else if (get_downstream_state() != ObTxState::INIT
+             && get_downstream_state() != ObTxState::REDO_COMPLETE) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected undecided replay transaction state", K(ret), KPC(this));
+  } else {
+    const bool contain_mds_table_lock = is_contain_mds_type_(ObTxDataSourceType::TABLE_LOCK);
+    // SeekDB has no surviving scheduler to notify after replay. Adapt the old
+    // INIT takeover branch to abort locally; REDO_COMPLETE keeps commit recovery
+    // unless a table-lock MDS transaction or a previous force-abort requires abort.
+    const bool abort_tx = ObTxState::INIT == exec_info_.state_
+                          || contain_mds_table_lock || runtime_state_.is_force_abort();
+    commit_retry_timeout_ = get_commit_retry_interval_us_();
+    if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
+      TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
+      (void)mt_ctx_.commit_to_replay();
+    } else if (OB_FAIL(register_timeout_task_(commit_retry_timeout_))) {
+      // Arm the completion driver before leaving replay mode. On failure,
+      // restore replay protection so activation can retry safely.
+      TRANS_LOG(WARN, "register timeout handler error", KR(ret), K(*this));
+      (void)mt_ctx_.commit_to_replay();
+    } else {
+      set_for_replay(false);
+      commit_cb_.disable();
+      // Discard replay-side segment state before submitting any local end log.
+      big_segment_info_.reuse();
+      if (abort_tx) {
+        part_trans_action_ = ObPartTransAction::ABORT;
+        runtime_state_.set_force_abort();
+        set_target_state(ObTxState::ABORT);
+        // Retry both MDS TX_END preparation and durable abort on the timeout.
+        const int tmp_ret = do_local_tx_end_(TxEndAction::ABORT_TX);
+        if (OB_SUCCESS != tmp_ret) {
+          TRANS_LOG(WARN, "abort tx failed, waiting for handle_timeout to retry", K(tmp_ret), KPC(this));
+        }
+      } else {
+        // Timestamp services may become ready after LS online.
+        part_trans_action_ = ObPartTransAction::COMMIT;
+      }
+      last_request_ts_ = ObClockGenerator::getClock();
+      TRANS_LOG(INFO, "switch to leader succeed", K(abort_tx), KPC(this));
+    }
+  }
+  timeguard.click();
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "switch to leader failed", KR(ret), KPC(this));
+  }
+  return ret;
 }
 
 inline bool ObTxCtx::need_commit_callback_() {

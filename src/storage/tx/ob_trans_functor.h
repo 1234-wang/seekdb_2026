@@ -152,6 +152,35 @@ private:
 #define PRINT_FUNC_STAT func_stat_.print_stat_();
 #define FORCE_PRINT_FUNC_STAT func_stat_.print_stat_(true);
 
+class SwitchToLeaderFunctor
+{
+public:
+  SwitchToLeaderFunctor() : ret_(common::OB_SUCCESS)
+  {
+    SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
+  }
+  ~SwitchToLeaderFunctor() { PRINT_FUNC_STAT; }
+  OPERATOR_V4(SwitchToLeaderFunctor)
+  {
+    bool bool_ret = false;
+    int tmp_ret = common::OB_SUCCESS;
+
+    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
+      ret_ = common::OB_INVALID_ARGUMENT;
+      TRANS_LOG_RET(WARN, ret_, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
+    } else if (OB_TMP_FAIL(tx_ctx->switch_to_leader())) {
+      TRANS_LOG_RET(WARN, tmp_ret, "switch_to_leader error", "ret", tmp_ret, K(*tx_ctx));
+      ret_ = tmp_ret;
+    } else {
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+  int get_ret() const { return ret_; }
+private:
+  int ret_;
+};
+
 class KillTxCtxFunctor
 {
 public:

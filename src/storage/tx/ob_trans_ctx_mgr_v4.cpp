@@ -581,10 +581,11 @@ int ObLSTxCtxMgr::block_normal(bool &is_all_tx_cleaned_up)
   return ret;
 }
 
-int ObLSTxCtxMgr::takeover_replayed_transactions()
+int ObLSTxCtxMgr::switch_to_leader()
 {
   int ret = OB_SUCCESS;
   bool all_cleaned_up = false;
+  SwitchToLeaderFunctor fn;
   ObLSTxCtxIterator iter;
   ObTxCtx *ctx = nullptr;
 
@@ -604,7 +605,9 @@ int ObLSTxCtxMgr::takeover_replayed_transactions()
       }
       // The iterator owns a context reference. Do not hold the manager lock
       // across MDS notifications or transaction log submission.
-      ret = ctx->takeover_from_replay();
+      if (!fn(ctx)) {
+        ret = fn.get_ret();
+      }
       const int tmp_ret = iter.revert_tx_ctx(ctx);
       ctx = nullptr;
       if (OB_SUCCESS != tmp_ret && OB_SUCC(ret)) {
@@ -612,7 +615,7 @@ int ObLSTxCtxMgr::takeover_replayed_transactions()
       }
     }
   }
-  TRANS_LOG(INFO, "take over replayed local transactions", K(ret), KPC(this));
+  FLOG_INFO("[LsTxCtxMgr Role Change] switch_to_leader", K(ret), KPC(this));
   return ret;
 }
 
