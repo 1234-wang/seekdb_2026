@@ -6438,6 +6438,18 @@ def_local_table(
   primary_key = ['id'],
 )
 
+def_local_table(
+  table_name = '__all_telemetry',
+  namespace = 'telemetry',
+  namespace_id = 10,
+  columns = [
+    ('id', 'int', 'false'),
+    ('payload', 'varchar:65536', 'false'),
+    ('sent', 'int', 'false'),
+  ],
+  primary_key = ['id'],
+)
+
 
 # Reserved position (placeholder before this line)
 # Placeholder suggestion for this section: Use actual table names for placeholders

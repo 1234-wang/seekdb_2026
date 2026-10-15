@@ -616,7 +616,7 @@ ObServer::ObServer()
     session_mgr_(),
     standby_host_(nullptr),
     standby_module_(nullptr),
-    ob_service_(gctx_, *this),
+    ob_service_(gctx_, *this, local_store_),
     debug_sync_broadcaster_(ob_service_),
     server_runtime_controller_(), vt_data_service_(local_management_service_, self_addr_),
     start_time_(ObTimeUtility::current_time()),

@@ -142,7 +142,7 @@ int TelemetryTask::report()
 {
   const char *env_reporter = std::getenv("REPORTER");
   const char *reporter = env_reporter ? env_reporter : (GCTX.is_embedded_mode() ? "embed" : "server");
-  return share::report_telemetry(reporter, "bootstraped");
+  return share::report_telemetry(store_, reporter, "bootstraped");
 }
 
 //////////////////////////////////////
@@ -150,14 +150,15 @@ int TelemetryTask::report()
 // here gctx may hasn't been initialized already
 ObService::ObService(
     const ObGlobalContext &gctx,
-    query::ObIChangeStreamService &change_stream_service)
+    query::ObIChangeStreamService &change_stream_service,
+    share::LocalStore &store)
     : inited_(false),
     stopped_(false),
     schema_updater_(),
     gctx_(gctx),
     change_stream_service_(change_stream_service),
     schema_release_task_(),
-    telemetry_task_()
+    telemetry_task_(store)
 {
 }
 
