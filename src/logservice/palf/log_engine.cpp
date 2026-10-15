@@ -33,9 +33,9 @@ LogEngine::LogEngine() :
     min_block_info_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     min_block_max_scn_(),
     min_block_id_(LOG_INVALID_BLOCK_ID),
-    base_lsn_for_block_gc_(PALF_INITIAL_LSN_VAL),
     min_block_min_scn_(),
     min_block_info_cache_version_(0),
+    meta_write_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     log_meta_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     log_meta_(),
     store_(nullptr),
@@ -45,7 +45,6 @@ LogEngine::LogEngine() :
     log_shared_queue_th_(NULL),
     plugins_(NULL),
     palf_epoch_(-1),
-    last_purge_throttling_ts_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {}
 
@@ -84,7 +83,6 @@ int LogEngine::init(share::LocalStore &store, const char *base_dir,
       log_shared_queue_th_ = log_shared_queue_th;
       plugins_ = plugins;
       palf_epoch_ = palf_epoch;
-      base_lsn_for_block_gc_ = log_meta.get_log_snapshot_meta().base_lsn_;
       is_inited_ = true;
       PALF_LOG(INFO, "LogEngine init success", K(base_dir), K(palf_epoch));
     }
@@ -107,12 +105,10 @@ void LogEngine::destroy()
     store_ = nullptr;
     log_meta_.reset();
     log_storage_.destroy();
-    base_lsn_for_block_gc_.reset();
     min_block_id_ = LOG_INVALID_BLOCK_ID;
     min_block_max_scn_.reset();
     min_block_min_scn_.reset();
     min_block_info_cache_version_ = 0;
-    last_purge_throttling_ts_ = OB_INVALID_TIMESTAMP;
   }
 }
 
@@ -166,7 +162,6 @@ int LogEngine::load(share::LocalStore &store, const char *base_dir,
       alloc_mgr_ = alloc_mgr;
       log_io_worker_ = log_io_worker;
       log_shared_queue_th_ = log_shared_queue_th;
-      base_lsn_for_block_gc_ = base_lsn;
       is_inited_ = true;
       PALF_LOG(INFO, "LogEngine load success", K(log_meta_), K(log_storage_), K(palf_epoch));
     }
@@ -252,31 +247,6 @@ int LogEngine::submit_handle_submit_task()
   return ret;
 }
 
-int LogEngine::submit_flush_snapshot_meta_task(const FlushMetaCbCtx &flush_meta_cb_ctx,
-                                               const LogSnapshotMeta &log_snapshot_meta)
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(log_meta_lock_);
-  const LSN &curr_base_lsn = log_meta_.get_log_snapshot_meta().base_lsn_;
-  const LogSnapshotMeta prev_log_snapshot_meta = log_meta_.get_log_snapshot_meta();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret));
-  } else if (false == flush_meta_cb_ctx.is_valid() || false == log_snapshot_meta.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(flush_meta_cb_ctx), K(log_snapshot_meta));
-  } else if (log_snapshot_meta.base_lsn_ != curr_base_lsn &&
-      OB_FAIL(log_meta_.update_log_snapshot_meta(log_snapshot_meta))) {
-    PALF_LOG(WARN, "update_log_snapshot_meta failed", K(log_snapshot_meta));
-  } else if (OB_FAIL(submit_flush_meta_task_(flush_meta_cb_ctx, log_meta_))) {
-    // revert snapshot meta, otherwise next flush request will be ignored
-    log_meta_.update_log_snapshot_meta(prev_log_snapshot_meta);
-    PALF_LOG(WARN, "submit_flush_snapshot_meta_task_ failed", K(ret), K(flush_meta_cb_ctx), K_(is_inited));
-  } else {
-  }
-  return ret;
-}
-
 int LogEngine::submit_truncate_prefix_blocks_task(
     const TruncatePrefixBlocksCbCtx &truncate_prefix_blocks_ctx)
 {
@@ -298,35 +268,6 @@ int LogEngine::submit_truncate_prefix_blocks_task(
   if (OB_FAIL(ret) && OB_NOT_NULL(truncate_prefix_blocks_task)) {
     alloc_mgr_->free_log_io_truncate_prefix_blocks_task(truncate_prefix_blocks_task);
     truncate_prefix_blocks_task = NULL;
-  }
-  return ret;
-}
-
-int LogEngine::submit_purge_throttling_task(const PurgeThrottlingType purge_type)
-{
-  int ret = OB_SUCCESS;
-  PurgeThrottlingCbCtx purge_cb_ctx(purge_type);
-  LogIOPurgeThrottlingTask *purge_task = NULL;
-  const int64_t cur_ts = ObClockGenerator::getClock();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret));
-  } else if (OB_UNLIKELY(!purge_cb_ctx.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(purge_cb_ctx));
-  } else if (cur_ts - last_purge_throttling_ts_ <= PURGE_THROTTLING_INTERVAL) {
-    PALF_LOG(INFO, "no need to purge throttling according to PURGE_THROTTLING_INTERVAL",
-    K(purge_cb_ctx), K(last_purge_throttling_ts_), K(cur_ts), K(PURGE_THROTTLING_INTERVAL));
-  } else if (OB_FAIL(generate_purge_throttling_task_(purge_cb_ctx, purge_task))) {
-  } else if (OB_FAIL(log_io_worker_->submit_io_task(purge_task))) {
-  } else {
-    last_purge_throttling_ts_ = cur_ts;
-    PALF_LOG(INFO, "submit_purge_throttling success", K(last_purge_throttling_ts_),
-        "purge_type", purge_throttling_type_2_str(purge_type));
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(purge_task)) {
-    alloc_mgr_->free_log_io_purge_throttling_task(purge_task);
-    purge_task = NULL;
   }
   return ret;
 }
@@ -599,10 +540,10 @@ LogMeta LogEngine::get_log_meta() const
   return log_meta_;
 }
 
-const LSN &LogEngine::get_base_lsn_used_for_block_gc() const
+LSN LogEngine::get_base_lsn_used_for_block_gc() const
 {
   ObSpinLockGuard guard(log_meta_lock_);
-  return base_lsn_for_block_gc_;
+  return log_meta_.get_log_snapshot_meta().base_lsn_;
 }
 
 int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte,
@@ -651,21 +592,30 @@ int LogEngine::raw_read(const LSN &lsn,
 // ====================== LogStorage end =======================
 
 // ===================== MetaStorage start =====================
-// NB: need update snapshot_meta inc.
-int LogEngine::update_base_lsn_used_for_gc(const LSN &lsn)
+int LogEngine::advance_base_lsn(const LSN &lsn)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(log_meta_lock_);
-  if (true == base_lsn_for_block_gc_.is_valid() && lsn < base_lsn_for_block_gc_) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(WARN,
-             "lsn is smaller than base_lsn_for_block_gc_",
-             K(ret),
-             K(lsn),
-             K(base_lsn_for_block_gc_));
+  lib::ObMutexGuard write_guard(meta_write_lock_);
+  LogMeta next = get_log_meta();
+  LogSnapshotMeta snapshot = next.get_log_snapshot_meta();
+  if (OB_FAIL(write_guard.get_ret())) {
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (snapshot.base_lsn_ >= lsn) {
+    // A concurrent caller may already have persisted this or a later position.
+  } else if (OB_FAIL(snapshot.generate(lsn, snapshot.prev_log_info_, snapshot.prev_log_tail_lsn_))) {
+  } else if (OB_FAIL(next.update_log_snapshot_meta(snapshot))) {
+  } else if (OB_FAIL(meta_store::save(*store_, next))) {
+    PALF_LOG(WARN, "persist PALF checkpoint failed", K(ret), K(lsn));
   } else {
-    base_lsn_for_block_gc_ = lsn;
-    PALF_LOG(INFO, "update_base_lsn_used_for_gc success", K(ret), K(lsn), K_(is_inited));
+    // Readers and GC only observe durable state; no spin lock spans local IO.
+    {
+      ObSpinLockGuard guard(log_meta_lock_);
+      log_meta_ = next;
+    }
+    PALF_LOG(INFO, "persisted PALF checkpoint", K(lsn));
   }
   return ret;
 }
@@ -674,28 +624,6 @@ int LogEngine::update_manifest(const block_id_t block_id)
 {
   // LogStorage invokes this while loading too, before is_inited_ becomes true.
   return store_ == nullptr ? OB_NOT_INIT : meta_store::update_manifest(*store_, block_id);
-}
-
-int LogEngine::persist_meta(const LogMeta &meta)
-{
-  return IS_NOT_INIT ? OB_NOT_INIT : meta_store::save(*store_, meta);
-}
-
-int LogEngine::submit_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx,
-                                       const LogMeta &log_meta)
-{
-  int ret = OB_SUCCESS;
-  LogIOFlushMetaTask *flush_meta_task = NULL;
-  if (OB_FAIL(generate_flush_meta_task_(flush_meta_cb_ctx, log_meta, flush_meta_task))) {
-  } else if (OB_FAIL(log_io_worker_->submit_io_task(flush_meta_task))) {
-  } else {
-    PALF_LOG(INFO, "submit_flush_meta_task_ success", K(flush_meta_cb_ctx), K(log_meta));
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(flush_meta_task)) {
-    alloc_mgr_->free_log_io_flush_meta_task(flush_meta_task);
-    flush_meta_task = NULL;
-  }
-  return ret;
 }
 
 int LogEngine::generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
@@ -749,41 +677,6 @@ int LogEngine::generate_truncate_prefix_blocks_task_(
   if (OB_FAIL(ret) && NULL != truncate_prefix_blocks_task) {
     alloc_mgr_->free_log_io_truncate_prefix_blocks_task(truncate_prefix_blocks_task);
     truncate_prefix_blocks_task = NULL;
-  }
-  return ret;
-}
-
-int LogEngine::generate_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx,
-                                         const LogMeta &log_meta,
-                                         LogIOFlushMetaTask *&flush_meta_task)
-{
-  int ret = OB_SUCCESS;
-  flush_meta_task = alloc_mgr_->alloc_log_io_flush_meta_task(palf_epoch_);
-  if (OB_ISNULL(flush_meta_task)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_FAIL(flush_meta_task->init(flush_meta_cb_ctx, log_meta))) {
-    alloc_mgr_->free_log_io_flush_meta_task(flush_meta_task);
-    flush_meta_task = nullptr;
-  }
-  return ret;
-}
-
-int LogEngine::generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge_cb_ctx,
-    LogIOPurgeThrottlingTask *&purge_task) {
-
-  int ret = OB_SUCCESS;
-  purge_task = NULL;
-  if (!purge_cb_ctx.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (NULL == (purge_task = alloc_mgr_->alloc_log_io_purge_throttling_task(palf_epoch_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    PALF_LOG(ERROR, "alloc_log_io_purge_throttling_task failed", KPC(this));
-  } else if (OB_FAIL(purge_task->init(purge_cb_ctx))) {
-  } else {
-  }
-  if (OB_FAIL(ret) && NULL != purge_task) {
-    alloc_mgr_->free_log_io_purge_throttling_task(purge_task);
-    purge_task = NULL;
   }
   return ret;
 }

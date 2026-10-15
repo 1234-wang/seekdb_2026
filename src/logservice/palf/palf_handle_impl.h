@@ -44,9 +44,7 @@ namespace palf
 {
 class FlushLogCbCtx;
 class LSN;
-class FlushMetaCbCtx;
 class LogIOFlushLogTask;
-class LogIOFlushMetaTask;
 class ReadBuf;
 class LogWriteBuf;
 class LogIOWorker;
@@ -191,10 +189,9 @@ public:
   virtual const share::SCN get_end_scn() const = 0;
   virtual const LSN get_readable_end_lsn() const = 0;
   virtual int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const = 0;
-  virtual const LSN &get_base_lsn_used_for_block_gc() const = 0;
+  virtual LSN get_base_lsn_used_for_block_gc() const = 0;
   virtual int delete_block(const block_id_t &block_id) = 0;
   virtual int inner_after_flush_log(const FlushLogCbCtx &flush_log_cb_ctx) = 0;
-  virtual int inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_ctx) = 0;
   virtual int inner_after_truncate_prefix_blocks(const TruncatePrefixBlocksCbCtx &truncate_prefix_cb_ctx) = 0;
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn) = 0;
   virtual int inner_append_log(const LSN &lsn,
@@ -203,7 +200,6 @@ public:
   virtual int inner_append_log(const LSNArray &lsn_array,
                                const LogWriteBufArray &write_buf_array,
                                const SCNArray &scn_array) = 0;
-  virtual int inner_persist_meta(const LogMeta &meta) = 0;
   virtual int inner_truncate_prefix_blocks(const LSN &lsn) = 0;
   virtual int check_and_switch_state() = 0;
   virtual int check_and_switch_freeze_mode() = 0;
@@ -361,13 +357,12 @@ public:
   }
   int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const;
   // return the smallest recycable lsn
-  const LSN &get_base_lsn_used_for_block_gc() const override final
+  LSN get_base_lsn_used_for_block_gc() const override final
   {
     return log_engine_.get_base_lsn_used_for_block_gc();
   }
   // =====================  LogIOTask start ==========================
   int inner_after_flush_log(const FlushLogCbCtx &flush_log_cb_ctx) override final;
-  int inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_ctx) override final;
   int inner_after_truncate_prefix_blocks(const TruncatePrefixBlocksCbCtx &truncate_prefix_cb_ctx) override final;
   int advance_reuse_lsn(const LSN &flush_log_end_lsn);
   int inner_append_log(const LSN &lsn,
@@ -376,7 +371,6 @@ public:
   int inner_append_log(const LSNArray &lsn_array,
                        const LogWriteBufArray &write_buf_array,
                        const SCNArray &scn_array);
-  int inner_persist_meta(const LogMeta &meta) override final;
   int inner_truncate_prefix_blocks(const LSN &lsn) override final;
   // ==================================================================
   int check_and_switch_state() override final;
@@ -399,7 +393,6 @@ private:
                    const common::ObAddr &self,
                    ObILogAllocator *alloc_mgr,
                    IPalfEnvImpl *palf_env_impl);
-  int after_flush_snapshot_meta_(const LSN &lsn);
   int get_prev_log_info_(const LSN &lsn, LogInfo &log_info);
   int construct_palf_base_info_(const LSN &max_committed_lsn,
                                 PalfBaseInfo &palf_base_info);

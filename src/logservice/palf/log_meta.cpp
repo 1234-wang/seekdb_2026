@@ -159,7 +159,7 @@ int write_meta(LocalStore &store, const LogMeta &meta, bool create)
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(meta.serialize(buf, size, pos))) {
   } else {
-    // Update only the snapshot: an older IO task must preserve the latest manifest.
+    // Log IO advances the manifest independently; update only the snapshot.
     auto request = create ? LocalRequest::upsert(schema()) : LocalRequest::update(schema());
     request.set(Payload, LocalValue::blob(buf, pos));
     if (create) {

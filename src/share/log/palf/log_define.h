@@ -262,27 +262,6 @@ int convert_sys_errno();
 
 bool is_number(const char *);
 
-enum PurgeThrottlingType
-{
-  INVALID_PURGE_TYPE = 0,
-  PURGE_BY_CHECK_BARRIER_CONDITION = 1,
-  MAX_PURGE_TYPE
-};
-
-inline const char *purge_throttling_type_2_str(const PurgeThrottlingType type)
-{
-#define EXTRACT_PURGE_TYPE(type_var) case(type_var): return #type_var
-  switch(type)
-  {
-    EXTRACT_PURGE_TYPE(INVALID_PURGE_TYPE);
-    EXTRACT_PURGE_TYPE(PURGE_BY_CHECK_BARRIER_CONDITION);
-
-    default:
-      return "Invalid Type";
-  }
-#undef EXTRACT_PURGE_TYPE
-}
-
 } // end namespace palf
 } // end namespace oceanbase
 
