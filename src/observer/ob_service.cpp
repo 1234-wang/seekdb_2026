@@ -45,7 +45,6 @@
 #include "storage/compaction/ob_tablet_scheduler.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_merge_info.h"
-#include "common/ob_data_version_mgr.h"
 #include "share/ob_column_checksum_error_operator.h"
 #include "storage/meta_store/storage_meta_service.h"
 #include "share/ob_server_struct.h"    // GCTX
@@ -818,20 +817,9 @@ int ObService::check_server_empty(bool &is_empty)
   is_empty = true;
   if (!inited_) {
     ret = OB_NOT_INIT;
-  } else {
-    if (is_empty) {
-      if (!OBSERVER.is_log_dir_empty()) {
-        FLOG_WARN("[CHECK_SERVER_EMPTY] log dir is not empty");
-        is_empty = false;
-      }
-    }
-    if (is_empty) {
-      if (DATA_VERSION_MGR.get_file_exists_when_loading()) {
-        // ignore ret
-        FLOG_WARN("[CHECK_SERVER_EMPTY] data_version file exists");
-        is_empty = false;
-      }
-    }
+  } else if (!OBSERVER.is_log_dir_empty()) {
+    FLOG_WARN("[CHECK_SERVER_EMPTY] log dir is not empty");
+    is_empty = false;
   }
   return ret;
 }

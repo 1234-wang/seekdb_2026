@@ -87,7 +87,6 @@ int ObServer::get_lower_bound_freeze_info(const int64_t snapshot_version, share:
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "observer/ob_server_utils.h"
 #include "common/xml/ob_libxml2_sax_handler.h"
-#include "common/ob_data_version_mgr.h"
 #include "observer/vector_index/ob_plugin_vector_index_utils.h"
 #include "observer/vector_index/ob_plugin_vector_index_service.h"
 #include "observer/composition/retrieval/ob_das_legacy_tr_merge_iter.h"
@@ -1774,9 +1773,6 @@ int ObServer::init_config(const ObServerOptions &opts)
   if (OB_FAIL(local_store_.init("./store/local"))) {
   } else if (OB_FAIL(config_mgr_.init(local_store_))) {
   } else if (OB_FAIL(config_mgr_.got_version())) {
-  } else if (OB_FAIL(DATA_VERSION_MGR.init())) {
-  } else if (OB_FAIL(DATA_VERSION_MGR.load_from_file())) {
-  } else if (OB_FAIL(DATA_VERSION_MGR.validate_or_init_current_version())) {
   }
 
   if (OB_SUCC(ret) && 0 == config::server_create_time()) {
