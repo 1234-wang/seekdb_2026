@@ -160,11 +160,9 @@ public:
   int iterate_tx_lock_priority_list(ObPrioOpIterator &iter) const;
   int iterate_tx_lock_stat(ObTxLockStatIterator &iter);
   int get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr);
-  uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
   int check_tx_status();
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
-  int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
   int check_with_tx_data(ObITxDataCheckFunctor &fn);
   const share::SCN get_rec_log_ts() const;
   int on_tx_ctx_table_flushed();
