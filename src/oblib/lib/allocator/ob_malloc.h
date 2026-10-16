@@ -36,30 +36,9 @@ namespace common
 {
 
 bool restore_allocator_after_fork();
-int64_t get_virtual_memory_used(int64_t *resident_size = nullptr);
 #if defined(__APPLE__) && defined(OB_HAVE_BUNDLED_JEMALLOC)
 bool configure_darwin_malloc_zone();
 #endif
-
-struct AllocatorProcessStats
-{
-  AllocatorProcessStats()
-    : allocator_stats_available_(false), allocated_(0), active_(0),
-      resident_(0), mapped_(0), virtual_memory_(0), process_resident_(0)
-  {}
-
-  bool allocator_stats_available_;
-  uint64_t allocated_;
-  uint64_t active_;
-  uint64_t resident_;
-  uint64_t mapped_;
-  int64_t virtual_memory_;
-  int64_t process_resident_;
-};
-
-bool get_allocator_process_stats(AllocatorProcessStats &stats);
-void ob_print_mod_memory_usage(bool print_to_std = false,
-                               bool print_glibc_malloc_stats = false);
 
 inline void *ob_malloc(const int64_t nbyte, const ObMemAttr &attr)
 {

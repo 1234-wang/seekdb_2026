@@ -337,8 +337,8 @@ Since `LOG_USER_XXX` provides fixed error information, if we want to output some
 seekdb periodically writes internal status information to the log to facilitate
 troubleshooting. The legacy `MemDumpTimer` allocator dump was removed together
 with obmalloc and is no longer a supported health-log format. For current
-component-level memory capacity and reclaim trends, query
-`V$OB_COMPONENT_MEMORY`; see the memory management guide for its approximate
+component-level memory usage and limits, query
+the memory rows of `oceanbase.__all_virtual_resource_limit`; see the memory management guide for its approximate
 sampling semantics.
 
 ### ERROR Log

@@ -10,8 +10,14 @@ WHERE table_schema = 'oceanbase'
                             '__all_virtual_malloc_sample_info',
                             'v$ob_memory');
 
-SELECT COUNT(*) = 2 AS replacement_objects
+SELECT COUNT(*) = 0 AS no_new_component_objects
 FROM information_schema.tables
 WHERE table_schema = 'oceanbase'
   AND lower(table_name) IN ('__all_virtual_component_memory_stat',
                             'v$ob_component_memory');
+
+SELECT COUNT(*) = 2 AS reused_resource_tables
+FROM information_schema.tables
+WHERE table_schema = 'oceanbase'
+  AND lower(table_name) IN ('__all_virtual_resource_limit',
+                            '__all_virtual_resource_limit_detail');

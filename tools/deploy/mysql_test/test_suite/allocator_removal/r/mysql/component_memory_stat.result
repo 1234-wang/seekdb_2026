@@ -1,21 +1,47 @@
-SELECT COUNT(*) = 4 AS fixed_component_rows
-FROM oceanbase.V$OB_COMPONENT_MEMORY;
-fixed_component_rows
+SELECT COUNT(*) = 5 AS resource_rows
+FROM oceanbase.__all_virtual_resource_limit;
+resource_rows
 1
-SELECT GROUP_CONCAT(COMPONENT_NAME ORDER BY COMPONENT_NAME SEPARATOR ',') AS components
-FROM oceanbase.V$OB_COMPONENT_MEMORY;
-components
-KV_CACHE,META_OBJECT,SQL_WORKAREA,VECTOR
-SELECT COUNT(*) = 0 AS invalid_atomic_fields
-FROM oceanbase.V$OB_COMPONENT_MEMORY
-WHERE LIMIT_BYTES < 0 OR COMMITTED_BYTES < 0 OR RESERVED_BYTES < 0
-OR REJECT_COUNT < 0 OR RECLAIM_COUNT < 0;
-invalid_atomic_fields
+SELECT GROUP_CONCAT(resource_name ORDER BY resource_name SEPARATOR ',') AS resources
+FROM oceanbase.__all_virtual_resource_limit;
+resources
+kv_cache_memory,meta_object_memory,sql_workarea_memory,tablet,vector_memory
+SELECT COUNT(*) = 4 AS memory_rows_with_byte_counters
+FROM oceanbase.__all_virtual_resource_limit
+WHERE resource_name IN ('kv_cache_memory', 'sql_workarea_memory',
+'vector_memory', 'meta_object_memory')
+AND current_utilization >= 0 AND reserved_value >= 0 AND limit_value >= 0
+AND max_utilization IS NULL AND effective_limit_type = 'memory';
+memory_rows_with_byte_counters
 1
-SELECT COUNT(*) = 0 AS forbidden_consistency_columns
+SELECT COUNT(*) = 1 AS tablet_semantics_preserved
+FROM oceanbase.__all_virtual_resource_limit
+WHERE resource_name = 'tablet' AND current_utilization > 0
+AND max_utilization IS NOT NULL AND reserved_value = 0
+AND effective_limit_type IN ('configuration', 'memory');
+tablet_semantics_preserved
+1
+SELECT COUNT(*) = 4 AS matching_memory_constraints
+FROM oceanbase.__all_virtual_resource_limit r
+JOIN oceanbase.__all_virtual_resource_limit_detail d
+ON r.resource_name = d.resource_name
+WHERE r.effective_limit_type = 'memory' AND r.max_utilization IS NULL
+AND d.limit_type = 'memory' AND r.limit_value = d.limit_value;
+matching_memory_constraints
+1
+SELECT COUNT(*) = 6 AS tablet_constraints_preserved
+FROM oceanbase.__all_virtual_resource_limit_detail
+WHERE resource_name = 'tablet';
+tablet_constraints_preserved
+1
+SELECT COUNT(*) = 4 AS repeated_memory_rows
+FROM oceanbase.__all_virtual_resource_limit
+WHERE max_utilization IS NULL;
+repeated_memory_rows
+1
+SELECT COUNT(*) = 1 AS nullable_peak_schema
 FROM information_schema.columns
-WHERE table_schema = 'oceanbase'
-  AND lower(table_name) = 'v$ob_component_memory'
-  AND upper(column_name) IN ('IS_CONSISTENT', 'SNAPSHOT_EPOCH');
-forbidden_consistency_columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_resource_limit'
+  AND column_name = 'max_utilization' AND is_nullable = 'YES';
+nullable_peak_schema
 1

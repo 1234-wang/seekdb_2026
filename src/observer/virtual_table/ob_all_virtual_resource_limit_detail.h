@@ -49,6 +49,8 @@ private:
 private:
   share::ObLogicResourceStatIterator iter_;
   share::ObResourceConstraintIterator constraint_iter_;
+  bool logical_resources_finished_;
+  int64_t memory_resource_index_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObResourceLimitDetailTable);
 };

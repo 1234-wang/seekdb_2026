@@ -21,9 +21,6 @@
 #include <cstdint>
 #include <limits>
 
-#include "lib/ob_define.h"
-#include "lib/thread_local/ob_tsi_utils.h"
-
 namespace oceanbase
 {
 namespace common
@@ -61,10 +58,8 @@ class MemoryQuota
 public:
   explicit MemoryQuota(const int64_t limit = std::numeric_limits<int64_t>::max())
       : limit_(normalize_limit(limit)), available_(normalize_limit(limit)),
-        committed_overflow_(0), reject_count_(0), reclaim_count_(0)
-  {
-    reset_committed_slots();
-  }
+        committed_(0), reject_count_(0), reclaim_count_(0)
+  {}
 
   MemoryQuota(const MemoryQuota &) = delete;
   MemoryQuota &operator=(const MemoryQuota &) = delete;
@@ -89,30 +84,14 @@ public:
     const int64_t normalized_limit = normalize_limit(limit);
     limit_.store(normalized_limit, std::memory_order_relaxed);
     available_.store(normalized_limit, std::memory_order_relaxed);
-    reset_committed_slots();
+    committed_.store(0, std::memory_order_relaxed);
     reject_count_.store(0, std::memory_order_relaxed);
     reclaim_count_.store(0, std::memory_order_relaxed);
     limit_update_lock_.clear(std::memory_order_relaxed);
   }
 
   int64_t limit() const { return limit_.load(std::memory_order_acquire); }
-  int64_t committed() const
-  {
-    uint64_t total = committed_overflow_.load(std::memory_order_acquire);
-    const int64_t used_slot_count = get_max_used_itid();
-    const int64_t slot_count = used_slot_count < COMMITTED_SLOT_COUNT
-        ? used_slot_count : COMMITTED_SLOT_COUNT;
-    for (int64_t i = 0; i < slot_count; ++i) {
-      total += committed_slots_[i].value_.load(std::memory_order_acquire);
-    }
-    // Concurrent sampling may combine slot values from different instants.
-    // The strict admission state is available_, so clamp only the approximate
-    // observation.  At a quiescent boundary the modulo sum is exact and is at
-    // most INT64_MAX by construction.
-    return total <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())
-        ? static_cast<int64_t>(total)
-        : std::numeric_limits<int64_t>::max();
-  }
+  int64_t committed() const { return committed_.load(std::memory_order_acquire); }
   int64_t reserved() const
   {
     return reserved_from_committed(committed());
@@ -146,7 +125,7 @@ public:
       }
     }
     if (succeeded) {
-      add_committed(actual);
+      committed_.fetch_add(actual, std::memory_order_release);
       if (actual < reservation) {
         available_.fetch_add(reservation - actual, std::memory_order_release);
       }
@@ -164,7 +143,7 @@ public:
   void release(const int64_t committed)
   {
     if (committed > 0) {
-      add_committed(-committed);
+      committed_.fetch_sub(committed, std::memory_order_release);
       available_.fetch_add(committed, std::memory_order_release);
     }
   }
@@ -197,13 +176,6 @@ public:
   }
 
 private:
-  static constexpr int64_t COMMITTED_SLOT_COUNT = OB_MAX_THREAD_NUM;
-
-  struct alignas(64) CommittedSlot
-  {
-    std::atomic<uint64_t> value_;
-  };
-
   static int64_t normalize_limit(const int64_t limit)
   {
     return limit >= 0 ? limit : std::numeric_limits<int64_t>::max();
@@ -229,30 +201,6 @@ private:
           : static_cast<int64_t>(unsigned_limit + unavailable);
     }
     return accounted > committed ? accounted - committed : 0;
-  }
-
-  void reset_committed_slots()
-  {
-    for (int64_t i = 0; i < COMMITTED_SLOT_COUNT; ++i) {
-      committed_slots_[i].value_.store(0, std::memory_order_relaxed);
-    }
-    committed_overflow_.store(0, std::memory_order_relaxed);
-  }
-
-  void add_committed(const int64_t bytes)
-  {
-    const int64_t thread_id = get_itid();
-    const uint64_t delta = static_cast<uint64_t>(bytes);
-    if (thread_id >= 0 && thread_id < COMMITTED_SLOT_COUNT) {
-      // get_itid() assigns this slot to one live writer.  Atomic load/store
-      // keeps concurrent SQL sampling data-race-free without a locked RMW.
-      std::atomic<uint64_t> &slot = committed_slots_[thread_id].value_;
-      slot.store(slot.load(std::memory_order_relaxed) + delta,
-                 std::memory_order_release);
-    } else {
-      // Threads beyond the normal SeekDB worker range share a safe fallback.
-      committed_overflow_.fetch_add(delta, std::memory_order_release);
-    }
   }
 
   bool grow_accounted(const int64_t bytes)
@@ -303,8 +251,7 @@ private:
   // process-lifetime component quotas make the small padding cost negligible,
   // while reserve/reconcile/release otherwise bounce one line for every RMW.
   alignas(64) std::atomic<int64_t> available_;
-  CommittedSlot committed_slots_[COMMITTED_SLOT_COUNT];
-  alignas(64) std::atomic<uint64_t> committed_overflow_;
+  alignas(64) std::atomic<int64_t> committed_;
   std::atomic<int64_t> reject_count_;
   std::atomic<int64_t> reclaim_count_;
   std::atomic_flag limit_update_lock_ = ATOMIC_FLAG_INIT;

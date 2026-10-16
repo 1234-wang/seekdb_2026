@@ -9,7 +9,7 @@
 
 #include "gtest/gtest.h"
 #include "lib/resource/ob_memory_quota.h"
-#include "observer/virtual_table/ob_all_virtual_component_memory_stat.h"
+#include "observer/virtual_table/ob_all_virtual_resource_limit.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "share/rc/ob_server_runtime.h"
 #include "sql/engine/ob_sql_memory_manager.h"
@@ -19,7 +19,7 @@
 using oceanbase::common::MemoryQuota;
 using oceanbase::common::MemoryQuotaSample;
 using oceanbase::common::MemoryReservation;
-using oceanbase::observer::ComponentMemoryStat;
+using oceanbase::observer::ObResourceLimitTable;
 
 namespace
 {
@@ -83,18 +83,23 @@ private:
 
 } // namespace
 
-TEST(TestComponentMemoryStat, stable_component_keys)
+TEST(TestResourceLimitMemory, stable_resource_keys)
 {
-  ASSERT_EQ(4, ComponentMemoryStat::component_count());
-  EXPECT_STREQ("KV_CACHE", ComponentMemoryStat::component_name(0));
-  EXPECT_STREQ("SQL_WORKAREA", ComponentMemoryStat::component_name(1));
-  EXPECT_STREQ("VECTOR", ComponentMemoryStat::component_name(2));
-  EXPECT_STREQ("META_OBJECT", ComponentMemoryStat::component_name(3));
-  EXPECT_EQ(nullptr, ComponentMemoryStat::component_name(-1));
-  EXPECT_EQ(nullptr, ComponentMemoryStat::component_name(4));
+  ASSERT_EQ(4, ObResourceLimitTable::memory_resource_count());
+  EXPECT_STREQ("kv_cache_memory", ObResourceLimitTable::memory_resource_name(0));
+  EXPECT_STREQ("sql_workarea_memory", ObResourceLimitTable::memory_resource_name(1));
+  EXPECT_STREQ("vector_memory", ObResourceLimitTable::memory_resource_name(2));
+  EXPECT_STREQ("meta_object_memory", ObResourceLimitTable::memory_resource_name(3));
+  EXPECT_EQ(nullptr, ObResourceLimitTable::memory_resource_name(-1));
+  EXPECT_EQ(nullptr, ObResourceLimitTable::memory_resource_name(4));
+  MemoryQuotaSample sample;
+  EXPECT_EQ(oceanbase::common::OB_INVALID_ARGUMENT,
+            ObResourceLimitTable::get_memory_resource_sample(-1, sample));
+  EXPECT_EQ(oceanbase::common::OB_INVALID_ARGUMENT,
+            ObResourceLimitTable::get_memory_resource_sample(4, sample));
 }
 
-TEST(TestComponentMemoryStat, approximate_sample_is_safe_during_writes)
+TEST(TestResourceLimitMemory, approximate_sample_is_safe_during_writes)
 {
   static const int WRITER_COUNT = 8;
   static const int ITERATIONS = 20000;
@@ -142,7 +147,7 @@ TEST(TestComponentMemoryStat, approximate_sample_is_safe_during_writes)
   EXPECT_EQ(0, quiescent.committed_bytes_);
 }
 
-TEST(TestComponentMemoryStat, production_manager_routing)
+TEST(TestResourceLimitMemory, production_manager_routing)
 {
   ComponentServiceBindings services;
   ASSERT_EQ(oceanbase::common::OB_SUCCESS, services.init());
@@ -152,19 +157,53 @@ TEST(TestComponentMemoryStat, production_manager_routing)
       12 * 1024 * 1024);
   services.meta_manager().get_memory_quota().set_limit(13 * 1024 * 1024);
 
-  ComponentMemoryStat stat;
   static const int64_t EXPECTED_LIMITS[] = {
       5 * ComponentServiceBindings::BLOCK_SIZE,
       11 * 1024 * 1024,
       12 * 1024 * 1024,
       13 * 1024 * 1024,
   };
-  for (int64_t i = 0; i < ComponentMemoryStat::component_count(); ++i) {
-    const char *name = nullptr;
+  for (int64_t i = 0; i < ObResourceLimitTable::memory_resource_count(); ++i) {
     MemoryQuotaSample sample;
     ASSERT_EQ(oceanbase::common::OB_SUCCESS,
-              stat.get_component_sample(i, name, sample));
-    EXPECT_STREQ(ComponentMemoryStat::component_name(i), name);
+              ObResourceLimitTable::get_memory_resource_sample(i, sample));
     EXPECT_EQ(EXPECTED_LIMITS[i], sample.limit_bytes_);
   }
+
+  // Distinguish physically committed bytes from an in-flight reservation.
+  MemoryQuota &quota = services.sql_manager().get_workarea_quota();
+  MemoryReservation allocation(&quota, 128);
+  ASSERT_TRUE(allocation.valid());
+  ASSERT_TRUE(allocation.reconcile(96));
+  {
+    MemoryReservation pending(&quota, 64);
+    ASSERT_TRUE(pending.valid());
+    MemoryQuotaSample sample;
+    ASSERT_EQ(oceanbase::common::OB_SUCCESS,
+              ObResourceLimitTable::get_memory_resource_sample(1, sample));
+    EXPECT_EQ(96, sample.committed_bytes_);
+    EXPECT_EQ(64, sample.reserved_bytes_);
+    quota.set_limit(32);
+    ASSERT_EQ(oceanbase::common::OB_SUCCESS,
+              ObResourceLimitTable::get_memory_resource_sample(1, sample));
+    EXPECT_EQ(32, sample.limit_bytes_);
+    EXPECT_EQ(96, sample.committed_bytes_);
+  }
+  quota.release(96);
+  MemoryQuotaSample quiescent;
+  ASSERT_EQ(oceanbase::common::OB_SUCCESS,
+            ObResourceLimitTable::get_memory_resource_sample(1, quiescent));
+  EXPECT_EQ(0, quiescent.committed_bytes_);
+  EXPECT_EQ(0, quiescent.reserved_bytes_);
+}
+
+TEST(TestResourceLimitMemory, missing_service_is_not_zero_usage)
+{
+  MemoryQuotaSample sample;
+  EXPECT_EQ(oceanbase::common::OB_NOT_INIT,
+            ObResourceLimitTable::get_memory_resource_sample(1, sample));
+  EXPECT_EQ(oceanbase::common::OB_NOT_INIT,
+            ObResourceLimitTable::get_memory_resource_sample(2, sample));
+  EXPECT_EQ(oceanbase::common::OB_NOT_INIT,
+            ObResourceLimitTable::get_memory_resource_sample(3, sample));
 }

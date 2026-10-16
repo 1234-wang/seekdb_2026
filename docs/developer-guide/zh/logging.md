@@ -348,8 +348,8 @@ LOG_USER_ERROR 宏定义如下：
 ### 健康日志
 
 seekdb 会周期性地把内部状态写入日志，方便问题排查。旧的 `MemDumpTimer`
-allocator dump 已随 obmalloc 删除，不再是受支持的健康日志格式。当前组件级内存容量和
-回收趋势请查询 `V$OB_COMPONENT_MEMORY`；其近似采样语义见内存管理指南。
+allocator dump 已随 obmalloc 删除，不再是受支持的健康日志格式。当前组件级内存占用和
+额度请查询 `oceanbase.__all_virtual_resource_limit` 中的内存资源行；其近似采样语义见内存管理指南。
 
 ### ERROR 日志
 对系统出现的一般错误，比如处理某个请求时，出现了异常，会以WARN级别输出日志。只有影响到seekdb进程正常运行，或者认为有严重问题时，会以ERROR级别输出日志。因此如果遇到进程异常退出，或者无法启动时，搜索ERROR日志会更有效地查找问题原因。

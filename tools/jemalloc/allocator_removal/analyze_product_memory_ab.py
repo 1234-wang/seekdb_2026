@@ -58,22 +58,25 @@ def load_runtime_metrics(root):
                 next(samples_file, None)
                 for line in samples_file:
                     fields = line.rstrip("\n").split("\t")
-                    if len(fields) != 9:
+                    if len(fields) not in (7, 9):
                         continue
                     component = fields[3]
                     component_item = item["components"].setdefault(
                         component,
-                        {"max_committed_bytes": 0, "max_reserved_bytes": 0,
-                         "max_reject_count": 0, "max_reclaim_count": 0},
+                        {"max_committed_bytes": 0, "max_reserved_bytes": 0},
                     )
                     component_item["max_committed_bytes"] = max(
                         component_item["max_committed_bytes"], int(fields[5]))
                     component_item["max_reserved_bytes"] = max(
                         component_item["max_reserved_bytes"], int(fields[6]))
-                    component_item["max_reject_count"] = max(
-                        component_item["max_reject_count"], int(fields[7]))
-                    component_item["max_reclaim_count"] = max(
-                        component_item["max_reclaim_count"], int(fields[8]))
+                    # Historical nine-column samples include counters that
+                    # the resource-limit table does not expose. Do not invent
+                    # zero counters for new seven-column samples.
+                    if len(fields) == 9:
+                        component_item["max_reject_count"] = max(
+                            component_item.get("max_reject_count", 0), int(fields[7]))
+                        component_item["max_reclaim_count"] = max(
+                            component_item.get("max_reclaim_count", 0), int(fields[8]))
         if os.path.exists(jemalloc_path):
             with open(jemalloc_path, encoding="utf-8") as jemalloc_file:
                 lines = [line.rstrip("\n") for line in jemalloc_file]

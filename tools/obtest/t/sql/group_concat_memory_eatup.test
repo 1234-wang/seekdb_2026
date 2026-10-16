@@ -28,14 +28,14 @@ insert into t2 values (0),(1),(2),(3),(4);
 connection conn1;
 
 connection connsys;
-let $sql_workarea_mem_pre = query_get_value(select committed_bytes value from oceanbase.V\$OB_COMPONENT_MEMORY where component_name = 'SQL_WORKAREA', value, 1);
+let $sql_workarea_mem_pre = query_get_value(select current_utilization value from oceanbase.__all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
 
 connection conn1;
 send select /*+query_timeout(4000000) */ case when sum(length(v)) > 0 then sleep(4) else sleep(0) end from (select k, group_concat(v) v from (select a.c1 + b.c1 * 10 + c.c1 * 100 + d.c1 * 1000 + e.c1 * 10000 + g.c1 * 100000 k, 'abc' v from t1 a, t1 b, t1 c, t1 d, t1 e, t2 g) t group by k)x;
 
 --sleep 3
 connection connsys;
-let $sql_workarea_mem_now = query_get_value(select committed_bytes value from oceanbase.V\$OB_COMPONENT_MEMORY where component_name = 'SQL_WORKAREA', value, 1);
+let $sql_workarea_mem_now = query_get_value(select current_utilization value from oceanbase.__all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
 eval select $sql_workarea_mem_now - $sql_workarea_mem_pre < 100000000 mem_less_than_100M;
 
 connection conn1;
@@ -44,5 +44,5 @@ reap;
 
 --sleep 1
 connection connsys;
-let $sql_workarea_reserved_after = query_get_value(select reserved_bytes value from oceanbase.V\$OB_COMPONENT_MEMORY where component_name = 'SQL_WORKAREA', value, 1);
+let $sql_workarea_reserved_after = query_get_value(select reserved_value value from oceanbase.__all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
 eval select $sql_workarea_reserved_after = 0 reservation_released;

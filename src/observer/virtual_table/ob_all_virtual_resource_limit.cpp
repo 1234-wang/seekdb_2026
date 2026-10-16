@@ -18,6 +18,10 @@
 
 #include "observer/virtual_table/ob_all_virtual_resource_limit.h"
 #include "share/rc/ob_server_runtime.h"
+#include "share/cache/ob_kv_storecache.h"
+#include "sql/engine/ob_sql_memory_manager.h"
+#include "storage/allocator/ob_shared_memory_allocator_mgr.h"
+#include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -29,7 +33,9 @@ namespace observer
 
 ObResourceLimitTable::ObResourceLimitTable()
   : ObVirtualTableScannerIterator(),
-    iter_()
+    iter_(),
+    logical_resources_finished_(false),
+    memory_resource_index_(0)
 {
 }
 
@@ -41,7 +47,58 @@ ObResourceLimitTable::~ObResourceLimitTable()
 void ObResourceLimitTable::reset()
 {
   iter_.reset();
+  logical_resources_finished_ = false;
+  memory_resource_index_ = 0;
   ObVirtualTableScannerIterator::reset();
+}
+
+const char *ObResourceLimitTable::memory_resource_name(const int64_t index)
+{
+  static const char *const NAMES[] = {
+      "kv_cache_memory", "sql_workarea_memory", "vector_memory", "meta_object_memory"};
+  return index >= 0 && index < memory_resource_count() ? NAMES[index] : nullptr;
+}
+
+int ObResourceLimitTable::get_memory_resource_sample(
+    const int64_t index, MemoryQuotaSample &sample)
+{
+  int ret = OB_SUCCESS;
+  switch (index) {
+    case 0:
+      sample = ObKVGlobalCache::get_instance().get_memory_quota_sample();
+      break;
+    case 1: {
+      sql::ObSqlMemoryManager *manager = server_service<sql::ObSqlMemoryManager>();
+      if (OB_ISNULL(manager)) {
+        ret = OB_NOT_INIT;
+      } else {
+        sample = manager->get_memory_quota_sample();
+      }
+      break;
+    }
+    case 2: {
+      ObSharedMemAllocMgr *manager = server_service<ObSharedMemAllocMgr>();
+      if (OB_ISNULL(manager)) {
+        ret = OB_NOT_INIT;
+      } else {
+        sample = manager->vector_allocator().get_memory_quota_sample();
+      }
+      break;
+    }
+    case 3: {
+      ObStorageMetaMemMgr *manager = server_service<ObStorageMetaMemMgr>();
+      if (OB_ISNULL(manager)) {
+        ret = OB_NOT_INIT;
+      } else {
+        sample = manager->get_memory_quota_sample();
+      }
+      break;
+    }
+    default:
+      ret = OB_INVALID_ARGUMENT;
+      break;
+  }
+  return ret;
 }
 
 int ObResourceLimitTable::get_next_resource_info_(ObResourceInfo &info)
@@ -60,19 +117,40 @@ int ObResourceLimitTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObResourceInfo info;
-  if (NULL == allocator_) {
+  row = nullptr;
+  if (OB_ISNULL(allocator_) || OB_ISNULL(cur_row_.cells_)) {
     ret = OB_NOT_INIT;
-  } else if (FALSE_IT(start_to_read_ = true)) {
-  } else if (OB_FAIL(get_next_resource_info_(info))) {
-    if (OB_ITER_END != ret) {
-    }
   } else {
+    start_to_read_ = true;
+    if (!logical_resources_finished_ && OB_FAIL(get_next_resource_info_(info))) {
+      if (OB_ITER_END == ret) {
+        logical_resources_finished_ = true;
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_SUCC(ret) && logical_resources_finished_) {
+      MemoryQuotaSample sample;
+      if (memory_resource_index_ >= memory_resource_count()) {
+        ret = OB_ITER_END;
+      } else if (OB_FAIL(get_memory_resource_sample(memory_resource_index_, sample))) {
+      } else {
+        // Independent atomic samples, not a joint quota snapshot. Units: bytes.
+        info.curr_utilization_ = sample.committed_bytes_;
+        info.reserved_value_ = sample.reserved_bytes_;
+        info.min_constraint_value_ = sample.limit_bytes_;
+        info.min_constraint_type_ = MEMORY_CONSTRAINT;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
         case RESOURCE_NAME: {
-          cur_row_.cells_[i].set_varchar(get_logic_res_type_name(iter_.get_curr_type()));
+          cur_row_.cells_[i].set_varchar(logical_resources_finished_
+              ? memory_resource_name(memory_resource_index_)
+              : get_logic_res_type_name(iter_.get_curr_type()));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
@@ -81,7 +159,12 @@ int ObResourceLimitTable::inner_get_next_row(ObNewRow *&row)
           break;
         }
         case MAX_UTILIZATION:
-          cur_row_.cells_[i].set_int(info.max_utilization_);
+          if (logical_resources_finished_) {
+            // No memory high-water counter is maintained on allocation paths.
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_int(info.max_utilization_);
+          }
           break;
         case RSERVED_VALUE:
           cur_row_.cells_[i].set_int(info.reserved_value_);
@@ -100,6 +183,9 @@ int ObResourceLimitTable::inner_get_next_row(ObNewRow *&row)
     }
   }
   if (OB_SUCC(ret)) {
+    if (logical_resources_finished_) {
+      ++memory_resource_index_;
+    }
     row = &cur_row_;
   }
   return ret;

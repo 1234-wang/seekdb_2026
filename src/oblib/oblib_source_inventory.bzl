@@ -225,7 +225,6 @@ OBLIB_UNITY_GROUPS = {
             name = "ob_malloc_object_list_common_alloc_0",
             language = "c++",
             srcs = [
-                "src/oblib/lib/utility/alloc_assist.cpp",
                 "src/oblib/lib/alloc/alloc_func.cpp",
                 "src/oblib/lib/alloc/alloc_struct.cpp",
                 "src/oblib/lib/alloc/ob_malloc_allocator.cpp",

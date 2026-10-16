@@ -18,6 +18,7 @@
 #define OB_ALL_VIRTUAL_RESOURCE_LIMIT_H_
 
 #include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"
+#include "lib/resource/ob_memory_quota.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 
 namespace oceanbase
@@ -37,6 +38,12 @@ public:
 public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
+  // Observation-only resources: do not register these with the calculator,
+  // which also converts tablet counts into physical resource requirements.
+  static int64_t memory_resource_count() { return 4; }
+  static const char *memory_resource_name(int64_t index);
+  static int get_memory_resource_sample(int64_t index,
+      common::MemoryQuotaSample &sample);
   enum COLUMN_NAME
   {
         RESOURCE_NAME = common::OB_APP_MIN_COLUMN_ID,
@@ -50,6 +57,8 @@ private:
   int get_next_resource_info_(share::ObResourceInfo &info);
 private:
   share::ObLogicResourceStatIterator iter_;
+  bool logical_resources_finished_;
+  int64_t memory_resource_index_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObResourceLimitTable);
 };

@@ -102,7 +102,6 @@ OBSERVER_PRIVATE_HEADERS = [
     "virtual_table/ob_all_virtual_apply_stat.h",
     "virtual_table/ob_all_virtual_bad_block_table.h",
     "virtual_table/ob_all_virtual_change_stream_refresh_stat.h",
-    "virtual_table/ob_all_virtual_component_memory_stat.h",
     "virtual_table/ob_all_virtual_checkpoint.h",
     "virtual_table/ob_all_virtual_compaction_diagnose_info.h",
     "virtual_table/ob_all_virtual_compaction_suggestion.h",

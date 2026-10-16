@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-#if defined(_WIN32)
-#define _WINSOCKAPI_
-#endif
 #include "ob_malloc.h"
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #if defined(__linux__)
@@ -29,14 +25,11 @@
 #include <malloc/malloc.h>
 #elif defined(_WIN32)
 #include <malloc.h>
-#include <windows.h>
-#include <psapi.h>
 #endif
 #ifdef __OB_MTRACE__
 #include <execinfo.h>
 #endif
 #include "lib/alloc/malloc_hook.h"
-#include "lib/utility/ob_platform_utils.h"
 #include "lib/utility/ob_tracepoint.h"
 
 #if defined(ENABLE_SANITY) || (defined(OB_HAVE_BUNDLED_JEMALLOC) && defined(__APPLE__) && TARGET_OS_IPHONE)
@@ -130,112 +123,6 @@ void __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool(
   in_hook() = true;
   global_default_allocator = lib::ObMallocAllocator::get_instance();
   in_hook() = false;
-}
-
-int64_t get_virtual_memory_used(int64_t *resident_size)
-{
-#ifdef _WIN32
-  PROCESS_MEMORY_COUNTERS counters;
-  if (GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters))) {
-    if (nullptr != resident_size) {
-      *resident_size = static_cast<int64_t>(counters.WorkingSetSize);
-    }
-    return static_cast<int64_t>(counters.PagefileUsage);
-  }
-  if (nullptr != resident_size) {
-    *resident_size = 0;
-  }
-  return 0;
-#elif defined(__APPLE__)
-  mach_task_basic_info_data_t task_info_value = {};
-  mach_msg_type_number_t task_info_count = MACH_TASK_BASIC_INFO_COUNT;
-  if (KERN_SUCCESS == task_info(
-          mach_task_self(), MACH_TASK_BASIC_INFO,
-          reinterpret_cast<task_info_t>(&task_info_value),
-          &task_info_count)) {
-    if (nullptr != resident_size) {
-      *resident_size = static_cast<int64_t>(task_info_value.resident_size);
-    }
-    return static_cast<int64_t>(task_info_value.virtual_size);
-  }
-  if (nullptr != resident_size) {
-    *resident_size = 0;
-  }
-  return 0;
-#else
-  static const ssize_t page_size = lib::ob_get_page_size();
-  int64_t page_count = 0;
-  int64_t resident_page_count = 0;
-  FILE *statm = fopen("/proc/self/statm", "r");
-  if (nullptr != statm) {
-    static_cast<void>(fscanf(statm, "%ld %ld", &page_count,
-                             &resident_page_count));
-    fclose(statm);
-  }
-  if (nullptr != resident_size) {
-    *resident_size = resident_page_count * page_size;
-  }
-  return page_count * page_size;
-#endif
-}
-
-bool get_allocator_process_stats(AllocatorProcessStats &stats)
-{
-  stats = AllocatorProcessStats();
-  stats.virtual_memory_ = get_virtual_memory_used(&stats.process_resident_);
-#if defined(OB_HAVE_BUNDLED_JEMALLOC)
-  uint64_t epoch = 1;
-  size_t epoch_size = sizeof(epoch);
-  size_t value_size = sizeof(size_t);
-  size_t allocated = 0;
-  size_t active = 0;
-  size_t resident = 0;
-  size_t mapped = 0;
-  if (0 == je_mallctl("epoch", &epoch, &epoch_size, &epoch, sizeof(epoch))
-      && 0 == je_mallctl("stats.allocated", &allocated, &value_size, nullptr, 0)
-      && (value_size = sizeof(size_t),
-          0 == je_mallctl("stats.active", &active, &value_size, nullptr, 0))
-      && (value_size = sizeof(size_t),
-          0 == je_mallctl("stats.resident", &resident, &value_size, nullptr, 0))
-      && (value_size = sizeof(size_t),
-          0 == je_mallctl("stats.mapped", &mapped, &value_size, nullptr, 0))) {
-    stats.allocator_stats_available_ = true;
-    stats.allocated_ = static_cast<uint64_t>(allocated);
-    stats.active_ = static_cast<uint64_t>(active);
-    stats.resident_ = static_cast<uint64_t>(resident);
-    stats.mapped_ = static_cast<uint64_t>(mapped);
-  }
-#endif
-  return stats.allocator_stats_available_;
-}
-
-void ob_print_mod_memory_usage(bool print_to_std,
-                               bool print_glibc_malloc_stats)
-{
-  UNUSED(print_glibc_malloc_stats);
-  AllocatorProcessStats stats;
-  const bool available = get_allocator_process_stats(stats);
-  const uint64_t allocated = stats.allocated_;
-  const uint64_t active = stats.active_;
-  const uint64_t allocator_resident = stats.resident_;
-  const uint64_t mapped = stats.mapped_;
-  const int64_t virtual_memory = stats.virtual_memory_;
-  const int64_t process_resident = stats.process_resident_;
-  LIB_LOG(INFO, "allocator process memory", K(available), K(allocated),
-          K(active), K(allocator_resident), K(mapped), K(virtual_memory),
-          K(process_resident));
-  if (print_to_std) {
-    fprintf(stderr,
-            "allocator_process_memory available=%d allocated=%llu active=%llu "
-            "allocator_resident=%llu mapped=%llu virtual_memory=%lld "
-            "process_resident=%lld\n",
-            available ? 1 : 0, static_cast<unsigned long long>(allocated),
-            static_cast<unsigned long long>(active),
-            static_cast<unsigned long long>(allocator_resident),
-            static_cast<unsigned long long>(mapped),
-            static_cast<long long>(virtual_memory),
-            static_cast<long long>(process_resident));
-  }
 }
 
 bool restore_allocator_after_fork()

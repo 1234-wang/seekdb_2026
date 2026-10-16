@@ -26,6 +26,7 @@ namespace
 {
 
 MemoryQuota *test_workarea_quota = nullptr;
+constexpr int64_t TEST_MAX_BATCH_SIZE = 1024;
 
 class TestTmpFileManagerGuard final
 {
@@ -263,14 +264,16 @@ int add_string_vectorized_batch(ObChunkDatumStore &store,
   int ret = OB_SUCCESS;
   ObExecContext exec_ctx(allocator);
   ObEvalCtx eval_ctx(exec_ctx);
-  eval_ctx.set_max_batch_size(batch_size);
+  // BatchCtx is allocated once per store using the query's maximum batch
+  // capacity, not the number of rows in its first (possibly partial) batch.
+  eval_ctx.set_max_batch_size(TEST_MAX_BATCH_SIZE);
 
   ObExpr expr;
   expr.datum_meta_.type_ = ObVarcharType;
   expr.batch_result_ = true;
   expr.frame_idx_ = 0;
   expr.datum_off_ = 0;
-  expr.eval_info_off_ = sizeof(ObDatum) * batch_size;
+  expr.eval_info_off_ = sizeof(ObDatum) * TEST_MAX_BATCH_SIZE;
   const int64_t frame_size = expr.eval_info_off_ + sizeof(ObEvalInfo);
   std::vector<uint64_t> frame_words(
       (frame_size + sizeof(uint64_t) - 1) / sizeof(uint64_t), 0);
@@ -624,7 +627,7 @@ TEST(TestWorkareaMemoryQuota,
   TrackedAllocator quota_allocator(
       shrinking_allocator, nullptr, &quota,
       ObMemAttr("WABatchQuota", ObCtxIds::WORK_AREA));
-  const int64_t batch_size = 1024;
+  const int64_t batch_size = TEST_MAX_BATCH_SIZE;
 
   quota.set_limit(1L << 20);
   {

@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/virtual_table/ob_all_virtual_resource_limit_detail.h"
+#include "observer/virtual_table/ob_all_virtual_resource_limit.h"
 #include "share/rc/ob_server_runtime.h"
 
 using namespace oceanbase::common;
@@ -30,7 +31,9 @@ namespace observer
 ObResourceLimitDetailTable::ObResourceLimitDetailTable()
   : ObVirtualTableScannerIterator(),
     iter_(),
-    constraint_iter_()
+    constraint_iter_(),
+    logical_resources_finished_(false),
+    memory_resource_index_(0)
 {
 }
 
@@ -43,6 +46,8 @@ void ObResourceLimitDetailTable::reset()
 {
   constraint_iter_.reset();
   iter_.reset();
+  logical_resources_finished_ = false;
+  memory_resource_index_ = 0;
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -81,24 +86,44 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   int64_t limit_value;
-  if (NULL == allocator_) {
+  row = nullptr;
+  if (OB_ISNULL(allocator_) || OB_ISNULL(cur_row_.cells_)) {
     ret = OB_NOT_INIT;
-  } else if (FALSE_IT(start_to_read_ = true)) {
-  } else if (OB_FAIL(get_next_resource_limit_val_(limit_value))) {
-    if (OB_ITER_END != ret) {
-    }
   } else {
+    start_to_read_ = true;
+    if (!logical_resources_finished_
+        && OB_FAIL(get_next_resource_limit_val_(limit_value))) {
+      if (OB_ITER_END == ret) {
+        logical_resources_finished_ = true;
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_SUCC(ret) && logical_resources_finished_) {
+      MemoryQuotaSample sample;
+      if (memory_resource_index_ >= ObResourceLimitTable::memory_resource_count()) {
+        ret = OB_ITER_END;
+      } else if (OB_FAIL(ObResourceLimitTable::get_memory_resource_sample(
+                     memory_resource_index_, sample))) {
+      } else {
+        limit_value = sample.limit_bytes_;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
         case RESOURCE_NAME: {
-          cur_row_.cells_[i].set_varchar(get_logic_res_type_name(iter_.get_curr_type()));
+          cur_row_.cells_[i].set_varchar(logical_resources_finished_
+              ? ObResourceLimitTable::memory_resource_name(memory_resource_index_)
+              : get_logic_res_type_name(iter_.get_curr_type()));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case LIMIT_TYPE:
-          cur_row_.cells_[i].set_varchar(get_constraint_type_name(constraint_iter_.get_curr_type()));
+          cur_row_.cells_[i].set_varchar(get_constraint_type_name(
+              logical_resources_finished_ ? MEMORY_CONSTRAINT : constraint_iter_.get_curr_type()));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case LIMIT_VALUE:
@@ -111,6 +136,9 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
     }
   }
   if (OB_SUCC(ret)) {
+    if (logical_resources_finished_) {
+      ++memory_resource_index_;
+    }
     row = &cur_row_;
   }
   return ret;

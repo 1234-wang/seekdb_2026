@@ -33,12 +33,12 @@ endif()
 
 # malloc_hook is only part of the Linux bundled-jemalloc runtime.  Do not even
 # compile it in ASAN builds: compiler-rt must own the process allocation ABI.
-if(NOT OB_USE_ASAN AND NOT APPLE AND NOT WIN32 AND NOT ANDROID)
-  add_library(malloc_hook STATIC ${SEEKDB_OBLIB_MALLOC_HOOK_STANDALONE})
-  target_link_libraries(malloc_hook oblib_base)
-  if(OB_HAVE_BUNDLED_JEMALLOC)
-    target_link_libraries(malloc_hook seekdb_jemalloc)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT OB_USE_ASAN)
+  if(NOT TARGET seekdb_jemalloc)
+    message(FATAL_ERROR "The Linux malloc hook requires bundled jemalloc")
   endif()
+  add_library(malloc_hook STATIC ${SEEKDB_OBLIB_MALLOC_HOOK_STANDALONE})
+  target_link_libraries(malloc_hook oblib_base seekdb_jemalloc)
 endif()
 
 if(WIN32)

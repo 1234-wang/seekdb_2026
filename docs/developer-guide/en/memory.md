@@ -115,11 +115,20 @@ primitive only provides atomic reserve/reconcile/rollback accounting.
 
 ## Component memory diagnostics
 
-`V$OB_COMPONENT_MEMORY` (backed by
-`__all_virtual_component_memory_stat`) exposes one row per server for
-`KV_CACHE`, `SQL_WORKAREA`, `VECTOR`, and `META_OBJECT`. Its eight columns are
-`SVR_IP`, `SVR_PORT`, `COMPONENT_NAME`, `LIMIT_BYTES`, `COMMITTED_BYTES`,
-`RESERVED_BYTES`, `REJECT_COUNT`, and `RECLAIM_COUNT`.
+`oceanbase.__all_virtual_resource_limit` preserves its existing `tablet` row
+and adds four local component resources: `kv_cache_memory`,
+`sql_workarea_memory`, `vector_memory`, and `meta_object_memory`.
+For these memory rows, `CURRENT_UTILIZATION` is committed (physically charged)
+memory, `RESERVED_VALUE` is in-flight quota reservation, and `LIMIT_VALUE` is
+the current quota limit, all in bytes. These are not process RSS or payload-only
+sizes. `MAX_UTILIZATION` is `NULL` because no memory high-water counter is
+maintained; `EFFECTIVE_LIMIT_TYPE` is `memory`. A disabled component may have
+zero usage; a missing data source is an error, not a fabricated zero sample.
+
+`oceanbase.__all_virtual_resource_limit_detail` adds one `memory` constraint
+per component with its quota limit in bytes. Existing tablet rows in both tables
+remain counts, not bytes; their capacity calculation is unchanged. No new
+component table or view is introduced.
 
 The numeric fields are independent atomic samples. A row has no joint
 linearization point and must not be treated as a transactionally consistent
@@ -127,8 +136,9 @@ snapshot. Use it for capacity trends and component attribution. Tests or tools
 that require a strict invariant must first stop and join component workers,
 wait for reclaim work, and then verify that no reservation is in flight.
 
-`REJECT_COUNT` counts each failed quota admission or reconcile attempt,
-including an attempt later recovered by a component retry. `RECLAIM_COUNT`
+Reject and reclaim counters remain internal quota diagnostics and are not
+columns of these resource-limit tables. The reject counter counts each failed quota admission or reconcile attempt,
+including an attempt later recovered by a component retry. The reclaim counter
 counts successful wash, spill, cleanup, or GC batches that physically reclaim
 at least one byte/object; failed attempts are logged but not counted. For SQL
 WorkArea specifically, one event is one successful positive physical-spill
@@ -140,14 +150,17 @@ and the `DUMP ENTITY`, `DUMP CHUNK`, and `ALTER SYSTEM REFRESH MEMORY STAT`
 commands, are removed. The Vector `RAW_MALLOC_SIZE` compatibility column is
 deprecated and returns `NULL`; Vector totals use the component tracker.
 
-`MALLOC_BACKEND=jemalloc` is accepted only as a deprecated no-op on bundled
-jemalloc builds. `MALLOC_BACKEND=obmalloc`, unknown values, and every non-empty
-value on platform-allocator builds fail during early startup. The following
-configuration parameters remain loadable and persistent compatibility no-ops:
+The following configuration parameters remain loadable and persistent
+compatibility no-ops:
 `cache_wash_threshold`, `memory_chunk_cache_size`,
 `__min_full_resource_pool_memory`,
 `_min_malloc_sample_interval`, `_max_malloc_sample_interval`,
-`_ctx_memory_limit`, and `_enable_memleak_light_backtrace`.
+and `_enable_memleak_light_backtrace`.
+
+`_ctx_memory_limit` is removed together with the obmalloc context allocator
+and is no longer accepted as a configuration parameter.
+Clear any persisted value on the previous version before upgrading; unknown
+configuration entries cause configuration loading to fail.
 
 **prio**
 

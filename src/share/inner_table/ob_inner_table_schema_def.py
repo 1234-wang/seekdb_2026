@@ -6078,7 +6078,7 @@ def_table_schema(
   normal_columns = [
   ('resource_name', 'varchar:MAX_RESOURCE_NAME_LEN'),
   ('current_utilization', 'bigint'),
-  ('max_utilization', 'bigint'),
+  ('max_utilization', 'bigint', 'true'),
   ('reserved_value', 'bigint'),
   ('limit_value', 'bigint'),
   ('effective_limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN')
@@ -6331,28 +6331,6 @@ def_table_schema(
     ('fetch_lsn', 'int'),
     ('fetch_scn', 'int'),
   ],
-)
-
-# 12565: __all_virtual_component_memory_stat
-def_table_schema(
-  owner = 'wangyunlai.wyl',
-  table_name = '__all_virtual_component_memory_stat',
-  table_id = '12565',
-  table_type = 'VIRTUAL_TABLE',
-  gm_columns = [],
-  rowkey_columns = [
-    ('svr_ip', 'varchar:OB_MAX_SERVER_ADDR_SIZE'),
-    ('svr_port', 'int'),
-    ('component_name', 'varchar:64'),
-  ],
-  normal_columns = [
-    ('limit_bytes', 'int'),
-    ('committed_bytes', 'int'),
-    ('reserved_bytes', 'int'),
-    ('reject_count', 'int'),
-    ('reclaim_count', 'int'),
-  ],
-  vtable_route_policy = 'local',
 )
 
 # Reserved position (placeholder before this line)
@@ -13811,29 +13789,6 @@ def_table_schema(
       FETCH_LSN,
       FETCH_SCN
     FROM oceanbase.__all_virtual_change_stream_refresh_stat
-  """.replace("\n", " ")
-)
-
-# 21669: V$OB_COMPONENT_MEMORY
-def_table_schema(
-  owner = 'wangyunlai.wyl',
-  table_name = 'V$OB_COMPONENT_MEMORY',
-  table_id = '21669',
-  table_type = 'SYSTEM_VIEW',
-  gm_columns = [],
-  rowkey_columns = [],
-  normal_columns = [],
-  view_definition = """
-    SELECT
-      SVR_IP,
-      SVR_PORT,
-      COMPONENT_NAME,
-      LIMIT_BYTES,
-      COMMITTED_BYTES,
-      RESERVED_BYTES,
-      REJECT_COUNT,
-      RECLAIM_COUNT
-    FROM oceanbase.__all_virtual_component_memory_stat
   """.replace("\n", " ")
 )
 

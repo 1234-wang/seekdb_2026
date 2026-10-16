@@ -32,16 +32,6 @@ using oceanbase::common::MemoryQuota;
 
 // This is a standalone performance runner, not a correctness unit test.
 
-#ifdef SEEKDB_STANDALONE_QUOTA_BENCHMARK
-// ob_tsi_utils.cpp only calls this if the process exhausts all 65,536 thread
-// ids.  The benchmark links that small runtime directly to keep its allocator
-// hot path independent from the product shared library.
-void ob_abort(void) noexcept
-{
-  std::abort();
-}
-#endif
-
 namespace
 {
 

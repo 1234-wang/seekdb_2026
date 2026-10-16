@@ -461,21 +461,6 @@ TEST(TestMallocBackend, aligned_jemalloc)
   ob_free(ptr);
 }
 
-TEST(TestMallocBackend, process_stats_are_readable)
-{
-  AllocatorProcessStats stats;
-  ASSERT_TRUE(get_allocator_process_stats(stats));
-  ASSERT_TRUE(stats.allocator_stats_available_);
-  ASSERT_GT(stats.allocated_, 0U);
-  ASSERT_GE(stats.active_, stats.allocated_);
-  ASSERT_GE(stats.resident_, stats.active_);
-  ASSERT_GE(stats.mapped_, stats.active_);
-#if defined(__linux__)
-  ASSERT_GT(stats.virtual_memory_, 0);
-  ASSERT_GT(stats.process_resident_, 0);
-#endif
-}
-
 #if defined(__linux__) && !defined(ENABLE_SANITY)
 TEST(TestMallocBackend, restore_after_fork)
 {

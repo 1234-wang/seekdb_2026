@@ -60,6 +60,28 @@ TEST(TestMemoryQuota, reservation_guard_rolls_back)
   ASSERT_EQ(0, quota.committed());
 }
 
+TEST(TestMemoryQuota, reset_clears_quiescent_accounting)
+{
+  MemoryQuota quota(100);
+  ASSERT_TRUE(quota.reserve(60));
+  ASSERT_TRUE(quota.reconcile(60, 60));
+  ASSERT_FALSE(quota.reserve(41));
+  quota.release(60);
+  quota.record_reclaim(60);
+
+  quota.reset(32);
+  EXPECT_EQ(32, quota.limit());
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+  EXPECT_EQ(0, quota.reject_count());
+  EXPECT_EQ(0, quota.reclaim_count());
+  ASSERT_TRUE(quota.reserve(32));
+  ASSERT_TRUE(quota.reconcile(32, 32));
+  EXPECT_EQ(32, quota.committed());
+  quota.release(32);
+  EXPECT_EQ(0, quota.committed());
+}
+
 TEST(TestMemoryQuota, actual_charge_can_grow_within_limit)
 {
   MemoryQuota quota(100);
@@ -139,7 +161,7 @@ TEST(TestMemoryQuota, dynamic_shrink_blocks_growth_until_reclaimed)
   ASSERT_EQ(0, quota.reserved());
 }
 
-TEST(TestMemoryQuota, cross_thread_release_preserves_sharded_committed_total)
+TEST(TestMemoryQuota, cross_thread_release_preserves_committed_total)
 {
   MemoryQuota quota(100);
   std::atomic<bool> committed(false);
@@ -156,6 +178,7 @@ TEST(TestMemoryQuota, cross_thread_release_preserves_sharded_committed_total)
     while (!committed.load(std::memory_order_acquire)) {
       std::this_thread::yield();
     }
+    EXPECT_EQ(60, quota.committed());
     quota.release(60);
     released.store(true, std::memory_order_release);
   });
@@ -164,6 +187,34 @@ TEST(TestMemoryQuota, cross_thread_release_preserves_sharded_committed_total)
 
   ASSERT_EQ(0, quota.committed());
   ASSERT_EQ(0, quota.reserved());
+}
+
+TEST(TestMemoryQuota, committed_total_survives_allocating_thread_exit)
+{
+  static const int THREAD_COUNT = 8;
+  MemoryQuota quota(1024);
+  std::atomic<bool> failed(false);
+  std::vector<std::thread> workers;
+  for (int i = 0; i < THREAD_COUNT; ++i) {
+    workers.emplace_back([&, i]() {
+      const int64_t bytes = (i + 1) * 16;
+      MemoryReservation reservation(&quota, bytes);
+      if (!reservation.valid() || !reservation.reconcile(bytes)) {
+        failed.store(true, std::memory_order_release);
+      }
+    });
+  }
+  for (std::thread &worker : workers) {
+    worker.join();
+  }
+
+  ASSERT_FALSE(failed.load(std::memory_order_acquire));
+  const int64_t total = THREAD_COUNT * (THREAD_COUNT + 1) / 2 * 16;
+  EXPECT_EQ(total, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+  quota.release(total);
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
 }
 
 TEST(TestMemoryQuota, concurrent_admission_never_exceeds_limit)

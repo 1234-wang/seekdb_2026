@@ -95,19 +95,25 @@ reserve/reconcile/rollback 记账。
 
 ## 组件内存诊断
 
-`V$OB_COMPONENT_MEMORY`（底层表为
-`__all_virtual_component_memory_stat`）在每个 server 固定返回
-`KV_CACHE`、`SQL_WORKAREA`、`VECTOR`、`META_OBJECT` 四行。八个字段为
-`SVR_IP`、`SVR_PORT`、`COMPONENT_NAME`、`LIMIT_BYTES`、
-`COMMITTED_BYTES`、`RESERVED_BYTES`、`REJECT_COUNT` 和
-`RECLAIM_COUNT`。
+`oceanbase.__all_virtual_resource_limit` 保留已有的 `tablet` 行，增加本地组件资源
+`kv_cache_memory`、`sql_workarea_memory`、`vector_memory`、`meta_object_memory`。
+内存行中，`CURRENT_UTILIZATION` 表示 committed（已实际计费内存），
+`RESERVED_VALUE` 表示尚未结算的预占额度，`LIMIT_VALUE` 表示当前组件额度，单位均为字节。
+这些值不是进程 RSS，也不只是 payload 大小。`MAX_UTILIZATION` 返回 `NULL`，
+不额外维护内存峰值计数；`EFFECTIVE_LIMIT_TYPE` 为 `memory`。
+未使用的组件可以是零占用；缺失数据源时报错，不伪造零值。
+
+`oceanbase.__all_virtual_resource_limit_detail` 为每个组件增加一条 `memory` 约束，
+其额度单位也是字节。两表原有的 tablet 行仍以个数为单位，容量计算不变。
+不新增组件内存表或视图。
 
 数值字段分别进行原子采样，同一行没有多字段联合线性化点，不能当作事务一致快照。
 该表用于容量趋势和组件归因；需要验证严格不变量时，必须先停止并 join 组件 worker、
 等待回收完成，并确认没有 in-flight reservation。
 
-`REJECT_COUNT` 统计每次失败的 quota reserve/reconcile 尝试，包括随后被组件重试
-挽救的尝试。`RECLAIM_COUNT` 统计实际回收了至少一个字节或对象的成功
+拒绝和回收计数继续用于 quota 内部诊断，不作为上述资源限制表的列。
+拒绝计数统计每次失败的 quota reserve/reconcile 尝试，包括随后被组件重试
+挽救的尝试。回收计数统计实际回收了至少一个字节或对象的成功
 wash/spill/cleanup/GC 批次；失败尝试只记录日志，不计入该字段。对 SQL
 WorkArea，一次成功的正向物理 spill 写回调计为一次；后续负向统计调整
 不增加该计数。
@@ -118,13 +124,14 @@ obmalloc 专用的 `V$OB_MEMORY`、`__all_virtual_memory_info`、
 Vector 的 `RAW_MALLOC_SIZE` 兼容列保留为 deprecated，并返回 `NULL`；Vector
 汇总改读组件 tracker。
 
-bundled jemalloc 构建只把 `MALLOC_BACKEND=jemalloc` 接受为 deprecated no-op；
-`MALLOC_BACKEND=obmalloc`、未知值，以及平台 allocator 构建中的任意非空值，都会在
-启动早期失败。以下参数继续支持加载和持久化，但为无效果的兼容项：
+以下参数继续支持加载和持久化，但为无效果的兼容项：
 `cache_wash_threshold`、`memory_chunk_cache_size`、
 `__min_full_resource_pool_memory`、
 `_min_malloc_sample_interval`、`_max_malloc_sample_interval`、
-`_ctx_memory_limit`、`_enable_memleak_light_backtrace`。
+`_enable_memleak_light_backtrace`。
+
+`_ctx_memory_limit` 随 obmalloc context allocator 一并删除，不再接受该配置项。
+升级前应在原版本清理已持久化的该配置值；未知配置项会导致配置加载失败。
 
 **prio**
 

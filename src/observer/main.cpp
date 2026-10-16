@@ -642,35 +642,8 @@ static int safe_sd_notify(int unset_environment, const char *state)
 #endif
 }
 
-static int validate_malloc_backend_environment()
-{
-  int ret = OB_SUCCESS;
-  const char *backend = getenv("MALLOC_BACKEND");
-  if (nullptr != backend && '\0' != backend[0]) {
-#if defined(OB_HAVE_BUNDLED_JEMALLOC)
-    if (0 == strcmp(backend, "jemalloc")) {
-      MPRINT("MALLOC_BACKEND=jemalloc is deprecated and has no effect; "
-             "this build always uses bundled jemalloc.");
-    } else {
-      MPRINT("Invalid MALLOC_BACKEND='%s'; this build only accepts the "
-             "deprecated no-op value 'jemalloc'.", backend);
-      ret = 127;
-    }
-#else
-    MPRINT("MALLOC_BACKEND is not supported by this build; the platform "
-           "allocator is fixed at build time.");
-    ret = 127;
-#endif
-  }
-  return ret;
-}
-
 int inner_main(int argc, char *argv[])
 {
-  const int malloc_backend_ret = validate_malloc_backend_environment();
-  if (OB_SUCCESS != malloc_backend_ret) {
-    return malloc_backend_ret;
-  }
 #if defined(__APPLE__) && defined(OB_HAVE_BUNDLED_JEMALLOC)
   if (!configure_darwin_malloc_zone()) {
     MPRINT("Failed to configure the bundled jemalloc macOS malloc zone.");
@@ -687,7 +660,6 @@ int inner_main(int argc, char *argv[])
   }
 #endif
   ObStackHeaderGuard stack_header_guard;
-  int64_t memory_used = get_virtual_memory_used();
 
   ObCurTraceId::SeqGenerator::seq_generator_  = ObTimeUtility::current_time();
   static const int  LOG_FILE_SIZE             = DEFAULT_LOG_FILE_SIZE_MB * 1024 * 1024;
@@ -786,15 +758,6 @@ int inner_main(int argc, char *argv[])
              "default file", LOG_FILE_NAME,
              "max_log_file_size", LOG_FILE_SIZE,
              "enable_async_log", OB_LOGGER.enable_async_log());
-    if (0 == memory_used) {
-      _LOG_INFO("Get virtual memory info failed");
-    } else {
-#ifdef _WIN32
-      _LOG_INFO("Virtual memory : %15ld byte", memory_used);
-#else
-      _LOG_INFO("Virtual memory : %'15ld byte", memory_used);
-#endif
-    }
     // print in log file.
     LOG_INFO("Build basic information for each syslog file", "info", syslog_file_info);
     print_all_limits();

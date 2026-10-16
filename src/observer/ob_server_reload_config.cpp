@@ -26,7 +26,6 @@
 #include "storage/compaction/ob_tablet_scheduler.h"
 #include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
-#include <atomic>
 
 #include <string>
 
@@ -35,30 +34,6 @@ using namespace oceanbase::common;
 using namespace oceanbase::observer;
 using namespace oceanbase::storage;
 using namespace oceanbase::share;
-
-namespace
-{
-void warn_deprecated_allocator_parameters_once()
-{
-  static std::atomic<bool> warned(false);
-  if (!warned.exchange(true, std::memory_order_acq_rel)) {
-    LOG_WARN_RET(OB_SUCCESS, "cache_wash_threshold is deprecated and has no effect",
-        "value", oceanbase::config::cache_wash_threshold());
-    LOG_WARN_RET(OB_SUCCESS, "memory_chunk_cache_size is deprecated and has no effect",
-        "value", oceanbase::config::memory_chunk_cache_size());
-    LOG_WARN_RET(OB_SUCCESS, "__min_full_resource_pool_memory is deprecated and has no effect",
-        "value", oceanbase::config::legacy_min_full_resource_pool_memory());
-    LOG_WARN_RET(OB_SUCCESS, "_min_malloc_sample_interval is deprecated and has no effect",
-        "value", oceanbase::config::_min_malloc_sample_interval());
-    LOG_WARN_RET(OB_SUCCESS, "_max_malloc_sample_interval is deprecated and has no effect",
-        "value", oceanbase::config::_max_malloc_sample_interval());
-    LOG_WARN_RET(OB_SUCCESS, "_ctx_memory_limit is deprecated and has no effect",
-        "value", oceanbase::config::_ctx_memory_limit().c_str());
-    LOG_WARN_RET(OB_SUCCESS, "_enable_memleak_light_backtrace is deprecated and has no effect",
-        "value", oceanbase::config::_enable_memleak_light_backtrace());
-  }
-}
-} // namespace
 
 ObServerReloadConfig::ObServerReloadConfig(ObGlobalContext &gctx)
   : gctx_(gctx)
@@ -74,7 +49,6 @@ int ObServerReloadConfig::operator()()
 {
   int tmp_ret = OB_SUCCESS;
   int ret = tmp_ret;
-  warn_deprecated_allocator_parameters_once();
 
   if (!gctx_.is_inited()) {
     ret = tmp_ret = OB_INNER_STAT_ERROR;

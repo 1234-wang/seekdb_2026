@@ -125,23 +125,23 @@ sample_process()
   local pid=$1
   local port=$2
   local destination=$3
-  printf 'timestamp\trss_kb\tpss_kb\tcomponent\tlimit_bytes\tcommitted_bytes\treserved_bytes\treject_count\treclaim_count\n' >"${destination}"
+  printf 'timestamp\trss_kb\tpss_kb\tcomponent\tlimit_bytes\tcommitted_bytes\treserved_bytes\n' >"${destination}"
   while kill -0 "${pid}" 2>/dev/null; do
     local timestamp rss pss rows
     timestamp=$(date +%s)
     rss=$(awk '/^Rss:/ {print $2}' "/proc/${pid}/smaps_rollup" 2>/dev/null || true)
     pss=$(awk '/^Pss:/ {print $2}' "/proc/${pid}/smaps_rollup" 2>/dev/null || true)
     rows=$(mysql --protocol=tcp -h127.0.0.1 -P"${port}" -uroot -Nse \
-      'SELECT COMPONENT_NAME,LIMIT_BYTES,COMMITTED_BYTES,RESERVED_BYTES,REJECT_COUNT,RECLAIM_COUNT FROM oceanbase.V$OB_COMPONENT_MEMORY ORDER BY COMPONENT_NAME' \
+      "SELECT resource_name,limit_value,current_utilization,reserved_value FROM oceanbase.__all_virtual_resource_limit WHERE resource_name IN ('kv_cache_memory','sql_workarea_memory','vector_memory','meta_object_memory') ORDER BY resource_name" \
       2>/dev/null || true)
     if [[ -n ${rows} ]]; then
-      while IFS=$'\t' read -r component limit committed reserved reject reclaim; do
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      while IFS=$'\t' read -r component limit committed reserved; do
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
           "${timestamp}" "${rss:-0}" "${pss:-0}" "${component}" "${limit}" \
-          "${committed}" "${reserved}" "${reject}" "${reclaim}" >>"${destination}"
+          "${committed}" "${reserved}" >>"${destination}"
       done <<<"${rows}"
     else
-      printf '%s\t%s\t%s\tunavailable\t0\t0\t0\t0\t0\n' \
+      printf '%s\t%s\t%s\tunavailable\t0\t0\t0\n' \
         "${timestamp}" "${rss:-0}" "${pss:-0}" >>"${destination}"
     fi
     sleep 1

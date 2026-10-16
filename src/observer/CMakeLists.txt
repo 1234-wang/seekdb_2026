@@ -15,9 +15,8 @@ target_link_libraries(oceanbase_static PUBLIC
   ob_share_static
   oblib)
 
-# malloc_hook conflicts with LLVM's early global constructors on macOS and is
-# not part of the Windows/Android runtime contract.
-if(NOT OB_USE_ASAN AND NOT APPLE AND NOT WIN32 AND NOT ANDROID)
+# The malloc_hook target owns the platform and allocator eligibility checks.
+if(TARGET malloc_hook)
   set(link_malloc_hook malloc_hook)
   set(malloc_hook_export_symbols
     malloc free realloc reallocarray memalign malloc_usable_size
