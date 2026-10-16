@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Exercise pinned release downloads and verification without external traffic."""
 
-import gzip
 import hashlib
 import http.server
-import io
+import json
 import os
-import tarfile
 import tempfile
 import threading
 import unittest
@@ -20,30 +18,14 @@ import bazel_bootstrap as bootstrap
 PAYLOAD = b"a pinned release binary\n"
 
 
-def deb_package(binary):
-    data = io.BytesIO()
-    with tarfile.open(fileobj=data, mode="w") as archive:
-        member = tarfile.TarInfo("usr/bin/bazel-real")
-        member.size = len(binary)
-        archive.addfile(member, io.BytesIO(binary))
-    payload = gzip.compress(data.getvalue(), mtime=0)
-    header = "%-16s%-12s%-6s%-6s%-8s%-10d`\n" % (
-        "data.tar.gz/", "0", "0", "0", "100644", len(payload),
-    )
-    return b"!<arch>\n" + header.encode() + payload + (b"\n" if len(payload) % 2 else b"")
-
-
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.server.requests.append(self.path)
         path = urlsplit(self.path).path
-        if path == "/missing":
+        if path.startswith("/missing"):
             self.send_error(404)
             return
-        if path == "/deb":
-            data = deb_package(PAYLOAD)
-        else:
-            data = PAYLOAD if path == "/good" else b"corrupt download"
+        data = PAYLOAD if path == "/good" or path.startswith("/bazel/9.3.0/") else b"corrupt download"
         self.send_response(200)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -102,29 +84,45 @@ class DownloadTest(unittest.TestCase):
         )
         self.assertEqual(self.server.requests, [])
 
-    def test_deb_mirror_installs_the_verified_native_binary(self):
-        checksum = hashlib.sha256(deb_package(PAYLOAD)).hexdigest()
-        result = bootstrap.download_deb_binary(
-            self.base + "/deb",
-            self.destination, self.checksum, checksum,
-        )
-        self.assertEqual(result.read_bytes(), PAYLOAD)
-        self.assertEqual(list(self.destination.parent.iterdir()), [self.destination])
+    def write_manifest(self, source):
+        root = Path(self.directory.name) / "project"
+        (root / "bazel").mkdir(exist_ok=True, parents=True)
+        manifest = {
+            "version": "9.3.0",
+            "base_url": source,
+            "sha256": {host: self.checksum for host in (
+                "linux-x86_64", "linux-arm64", "darwin-x86_64", "darwin-arm64",
+                "windows-x86_64.exe", "windows-arm64.exe",
+            )},
+        }
+        (root / "bazel/binaries.json").write_text(json.dumps(manifest))
+        return root, manifest
 
-    def test_corrupt_deb_is_never_installed(self):
-        with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):
-            bootstrap.download_deb_binary(
-                self.base + "/deb", self.destination, self.checksum, "0" * 64,
-            )
-        self.assertEqual(list(self.destination.parent.iterdir()), [])
+    def test_all_platforms_use_the_configured_mirror(self):
+        root, manifest = self.write_manifest(self.base + "/bazel/")
+        cache = Path(self.directory.name) / "cache"
+        for host in manifest["sha256"]:
+            with self.subTest(host=host), patch.object(bootstrap, "host_platform", return_value=host):
+                result = bootstrap.ensure_bazel(root, cache, "9.3.0")
+                self.assertEqual(result.read_bytes(), PAYLOAD)
+                self.assertEqual(result.name, "bazel-9.3.0-" + host)
+        self.assertEqual(self.server.requests, [
+            "/bazel/9.3.0/bazel-9.3.0-" + host for host in manifest["sha256"]
+        ])
 
-    def test_deb_binary_is_checked_against_the_official_binary_hash(self):
-        checksum = hashlib.sha256(deb_package(PAYLOAD)).hexdigest()
-        with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):
-            bootstrap.download_deb_binary(
-                self.base + "/deb", self.destination, "0" * 64, checksum,
-            )
-        self.assertEqual(list(self.destination.parent.iterdir()), [])
+    def test_missing_mirror_file_fails_without_fallback(self):
+        root, _ = self.write_manifest(self.base + "/missing")
+        cache = Path(self.directory.name) / "cache"
+        with patch.object(bootstrap, "host_platform", return_value="darwin-arm64"):
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "404"):
+                bootstrap.ensure_bazel(root, cache, "9.3.0")
+        self.assertEqual(self.server.requests, ["/missing/9.3.0/bazel-9.3.0-darwin-arm64"])
+
+    def test_invalid_mirror_url_is_rejected_before_download(self):
+        root, _ = self.write_manifest("file:///bazel")
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "base_url"):
+            bootstrap.ensure_bazel(root, Path(self.directory.name) / "cache", "9.3.0")
+        self.assertEqual(self.server.requests, [])
 
 
 if __name__ == "__main__":
