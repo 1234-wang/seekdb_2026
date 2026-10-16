@@ -125,7 +125,9 @@ Rust 可使用 [TUNA rustup 镜像](https://mirrors.tuna.tsinghua.edu.cn/help/ru
 python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
 ```
 
-新机器可先执行 `python3 bazel.py --no-proxy version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py --no-proxy deps init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
+新机器可先执行 `python3 bazel.py --no-proxy version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py --no-proxy init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
+
+`.bazelrc` 默认设置 `common --http_max_parallel_downloads=32`，构建及 `fetch` 等命令无需重复指定下载并发。该参数控制 Bazel HTTP 下载数量上限，与构建任务的 `--jobs` 分开；不会对单个文件分片加速。需要覆盖时，将参数放在命令之后，例如 `python3 bazel.py build --http_max_parallel_downloads=8 //src/observer:seekdb`。
 
 - PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。Linux x86_64 固定从清华 Bazel APT 镜像下载；仅解出原始 Bazel 二进制，同时校验官方安装包和独立二进制的 SHA256。其他宿主固定使用 `releases.bazel.build`。每个平台只有一个下载源，失败直接报错，不做 fallback。下载地址和校验值见 [`bazel/binaries.json`](../../bazel/binaries.json)。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
 - 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。

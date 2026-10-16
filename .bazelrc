@@ -1,5 +1,6 @@
 # Shared settings for the seekdb Bazel build.
 common --lockfile_mode=error
+common --http_max_parallel_downloads=32
 build --verbose_failures
 build --workspace_status_command=./tools/bazel_migration/workspace_status.sh
 build --enable_platform_specific_config

@@ -393,7 +393,7 @@ def _launcher_arguments(
             "seekdb Bazel launcher; unrecognized arguments are passed through to Bazel"
         ),
         epilog=(
-            "seekdb management commands: ./bazel.py deps init; "
+            "seekdb management commands: ./bazel.py init; "
             "./bazel.py registry sync --root PATH"
         ),
     )
@@ -521,10 +521,10 @@ def _run_management_command(root: Path, arguments: List[str]) -> Optional[int]:
             [sys.executable, str(registry_tool)] + arguments[1:],
             cwd=str(root),
         ).returncode
-    if not arguments or arguments[0] != "deps":
+    if not arguments or arguments[0] != "init":
         return None
-    if arguments != ["deps", "init"]:
-        raise LauncherError("usage: ./bazel.py deps init")
+    if arguments != ["init"]:
+        raise LauncherError("usage: ./bazel.py init")
 
     initializer = root / "deps" / "init" / "dep_create.sh"
     if not initializer.is_file():
