@@ -11,10 +11,7 @@
   "deb": {
     "linux-x86_64": {
       "sha256": "11d91b4d893724f74d47b42f118d459f37fd21ec72fa21cd7c87f48fb70a2321",
-      "urls": [
-        "https://mirrors.tuna.tsinghua.edu.cn/bazel-apt/pool/jdk1.8/b/bazel/bazel_9.3.0_amd64.deb",
-        "https://mirrors.nju.edu.cn/bazel-apt/pool/jdk1.8/b/bazel/bazel_9.3.0_amd64.deb"
-      ]
+      "url": "https://mirrors.tuna.tsinghua.edu.cn/bazel-apt/pool/jdk1.8/b/bazel/bazel_9.3.0_amd64.deb"
     }
   }
 }

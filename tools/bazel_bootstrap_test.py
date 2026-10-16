@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise release download fallback and verification without external traffic."""
+"""Exercise pinned release downloads and verification without external traffic."""
 
 import gzip
 import hashlib
@@ -32,6 +32,7 @@ def deb_package(binary):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        self.server.requests.append(self.path)
         if self.path == "/missing":
             self.send_error(404)
             return
@@ -53,6 +54,7 @@ class DownloadTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.destination = Path(self.directory.name) / "bazel"
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server.requests = []
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.base = "http://127.0.0.1:%d" % self.server.server_port
@@ -64,28 +66,35 @@ class DownloadTest(unittest.TestCase):
         self.thread.join()
         self.directory.cleanup()
 
-    def test_missing_mirror_falls_back_to_verified_release(self):
+    def test_verified_release_is_installed(self):
         result = bootstrap.download_binary(
-            [self.base + "/missing", self.base + "/good"], self.destination, self.checksum
+            self.base + "/good", self.destination, self.checksum
         )
         self.assertEqual(result.read_bytes(), PAYLOAD)
         self.assertEqual(list(self.destination.parent.iterdir()), [self.destination])
 
+    def test_missing_release_fails_without_another_request(self):
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "404"):
+            bootstrap.download_binary(self.base + "/missing", self.destination, self.checksum)
+        self.assertEqual(self.server.requests, ["/missing"])
+        self.assertEqual(list(self.destination.parent.iterdir()), [])
+
     def test_corrupt_release_is_never_installed(self):
         with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):
-            bootstrap.download_binary([self.base + "/bad"], self.destination, self.checksum)
+            bootstrap.download_binary(self.base + "/bad", self.destination, self.checksum)
         self.assertEqual(list(self.destination.parent.iterdir()), [])
 
     def test_verified_cached_release_needs_no_source(self):
         self.destination.write_bytes(PAYLOAD)
         self.assertEqual(
-            bootstrap.download_binary([], self.destination, self.checksum), self.destination
+            bootstrap.download_binary(self.base + "/missing", self.destination, self.checksum), self.destination
         )
+        self.assertEqual(self.server.requests, [])
 
     def test_deb_mirror_installs_the_verified_native_binary(self):
         checksum = hashlib.sha256(deb_package(PAYLOAD)).hexdigest()
         result = bootstrap.download_deb_binary(
-            [self.base + "/missing", self.base + "/deb"],
+            self.base + "/deb",
             self.destination, self.checksum, checksum,
         )
         self.assertEqual(result.read_bytes(), PAYLOAD)
@@ -94,7 +103,7 @@ class DownloadTest(unittest.TestCase):
     def test_corrupt_deb_is_never_installed(self):
         with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):
             bootstrap.download_deb_binary(
-                [self.base + "/deb"], self.destination, self.checksum, "0" * 64,
+                self.base + "/deb", self.destination, self.checksum, "0" * 64,
             )
         self.assertEqual(list(self.destination.parent.iterdir()), [])
 
@@ -102,7 +111,7 @@ class DownloadTest(unittest.TestCase):
         checksum = hashlib.sha256(deb_package(PAYLOAD)).hexdigest()
         with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):
             bootstrap.download_deb_binary(
-                [self.base + "/deb"], self.destination, "0" * 64, checksum,
+                self.base + "/deb", self.destination, "0" * 64, checksum,
             )
         self.assertEqual(list(self.destination.parent.iterdir()), [])
 

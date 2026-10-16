@@ -127,7 +127,7 @@ python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
 
 新机器可先执行 `python3 bazel.py --no-proxy version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py --no-proxy deps init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
 
-- PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。Linux x86_64 从清华 Bazel APT 镜像下载，失败后尝试南京大学的同一镜像；仅解出原始 Bazel 二进制，同时校验官方安装包和独立二进制的 SHA256。其他宿主仍先尝试华为镜像，再尝试 `releases.bazel.build`。下载地址和校验值见 [`bazel/binaries.json`](../../bazel/binaries.json)。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
+- PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。Linux x86_64 固定从清华 Bazel APT 镜像下载；仅解出原始 Bazel 二进制，同时校验官方安装包和独立二进制的 SHA256。其他宿主固定使用 `releases.bazel.build`。每个平台只有一个下载源，失败直接报错，不做 fallback。下载地址和校验值见 [`bazel/binaries.json`](../../bazel/binaries.json)。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
 - 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。
 - `--no-proxy` 仅清除本次启动器及其子进程的大小写 HTTP/HTTPS/ALL 代理变量，设置 `NO_PROXY=*`，不会修改 shell 或系统配置。Bazel 本体的自动下载始终优先节省代理流量，直接连接公开下载源。
 
@@ -139,7 +139,7 @@ python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
 
 验证先使用空启动器缓存、空 repository cache、新 output base、新 output_user_root，并禁用 repo contents cache。在 PATH 中移除现有 Bazel，将 HTTP/HTTPS/ALL 代理变量设为不可用的 `127.0.0.1:9`，通过 `--no-proxy` 执行目标分析。Bazel 9.3.0 从公开发布源重新完整下载并通过 SHA256 检查，依赖从 BCR 和官方源码镜像取得；两个目标均分析成功，共 16849 个配置目标、2445 次架构 aspect 应用。没有从旧 Bazel 依赖缓存复制文件。
 
-下载器的本地 HTTP 测试覆盖镜像 404 后的回退、SHA256 错误时拒绝安装、已验证缓存的复用，以及 deb 安装包提取与双重校验，六项通过。
+下载器的本地 HTTP 测试覆盖下载成功、404 直接失败且不请求其他来源、SHA256 错误时拒绝安装、已验证缓存的复用，以及 deb 安装包提取与双重校验，七项通过。
 
 随后再次创建另一套空 repository cache、新 output base 和 output_user_root，禁用 repo contents cache，恢复已有 C++/Rust 工具链环境，使用已通过上述冷启动安装验证的 Bazel 9.3.0 执行完整构建。保留严格 `--lockfile_mode=error`，经 `6.13.50.37:50051` 远程执行，`--jobs=100`；两个目标均成功，耗时 362.887 秒，1890 个动作中 374 个远程执行、329 个构建动作缓存命中、1187 个内部动作。构建动作缓存被复用，Bazel 依赖下载缓存没有复用；二者不能混淆。新的依赖缓存最终为 210 个文件、32651005 字节。
 
