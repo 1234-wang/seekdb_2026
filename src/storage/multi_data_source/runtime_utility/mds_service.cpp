@@ -432,12 +432,12 @@ int ObVectorAllocator::init()
   }
 
   if (OB_FAIL(ret) && !is_inited_) {
-    common::set_memory_quota_resolver(ObCtxIds::VECTOR_CTX_ID, nullptr);
     if (memory_context_ != nullptr) {
       DESTROY_CONTEXT(memory_context_);
       memory_context_ = nullptr;
     }
     ObVectorMemContext::reset();
+    common::set_memory_quota_resolver(ObCtxIds::VECTOR_CTX_ID, nullptr);
     quota_.reset(0);
   }
 
@@ -446,12 +446,12 @@ int ObVectorAllocator::init()
 
 void ObVectorAllocator::destroy()
 {
-  common::set_memory_quota_resolver(ObCtxIds::VECTOR_CTX_ID, nullptr);
   if (memory_context_ != nullptr) {
     DESTROY_CONTEXT(memory_context_);
     memory_context_ = nullptr;
   }
   ObVectorMemContext::reset();
+  common::set_memory_quota_resolver(ObCtxIds::VECTOR_CTX_ID, nullptr);
   quota_.reset(0);
   is_inited_ = false;
 }

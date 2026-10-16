@@ -357,7 +357,6 @@ void ObStorageMetaMemMgr::wait()
 
 void ObStorageMetaMemMgr::destroy()
 {
-  common::set_memory_quota_resolver(common::ObCtxIds::META_OBJ_CTX_ID, nullptr);
   gc_timer_.destroy();
   full_tablet_creator_.reset(); // must reset after gc_tablets
   flying_tablet_map_.destroy();
@@ -378,6 +377,8 @@ void ObStorageMetaMemMgr::destroy()
   tx_ctx_memtable_pool_.destroy();
   lock_memtable_pool_.destroy();
   meta_cache_io_allocator_.destroy();
+  // Keep the resolver available until all dependent allocations are released.
+  common::set_memory_quota_resolver(common::ObCtxIds::META_OBJ_CTX_ID, nullptr);
   memory_quota_.reset(0);
 
   is_inited_ = false;

@@ -114,7 +114,9 @@ private:
 // Resolvers map an ObCtxIds category, not a MemoryContext instance, to
 // component-owned accounting objects shared by contexts and allocators.
 // Returned pointers are borrowed: the objects must outlive all allocations
-// charged to them. Unregistering only affects future lookups.
+// charged to them. Register before dependent allocations start, and unregister
+// only after those allocations have been released; lookup state must stay
+// stable throughout their lifetime.
 typedef MemoryUsageTracker *(*MemoryUsageTrackerResolver)(const int64_t ctx_id);
 // Register the tracker lookup callback; nullptr unregisters it.
 void set_memory_usage_tracker_resolver(const int64_t ctx_id,
@@ -138,18 +140,16 @@ class TrackedAllocator final : public ObIAllocator
 public:
   TrackedAllocator()
     : allocator_(nullptr), tracker_(nullptr), quota_(nullptr), attr_(),
-      use_malloc_usable_size_(false), always_header_(false)
+      use_malloc_usable_size_(false)
   {}
 
   TrackedAllocator(ObIAllocator &allocator,
                    MemoryUsageTracker *tracker,
                    MemoryQuota *quota,
                    const ObMemAttr &attr = ObMemAttr(),
-                   const bool use_malloc_usable_size = false,
-                   const bool always_header = false)
+                   const bool use_malloc_usable_size = false)
     : allocator_(&allocator), tracker_(tracker), quota_(quota), attr_(attr),
-      use_malloc_usable_size_(use_malloc_usable_size),
-      always_header_(always_header)
+      use_malloc_usable_size_(use_malloc_usable_size)
   {}
 
   ~TrackedAllocator() override = default;
@@ -158,15 +158,13 @@ public:
                  MemoryUsageTracker *tracker,
                  MemoryQuota *quota,
                  const ObMemAttr &attr,
-                 const bool use_malloc_usable_size = false,
-                 const bool always_header = false)
+                 const bool use_malloc_usable_size = false)
   {
     allocator_ = &allocator;
     tracker_ = tracker;
     quota_ = quota;
     attr_ = attr;
     use_malloc_usable_size_ = use_malloc_usable_size;
-    always_header_ = always_header;
   }
 
   void set_tracker(MemoryUsageTracker *tracker) { tracker_ = tracker; }
@@ -186,7 +184,7 @@ public:
     MemoryUsageTracker *tracker = tracker_;
     MemoryQuota *quota = quota_;
     if (OB_ISNULL(allocator_)) {
-    } else if (!uses_header()) {
+    } else if (!is_tracking()) {
       ptr = allocator_->alloc(size, attr);
     } else if (size > 0 && size <= INT64_MAX - static_cast<int64_t>(sizeof(Header))) {
       const int64_t requested_size = size + sizeof(Header);
@@ -222,7 +220,7 @@ public:
   void free(void *ptr) override
   {
     if (OB_ISNULL(allocator_) || OB_ISNULL(ptr)) {
-    } else if (!uses_header()) {
+    } else if (!is_tracking()) {
       allocator_->free(ptr);
     } else {
       Header *header = static_cast<Header *>(ptr) - 1;
@@ -246,7 +244,7 @@ public:
 
   void *raw_pointer(void *ptr) const
   {
-    return nullptr != ptr && uses_header()
+    return nullptr != ptr && is_tracking()
         ? static_cast<void *>(static_cast<Header *>(ptr) - 1) : ptr;
   }
 
@@ -280,7 +278,7 @@ private:
     } else if (0 == size) {
       free(ptr);
     } else if (OB_ISNULL(allocator_)) {
-    } else if (!uses_header()) {
+    } else if (!is_tracking()) {
       new_ptr = allocator_->realloc(ptr, size, attr);
     } else if (size > 0 && size <= INT64_MAX - static_cast<int64_t>(sizeof(Header))) {
       Header *old_header = static_cast<Header *>(ptr) - 1;
@@ -342,18 +340,12 @@ private:
     return result;
   }
 
-  bool uses_header() const
-  {
-    return always_header_ || is_tracking();
-  }
-
 private:
   ObIAllocator *allocator_;
   MemoryUsageTracker *tracker_;
   MemoryQuota *quota_;
   ObMemAttr attr_;
   bool use_malloc_usable_size_;
-  bool always_header_;
 };
 
 void *ob_malloc_align(

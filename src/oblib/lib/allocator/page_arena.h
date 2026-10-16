@@ -178,11 +178,8 @@ protected:
     void *ptr = nullptr;
     if (NULL == allocator_) {
       ObMalloc fallback_allocator(attr);
-      // A resolver can be installed or cleared between alloc() and free().
-      // Always retain the owner header on this fallback path so release never
-      // decodes a pointer according to the resolver's later state.
       TrackedAllocator tracked_allocator(
-          fallback_allocator, tracker, quota, attr, true, true);
+          fallback_allocator, tracker, quota, attr, true);
       ptr = tracked_allocator.alloc(size, attr);
     } else {
       TrackedAllocator tracked_allocator(*allocator_, tracker, quota, attr);
@@ -196,7 +193,7 @@ protected:
     if (NULL == allocator_) {
       ObMalloc fallback_allocator(attr_);
       TrackedAllocator tracked_allocator(
-          fallback_allocator, tracker, quota, attr_, true, true);
+          fallback_allocator, tracker, quota, attr_, true);
       tracked_allocator.free(ptr);
     } else {
       TrackedAllocator tracked_allocator(*allocator_, tracker, quota, attr_);

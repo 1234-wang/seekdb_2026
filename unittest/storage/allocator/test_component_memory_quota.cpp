@@ -4,12 +4,14 @@
  */
 
 #include "gtest/gtest.h"
+#include <memory>
 #include "lib/alloc/alloc_func.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/rc/context.h"
 #include "share/rc/ob_server_runtime.h"
 #include "share/roaringbitmap/ob_rb_memory_mgr.h"
 #include "storage/allocator/ob_vector_allocator.h"
+#include "storage/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 
 using namespace oceanbase::common;
@@ -63,6 +65,27 @@ private:
   ObRbMemMgr mem_mgr_;
 };
 
+class TestVectorAllocatorServiceGuard final
+{
+public:
+  TestVectorAllocatorServiceGuard()
+      : previous_(server_service<ObSharedMemAllocMgr>()),
+        manager_(new ObSharedMemAllocMgr())
+  {
+    bind_server_service<ObSharedMemAllocMgr>(manager_.get());
+  }
+  ~TestVectorAllocatorServiceGuard()
+  {
+    manager_->vector_allocator().destroy();
+    bind_server_service<ObSharedMemAllocMgr>(previous_);
+  }
+  ObVectorAllocator &allocator() { return manager_->vector_allocator(); }
+
+private:
+  ObSharedMemAllocMgr *previous_;
+  std::unique_ptr<ObSharedMemAllocMgr> manager_;
+};
+
 struct TestMetaPoolObject
 {
   void reset() {}
@@ -82,6 +105,33 @@ TEST(TestVectorMemoryQuota, actual_bytes_and_dynamic_limit)
   EXPECT_FALSE(quota.reserve(1));
   quota.release(80);
   EXPECT_EQ(0, quota.committed());
+}
+
+TEST(TestVectorMemoryQuota, destroy_releases_context_pages_before_unregister)
+{
+  TestVectorAllocatorServiceGuard service_guard;
+  ObVectorAllocator &allocator = service_guard.allocator();
+  MemoryQuota &quota = allocator.memory_quota();
+
+  for (int iteration = 0; iteration < 3; ++iteration) {
+    ASSERT_EQ(OB_SUCCESS, allocator.init());
+    ASSERT_EQ(&quota, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
+    EXPECT_EQ(OB_INIT_TWICE, allocator.init());
+    EXPECT_EQ(&quota, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
+    quota.set_limit(4L << 20);
+    ASSERT_NE(nullptr, allocator.get_mem_context()->get_arena_allocator().alloc(4097));
+    ASSERT_NE(nullptr, allocator.alloc(257));
+    ASSERT_GT(quota.committed(), 0);
+
+    // Leave arena and freeable allocations alive: destroy must release both
+    // while resolver-based page accounting can still find their owner.
+    allocator.destroy();
+    EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
+    EXPECT_EQ(0, quota.committed());
+    EXPECT_EQ(0, quota.reserved());
+    allocator.destroy();
+    EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
+  }
 }
 
 TEST(TestVectorMemoryQuota, production_bitmap_path_charges_and_releases_quota)

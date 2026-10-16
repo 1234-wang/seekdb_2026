@@ -192,7 +192,7 @@ TEST(TestMallocBackend, documented_mem_attr_shape_matches_header)
   EXPECT_EQ(OB_NORMAL_ALLOC, attr.prio_);
 }
 
-TEST(TestMallocBackend, module_page_allocation_survives_resolver_transition)
+TEST(TestMallocBackend, module_page_allocation_follows_resolver_lifetime)
 {
   ObMemAttr attr("ResolverTrans", ObCtxIds::WORK_AREA);
   ModulePageAllocator allocator(attr);
@@ -200,19 +200,23 @@ TEST(TestMallocBackend, module_page_allocation_survives_resolver_transition)
 
   void *before_resolver = allocator.alloc(64);
   ASSERT_NE(nullptr, before_resolver);
-  void *while_resolver = nullptr;
+  // Without accounting the returned pointer keeps the malloc allocation layout.
+  EXPECT_GE(ob_malloc_usable_size(before_resolver), 64);
+  allocator.free(before_resolver);
   {
     ContextMemoryTrackerGuard tracker_guard(tracker);
-    while_resolver = allocator.alloc(128);
+    void *while_resolver = allocator.alloc(128);
     ASSERT_NE(nullptr, while_resolver);
     ASSERT_GT(tracker.used(), 0);
-    allocator.free(before_resolver);
-    ASSERT_GT(tracker.used(), 0);
+    allocator.free(while_resolver);
+    ASSERT_EQ(0, tracker.used());
   }
 
-  // The allocation remembers its accounting owner. Clearing the resolver
-  // must not change how its header is decoded or where its charge is released.
-  allocator.free(while_resolver);
+  EXPECT_EQ(nullptr, resolve_memory_usage_tracker(ObCtxIds::WORK_AREA));
+  void *after_resolver = allocator.alloc(256);
+  ASSERT_NE(nullptr, after_resolver);
+  EXPECT_GE(ob_malloc_usable_size(after_resolver), 256);
+  allocator.free(after_resolver);
   ASSERT_EQ(0, tracker.used());
 }
 

@@ -524,8 +524,6 @@ int ObSqlMemoryManager::server_module_init(ObSqlMemoryManager *&sql_mem_mgr)
 
 void ObSqlMemoryManager::server_module_destroy(ObSqlMemoryManager *&sql_mem_mgr)
 {
-  common::set_memory_usage_tracker_resolver(common::ObCtxIds::WORK_AREA, nullptr);
-  common::set_memory_quota_resolver(common::ObCtxIds::WORK_AREA, nullptr);
   if (nullptr != sql_mem_mgr) {
     if (nullptr != sql_mem_mgr->wa_intervals_) {
       sql_mem_mgr->allocator_.free(sql_mem_mgr->wa_intervals_);
@@ -539,8 +537,10 @@ void ObSqlMemoryManager::server_module_destroy(ObSqlMemoryManager *&sql_mem_mgr)
     sql_mem_mgr->workarea_stats_.reset();
     sql_mem_mgr->workarea_histograms_.reset();
     sql_mem_mgr->allocator_.reset();
-    common::ob_delete(sql_mem_mgr);
   }
+  common::set_memory_usage_tracker_resolver(common::ObCtxIds::WORK_AREA, nullptr);
+  common::set_memory_quota_resolver(common::ObCtxIds::WORK_AREA, nullptr);
+  common::ob_delete(sql_mem_mgr);
   sql_mem_mgr = nullptr;
 }
 
