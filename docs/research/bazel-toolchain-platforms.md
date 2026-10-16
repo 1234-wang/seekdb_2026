@@ -50,7 +50,7 @@ sudo apt update
 sudo apt install bazel=9.3.0
 ```
 
-此方式直接安装 Bazel，无需 Bazelisk；适用于上述 APT 平台，不覆盖 macOS、Windows 或当前 Alibaba Cloud Linux 主机。这里只核验了索引和包地址，没有在本机执行 APT 安装。
+上述 APT 命令适用于 Debian/Ubuntu。启动器另有无需 APT 的安装路径：Linux x86_64 直接下载该包，只解出 `usr/bin/bazel-real`，因此 Alibaba Cloud Linux 等发行版也能使用。解出的二进制与官方独立 Linux x86_64 文件的 SHA256 完全相同；不执行包安装脚本，不修改系统软件源。
 
 不使用 Bazelisk 时，也可安装单个 Bazel 文件。以下是 **Linux x86_64 示例**，下载时只对当前命令绕过代理；其他平台应选官方对应制品：
 
@@ -127,17 +127,19 @@ python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
 
 新机器可先执行 `python3 bazel.py --no-proxy version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py --no-proxy deps init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
 
-- PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。优先查询华为公共镜像，缺失时从 `releases.bazel.build` 获取；9.3.0 本次使用的是官方发布源。二进制 SHA256 固定在 [`bazel/binaries.json`](../../bazel/binaries.json)，覆盖 Linux/macOS/Windows 的 x86_64/ARM64 六种宿主。安装到用户缓存，无需 sudo、npm 或 Bazelisk。
+- PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。Linux x86_64 从清华 Bazel APT 镜像下载，失败后尝试南京大学的同一镜像；仅解出原始 Bazel 二进制，同时校验官方安装包和独立二进制的 SHA256。其他宿主仍先尝试华为镜像，再尝试 `releases.bazel.build`。下载地址和校验值见 [`bazel/binaries.json`](../../bazel/binaries.json)。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
 - 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。
 - `--no-proxy` 仅清除本次启动器及其子进程的大小写 HTTP/HTTPS/ALL 代理变量，设置 `NO_PROXY=*`，不会修改 shell 或系统配置。Bazel 本体的自动下载始终优先节省代理流量，直接连接公开下载源。
 
 这里的 BCR、依赖镜像和官方发布源均由 Bazel 官方托管在 Google Cloud，不能描述为中国境内镜像。[官方基础设施说明](https://blog.bazel.build/2026/01/16/ssl-cert-expiry.html) 本次验证的是当前网络环境可无代理获取完整 Bazel 构建依赖，不对其他运营商和所有地区的连通性作保证。
 
+另一台 Alibaba Cloud Linux x86_64 主机实测发现，官方二进制直连约每秒几十 KiB，超过十分钟仍未下完；清华镜像的同版本完整安装包（68272520 字节）仅需 3.104 秒，约 22 MB/s。安装包 SHA256 与官方 APT 索引一致，提取出的 77023347 字节二进制也与官方独立发布文件完全一致。因此 Linux x86_64 安装已改走国内公共镜像；此调整只解决 Bazel 二进制下载，不改变 BCR 和构建规则的下载源。
+
 此前检查 27 个依赖的镜像地址，26 个返回 200，`rules_cc 0.2.22` 返回 404；这只是地址检查，并不是当时构建已启用镜像。进一步检查发现 `rules_cc 0.2.25` 有官方镜像，因此更新该版本。它依赖的 `apple_support 2.8.0` 在实际冷启动时返回 404，再将其选为镜像已有的 `2.8.4`；传递依赖中的 `bazel_skylib` 更新为 `1.9.0`。锁文件使用 Bazel 9.3.0 更新，其余版本仍按模块解析结果固定。rules_cc 0.2.25 默认不再配置旧 macOS 工具链，apple_support 会注册自己的 macOS 工具链；本次未做 macOS 编译测试。
 
 验证先使用空启动器缓存、空 repository cache、新 output base、新 output_user_root，并禁用 repo contents cache。在 PATH 中移除现有 Bazel，将 HTTP/HTTPS/ALL 代理变量设为不可用的 `127.0.0.1:9`，通过 `--no-proxy` 执行目标分析。Bazel 9.3.0 从公开发布源重新完整下载并通过 SHA256 检查，依赖从 BCR 和官方源码镜像取得；两个目标均分析成功，共 16849 个配置目标、2445 次架构 aspect 应用。没有从旧 Bazel 依赖缓存复制文件。
 
-下载器的本地 HTTP 测试覆盖镜像 404 后的回退、SHA256 错误时拒绝安装及已验证缓存的复用，三项通过。
+下载器的本地 HTTP 测试覆盖镜像 404 后的回退、SHA256 错误时拒绝安装、已验证缓存的复用，以及 deb 安装包提取与双重校验，六项通过。
 
 随后再次创建另一套空 repository cache、新 output base 和 output_user_root，禁用 repo contents cache，恢复已有 C++/Rust 工具链环境，使用已通过上述冷启动安装验证的 Bazel 9.3.0 执行完整构建。保留严格 `--lockfile_mode=error`，经 `6.13.50.37:50051` 远程执行，`--jobs=100`；两个目标均成功，耗时 362.887 秒，1890 个动作中 374 个远程执行、329 个构建动作缓存命中、1187 个内部动作。构建动作缓存被复用，Bazel 依赖下载缓存没有复用；二者不能混淆。新的依赖缓存最终为 210 个文件、32651005 字节。
 

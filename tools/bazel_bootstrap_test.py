@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Exercise release download fallback and verification without external traffic."""
 
+import gzip
 import hashlib
 import http.server
+import io
+import tarfile
 import tempfile
 import threading
 import unittest
@@ -14,12 +17,28 @@ import bazel_bootstrap as bootstrap
 PAYLOAD = b"a pinned release binary\n"
 
 
+def deb_package(binary):
+    data = io.BytesIO()
+    with tarfile.open(fileobj=data, mode="w") as archive:
+        member = tarfile.TarInfo("usr/bin/bazel-real")
+        member.size = len(binary)
+        archive.addfile(member, io.BytesIO(binary))
+    payload = gzip.compress(data.getvalue(), mtime=0)
+    header = "%-16s%-12s%-6s%-6s%-8s%-10d`\n" % (
+        "data.tar.gz/", "0", "0", "0", "100644", len(payload),
+    )
+    return b"!<arch>\n" + header.encode() + payload + (b"\n" if len(payload) % 2 else b"")
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/missing":
             self.send_error(404)
             return
-        data = PAYLOAD if self.path == "/good" else b"corrupt download"
+        if self.path == "/deb":
+            data = deb_package(PAYLOAD)
+        else:
+            data = PAYLOAD if self.path == "/good" else b"corrupt download"
         self.send_response(200)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -62,6 +81,30 @@ class DownloadTest(unittest.TestCase):
         self.assertEqual(
             bootstrap.download_binary([], self.destination, self.checksum), self.destination
         )
+
+    def test_deb_mirror_installs_the_verified_native_binary(self):
+        checksum = hashlib.sha256(deb_package(PAYLOAD)).hexdigest()
+        result = bootstrap.download_deb_binary(
+            [self.base + "/missing", self.base + "/deb"],
+            self.destination, self.checksum, checksum,
+        )
+        self.assertEqual(result.read_bytes(), PAYLOAD)
+        self.assertEqual(list(self.destination.parent.iterdir()), [self.destination])
+
+    def test_corrupt_deb_is_never_installed(self):
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):
+            bootstrap.download_deb_binary(
+                [self.base + "/deb"], self.destination, self.checksum, "0" * 64,
+            )
+        self.assertEqual(list(self.destination.parent.iterdir()), [])
+
+    def test_deb_binary_is_checked_against_the_official_binary_hash(self):
+        checksum = hashlib.sha256(deb_package(PAYLOAD)).hexdigest()
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):
+            bootstrap.download_deb_binary(
+                [self.base + "/deb"], self.destination, "0" * 64, checksum,
+            )
+        self.assertEqual(list(self.destination.parent.iterdir()), [])
 
 
 if __name__ == "__main__":

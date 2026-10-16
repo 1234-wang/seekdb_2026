@@ -5,7 +5,9 @@ import json
 import os
 import platform
 import re
+import shutil
 import sys
+import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
@@ -70,6 +72,53 @@ def download_binary(urls: Iterable[str], destination: Path, checksum: str) -> Pa
     raise BootstrapError("cannot download the pinned Bazel binary:\n" + "\n".join(errors))
 
 
+def _extract_deb_binary(package: Path, destination: Path) -> None:
+    # A deb is an ar container. Read only Bazel's binary from its data tarball;
+    # no package manager, install scripts or system-wide installation is needed.
+    with package.open("rb") as stream:
+        if stream.read(8) != b"!<arch>\n":
+            raise BootstrapError("invalid Bazel deb package")
+        while True:
+            header = stream.read(60)
+            if not header:
+                break
+            if len(header) != 60 or header[58:] != b"`\n":
+                raise BootstrapError("invalid Bazel deb member header")
+            size = int(header[48:58])
+            if size < 0:
+                raise BootstrapError("invalid Bazel deb member size")
+            if header[:16].strip().rstrip(b"/") == b"data.tar.gz":
+                with tarfile.open(fileobj=stream, mode="r|gz") as archive:
+                    for member in archive:
+                        if member.name in ("usr/bin/bazel-real", "./usr/bin/bazel-real") and member.isfile():
+                            with archive.extractfile(member) as binary, destination.open("wb") as output:
+                                shutil.copyfileobj(binary, output)
+                            return
+                break
+            stream.seek(size + size % 2, os.SEEK_CUR)
+    raise BootstrapError("Bazel binary is missing from the deb package")
+
+
+def download_deb_binary(
+    urls: Iterable[str], destination: Path, checksum: str, package_checksum: str,
+) -> Path:
+    if destination.is_file() and sha256_file(destination) == checksum:
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".bazel-deb-", dir=str(destination.parent)) as directory:
+        package = download_binary(urls, Path(directory) / "bazel.deb", package_checksum)
+        binary = Path(directory) / "bazel"
+        try:
+            _extract_deb_binary(package, binary)
+        except (OSError, ValueError, tarfile.TarError) as error:
+            raise BootstrapError("cannot extract Bazel from deb: %s" % error) from error
+        if sha256_file(binary) != checksum:
+            raise BootstrapError("SHA256 mismatch for Bazel extracted from deb")
+        binary.chmod(0o755)
+        os.replace(str(binary), str(destination))
+    return destination
+
+
 def ensure_bazel(root: Path, cache_directory: Path, version: str) -> Path:
     manifest_path = root / "bazel" / "binaries.json"
     try:
@@ -78,10 +127,15 @@ def ensure_bazel(root: Path, cache_directory: Path, version: str) -> Path:
         checksum = manifest["sha256"][host]
         if manifest["version"] != version or not re.fullmatch(r"[0-9a-f]{64}", checksum):
             raise ValueError("version/checksum does not match .bazelversion")
+        package = manifest.get("deb", {}).get(host)
+        if package and (not re.fullmatch(r"[0-9a-f]{64}", package["sha256"]) or not package["urls"]):
+            raise ValueError("invalid deb checksum/download sources")
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise BootstrapError("invalid Bazel binary manifest %s: %s" % (manifest_path, error))
     filename = "bazel-%s-%s" % (version, host)
     destination = cache_directory / "binaries" / version / filename
+    if package:
+        return download_deb_binary(package["urls"], destination, checksum, package["sha256"])
     return download_binary(
         [
             "https://mirrors.huaweicloud.com/bazel/%s/%s" % (version, filename),
