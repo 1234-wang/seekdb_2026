@@ -28,10 +28,10 @@
 #error "The Linux malloc hook requires bundled jemalloc"
 #endif
 
-#define ALLOC_HOOK_ATTR(s) __attribute__((s))
-#define ALLOC_HOOK_EXPORT __attribute__((visibility("default"), used, retain))
-#define ALLOC_HOOK_ALLOC_SIZE(s) __attribute__((alloc_size(s)))
-#define ALLOC_HOOK_NOTHROW __attribute__((nothrow))
+#define OBMALLOC_ATTR(s) __attribute__((s))
+#define OBMALLOC_EXPORT __attribute__((visibility("default"), used, retain))
+#define OBMALLOC_ALLOC_SIZE(s) __attribute__((alloc_size(s)))
+#define OBMALLOC_NOTHROW __attribute__((nothrow))
 #define LIBC_ALIAS(fn) __attribute__((alias (#fn), used, retain))
 
 using namespace oceanbase;
@@ -54,15 +54,15 @@ static void __attribute__((constructor(101))) init_malloc_hook_at_startup()
 
 extern "C" {
 
-ALLOC_HOOK_EXPORT
-void ALLOC_HOOK_NOTHROW *
-ALLOC_HOOK_ATTR(malloc) ALLOC_HOOK_ALLOC_SIZE(1)
+OBMALLOC_EXPORT
+void OBMALLOC_NOTHROW *
+OBMALLOC_ATTR(malloc) OBMALLOC_ALLOC_SIZE(1)
 malloc(size_t size)
 {
   return jemalloc_malloc(size);
 }
 
-ALLOC_HOOK_EXPORT void ALLOC_HOOK_NOTHROW
+OBMALLOC_EXPORT void OBMALLOC_NOTHROW
 free(void *ptr)
 {
   const int saved_errno = errno;
@@ -70,9 +70,9 @@ free(void *ptr)
   errno = saved_errno;
 }
 
-ALLOC_HOOK_EXPORT
-void ALLOC_HOOK_NOTHROW *
-ALLOC_HOOK_ALLOC_SIZE(2)
+OBMALLOC_EXPORT
+void OBMALLOC_NOTHROW *
+OBMALLOC_ALLOC_SIZE(2)
 realloc(void *ptr, size_t size)
 {
   if (0 == size && nullptr != ptr) {
@@ -84,15 +84,15 @@ realloc(void *ptr, size_t size)
   return jemalloc_realloc(ptr, size);
 }
 
-ALLOC_HOOK_EXPORT
-void ALLOC_HOOK_NOTHROW *
-ALLOC_HOOK_ATTR(malloc)
+OBMALLOC_EXPORT
+void OBMALLOC_NOTHROW *
+OBMALLOC_ATTR(malloc)
 memalign(size_t alignment, size_t size)
 {
   return jemalloc_memalign(alignment, size);
 }
 
-ALLOC_HOOK_EXPORT size_t ALLOC_HOOK_NOTHROW
+OBMALLOC_EXPORT size_t OBMALLOC_NOTHROW
 malloc_usable_size(void *ptr)
 {
   return nullptr == ptr ? 0 : jemalloc_usable_size(ptr);
