@@ -111,13 +111,26 @@ private:
   std::atomic<int64_t> live_bytes_;
 };
 
+// Resolvers map an ObCtxIds category, not a MemoryContext instance, to
+// component-owned accounting objects shared by contexts and allocators.
+// Returned pointers are borrowed: the objects must outlive all allocations
+// charged to them. Unregistering only affects future lookups.
 typedef MemoryUsageTracker *(*MemoryUsageTrackerResolver)(const int64_t ctx_id);
+// Register the tracker lookup callback; nullptr unregisters it.
 void set_memory_usage_tracker_resolver(const int64_t ctx_id,
                                        MemoryUsageTrackerResolver resolver);
+// Return the component's tracker, or nullptr if no resolver/object is available.
 MemoryUsageTracker *resolve_memory_usage_tracker(const int64_t ctx_id);
+
+// A callback that finds an existing quota; it does not create or own the quota.
 typedef MemoryQuota *(*MemoryQuotaResolver)(const int64_t ctx_id);
+// Register the quota lookup callback for this context category. This does not
+// set a memory limit; the component configures it via MemoryQuota::set_limit().
+// Passing nullptr unregisters the callback without releasing charged memory.
 void set_memory_quota_resolver(const int64_t ctx_id,
                                MemoryQuotaResolver resolver);
+// Return the component's quota, or nullptr if no resolver/object is available.
+// A nullptr result means no quota is supplied by this lookup.
 MemoryQuota *resolve_memory_quota(const int64_t ctx_id);
 
 class TrackedAllocator final : public ObIAllocator
