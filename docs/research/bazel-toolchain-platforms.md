@@ -50,7 +50,7 @@ sudo apt update
 sudo apt install bazel=9.3.0
 ```
 
-上述 APT 命令适用于 Debian/Ubuntu。早期启动器曾直接下载该包并提取 `usr/bin/bazel-real`，供其他 Linux x86_64 发行版使用；当前启动器已统一改为从下文项目镜像下载官方独立二进制，删除了 deb 解包逻辑。
+上述 APT 命令适用于 Debian/Ubuntu。早期启动器曾直接下载该包并提取 `usr/bin/bazel-real`，供其他 Linux x86_64 发行版使用；当前启动器已统一按下载清单通过 GH-Proxy 获取官方独立二进制，删除了 deb 解包逻辑。
 
 不使用 Bazelisk 时，也可安装单个 Bazel 文件。以下是 **Linux x86_64 示例**，下载时只对当前命令绕过代理；其他平台应选官方对应制品：
 
@@ -102,8 +102,8 @@ Linux x86_64 开发者随后取得的文件就是 `https://artifacts.example.com
 
 | 下载层 | 当前项目条件与建议 |
 | --- | --- |
-| Bazel/Bazelisk 本体 | 维护者同步国内制品镜像；开发者从同一入口获取启动器和仓库固定的 9.3.0 |
-| BCR 元数据、规则源码与依赖归档 | 仓库已有 [`tools/bazel_registry.py`](../../tools/bazel_registry.py)，可依据 `MODULE.bazel.lock` 准备内部 registry 并预热源码归档镜像；[`bazel.py`](../../bazel.py) 接收成对的 `SEEKDB_BAZEL_REGISTRY`/`SEEKDB_BAZEL_MIRROR` 或 `--registry`/`--registry-mirror` |
+| Bazel/Bazelisk 本体 | 默认由 `bazel.py` 通过 GH-Proxy 获取固定的 9.3.0；Bazelisk 是可选入口，不是项目启动器的依赖 |
+| BCR 元数据、规则源码与依赖归档 | 默认通过 GH-Proxy 下载并核对现有锁文件哈希；如需自建，仍可使用 [`tools/bazel_registry.py`](../../tools/bazel_registry.py) 与成对的 `--registry`/`--registry-mirror` 配置 |
 | C/C++ 编译器及第三方库 | Linux 沿用 seekdb 的 `deps` 初始化和 `mirrors.oceanbase.com` 包，主要是 LLVM 17.0.6、GCC 12.3；macOS 27 走本机 Apple Clang/SDK，不能照搬 Linux 工具链 |
 | Rust、Cargo 与交叉编译 SDK | 分别准备固定 Rust toolchain、Cargo registry/源码缓存，以及 NDK、Xcode SDK、Emscripten；Bazel 二进制镜像不会自动覆盖它们 |
 
@@ -117,7 +117,7 @@ Rust 可使用 [TUNA rustup 镜像](https://mirrors.tuna.tsinghua.edu.cn/help/ru
 
 ### 项目 Bazel 镜像与自动安装（已接入）
 
-当前 Bazel 程序统一从项目镜像下载；Clang、Rust、Cargo 仍由现有环境提供。镜像只托管官方 Bazel 可执行文件，不归档 rules_cc 等模块，也不使用 vendor 或 distdir 绕过依赖下载。
+当前 Bazel 程序统一通过 GH-Proxy 下载官方 GitHub 发布文件；Clang、Rust、Cargo 仍由现有环境提供。Bazel 本体和模块依赖分别配置下载 URL，均使用公共 GH-Proxy 服务，不需要开发者访问自建镜像。
 
 入口统一为：
 
@@ -131,13 +131,30 @@ python3 bazel.py build --jobs=100 //src/observer:seekdb
 
 本地 CPU 和内存资源使用 Bazel 的自动检测，不在启动器中固定机器核数，也不根据 `ob-make` 是否存在覆盖 `--jobs`。例如 8 核主机按 8 核 CPU 资源预算调度；远程构建仍可设置 `--jobs=100`，本地执行同时受本机资源限制。需要主动给其他程序留 CPU 时，可在 `build` 后加 `--local_resources=cpu=HOST_CPUS-2`。
 
-- 启动器只使用 `.bazelversion` 指定的 9.3.0，优先复用已校验的用户缓存，缺失或校验失败时从固定源下载。[`bazel/binaries.json`](../../bazel/binaries.json) 的 `platforms` 按平台分别记录完整 `url` 和官方 `sha256`，例如 `platforms.darwin-arm64.url` 为 `http://6.12.232.130:18080/bazel-9.3.0-darwin-arm64`。启动器直接使用该 URL，不拼接目录、版本或文件名。每个平台只有一个下载地址，失败直接报错，不回退其他来源；下载后核对仓库固定的官方 SHA256。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
+- 启动器只使用 `.bazelversion` 指定的 9.3.0，优先复用已校验的用户缓存，缺失或校验失败时从固定源下载。[`bazel/binaries.json`](../../bazel/binaries.json) 的 `platforms` 按平台分别记录完整 `url` 和官方 `sha256`，例如 `platforms.darwin-arm64.url` 为 `https://gh-proxy.com/https://github.com/bazelbuild/bazel/releases/download/9.3.0/bazel-9.3.0-darwin-arm64`。启动器直接使用该 URL，不拼接目录、版本或文件名。每个平台只有一个下载地址，失败直接报错，不回退其他来源；下载后核对仓库固定的官方 SHA256。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
 - 依赖索引保留逻辑地址 `bcr.bazel.build` 及锁文件中的原有哈希。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将索引和补丁下载重写到 GH-Proxy 上的官方 BCR GitHub 仓库，将 GitHub 依赖包及其 Google 镜像地址统一重写到 GH-Proxy，只允许 `gh-proxy.com`，失败直接报错。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。覆盖范围、Mac 完整下载和空缓存 fetch 证据见[公共依赖镜像调查](bazel-public-dependency-mirrors.md)。
 - 启动器和 Bazel 程序下载遵循终端的代理环境设置，不再提供专用代理开关，也不清除或覆盖代理变量。无代理环境下直接连接上述下载源。
 
-镜像服务部署于 `6.12.232.130`，Linux、macOS、Windows 各自的 x86_64 和 ARM64 二进制、对应的 `.sha256` 文件及 `SHA256SUMS` 全部平铺在公开目录 `/data/1/nijia.nj/services/bazel-mirror/public` 下。文件原样来自官方发布；已有的 Linux x86_64 文件经官方校验后复用，其余五个通过代理获取，再核对官方校验文件与仓库清单。
+#### GH-Proxy 六平台二进制验证
 
-迁移到 OSS 时，将这六个二进制原样上传，然后分别替换清单中的 `url` 即可，`sha256` 保持不变。各平台链接可以来自不同域名或使用不同文件名，无需统一目录结构。支持带查询参数的下载直链；若使用临时签名，链接到期后需更新。已有的正确版本缓存仍可复用。
+2026-10-17 使用项目下载器从 GH-Proxy 完整下载六个平台的 Bazel 9.3.0，并与切换前仓库固定的官方 SHA256 对照，全部一致。测试使用独立临时目录并仅对测试进程禁用代理；没有复用已安装的二进制或修改系统代理设置。五个平台在 Linux 主机 `6.12.232.130` 上最多三个并发下载；macOS ARM64 在用户 Mac `30.174.76.160` 上通过 `ensure_bazel` 完整走安装流程。
+
+| 平台 | 文件大小 | 下载及校验耗时 | 结果 |
+| --- | ---: | ---: | --- |
+| Linux x86_64 | 77,023,347 B | 2.279 秒 | SHA256 一致，`--version` 返回 `bazel 9.3.0` |
+| Linux ARM64 | 74,884,908 B | 2.054 秒 | SHA256 一致 |
+| macOS x86_64 | 73,487,921 B | 1.985 秒 | SHA256 一致 |
+| macOS ARM64 | 71,524,530 B | 43.918 秒 | SHA256 一致，`--version` 返回 `bazel 9.3.0` |
+| Windows x86_64 | 68,435,391 B | 1.717 秒 | SHA256 一致 |
+| Windows ARM64 | 66,938,951 B | 1.896 秒 | SHA256 一致 |
+
+时间是当次测试结果，Linux x86_64 一行还包含版本检查耗时，不表示其他网络的固定速度。仅运行了 Linux x86_64 和 macOS ARM64 二进制，其余平台只验证下载内容；不是 seekdb 六平台编译验证。现有下载器九项测试全部通过。修改只替换六个平台的 URL，官方哈希、缓存路径及单一来源策略保持不变。
+
+#### 此前的自建镜像与下载验证
+
+此前镜像服务部署于 `6.12.232.130`，Linux、macOS、Windows 各自的 x86_64 和 ARM64 二进制、对应的 `.sha256` 文件及 `SHA256SUMS` 全部平铺在公开目录 `/data/1/nijia.nj/services/bazel-mirror/public` 下。文件原样来自官方发布；已有的 Linux x86_64 文件经官方校验后复用，其余五个通过代理获取，再核对官方校验文件与仓库清单。切换 GH-Proxy 后，默认下载清单不再引用该服务。
+
+如需改用 OSS，将这六个二进制原样上传，然后分别替换清单中的 `url` 即可，`sha256` 保持不变。各平台链接可以来自不同域名或使用不同文件名，无需统一目录结构。支持带查询参数的下载直链；若使用临时签名，链接到期后需更新。已有的正确版本缓存仍可复用。
 
 服务由当前账号的 systemd 管理：`seekdb-bazel-mirror.service`，已启用开机启动与异常重启。查看状态使用 `systemctl --user status seekdb-bazel-mirror.service`，重启使用 `systemctl --user restart seekdb-bazel-mirror.service`。HTTP 服务仅公开上述目录；客户端需要能访问该机器的 18080 端口。
 
@@ -146,7 +163,7 @@ python3 bazel.py build --jobs=100 //src/observer:seekdb
 
 BCR、`mirror.bazel.build` 和上游 `releases.bazel.build` 均由 Bazel 官方托管在 Google Cloud，不能描述为中国境内镜像。[官方基础设施说明](https://blog.bazel.build/2026/01/16/ssl-cert-expiry.html) 本次验证的是当前网络环境可无代理获取完整 Bazel 构建依赖，不对其他运营商和所有地区的连通性作保证。
 
-另一台 Alibaba Cloud Linux x86_64 主机实测发现，官方二进制直连约每秒几十 KiB，超过十分钟仍未下完；清华镜像的同版本完整安装包（68272520 字节）仅需 3.104 秒，约 22 MB/s。安装包 SHA256 与官方 APT 索引一致，提取出的 77023347 字节二进制也与官方独立发布文件完全一致。因此当时 Linux x86_64 安装改走国内公共镜像；此方案没有覆盖 macOS，现已被统一的项目镜像替代。当时 BCR 和构建规则的下载源未变，后续调整为上文的 GH-Proxy 配置。
+另一台 Alibaba Cloud Linux x86_64 主机实测发现，官方二进制直连约每秒几十 KiB，超过十分钟仍未下完；清华镜像的同版本完整安装包（68272520 字节）仅需 3.104 秒，约 22 MB/s。安装包 SHA256 与官方 APT 索引一致，提取出的 77023347 字节二进制也与官方独立发布文件完全一致。因此当时 Linux x86_64 安装改走国内公共镜像；此方案没有覆盖 macOS，后来先改为自建镜像，再改为上文的 GH-Proxy 下载地址。当时 BCR 和构建规则的下载源未变，后续调整为上文的 GH-Proxy 配置。
 
 此前检查 27 个依赖的镜像地址，26 个返回 200，`rules_cc 0.2.22` 返回 404；这只是地址检查，并不是当时构建已启用镜像。进一步检查发现 `rules_cc 0.2.25` 有官方镜像，因此更新该版本。它依赖的 `apple_support 2.8.0` 在实际冷启动时返回 404，再将其选为镜像已有的 `2.8.4`；传递依赖中的 `bazel_skylib` 更新为 `1.9.0`。锁文件使用 Bazel 9.3.0 更新，其余版本仍按模块解析结果固定。rules_cc 0.2.25 默认不再配置旧 macOS 工具链，apple_support 会注册自己的 macOS 工具链；本次未做 macOS 编译测试。
 
