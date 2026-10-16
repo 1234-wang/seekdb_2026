@@ -126,12 +126,12 @@ Vector 的 `RAW_MALLOC_SIZE` 兼容列保留为 deprecated，并返回 `NULL`；
 
 以下参数继续支持加载和持久化，但为无效果的兼容项：
 `cache_wash_threshold`、`memory_chunk_cache_size`、
-`__min_full_resource_pool_memory`、
 `_min_malloc_sample_interval`、`_max_malloc_sample_interval`、
 `_enable_memleak_light_backtrace`。
 
-`_ctx_memory_limit` 随 obmalloc context allocator 一并删除，不再接受该配置项。
-升级前应在原版本清理已持久化的该配置值；未知配置项会导致配置加载失败。
+`_ctx_memory_limit` 和 `__min_full_resource_pool_memory` 随 obmalloc context
+allocator 和 resource pool 底座一并删除，不再接受这两个配置项。
+升级前应在原版本清理已持久化的配置值；未知配置项会导致配置加载失败。
 
 **prio**
 

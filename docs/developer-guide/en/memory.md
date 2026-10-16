@@ -153,12 +153,12 @@ deprecated and returns `NULL`; Vector totals use the component tracker.
 The following configuration parameters remain loadable and persistent
 compatibility no-ops:
 `cache_wash_threshold`, `memory_chunk_cache_size`,
-`__min_full_resource_pool_memory`,
 `_min_malloc_sample_interval`, `_max_malloc_sample_interval`,
 and `_enable_memleak_light_backtrace`.
 
-`_ctx_memory_limit` is removed together with the obmalloc context allocator
-and is no longer accepted as a configuration parameter.
+`_ctx_memory_limit` and `__min_full_resource_pool_memory` are removed together
+with the obmalloc context allocator and resource pool machinery and are no
+longer accepted as configuration parameters.
 Clear any persisted value on the previous version before upgrading; unknown
 configuration entries cause configuration loading to fail.
 
