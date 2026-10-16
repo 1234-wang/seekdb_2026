@@ -530,10 +530,10 @@ seekdb_semantic_unity_cc_library(
         "//rust:config_headers",
     ],
     implementation_deps = [
-        "//rust:local",
         ":cluster_version_interface",
         ":error_codes",
         ":io",
+        ":local_storage_interface",
         ":resource_limit_interface",
         ":sql_persistence_support",
         ":task_control",
@@ -1535,7 +1535,6 @@ _SHARE_NATIVE_UNITY_SOURCES = share_unity_group_sources(
     _SCHEMA_PARTITION_ITERATION_UNITY_GROUP,
     _SYSTEM_VARIABLE_METADATA_UNITY_GROUP,
     _TENANT_RUNTIME_RC_UNITY_GROUP,
-    _TASK_CONTROL_UNITY_GROUP,
     _ROARING_BITMAP_UNITY_GROUP,
     _CACHE_UNITY_GROUP,
     _JSON_ACCESS_UNITY_GROUP,
@@ -1547,10 +1546,13 @@ _SHARE_NATIVE_UNITY_SOURCES = share_unity_group_sources(
     ],
 )
 
-_SHARE_RUNTIME_DEPS = [
-    ":local_table_schema",
+_SHARE_RUNTIME_GENERATED_DEPS = [
     ":_generated_inner_table_headers",
     ":_generated_inner_table_short_headers",
+    ":local_table_schema",
+]
+
+_SHARE_RUNTIME_DEPS = _SHARE_RUNTIME_GENERATED_DEPS + [
     ":cache",
     ":config",
     ":config_parser_interface",
@@ -1635,7 +1637,7 @@ _SHARE_RUNTIME_DEPS = [
 _SHARE_RUNTIME_SEMANTIC_DEPS = [
     dep
     for dep in _SHARE_RUNTIME_DEPS
-    if dep.startswith(":") and not dep.startswith(":_generated_")
+    if dep.startswith(":") and dep not in _SHARE_RUNTIME_GENERATED_DEPS
 ]
 
 _SHARE_RUNTIME_OBLIB_DEPS = [

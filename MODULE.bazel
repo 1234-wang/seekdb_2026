@@ -2,12 +2,14 @@ module(
     name = "seekdb",
     version = "0.0.0",
     bazel_compatibility = [
-        ">=8.2.1",
-        "<=8.2.1",
+        ">=9.3.0",
+        "<=9.3.0",
     ],
 )
 
-bazel_dep(name = "rules_cc", version = "0.2.22")
+bazel_dep(name = "rules_cc", version = "0.2.25")
+# Use public-mirror releases for the rules_cc toolchain dependencies too.
+bazel_dep(name = "apple_support", version = "2.8.4")
 bazel_dep(name = "platforms", version = "1.0.0")
 
 seekdb_third_party_headers_repository = use_repo_rule(
@@ -27,9 +29,9 @@ seekdb_cc_toolchain_repository(name = "seekdb_cc_toolchain")
 register_toolchains("@seekdb_cc_toolchain//:local_compile_toolchain")
 
 # Keep the repository-owned Clang toolchain as the reproducible Linux build
-# toolchain.  On platforms it does not target (currently macOS), let rules_cc
-# configure the native host compiler and SDK instead of pretending that the
-# Linux/glibc toolchain is portable.
+# toolchain. rules_cc configures other native hosts; apple_support registers
+# the macOS compiler and SDK toolchain. The Linux/glibc toolchain is not portable
+# to those hosts.
 cc_configure = use_extension(
     "@rules_cc//cc:extensions.bzl",
     "cc_configure_extension",

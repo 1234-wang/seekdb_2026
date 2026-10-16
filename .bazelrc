@@ -8,6 +8,10 @@ build --enable_platform_specific_config
 # toolchain, whose fastbuild flags are not repository-owned.
 build --compilation_mode=opt
 build --force_pic
+# Allow developers to modify build outputs in place.
+build --experimental_writable_outputs
+# Cargo is installed with the developer's toolchain and must be on PATH.
+build --action_env=PATH
 build:O1 --compilation_mode=fastbuild
 build:O1 --copt=-O1
 build:O2 --compilation_mode=opt

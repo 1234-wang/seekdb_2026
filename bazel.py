@@ -14,6 +14,8 @@ import urllib.parse
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from tools.bazel_bootstrap import BootstrapError, ensure_bazel
+
 
 DEFAULT_BUILD_DIRECTORY = "build_bazel"
 DEFAULT_LOCAL_CPU_RESOURCES = 80
@@ -83,11 +85,13 @@ def _required_bazel_version(root: Path) -> str:
     return version
 
 
-def _resolve_bazel(root: Path, override: Optional[str]) -> Path:
+def _resolve_bazel(root: Path, override: Optional[str], cache_directory: Path) -> Path:
     requested = override or os.environ.get("BAZEL") or "bazel"
     executable = shutil.which(requested)
     if executable is None:
         required_version = _required_bazel_version(root)
+        if not override and not os.environ.get("BAZEL"):
+            return ensure_bazel(root, cache_directory, required_version)
         raise LauncherError(
             "Bazel %s is required but '%s' was not found; install Bazel or "
             "pass --bazel=/path/to/bazel" % (required_version, requested)
@@ -394,6 +398,11 @@ def _launcher_arguments(
         ),
     )
     parser.add_argument(
+        "--no-proxy",
+        action="store_true",
+        help="ignore HTTP/HTTPS/ALL proxy variables for this invocation",
+    )
+    parser.add_argument(
         "--build-dir",
         metavar="PATH",
         help=(
@@ -494,7 +503,7 @@ def _launcher_arguments(
         metavar="PATH",
         help=(
             "Bazel executable; defaults to $BAZEL or bazel from PATH "
-            "(never downloaded by this launcher)"
+            "(downloads the pinned release if neither is installed)"
         ),
     )
     return parser.parse_known_args(arguments)
@@ -543,23 +552,34 @@ def _inject_module_policy_aspect(arguments: List[str]) -> List[str]:
 
 def main(arguments: List[str]) -> int:
     root = Path(__file__).resolve().parent
+    separator = arguments.index("--") if "--" in arguments else len(arguments)
+    if "--no-proxy" in arguments[:separator]:
+        # Change only this launcher process and its children, not shell settings.
+        for name in ("http_proxy", "https_proxy", "all_proxy"):
+            os.environ.pop(name, None)
+            os.environ.pop(name.upper(), None)
+        os.environ["no_proxy"] = "*"
+        os.environ["NO_PROXY"] = "*"
+        arguments = [
+            argument for argument in arguments[:separator] if argument != "--no-proxy"
+        ] + arguments[separator:]
     dependency_status = _run_management_command(root, arguments)
     if dependency_status is not None:
         return dependency_status
 
     options, bazel_arguments = _launcher_arguments(arguments)
 
-    bazel = _resolve_bazel(root, options.bazel)
-    _verify_bazel_version(root, bazel)
-    bazel_arguments = _inject_module_policy_aspect(bazel_arguments)
-    build_directory = _resolve_build_directory(root, options.build_dir)
-    output_base = build_directory / "output-base"
     default_cache_directory = _bazel_cache_directory()
     cache_directory = (
         Path(options.launcher_cache_dir).expanduser()
         if options.launcher_cache_dir
         else default_cache_directory
     )
+    bazel = _resolve_bazel(root, options.bazel, cache_directory.resolve())
+    _verify_bazel_version(root, bazel)
+    bazel_arguments = _inject_module_policy_aspect(bazel_arguments)
+    build_directory = _resolve_build_directory(root, options.build_dir)
+    output_base = build_directory / "output-base"
     disk_cache = (
         Path(options.disk_cache).expanduser()
         if options.disk_cache
@@ -637,7 +657,7 @@ def main(arguments: List[str]) -> int:
             remote_timeout=remote_timeout,
             remote_cache_read_only=options.remote_cache_read_only,
             registry=registry,
-            downloader_config=downloader_config,
+            downloader_config=(downloader_config or root / "bazel" / "downloader.cfg"),
             local_jobs=local_jobs,
         )
         command = [
@@ -663,7 +683,7 @@ def main(arguments: List[str]) -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv[1:]))
-    except LauncherError as error:
+    except (LauncherError, BootstrapError) as error:
         print("ERROR: %s" % error, file=sys.stderr)
         sys.exit(2)
     except KeyboardInterrupt:
