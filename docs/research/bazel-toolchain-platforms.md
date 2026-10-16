@@ -131,15 +131,17 @@ python3 bazel.py build --jobs=100 //src/observer:seekdb
 
 本地 CPU 和内存资源使用 Bazel 的自动检测，不在启动器中固定机器核数，也不根据 `ob-make` 是否存在覆盖 `--jobs`。例如 8 核主机按 8 核 CPU 资源预算调度；远程构建仍可设置 `--jobs=100`，本地执行同时受本机资源限制。需要主动给其他程序留 CPU 时，可在 `build` 后加 `--local_resources=cpu=HOST_CPUS-2`。
 
-- 启动器只使用 `.bazelversion` 指定的 9.3.0，优先复用已校验的用户缓存，缺失或校验失败时从固定源下载。六个平台统一使用 [`bazel/binaries.json`](../../bazel/binaries.json) 的 `base_url`：`http://6.12.232.130:18080/bazel`，文件路径为 `<base_url>/<版本>/bazel-<版本>-<平台>`。每个平台只有一个下载地址，失败直接报错，不回退其他来源；下载后核对仓库固定的官方 SHA256。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
+- 启动器只使用 `.bazelversion` 指定的 9.3.0，优先复用已校验的用户缓存，缺失或校验失败时从固定源下载。[`bazel/binaries.json`](../../bazel/binaries.json) 的 `platforms` 按平台分别记录完整 `url` 和官方 `sha256`，例如 `platforms.darwin-arm64.url` 为 `http://6.12.232.130:18080/bazel-9.3.0-darwin-arm64`。启动器直接使用该 URL，不拼接目录、版本或文件名。每个平台只有一个下载地址，失败直接报错，不回退其他来源；下载后核对仓库固定的官方 SHA256。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
 - 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。
 - 启动器和 Bazel 程序下载遵循终端的代理环境设置，不再提供专用代理开关，也不清除或覆盖代理变量。无代理环境下直接连接上述下载源。
 
-镜像服务部署于 `6.12.232.130`，公开目录为 `/data/1/nijia.nj/services/bazel-mirror/public`，其中 `/bazel/9.3.0/` 包含 Linux、macOS、Windows 各自的 x86_64 和 ARM64 二进制，以及对应的 `.sha256` 文件和 `SHA256SUMS`。文件原样来自官方发布；已有的 Linux x86_64 文件经官方校验后复用，其余五个通过代理获取，再核对官方校验文件与仓库清单。
+镜像服务部署于 `6.12.232.130`，Linux、macOS、Windows 各自的 x86_64 和 ARM64 二进制、对应的 `.sha256` 文件及 `SHA256SUMS` 全部平铺在公开目录 `/data/1/nijia.nj/services/bazel-mirror/public` 下。文件原样来自官方发布；已有的 Linux x86_64 文件经官方校验后复用，其余五个通过代理获取，再核对官方校验文件与仓库清单。
+
+迁移到 OSS 时，将这六个二进制原样上传，然后分别替换清单中的 `url` 即可，`sha256` 保持不变。各平台链接可以来自不同域名或使用不同文件名，无需统一目录结构。支持带查询参数的下载直链；若使用临时签名，链接到期后需更新。已有的正确版本缓存仍可复用。
 
 服务由当前账号的 systemd 管理：`seekdb-bazel-mirror.service`，已启用开机启动与异常重启。查看状态使用 `systemctl --user status seekdb-bazel-mirror.service`，重启使用 `systemctl --user restart seekdb-bazel-mirror.service`。HTTP 服务仅公开上述目录；客户端需要能访问该机器的 18080 端口。
 
-2026-10-17 从空缓存验证：`6.13.153.80` 下载完整 Linux x86_64 文件并校验用时 0.298 秒；`30.174.76.160` 下载完整 macOS ARM64 文件并校验用时 15.497 秒。两端均直连该 HTTP 服务，下载后二进制执行 `--version` 返回 `bazel 9.3.0`。其余四个平台验证了文件与官方校验值一致，没有运行二进制。下载器八项测试通过，覆盖六平台镜像路径、缺文件时不回退、校验失败拒绝安装、缓存复用和环境代理。
+2026-10-17 从空缓存验证（平铺前的目录）：`6.13.153.80` 下载完整 Linux x86_64 文件并校验用时 0.298 秒；`30.174.76.160` 下载完整 macOS ARM64 文件并校验用时 15.497 秒。两端均直连该 HTTP 服务，下载后二进制执行 `--version` 返回 `bazel 9.3.0`。其余四个平台验证了文件与官方校验值一致，没有运行二进制。文件平铺后，在服务所在机器清除本次测试的代理环境变量，使用临时空缓存从六个新 URL 下载全部文件，SHA256 均通过，Linux x86_64 执行 `--version` 返回 `bazel 9.3.0`。下载器九项测试通过，覆盖六平台独立 URL、带查询参数的对象链接、缺文件时不回退、校验失败拒绝安装、缓存复用和环境代理。
 
 
 BCR、`mirror.bazel.build` 和上游 `releases.bazel.build` 均由 Bazel 官方托管在 Google Cloud，不能描述为中国境内镜像。[官方基础设施说明](https://blog.bazel.build/2026/01/16/ssl-cert-expiry.html) 本次验证的是当前网络环境可无代理获取完整 Bazel 构建依赖，不对其他运营商和所有地区的连通性作保证。

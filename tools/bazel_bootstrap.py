@@ -48,20 +48,21 @@ def download_binary(url: str, destination: Path, checksum: str) -> Path:
         prefix=destination.name + ".", dir=str(destination.parent)
     )
     temporary = Path(temporary_name)
+    display_url = urllib.parse.urlsplit(url)._replace(query="", fragment="").geturl()
     try:
-        print("Downloading Bazel: %s" % url, file=sys.stderr, flush=True)
+        print("Downloading Bazel: %s" % display_url, file=sys.stderr, flush=True)
         request = urllib.request.Request(url, headers={"User-Agent": "seekdb-bazel-bootstrap/1"})
         with os.fdopen(descriptor, "wb") as output:
             with opener.open(request, timeout=30) as response:
                 for chunk in iter(lambda: response.read(1024 * 1024), b""):
                     output.write(chunk)
         if sha256_file(temporary) != checksum:
-            raise BootstrapError("SHA256 mismatch for %s" % url)
+            raise BootstrapError("SHA256 mismatch for %s" % display_url)
         temporary.chmod(0o755)
         os.replace(str(temporary), str(destination))
         return destination
     except (OSError, ValueError) as error:
-        raise BootstrapError("cannot download Bazel from %s: %s" % (url, error)) from error
+        raise BootstrapError("cannot download Bazel from %s: %s" % (display_url, error)) from error
     finally:
         if temporary.exists():
             temporary.unlink()
@@ -72,21 +73,18 @@ def ensure_bazel(root: Path, cache_directory: Path, version: str) -> Path:
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         host = host_platform()
-        checksum = manifest["sha256"][host]
+        binary = manifest["platforms"][host]
+        checksum = binary["sha256"]
         if manifest["version"] != version or not re.fullmatch(r"[0-9a-f]{64}", checksum):
             raise ValueError("version/checksum does not match .bazelversion")
-        base_url = manifest["base_url"]
-        if not isinstance(base_url, str):
-            raise ValueError("base_url must be an HTTP or HTTPS URL")
-        source = urllib.parse.urlsplit(base_url)
-        if source.scheme not in ("http", "https") or not source.hostname or source.query or source.fragment:
-            raise ValueError("base_url must be an HTTP or HTTPS URL without a query or fragment")
+        url = binary["url"]
+        if not isinstance(url, str):
+            raise ValueError("url must be an HTTP or HTTPS URL")
+        source = urllib.parse.urlsplit(url)
+        if source.scheme not in ("http", "https") or not source.hostname or source.fragment:
+            raise ValueError("url must be an HTTP or HTTPS URL without a fragment")
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise BootstrapError("invalid Bazel binary manifest %s: %s" % (manifest_path, error))
     filename = "bazel-%s-%s" % (version, host)
     destination = cache_directory / "binaries" / version / filename
-    return download_binary(
-        "%s/%s/%s" % (base_url.rstrip("/"), version, filename),
-        destination,
-        checksum,
-    )
+    return download_binary(url, destination, checksum)

@@ -3,6 +3,7 @@
 
 import hashlib
 import http.server
+import io
 import json
 import os
 import tempfile
@@ -25,7 +26,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path.startswith("/missing"):
             self.send_error(404)
             return
-        data = PAYLOAD if path == "/good" or path.startswith("/bazel/9.3.0/") else b"corrupt download"
+        data = PAYLOAD if path == "/good" or path.startswith("/bazel-9.3.0-") else b"corrupt download"
         self.send_response(200)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -89,8 +90,7 @@ class DownloadTest(unittest.TestCase):
         (root / "bazel").mkdir(exist_ok=True, parents=True)
         manifest = {
             "version": "9.3.0",
-            "base_url": source,
-            "sha256": {host: self.checksum for host in (
+            "platforms": {host: {"url": source, "sha256": self.checksum} for host in (
                 "linux-x86_64", "linux-arm64", "darwin-x86_64", "darwin-arm64",
                 "windows-x86_64.exe", "windows-arm64.exe",
             )},
@@ -98,17 +98,30 @@ class DownloadTest(unittest.TestCase):
         (root / "bazel/binaries.json").write_text(json.dumps(manifest))
         return root, manifest
 
-    def test_all_platforms_use_the_configured_mirror(self):
-        root, manifest = self.write_manifest(self.base + "/bazel/")
+    def test_all_platforms_use_their_explicit_url(self):
+        root, manifest = self.write_manifest("")
+        for host, binary in manifest["platforms"].items():
+            binary["url"] = self.base + "/bazel-9.3.0-" + host
+        (root / "bazel/binaries.json").write_text(json.dumps(manifest))
         cache = Path(self.directory.name) / "cache"
-        for host in manifest["sha256"]:
+        for host in manifest["platforms"]:
             with self.subTest(host=host), patch.object(bootstrap, "host_platform", return_value=host):
                 result = bootstrap.ensure_bazel(root, cache, "9.3.0")
                 self.assertEqual(result.read_bytes(), PAYLOAD)
                 self.assertEqual(result.name, "bazel-9.3.0-" + host)
         self.assertEqual(self.server.requests, [
-            "/bazel/9.3.0/bazel-9.3.0-" + host for host in manifest["sha256"]
+            "/bazel-9.3.0-" + host for host in manifest["platforms"]
         ])
+
+    def test_object_url_and_query_are_preserved(self):
+        path = "/good?Signature=example%2Bsignature%3D&Expires=2000000000"
+        root, _ = self.write_manifest(self.base + path)
+        cache = Path(self.directory.name) / "cache"
+        with patch("sys.stderr", new_callable=io.StringIO) as output:
+            result = bootstrap.ensure_bazel(root, cache, "9.3.0")
+        self.assertEqual(result.read_bytes(), PAYLOAD)
+        self.assertEqual(self.server.requests, [path])
+        self.assertNotIn("Signature", output.getvalue())
 
     def test_missing_mirror_file_fails_without_fallback(self):
         root, _ = self.write_manifest(self.base + "/missing")
@@ -116,11 +129,11 @@ class DownloadTest(unittest.TestCase):
         with patch.object(bootstrap, "host_platform", return_value="darwin-arm64"):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "404"):
                 bootstrap.ensure_bazel(root, cache, "9.3.0")
-        self.assertEqual(self.server.requests, ["/missing/9.3.0/bazel-9.3.0-darwin-arm64"])
+        self.assertEqual(self.server.requests, ["/missing"])
 
     def test_invalid_mirror_url_is_rejected_before_download(self):
         root, _ = self.write_manifest("file:///bazel")
-        with self.assertRaisesRegex(bootstrap.BootstrapError, "base_url"):
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "url"):
             bootstrap.ensure_bazel(root, Path(self.directory.name) / "cache", "9.3.0")
         self.assertEqual(self.server.requests, [])
 
