@@ -40,17 +40,17 @@ def sha256_file(path: Path) -> str:
 
 
 def download_binary(url: str, destination: Path, checksum: str) -> Path:
-    """Verify before atomic installation; release downloads never use a proxy."""
+    """Verify before atomic installation; use the environment's proxy settings."""
     if destination.is_file() and sha256_file(destination) == checksum:
         return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    opener = urllib.request.build_opener()
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=destination.name + ".", dir=str(destination.parent)
     )
     temporary = Path(temporary_name)
     try:
-        print("Downloading Bazel without proxy: %s" % url, file=sys.stderr, flush=True)
+        print("Downloading Bazel: %s" % url, file=sys.stderr, flush=True)
         request = urllib.request.Request(url, headers={"User-Agent": "seekdb-bazel-bootstrap/1"})
         with os.fdopen(descriptor, "wb") as output:
             with opener.open(request, timeout=30) as response:

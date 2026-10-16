@@ -5,11 +5,14 @@ import gzip
 import hashlib
 import http.server
 import io
+import os
 import tarfile
 import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+from urllib.parse import urlsplit
 
 import bazel_bootstrap as bootstrap
 
@@ -33,13 +36,14 @@ def deb_package(binary):
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.server.requests.append(self.path)
-        if self.path == "/missing":
+        path = urlsplit(self.path).path
+        if path == "/missing":
             self.send_error(404)
             return
-        if self.path == "/deb":
+        if path == "/deb":
             data = deb_package(PAYLOAD)
         else:
-            data = PAYLOAD if self.path == "/good" else b"corrupt download"
+            data = PAYLOAD if path == "/good" else b"corrupt download"
         self.send_response(200)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -78,6 +82,13 @@ class DownloadTest(unittest.TestCase):
             bootstrap.download_binary(self.base + "/missing", self.destination, self.checksum)
         self.assertEqual(self.server.requests, ["/missing"])
         self.assertEqual(list(self.destination.parent.iterdir()), [])
+
+    def test_download_uses_environment_proxy(self):
+        url = "http://bazel-bootstrap.invalid/good"
+        with patch.dict(os.environ, {"http_proxy": self.base}, clear=True):
+            result = bootstrap.download_binary(url, self.destination, self.checksum)
+        self.assertEqual(result.read_bytes(), PAYLOAD)
+        self.assertEqual(self.server.requests, [url])
 
     def test_corrupt_release_is_never_installed(self):
         with self.assertRaisesRegex(bootstrap.BootstrapError, "SHA256 mismatch"):

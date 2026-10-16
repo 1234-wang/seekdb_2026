@@ -18,8 +18,6 @@ from tools.bazel_bootstrap import BootstrapError, ensure_bazel
 
 
 DEFAULT_BUILD_DIRECTORY = "build_bazel"
-DEFAULT_LOCAL_CPU_RESOURCES = 80
-OB_MAKE_LOCAL_JOBS = 72
 DEFAULT_DISK_CACHE_GC_MAX_SIZE = "50G"
 DEFAULT_DISK_CACHE_GC_MAX_AGE = "14d"
 DEFAULT_DISK_CACHE_GC_IDLE_DELAY = "1m"
@@ -67,11 +65,6 @@ def _bazel_cache_directory() -> Path:
         return Path.home() / "Library" / "Caches" / "bazel"
     xdg_cache = os.environ.get("XDG_CACHE_HOME")
     return (Path(xdg_cache) if xdg_cache else Path.home() / ".cache") / "bazel"
-
-
-def _environment_local_jobs() -> Optional[int]:
-    """Override Bazel's job count only in an ob-make environment."""
-    return OB_MAKE_LOCAL_JOBS if shutil.which("ob-make") is not None else None
 
 
 def _required_bazel_version(root: Path) -> str:
@@ -258,10 +251,8 @@ def _write_runtime_bazelrc(
     remote_cache_read_only: bool,
     registry: str,
     downloader_config: Optional[Path],
-    local_jobs: Optional[int],
 ) -> Path:
     lines: List[str] = [
-        "build --local_resources=cpu=%d" % DEFAULT_LOCAL_CPU_RESOURCES,
         "build --disk_cache=%s" % _bazelrc_quote(disk_cache.as_posix()),
         "build --experimental_disk_cache_gc_max_size=%s"
         % disk_cache_gc_max_size,
@@ -272,8 +263,6 @@ def _write_runtime_bazelrc(
         "build --symlink_prefix=%s"
         % _bazelrc_quote(symlink_prefix.as_posix().rstrip("/") + "/"),
     ]
-    if local_jobs is not None:
-        lines.insert(0, "build --jobs=%d" % local_jobs)
     if repository_cache is not None:
         lines.insert(
             0,
@@ -396,11 +385,6 @@ def _launcher_arguments(
             "seekdb management commands: ./bazel.py init; "
             "./bazel.py registry sync --root PATH"
         ),
-    )
-    parser.add_argument(
-        "--no-proxy",
-        action="store_true",
-        help="ignore HTTP/HTTPS/ALL proxy variables for this invocation",
     )
     parser.add_argument(
         "--build-dir",
@@ -552,17 +536,6 @@ def _inject_module_policy_aspect(arguments: List[str]) -> List[str]:
 
 def main(arguments: List[str]) -> int:
     root = Path(__file__).resolve().parent
-    separator = arguments.index("--") if "--" in arguments else len(arguments)
-    if "--no-proxy" in arguments[:separator]:
-        # Change only this launcher process and its children, not shell settings.
-        for name in ("http_proxy", "https_proxy", "all_proxy"):
-            os.environ.pop(name, None)
-            os.environ.pop(name.upper(), None)
-        os.environ["no_proxy"] = "*"
-        os.environ["NO_PROXY"] = "*"
-        arguments = [
-            argument for argument in arguments[:separator] if argument != "--no-proxy"
-        ] + arguments[separator:]
     dependency_status = _run_management_command(root, arguments)
     if dependency_status is not None:
         return dependency_status
@@ -599,7 +572,6 @@ def main(arguments: List[str]) -> int:
     disk_cache_gc_max_size = options.disk_cache_gc_max_size
     disk_cache_gc_max_age = options.disk_cache_gc_max_age
     disk_cache_gc_idle_delay = options.disk_cache_gc_idle_delay
-    local_jobs = _environment_local_jobs()
 
     if options.remote_cache_read_only and not (remote_cache or remote_executor):
         raise LauncherError(
@@ -658,7 +630,6 @@ def main(arguments: List[str]) -> int:
             remote_cache_read_only=options.remote_cache_read_only,
             registry=registry,
             downloader_config=(downloader_config or root / "bazel" / "downloader.cfg"),
-            local_jobs=local_jobs,
         )
         command = [
             str(bazel),

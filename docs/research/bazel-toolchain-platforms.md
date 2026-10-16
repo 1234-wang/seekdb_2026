@@ -17,7 +17,7 @@
 
 ## 国内安装与工具链供应
 
-推荐先使用下文“仅针对 Bazel 自身的无代理使用”中的 `python3 bazel.py --no-proxy` 入口，以下 Bazelisk 和手动安装方式仍可选用。
+推荐先使用下文“Bazel 国内镜像与自动安装”中的 `python3 bazel.py` 入口，以下 Bazelisk 和手动安装方式仍可选用。
 
 个人和团队使用同一套 Bazel/Bazelisk。Bazelisk 负责读取仓库的版本号、下载和启动对应 Bazel；团队增加的工作是维护下载源和公共缓存，开发者不必各自搭服务器。开源项目提供公开的国内镜像时，个人贡献者也能直接使用。
 
@@ -115,23 +115,25 @@ Rust 可使用 [TUNA rustup 镜像](https://mirrors.tuna.tsinghua.edu.cn/help/ru
 
 已有的 `6.13.50.37` NativeLink 服务提供远程执行和构建结果缓存；它不会替开发者安装 Bazel、下载 Rust 或自动成为 BCR 源码镜像。工具分发、源码依赖镜像、构建缓存及远程执行各解决不同环节，可以逐步建设。
 
-### 仅针对 Bazel 自身的无代理使用（已接入）
+### Bazel 国内镜像与自动安装（已接入）
 
 本轮只处理 Bazel 程序及其规则、模块的下载，Clang、Rust、Cargo 仍由现有环境提供。按用户要求，不将 rules_cc 等依赖随项目归档，不使用 vendor 或 distdir 绕过下载，也不要求搭建下载站。
 
 入口统一为：
 
 ```bash
-python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
+python3 bazel.py build --jobs=100 //src/observer:seekdb
 ```
 
-新机器可先执行 `python3 bazel.py --no-proxy version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py --no-proxy init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
+新机器可先执行 `python3 bazel.py version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
 
 `.bazelrc` 默认设置 `common --http_max_parallel_downloads=32`，构建及 `fetch` 等命令无需重复指定下载并发。该参数控制 Bazel HTTP 下载数量上限，与构建任务的 `--jobs` 分开；不会对单个文件分片加速。需要覆盖时，将参数放在命令之后，例如 `python3 bazel.py build --http_max_parallel_downloads=8 //src/observer:seekdb`。
 
+本地 CPU 和内存资源使用 Bazel 的自动检测，不在启动器中固定机器核数，也不根据 `ob-make` 是否存在覆盖 `--jobs`。例如 8 核主机按 8 核 CPU 资源预算调度；远程构建仍可设置 `--jobs=100`，本地执行同时受本机资源限制。需要主动给其他程序留 CPU 时，可在 `build` 后加 `--local_resources=cpu=HOST_CPUS-2`。
+
 - PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。Linux x86_64 固定从清华 Bazel APT 镜像下载；仅解出原始 Bazel 二进制，同时校验官方安装包和独立二进制的 SHA256。其他宿主固定使用 `releases.bazel.build`。每个平台只有一个下载源，失败直接报错，不做 fallback。下载地址和校验值见 [`bazel/binaries.json`](../../bazel/binaries.json)。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
 - 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。
-- `--no-proxy` 仅清除本次启动器及其子进程的大小写 HTTP/HTTPS/ALL 代理变量，设置 `NO_PROXY=*`，不会修改 shell 或系统配置。Bazel 本体的自动下载始终优先节省代理流量，直接连接公开下载源。
+- 启动器和 Bazel 程序下载遵循终端的代理环境设置，不再提供专用代理开关，也不清除或覆盖代理变量。无代理环境下直接连接上述下载源。
 
 这里的 BCR、依赖镜像和官方发布源均由 Bazel 官方托管在 Google Cloud，不能描述为中国境内镜像。[官方基础设施说明](https://blog.bazel.build/2026/01/16/ssl-cert-expiry.html) 本次验证的是当前网络环境可无代理获取完整 Bazel 构建依赖，不对其他运营商和所有地区的连通性作保证。
 
@@ -139,7 +141,7 @@ python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
 
 此前检查 27 个依赖的镜像地址，26 个返回 200，`rules_cc 0.2.22` 返回 404；这只是地址检查，并不是当时构建已启用镜像。进一步检查发现 `rules_cc 0.2.25` 有官方镜像，因此更新该版本。它依赖的 `apple_support 2.8.0` 在实际冷启动时返回 404，再将其选为镜像已有的 `2.8.4`；传递依赖中的 `bazel_skylib` 更新为 `1.9.0`。锁文件使用 Bazel 9.3.0 更新，其余版本仍按模块解析结果固定。rules_cc 0.2.25 默认不再配置旧 macOS 工具链，apple_support 会注册自己的 macOS 工具链；本次未做 macOS 编译测试。
 
-验证先使用空启动器缓存、空 repository cache、新 output base、新 output_user_root，并禁用 repo contents cache。在 PATH 中移除现有 Bazel，将 HTTP/HTTPS/ALL 代理变量设为不可用的 `127.0.0.1:9`，通过 `--no-proxy` 执行目标分析。Bazel 9.3.0 从公开发布源重新完整下载并通过 SHA256 检查，依赖从 BCR 和官方源码镜像取得；两个目标均分析成功，共 16849 个配置目标、2445 次架构 aspect 应用。没有从旧 Bazel 依赖缓存复制文件。
+验证先使用空启动器缓存、空 repository cache、新 output base、新 output_user_root，并禁用 repo contents cache。在 PATH 中移除现有 Bazel，将 HTTP/HTTPS/ALL 代理变量设为不可用的 `127.0.0.1:9`，由当时的启动器清除本次执行的代理变量后进行目标分析（该代理开关现已移除）。Bazel 9.3.0 从公开发布源重新完整下载并通过 SHA256 检查，依赖从 BCR 和官方源码镜像取得；两个目标均分析成功，共 16849 个配置目标、2445 次架构 aspect 应用。没有从旧 Bazel 依赖缓存复制文件。
 
 下载器的本地 HTTP 测试覆盖下载成功、404 直接失败且不请求其他来源、SHA256 错误时拒绝安装、已验证缓存的复用，以及 deb 安装包提取与双重校验，七项通过。
 
@@ -149,11 +151,11 @@ python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
 
 产物为 `/data/1/nijia.nj/build-cache/seekdb-bazel-direct-final.eZKeQZ/build/bin/src/observer/seekdb`，权限 0755，`--version` 返回 0，报告 seekdb 1.4.0.0、分支 bazel。构建日志为 `build_bazel/direct-clean-build.log`，连接记录为 `build_bazel/direct-build-network.log`，结构化证据为 `build_bazel/direct-validation.json`。本次没有部署数据库或运行 SQL 测试。
 
-日常无代理远程构建入口（其他语言工具链和依赖按用户要求由现有环境提供）：
+日常远程构建入口（其他语言工具链和依赖按用户要求由现有环境提供）：
 
 ```bash
 source ~/.bashrc
-python3 bazel.py --no-proxy \
+python3 bazel.py \
   --remote-executor=ssh://6.13.50.37:50051 \
   --remote-timeout=600s \
   build --jobs=100 \
