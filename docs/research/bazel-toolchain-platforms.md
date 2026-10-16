@@ -132,7 +132,7 @@ python3 bazel.py build --jobs=100 //src/observer:seekdb
 本地 CPU 和内存资源使用 Bazel 的自动检测，不在启动器中固定机器核数，也不根据 `ob-make` 是否存在覆盖 `--jobs`。例如 8 核主机按 8 核 CPU 资源预算调度；远程构建仍可设置 `--jobs=100`，本地执行同时受本机资源限制。需要主动给其他程序留 CPU 时，可在 `build` 后加 `--local_resources=cpu=HOST_CPUS-2`。
 
 - 启动器只使用 `.bazelversion` 指定的 9.3.0，优先复用已校验的用户缓存，缺失或校验失败时从固定源下载。[`bazel/binaries.json`](../../bazel/binaries.json) 的 `platforms` 按平台分别记录完整 `url` 和官方 `sha256`，例如 `platforms.darwin-arm64.url` 为 `http://6.12.232.130:18080/bazel-9.3.0-darwin-arm64`。启动器直接使用该 URL，不拼接目录、版本或文件名。每个平台只有一个下载地址，失败直接报错，不回退其他来源；下载后核对仓库固定的官方 SHA256。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
-- 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。
+- 依赖索引保留逻辑地址 `bcr.bazel.build` 及锁文件中的原有哈希。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将索引和补丁下载重写到 GH-Proxy 上的官方 BCR GitHub 仓库，将 GitHub 依赖包及其 Google 镜像地址统一重写到 GH-Proxy，只允许 `gh-proxy.com`，失败直接报错。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。覆盖范围、Mac 完整下载和空缓存 fetch 证据见[公共依赖镜像调查](bazel-public-dependency-mirrors.md)。
 - 启动器和 Bazel 程序下载遵循终端的代理环境设置，不再提供专用代理开关，也不清除或覆盖代理变量。无代理环境下直接连接上述下载源。
 
 镜像服务部署于 `6.12.232.130`，Linux、macOS、Windows 各自的 x86_64 和 ARM64 二进制、对应的 `.sha256` 文件及 `SHA256SUMS` 全部平铺在公开目录 `/data/1/nijia.nj/services/bazel-mirror/public` 下。文件原样来自官方发布；已有的 Linux x86_64 文件经官方校验后复用，其余五个通过代理获取，再核对官方校验文件与仓库清单。
@@ -146,7 +146,7 @@ python3 bazel.py build --jobs=100 //src/observer:seekdb
 
 BCR、`mirror.bazel.build` 和上游 `releases.bazel.build` 均由 Bazel 官方托管在 Google Cloud，不能描述为中国境内镜像。[官方基础设施说明](https://blog.bazel.build/2026/01/16/ssl-cert-expiry.html) 本次验证的是当前网络环境可无代理获取完整 Bazel 构建依赖，不对其他运营商和所有地区的连通性作保证。
 
-另一台 Alibaba Cloud Linux x86_64 主机实测发现，官方二进制直连约每秒几十 KiB，超过十分钟仍未下完；清华镜像的同版本完整安装包（68272520 字节）仅需 3.104 秒，约 22 MB/s。安装包 SHA256 与官方 APT 索引一致，提取出的 77023347 字节二进制也与官方独立发布文件完全一致。因此当时 Linux x86_64 安装改走国内公共镜像；此方案没有覆盖 macOS，现已被统一的项目镜像替代。BCR 和构建规则的下载源保持不变。
+另一台 Alibaba Cloud Linux x86_64 主机实测发现，官方二进制直连约每秒几十 KiB，超过十分钟仍未下完；清华镜像的同版本完整安装包（68272520 字节）仅需 3.104 秒，约 22 MB/s。安装包 SHA256 与官方 APT 索引一致，提取出的 77023347 字节二进制也与官方独立发布文件完全一致。因此当时 Linux x86_64 安装改走国内公共镜像；此方案没有覆盖 macOS，现已被统一的项目镜像替代。当时 BCR 和构建规则的下载源未变，后续调整为上文的 GH-Proxy 配置。
 
 此前检查 27 个依赖的镜像地址，26 个返回 200，`rules_cc 0.2.22` 返回 404；这只是地址检查，并不是当时构建已启用镜像。进一步检查发现 `rules_cc 0.2.25` 有官方镜像，因此更新该版本。它依赖的 `apple_support 2.8.0` 在实际冷启动时返回 404，再将其选为镜像已有的 `2.8.4`；传递依赖中的 `bazel_skylib` 更新为 `1.9.0`。锁文件使用 Bazel 9.3.0 更新，其余版本仍按模块解析结果固定。rules_cc 0.2.25 默认不再配置旧 macOS 工具链，apple_support 会注册自己的 macOS 工具链；本次未做 macOS 编译测试。
 
