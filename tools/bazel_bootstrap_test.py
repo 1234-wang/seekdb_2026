@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Exercise pinned release downloads and verification without external traffic."""
+"""Exercise Bazel bootstrap and launcher arguments without external traffic."""
 
 import hashlib
 import http.server
+import importlib.util
 import io
 import json
 import os
+import sys
 import tempfile
 import threading
 import unittest
@@ -136,6 +138,27 @@ class DownloadTest(unittest.TestCase):
         with self.assertRaisesRegex(bootstrap.BootstrapError, "url"):
             bootstrap.ensure_bazel(root, Path(self.directory.name) / "cache", "9.3.0")
         self.assertEqual(self.server.requests, [])
+
+
+class LauncherArgumentsTest(unittest.TestCase):
+    def test_repo_flags_are_forwarded_without_changing_repository_cache(self):
+        root = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location(
+            "seekdb_bazel_launcher", root / "bazel.py"
+        )
+        launcher = importlib.util.module_from_spec(spec)
+        with patch.object(sys, "path", [str(root)] + sys.path):
+            spec.loader.exec_module(launcher)
+        for repo_args in (
+            ["--repo=@rules_cc", "--repo=@platforms"],
+            ["--repo", "@rules_cc", "--repo", "@platforms"],
+        ):
+            with self.subTest(repo_args=repo_args):
+                options, forwarded = launcher._launcher_arguments(
+                    ["--repository-cache", "download-cache", "fetch"] + repo_args
+                )
+                self.assertEqual(options.repository_cache, "download-cache")
+                self.assertEqual(forwarded, ["fetch"] + repo_args)
 
 
 if __name__ == "__main__":

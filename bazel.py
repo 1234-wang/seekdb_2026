@@ -361,6 +361,7 @@ def _launcher_arguments(
     arguments: List[str],
 ) -> Tuple[argparse.Namespace, List[str]]:
     parser = argparse.ArgumentParser(
+        allow_abbrev=False,
         description=(
             "seekdb Bazel launcher; unrecognized arguments are passed through to Bazel"
         ),

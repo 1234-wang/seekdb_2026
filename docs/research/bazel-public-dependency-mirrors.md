@@ -4,7 +4,7 @@
 
 ## 当前得到的候选
 
-本次找到了可用的公共路径：**GH-Proxy `.com` 覆盖了当前项目的 191 个锁定元数据文件、20 个补丁以及 27 个模块源码归档，全部通过原有哈希校验**；在用户 Mac 的完整下载抽测中，它比 Cloudflare 归档镜像更快。元数据和补丁在本机检查，27 个归档在用户 Mac 检查；另外在本机用真正的 Bazel 9.3.0、隔离缓存、原锁文件严格模式，完成了三个直接模块的 fetch。无需自建服务，也无需开发者安装代理客户端。
+本次找到了可用的公共路径：**GH-Proxy `.com` 覆盖了当前项目的 191 个锁定元数据文件、20 个补丁以及 27 个模块源码归档，全部通过原有哈希校验**；在用户 Mac 的完整下载抽测中，它比 Cloudflare 归档镜像更快。元数据和补丁在本机检查，27 个归档在用户 Mac 检查；另外用真正的 Bazel 9.3.0、隔离缓存、原锁文件严格模式，在本机完成了三个直接模块的 fetch，并在 Windows x86_64 完成了全部 27 个模块的定向 fetch。无需自建服务，也无需开发者安装代理客户端。
 
 Cloudflare 也已有专门面向 BCR 源码归档的公共镜像，BCR 维护者确认过这一服务；它在用户 Mac 的 27 个归档下载同样全部通过哈希校验。它可以作为另一个供选择的渠道，**不是**项目自动 fallback。
 
@@ -138,3 +138,13 @@ block *
 上述 fetch 是**三个直接模块的隔离集成验证**，并非当前 seekdb 全部模块的 Bazel fetch，也非 Linux/macOS/Windows 全平台编译验证。27 个归档完整性检查、191 个元数据检查和这个集成验证分别回答覆盖范围、文件正确性及 Bazel 配置能否生效的问题。
 
 项目的 [`bazel/downloader.cfg`](../../bazel/downloader.cfg) 已采用上述 GH-Proxy 单一来源配置，现有 `MODULE.bazel.lock` 保持不变。临时 Bazel 安装解压目录和构建缓存已清理，完整下载记录、测试配置与日志保留在调查机器的 `/data/1/tmp/seekdb-public-mirror-research-bgynlxhf/`，其中 `mac-full-downloads.jsonl` 与 `mac-full-downloads-extra.jsonl` 是 Mac 的逐文件记录，`gh-fetch-check/downloader.cfg` 与 `gh-fetch-check/fetch.log` 是严格锁文件模式的配置和结果。
+
+## Windows x86_64 原生 fetch 验证
+
+2026-10-17 在 Windows x86_64 主机 `30.249.210.49` 上，用项目启动器和配置验证 GH-Proxy。Bazel 9.3.0 本体从空缓存下载安装、校验及首次启动共 11.938 秒。依赖测试沿用上面的三个直接模块声明和原始 `MODULE.bazel.lock`，通过重复 `--repo` 参数指定锁定的全部 27 个源码模块，不触发无关模块扩展。三个直接模块使用 `@rules_cc`、`@apple_support`、`@platforms`，其余使用 `@@模块名+`。
+
+测试目录为 `C:\Users\admin\bazel-check-3u6iz8kb`。使用全新的 `build-verified` 和 `repository-cache-verified`，并设置 `fetch --repo_contents_cache= --lockfile_mode=error`。下载器仅允许 GH-Proxy，测试进程禁用代理，未修改系统代理配置。Bazel 报告 `All requested repos fetched successfully.`，退出码 0，总耗时 **50.351 秒**；测试前后锁文件字节完全一致。随后直接检查 Bazel 内容缓存中的全部归档，与原锁文件固定的 `source.json` 中 integrity 对照，**27/27 SHA256 一致，共 45,809,205 B**。
+
+初次测试暴露了启动器的参数解析问题：Python argparse 默认允许长参数缩写，误把 Bazel 的 `--repo` 当作启动器的 `--repository-cache`，导致请求的模块列表未转交给 Bazel。启动器已设置 `allow_abbrev=False`，并新增同时覆盖 `--repo=value` 和 `--repo value` 的回归用例。修复后重新使用空依赖缓存取得上述结果；包含回归用例的 10 项测试在 Linux、Windows 均通过。
+
+本次验证涵盖 Bazel 本体安装及上述 27 个模块的实际获取，没有编译 seekdb，也没有验证所有模块扩展可能下载的 JDK、SDK 或其他平台工具。Windows 测试目录保留了 `version.log`、`fetch-verified.log`、`fetch-verified-result.json` 和 `archive-integrity-results.json`，本次隔离 Bazel 服务已关闭；本机汇总日志位于 `/data/1/tmp/seekdb-windows-bazel-n25_cz29/`。

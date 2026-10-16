@@ -148,7 +148,15 @@ python3 bazel.py build --jobs=100 //src/observer:seekdb
 | Windows x86_64 | 68,435,391 B | 1.717 秒 | SHA256 一致 |
 | Windows ARM64 | 66,938,951 B | 1.896 秒 | SHA256 一致 |
 
-时间是当次测试结果，Linux x86_64 一行还包含版本检查耗时，不表示其他网络的固定速度。仅运行了 Linux x86_64 和 macOS ARM64 二进制，其余平台只验证下载内容；不是 seekdb 六平台编译验证。现有下载器九项测试全部通过。修改只替换六个平台的 URL，官方哈希、缓存路径及单一来源策略保持不变。
+时间是当次测试结果，Linux x86_64 一行还包含版本检查耗时，不表示其他网络的固定速度。这一批测试仅运行了 Linux x86_64 和 macOS ARM64 二进制，其余平台只验证下载内容；后续 Windows x86_64 原生验证见下文。现有下载器九项测试全部通过。修改只替换六个平台的 URL，官方哈希、缓存路径及单一来源策略保持不变。
+
+#### Windows x86_64 原生验证
+
+2026-10-17 在用户指定的 Windows x86_64 主机 `30.249.210.49`（系统版本 `10.0.26100.9445`、Python 3.14.3）上，用项目 `bazel.py version` 从空启动器缓存下载安装。测试进程直连 GH-Proxy，未修改系统代理或已有项目。68,435,391 B 的 Windows 二进制通过仓库固定的官方 SHA256 校验，输出 `Build label: 9.3.0`；完整下载、校验、解压和首次启动共 11.938 秒。
+
+随后使用新的输出目录和依赖缓存，通过真实 Bazel `fetch --repo` 获取锁文件中的 27 个模块，耗时 50.351 秒，原锁文件保持不变。缓存内 27 个归档逐一复核 SHA256 全部通过，共 45,809,205 B；测试范围与命令见[Windows 依赖验证](bazel-public-dependency-mirrors.md#windows-x86_64-原生-fetch-验证)。这次同时发现并修复启动器将 `--repo` 缩写匹配为 `--repository-cache` 的参数冲突；包含新增回归用例的 10 项启动器/下载器测试在 Linux、Windows 均通过。
+
+原生运行已覆盖 Linux x86_64、macOS ARM64、Windows x86_64；其余三个宿主平台仍只验证二进制下载与哈希。这次未编译 seekdb。Windows 测试文件保留在 `C:\Users\admin\bazel-check-3u6iz8kb`，本次启动的隔离 Bazel 服务已关闭。
 
 #### 此前的自建镜像与下载验证
 
