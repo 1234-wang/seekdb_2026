@@ -7,13 +7,9 @@ import platform
 import re
 import sys
 import tempfile
-import time
 import urllib.request
 from pathlib import Path
 from typing import Iterable
-
-
-DOWNLOAD_PROGRESS_INTERVAL = 5
 
 
 class BootstrapError(RuntimeError):
@@ -59,30 +55,12 @@ def download_binary(urls: Iterable[str], destination: Path, checksum: str) -> Pa
             request = urllib.request.Request(url, headers={"User-Agent": "seekdb-bazel-bootstrap/1"})
             with os.fdopen(descriptor, "wb") as output:
                 with opener.open(request, timeout=30) as response:
-                    length = response.headers.get("Content-Length", "")
-                    total = int(length) if length.isdigit() else 0
-                    downloaded = 0
-                    started = last_progress = time.monotonic()
-                    # read1 returns available data without waiting to fill a
-                    # large buffer on slow connections.
-                    for chunk in iter(lambda: response.read1(64 * 1024), b""):
+                    for chunk in iter(lambda: response.read(1024 * 1024), b""):
                         output.write(chunk)
-                        downloaded += len(chunk)
-                        now = time.monotonic()
-                        if now - last_progress >= DOWNLOAD_PROGRESS_INTERVAL or downloaded == total:
-                            progress = "Downloaded %.1f MiB" % (downloaded / (1024 * 1024))
-                            if total:
-                                progress += " / %.1f MiB (%.1f%%)" % (
-                                    total / (1024 * 1024), downloaded * 100 / total,
-                                )
-                            speed = downloaded / max(now - started, 0.001) / 1024
-                            print("%s, %.1f KiB/s" % (progress, speed), file=sys.stderr, flush=True)
-                            last_progress = now
             if sha256_file(temporary) != checksum:
                 raise BootstrapError("SHA256 mismatch for %s" % url)
             temporary.chmod(0o755)
             os.replace(str(temporary), str(destination))
-            print("Bazel installed: %s" % destination, file=sys.stderr, flush=True)
             return destination
         except (OSError, ValueError, BootstrapError) as error:
             errors.append("%s: %s" % (url, error))

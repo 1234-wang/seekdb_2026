@@ -127,8 +127,6 @@ python3 bazel.py --no-proxy build --jobs=100 //src/observer:seekdb
 
 新机器可先执行 `python3 bazel.py --no-proxy version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py --no-proxy deps init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
 
-下载期间持续收到数据时，启动器每约 5 秒显示已下载大小和平均速度；服务器提供文件大小时，还会显示总大小和百分比。下载和 SHA256 校验完成后显示安装路径。直连返回 HTTP 200 只证明地址可达，不代表下载速度足够快。
-
 - PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。优先查询华为公共镜像，缺失时从 `releases.bazel.build` 获取；9.3.0 本次使用的是官方发布源。二进制 SHA256 固定在 [`bazel/binaries.json`](../../bazel/binaries.json)，覆盖 Linux/macOS/Windows 的 x86_64/ARM64 六种宿主。安装到用户缓存，无需 sudo、npm 或 Bazelisk。
 - 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。
 - `--no-proxy` 仅清除本次启动器及其子进程的大小写 HTTP/HTTPS/ALL 代理变量，设置 `NO_PROXY=*`，不会修改 shell 或系统配置。Bazel 本体的自动下载始终优先节省代理流量，直接连接公开下载源。
