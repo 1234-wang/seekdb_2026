@@ -13,7 +13,7 @@
 | 最新候选版本 | **10.0.0rc1**，2026-10-07 发布 | [官方发布列表](https://github.com/bazelbuild/bazel/releases)，标记为 Pre-release |
 | 8.x 最新维护版本 | **8.8.1**，2026-09-24 发布 | [官方 8.8.1 release](https://github.com/bazelbuild/bazel/releases/tag/8.8.1) |
 
-当前启动器在找不到 Bazel 时会自动安装 9.3.0，也可使用已安装的同版本程序。已完成 Linux x86_64 远程编译验证，并将新锁文件和 Cargo PATH 配置纳入默认构建；当前版本检查会拒绝其他版本。官方建议通过 Bazelisk 管理项目版本。[官方安装建议](https://bazel.build/install/bazelisk)
+当前启动器始终使用项目管理的 9.3.0：从用户缓存加载，缓存缺失时自动下载，不探测 PATH 中的 Bazel，也不读取 `BAZEL` 或提供 `--bazel` 覆盖入口。系统或 Homebrew 安装的其他版本可独立保留。已完成 Linux x86_64 远程编译验证，并将新锁文件和 Cargo PATH 配置纳入默认构建。官方建议通过 Bazelisk 管理项目版本。[官方安装建议](https://bazel.build/install/bazelisk)
 
 ## 国内安装与工具链供应
 
@@ -125,13 +125,13 @@ Rust 可使用 [TUNA rustup 镜像](https://mirrors.tuna.tsinghua.edu.cn/help/ru
 python3 bazel.py build --jobs=100 //src/observer:seekdb
 ```
 
-新机器可先执行 `python3 bazel.py version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变，无需添加到 PATH。`python3 bazel.py init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
+新机器可先执行 `python3 bazel.py version`，单独触发 Bazel 安装并检查版本。Linux 默认安装目录为 `~/.cache/bazel/binaries/9.3.0/`，可由 `XDG_CACHE_HOME` 或 `--launcher-cache-dir` 改变；macOS 默认为 `~/Library/Caches/bazel/binaries/9.3.0/`。无需添加到 PATH。`python3 bazel.py init` 只准备 seekdb 的第三方依赖，不安装 Bazel；Rust/Cargo 及宿主机基础工具仍须预先准备。
 
 `.bazelrc` 默认设置 `common --http_max_parallel_downloads=32`，构建及 `fetch` 等命令无需重复指定下载并发。该参数控制 Bazel HTTP 下载数量上限，与构建任务的 `--jobs` 分开；不会对单个文件分片加速。需要覆盖时，将参数放在命令之后，例如 `python3 bazel.py build --http_max_parallel_downloads=8 //src/observer:seekdb`。
 
 本地 CPU 和内存资源使用 Bazel 的自动检测，不在启动器中固定机器核数，也不根据 `ob-make` 是否存在覆盖 `--jobs`。例如 8 核主机按 8 核 CPU 资源预算调度；远程构建仍可设置 `--jobs=100`，本地执行同时受本机资源限制。需要主动给其他程序留 CPU 时，可在 `build` 后加 `--local_resources=cpu=HOST_CPUS-2`。
 
-- PATH 中没有 Bazel、且没有显式设置 `--bazel`/`BAZEL` 时，启动器会下载 `.bazelversion` 指定的 9.3.0。Linux x86_64 固定从清华 Bazel APT 镜像下载；仅解出原始 Bazel 二进制，同时校验官方安装包和独立二进制的 SHA256。其他宿主固定使用 `releases.bazel.build`。每个平台只有一个下载源，失败直接报错，不做 fallback。下载地址和校验值见 [`bazel/binaries.json`](../../bazel/binaries.json)。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
+- 启动器只使用 `.bazelversion` 指定的 9.3.0，优先复用已校验的用户缓存，缺失或校验失败时从固定源下载。Linux x86_64 固定从清华 Bazel APT 镜像下载；仅解出原始 Bazel 二进制，同时校验官方安装包和独立二进制的 SHA256。其他宿主固定使用 `releases.bazel.build`。每个平台只有一个下载源，失败直接报错，不做 fallback。下载地址和校验值见 [`bazel/binaries.json`](../../bazel/binaries.json)。安装到用户缓存，无需 sudo、APT、npm 或 Bazelisk。
 - 依赖索引使用默认 `bcr.bazel.build`。[`bazel/downloader.cfg`](../../bazel/downloader.cfg) 将 GitHub 文件地址重写到 `mirror.bazel.build`，仅允许 BCR 和该镜像站；镜像缺包时明确失败，不悄悄回退 GitHub。现有显式 `--registry`/`--registry-mirror` 配置仍可覆盖默认路径。
 - 启动器和 Bazel 程序下载遵循终端的代理环境设置，不再提供专用代理开关，也不清除或覆盖代理变量。无代理环境下直接连接上述下载源。
 
@@ -240,7 +240,7 @@ source ~/.bashrc
 
 Bazel 9 默认启用 `--incompatible_strict_action_env`，而当前 `rust/build.py` 直接执行 PATH 中的 `cargo`，因此可复现上述环境依赖问题。[Bazel 9 发布说明](https://github.com/bazelbuild/bazel/releases/tag/9.0.0)也说明它最低依赖 protobuf 33.4，本次更新相应下载了规则依赖。这里的结果说明当前代码可以使用 9.3.0 编译，不能证明最初固定 8.2.1 的历史原因。
 
-成功构建命令（要求先临时调整上述版本限制，并完成锁文件更新）：
+当时的成功构建命令（历史记录；其中 `--bazel` 入口现已删除，当前启动器按项目版本自动管理程序）：
 
 ```bash
 source ~/.bashrc

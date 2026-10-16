@@ -78,23 +78,6 @@ def _required_bazel_version(root: Path) -> str:
     return version
 
 
-def _resolve_bazel(root: Path, override: Optional[str], cache_directory: Path) -> Path:
-    requested = override or os.environ.get("BAZEL") or "bazel"
-    executable = shutil.which(requested)
-    if executable is None:
-        required_version = _required_bazel_version(root)
-        if not override and not os.environ.get("BAZEL"):
-            return ensure_bazel(root, cache_directory, required_version)
-        raise LauncherError(
-            "Bazel %s is required but '%s' was not found; install Bazel or "
-            "pass --bazel=/path/to/bazel" % (required_version, requested)
-        )
-    path = Path(executable).resolve()
-    if not path.is_file():
-        raise LauncherError("Bazel executable is not a file: %s" % path)
-    return path
-
-
 def _verify_bazel_version(root: Path, executable: Path) -> None:
     required_version = _required_bazel_version(root)
     result = subprocess.run(
@@ -482,14 +465,6 @@ def _launcher_arguments(
         help="directory for generated launcher state (default: %s)"
         % _bazel_cache_directory(),
     )
-    parser.add_argument(
-        "--bazel",
-        metavar="PATH",
-        help=(
-            "Bazel executable; defaults to $BAZEL or bazel from PATH "
-            "(downloads the pinned release if neither is installed)"
-        ),
-    )
     return parser.parse_known_args(arguments)
 
 
@@ -548,7 +523,7 @@ def main(arguments: List[str]) -> int:
         if options.launcher_cache_dir
         else default_cache_directory
     )
-    bazel = _resolve_bazel(root, options.bazel, cache_directory.resolve())
+    bazel = ensure_bazel(root, cache_directory.resolve(), _required_bazel_version(root))
     _verify_bazel_version(root, bazel)
     bazel_arguments = _inject_module_policy_aspect(bazel_arguments)
     build_directory = _resolve_build_directory(root, options.build_dir)
