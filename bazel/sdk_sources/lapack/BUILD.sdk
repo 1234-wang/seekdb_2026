@@ -36,3 +36,8 @@ filegroup(
     name = "licenses",
     srcs = ["LICENSE"],
 )
+
+filegroup(
+    name = "source_metadata",
+    srcs = ["source.json"],
+)

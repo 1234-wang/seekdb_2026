@@ -276,6 +276,26 @@ def reusable_package(marker, identity, prefix):
         return False
 
 
+def publish_metadata(name, source, marker, prefix):
+    """Expose base build records and notices as declared SDK inputs."""
+    notices = set()
+    for pattern in ("LICENSE*", "COPYING*", "Copyright", "license.html"):
+        notices.update(path for path in source.glob(pattern) if path.is_file())
+    if name == "zlib":
+        notices.add(source / "zlib.h")
+    if not notices:
+        raise RuntimeError("No upstream license notice found: " + name)
+    destination = prefix / "licenses" / name
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    for notice in sorted(notices):
+        shutil.copy2(notice, destination / notice.name)
+    records = prefix / "verified"
+    records.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(marker, records / (name + ".json"))
+
+
 def builder_identity():
     """Bind cache reuse to tracked dependency recipes and package version definitions."""
     digest = hashlib.sha256()
@@ -320,6 +340,7 @@ def main():
         marker = build / "verified.json"
         if options.reuse and not rebuilt and reusable_package(marker, identity, prefix):
             print("Reusing verified iOS dependency: " + name, flush=True)
+            publish_metadata(name, source_package(name, environment), marker, prefix)
             continue
         # Rebuild downstream packages when an earlier dependency has changed.
         rebuilt = True
@@ -334,6 +355,7 @@ def main():
         if outputs is None:
             raise RuntimeError("Missing installed dependency outputs: " + name)
         marker.write_text(json.dumps(dict(identity, outputs=outputs), indent=2) + "\n")
+        publish_metadata(name, source, marker, prefix)
 
 
 if __name__ == "__main__":
