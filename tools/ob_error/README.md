@@ -4,13 +4,10 @@ ob_error is an error tool for OceanBase Database. ob_error returns information, 
 
 ## How to build
 
-The tool currently uses the CMake build:
-
 ```bash
 ./build.py init
-cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build_release --target ob_error
-cp build_release/tools/ob_error/src/ob_error /usr/local/bin
+./build.py build //tools/ob_error:ob_error
+cp build_bazel/bin/tools/ob_error/ob_error /usr/local/bin
 ```
 
 ## How to use
@@ -87,4 +84,4 @@ cd src/share
 ./gen_errno.pl
 ```
 
-Then you go to `BUILD_DIR` to remake `ob_error`.
+Then rebuild `//tools/ob_error:ob_error`.

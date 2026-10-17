@@ -507,20 +507,3 @@ bool init_global_info()
 
   return ob_init_error_to_oberror(g_mysql_error, g_os_error);
 }
-
-int main(int args, char* argv[])
-{
-  if (!init_global_info()) {
-    printf("\nerror: ob_error init failed.\n");
-  } else if (1 < args) {
-    if (!parse_param(args, argv)) {
-      printf("error: parameters invalid\n"
-             "Use 'ob_error --help' for help.\n");
-    }
-  } else {
-    printf("error: missing parameter\n"
-           "Use 'ob_error --help' for help.\n");
-  }
-
-  return 0;
-}

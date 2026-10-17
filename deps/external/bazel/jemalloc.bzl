@@ -14,6 +14,7 @@
 
 """Build and expose the native artifacts from seekdb-jemalloc-sys."""
 
+load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//bazel:cargo.bzl", "CARGO_ACTION_ATTRS", "CARGO_TOOLCHAINS", "cargo_action")
 load("//bazel:platforms.bzl", "target_platform")
@@ -113,4 +114,10 @@ def seekdb_jemalloc(name, external_src, lockfile, manifest):
         hdrs = [":" + public_header_target],
         strip_include_prefix = "jemalloc/include",
         visibility = ["//src/oblib:__pkg__", "//src/observer:__pkg__"],
+    )
+
+    cc_import(
+        name = "%s_library" % name,
+        static_library = ":%s_archive" % name,
+        visibility = ["//src/oblib:__pkg__"],
     )

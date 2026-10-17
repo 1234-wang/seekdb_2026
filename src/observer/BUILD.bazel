@@ -1,3 +1,4 @@
+load("//bazel:seekdb_build_config.bzl", "seekdb_sanity_linkopts")
 load(":observer_link_deps.bzl", "observer_third_party_link_files")
 load("//bazel:ios_framework.bzl", "seekdb_ios_framework")
 load(
@@ -474,28 +475,7 @@ _SEEKDB_EXECUTABLE_LINKOPTS = select({
     ],
 })
 
-_SEEKDB_SANITY_LINKOPTS = select({
-    "//bazel:sanity_enabled": [
-        "-Wl,--wrap=memcpy",
-        "-Wl,--wrap=memmove",
-        "-Wl,--wrap=memset",
-        "-Wl,--wrap=bzero",
-        "-Wl,--wrap=memcmp",
-        "-Wl,--wrap=strlen",
-        "-Wl,--wrap=strnlen",
-        "-Wl,--wrap=strcpy",
-        "-Wl,--wrap=strncpy",
-        "-Wl,--wrap=strcmp",
-        "-Wl,--wrap=strncmp",
-        "-Wl,--wrap=strcasecmp",
-        "-Wl,--wrap=strncasecmp",
-        "-Wl,--wrap=vsprintf",
-        "-Wl,--wrap=vsnprintf",
-        "-Wl,--wrap=sprintf",
-        "-Wl,--wrap=snprintf",
-    ],
-    "//conditions:default": [],
-})
+
 
 _SEEKDB_SHARED_LINKOPTS = select({
     "@platforms//os:macos": [
@@ -530,16 +510,12 @@ seekdb_final_link(
     ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
     extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
     system_libs = _SEEKDB_SYSTEM_LIBS,
-    linkopts = _SEEKDB_EXECUTABLE_LINKOPTS + _SEEKDB_SANITY_LINKOPTS,
+    linkopts = _SEEKDB_EXECUTABLE_LINKOPTS + seekdb_sanity_linkopts(),
     out = "seekdb",
     tags = ["manual"],
     visibility = ["//visibility:public"],
 )
 
-# Compatibility runtime for the first unit-test migration.  It deliberately
-# exports the complete production implementation closure, as the former CMake
-# `oceanbase` shared target did, but owns no headers.  Tests must still obtain
-# compile-time access from source-module-owned test interfaces.
 seekdb_final_link(
     name = "_liboceanbase_link",
     whole_group_deps = (
@@ -558,7 +534,7 @@ seekdb_final_link(
     ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
     extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
     system_libs = _SEEKDB_SYSTEM_LIBS,
-    linkopts = _SEEKDB_SHARED_LINKOPTS + _SEEKDB_SANITY_LINKOPTS,
+    linkopts = _SEEKDB_SHARED_LINKOPTS + seekdb_sanity_linkopts(),
     out = "liboceanbase.so",
     shared = True,
     tags = ["manual"],

@@ -109,3 +109,28 @@ def seekdb_sanity_settings(instrument):
         name: select({_SANITY_CONFIG: values, "//conditions:default": []})
         for name, values in settings.items()
     })
+
+
+def seekdb_sanity_linkopts():
+    return select({
+        "//bazel:sanity_enabled": [
+            "-Wl,--wrap=memcpy",
+            "-Wl,--wrap=memmove",
+            "-Wl,--wrap=memset",
+            "-Wl,--wrap=bzero",
+            "-Wl,--wrap=memcmp",
+            "-Wl,--wrap=strlen",
+            "-Wl,--wrap=strnlen",
+            "-Wl,--wrap=strcpy",
+            "-Wl,--wrap=strncpy",
+            "-Wl,--wrap=strcmp",
+            "-Wl,--wrap=strncmp",
+            "-Wl,--wrap=strcasecmp",
+            "-Wl,--wrap=strncasecmp",
+            "-Wl,--wrap=vsprintf",
+            "-Wl,--wrap=vsnprintf",
+            "-Wl,--wrap=sprintf",
+            "-Wl,--wrap=snprintf",
+        ],
+        "//conditions:default": [],
+    })

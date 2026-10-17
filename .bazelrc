@@ -8,6 +8,7 @@ build --experimental_disk_cache_gc_max_age=14d
 build --experimental_disk_cache_gc_idle_delay=1m
 build --workspace_status_command=./tools/bazel_migration/workspace_status.sh
 build --enable_platform_specific_config
+build:linux --features=static_link_cpp_runtimes
 # Release-compatible O2 is the default. O1 uses fastbuild only as its output
 # configuration; the explicit copt also makes O1 portable to the native macOS
 # toolchain, whose fastbuild flags are not repository-owned.

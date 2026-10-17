@@ -1,3 +1,4 @@
+load("//bazel:seekdb_build_config.bzl", "seekdb_sanity_linkopts")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load(
     ":oblib_source_inventory.bzl",
@@ -436,10 +437,6 @@ cc_library(
     visibility = ["//src/observer:__pkg__"],
 )
 
-# OBLib's own tests exercise private Implementation headers in addition to the
-# public Module Interface.  Keep that compile seam narrow: no peer Module can
-# depend on it, and //unittest/oblib discards all link inputs through
-# seekdb_test_interface.
 cc_library(
     name = "oblib_unit_test_internal_headers",
     testonly = True,
@@ -470,7 +467,6 @@ cc_library(
         ":_oblib_foundation_impl",
         ":_oblib_restore_impl",
         ":_oblib_rpc_impl",
-        ":_oblib_ssl_impl",
         ":_oblib_vector_impl",
         ":_zstd_1_3_8_objects",
         "@seekdb_3rd_headers//:libaio",
@@ -478,12 +474,14 @@ cc_library(
         "@seekdb_3rd_headers//:libssl",
         "@seekdb_3rd_headers//:libunwind",
         "@seekdb_3rd_headers//:zlib",
-    ],
+    ] + select({
+        "//bazel:sanity_enabled": ["//deps/external:jemalloc_library"],
+        "//conditions:default": [],
+    }),
+    linkopts = seekdb_sanity_linkopts(),
     visibility = ["//unittest/oblib:__pkg__"],
 )
 
-# Match CMake OBJECT libraries: materialize compilation outputs without asking
-# each cc_library for its DefaultInfo, which also contains unused .a/.so files.
 filegroup(
     name = "_oblib_compilation_outputs",
     srcs = [
@@ -500,7 +498,6 @@ filegroup(
         ":_oblib_foundation_impl",
         ":_oblib_restore_impl",
         ":_oblib_rpc_impl",
-        ":_oblib_ssl_impl",
         ":_oblib_vector_impl",
     ],
     output_group = "compilation_outputs",
@@ -511,8 +508,6 @@ filegroup(
     name = "oblib_objects_build",
     srcs = [
         ":_oblib_compilation_outputs",
-        # The legacy CMake graph also folds the vendored Zstd objects with
-        # `ld -r` before localizing their hidden symbols.
         ":_zstd_1_3_8_partial_link_object",
     ],
     tags = ["manual"],

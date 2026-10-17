@@ -9,7 +9,11 @@ def _headers(directory, includes = ["include"]):
     return {"hdrs": ["include/" + directory + "/**/*." + extension for extension in _HEADER_EXTENSIONS], "includes": includes}
 
 SDK_HEADERS = {
-    "gtest": _headers("gtest") | {"deps": [":gtest_archive"]},
+    "gtest": _headers("gtest") | {
+        "deps": [":gtest_archive"],
+        "defines": ["_GLIBCXX_USE_CXX11_ABI=1"],
+        "linkopts": select({"@platforms//os:linux": ["-pthread"], "//conditions:default": []}),
+    },
     "gmock": _headers("gmock") | {"deps": [":gmock_archive", ":gtest"]},
     "sanity_headers": {"hdrs": ["devtools/include/sanity/**/*.h"], "includes": ["devtools/include"]},
     "jemalloc_headers": _headers("jemalloc"),
