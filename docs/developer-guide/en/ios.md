@@ -44,7 +44,7 @@ Validate affected unit tests on a supported Linux host by following [Write and r
 
 - `SeekDB`: the engine, its Rust libraries and third-party libraries linked into one arm64 dynamic library that depends only on system libraries
 - `Headers/seekdb.h`: `seekdb_open`, `seekdb_close` and `seekdb_connection_options`
-- `Info.plist`, `build-manifest.json`: source revision, platform, minimum OS version, binary checksum and exported symbols
+- `Info.plist`: source revision, platform and minimum OS version
 
 The device and simulator frameworks are not interchangeable. The framework is not signed for distribution; Xcode signs it with the app when it is added with **Embed & Sign**.
 

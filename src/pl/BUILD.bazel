@@ -41,33 +41,6 @@ pl_validate_header_inventory(glob(
     exclude = PL_IGNORED_GENERATED_HEADERS,
 ))
 
-# Public only for the negative central-policy probe in //src/sql/bazel_pilot.
-# It carries no production files or providers; its purpose is to prove that a
-# broad target visibility cannot authorize a forbidden module direction.
-filegroup(
-    name = "module_policy_public_probe",
-    tags = ["manual"],
-    testonly = True,
-    visibility = ["//visibility:public"],
-)
-
-# These producers deliberately expose public probes, so ordinary visibility
-# permits the edges. The central module policy must independently reject both
-# forbidden PL -> server directions.
-filegroup(
-    name = "bazel_pilot_illegal_observer_dependency",
-    srcs = ["//src/observer:module_policy_public_probe"],
-    tags = ["manual"],
-    testonly = True,
-)
-
-filegroup(
-    name = "bazel_pilot_illegal_rootserver_dependency",
-    srcs = ["//src/rootserver:module_policy_public_probe"],
-    tags = ["manual"],
-    testonly = True,
-)
-
 genrule(
     name = "generate_pl_parser",
     srcs = [

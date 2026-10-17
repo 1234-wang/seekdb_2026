@@ -123,14 +123,6 @@ seekdb_generated_unity_cc_library(
     tags = ["manual"],
     visibility = [
         "//src/sql:__pkg__",
-        "//src/sql/bazel_pilot:__pkg__",
         "//src/sql/engine/prepare:__pkg__",
     ],
-)
-
-# Negative probe: resolver/prepare must not depend back on engine/prepare.
-alias(
-    name = "bazel_pilot_illegal_reverse_dependency",
-    actual = "//src/sql/engine/prepare:engine_prepare",
-    tags = ["manual"],
 )

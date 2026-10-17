@@ -5,6 +5,7 @@ to evolve without spreading their layout or standard policy across packages.
 """
 
 load("@rules_cc//cc:cc_import.bzl", _cc_import = "cc_import")
+load("//bazel:platforms.bzl", _seekdb_openmp_copts = "seekdb_openmp_copts")
 load(
     "//bazel:seekdb_build_config.bzl",
     _SEEKDB_C_MIGRATION_COPTS = "SEEKDB_C_MIGRATION_COPTS",
@@ -14,7 +15,6 @@ load(
     _SEEKDB_OBLIB_LOCAL_DEFINES = "SEEKDB_OBLIB_LOCAL_DEFINES",
     _SEEKDB_SEMANTIC_MODULE_COPTS = "SEEKDB_SEMANTIC_MODULE_COPTS",
     _SEEKDB_X86_SIMD_COPTS = "SEEKDB_X86_SIMD_COPTS",
-    _seekdb_openmp_copts = "seekdb_openmp_copts",
 )
 load(
     "//bazel:seekdb_cc_library.bzl",

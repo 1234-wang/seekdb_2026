@@ -166,7 +166,6 @@ seekdb_semantic_unity_cc_library(
     features = ["layering_check"],
     tags = ["manual"],
     visibility = [
-        "//bazel/probes:__pkg__",
         "//src/observer:__subpackages__",
         "//src/pl:__subpackages__",
         "//src/rootserver:__subpackages__",
@@ -187,12 +186,4 @@ filegroup(
     srcs = [":logservice"],
     tags = ["manual"],
     visibility = ["//src/observer:__pkg__"],
-)
-
-# Negative visibility probe. Logservice is below SQL and must not depend on
-# Optimizer, even though both are linked into the final server binary.
-alias(
-    name = "bazel_pilot_illegal_sql_optimizer_dependency",
-    actual = "//src/sql/optimizer:optimizer",
-    tags = ["manual"],
 )

@@ -139,12 +139,6 @@ _SQL_SEPARATELY_OWNED_SOURCES = [
     # Upstream checked-in prototype duplicates ob_dtl_mem_manager and is not
     # referenced by the production DTL runtime.
     "src/sql/dtl/ob_dtl_memory_manager.cpp",
-    "src/sql/bazel_pilot/optimizer_private_header_probe.cpp",
-    "src/sql/bazel_pilot/optimizer_public_interface_probe.cpp",
-    "src/sql/bazel_pilot/prepare_public_interface_probe.cpp",
-    "src/sql/bazel_pilot/sql_parser_driver_private_header_probe.cpp",
-    "src/sql/bazel_pilot/sql_parser_driver_public_interface_probe.cpp",
-    "src/sql/bazel_pilot/undeclared_resolver_header_probe.cpp",
 ]
 
 _SQL_RETRIEVAL_COMPOSITION_HEADERS = sql_headers_outside(

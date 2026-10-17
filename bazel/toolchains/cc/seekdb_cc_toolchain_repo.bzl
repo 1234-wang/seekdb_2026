@@ -1,10 +1,9 @@
 """Creates seekdb's local, repository-owned Clang toolchain."""
 
+load(":repository_utils.bzl", "builtin_include_directories", "host_substitutions")
+
 def _quote(value):
     return "\"%s\"" % value.replace("\\", "\\\\").replace("\"", "\\\"")
-
-def _format_string_list(values):
-    return "[\n%s\n]" % "".join(["    %s,\n" % _quote(value) for value in values])
 
 def _discover_builtin_include_directories(repository_ctx, compiler):
     resource_result = repository_ctx.execute(
@@ -25,45 +24,16 @@ def _discover_builtin_include_directories(repository_ctx, compiler):
             bundled_resource_directory,
         )
 
-    result = repository_ctx.execute(
-        [compiler, "-E", "-x", "c++", "/dev/null", "-v"],
-        environment = {"LC_ALL": "C"},
-        quiet = True,
-    )
-    if result.return_code != 0:
-        fail("failed to discover Clang include directories:\n%s" % result.stderr)
-
-    marker = "#include <...> search starts here:"
-    end_marker = "End of search list."
-    collecting = False
     directories = []
     repository_root = str(repository_ctx.path(""))
-    for line in result.stderr.splitlines():
-        value = line.strip()
-        if value == marker:
-            collecting = True
-        elif collecting and value == end_marker:
-            break
-        elif collecting and value:
-            framework_suffix = " (framework directory)"
-            if value.endswith(framework_suffix):
-                value = value[:-len(framework_suffix)]
-            if value == resource_directory:
-                value = "%crosstool_top%/devtools/lib/clang/" + resource_version
-            elif value.startswith(resource_directory + "/"):
-                value = (
-                    "%crosstool_top%/devtools/lib/clang/" +
-                    resource_version +
-                    "/" +
-                    value[len(resource_directory) + 1:]
-                )
-            elif value.startswith(repository_root + "/"):
-                value = "%crosstool_top%/" + value[len(repository_root) + 1:]
-            if value not in directories:
-                directories.append(value)
+    for value in builtin_include_directories(repository_ctx, compiler):
+        if value == resource_directory or value.startswith(resource_directory + "/"):
+            value = "%crosstool_top%/devtools/lib/clang/" + resource_version + value[len(resource_directory):]
+        elif value.startswith(repository_root + "/"):
+            value = "%crosstool_top%/" + value[len(repository_root) + 1:]
+        if value not in directories:
+            directories.append(value)
 
-    if not directories:
-        fail("Clang did not report any builtin include directories:\n%s" % result.stderr)
     return directories
 
 def _write_builtin_module_map(repository_ctx, builtin_include_directories):
@@ -108,8 +78,7 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
         repository_ctx.file("BUILD.bazel", "# The bundled toolchain is Linux-only.\n")
         return
     workspace_root = str(repository_ctx.workspace_root)
-    architecture = repository_ctx.os.arch
-    architecture = "aarch64" if architecture in ["aarch64", "arm64"] else "x86_64"
+    architecture = host_substitutions(repository_ctx)["@HOST_CPU@"]
     devtools = repository_ctx.path(workspace_root + "/" + repository_ctx.attr.devtools_path)
     tools = {}
     for tool_name in [
@@ -154,7 +123,7 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
         "toolchain_config.bzl",
         repository_ctx.attr.toolchain_config,
         substitutions = {
-            "@CXX_BUILTIN_INCLUDE_DIRECTORIES@": _format_string_list(builtin_include_directories),
+            "@CXX_BUILTIN_INCLUDE_DIRECTORIES@": repr(builtin_include_directories),
             "@HOST_CPU@": architecture,
             "@BAZEL_CPU@": "aarch64" if architecture == "aarch64" else "k8",
         },

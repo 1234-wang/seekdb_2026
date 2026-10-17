@@ -44,7 +44,7 @@ build_bazel/bin/src/observer/framework/SeekDB.framework
 
 - `SeekDB`：引擎、Rust 库和第三方库链接成的一个 arm64 动态库，只依赖系统库
 - `Headers/seekdb.h`：声明 `seekdb_open`、`seekdb_close` 和 `seekdb_connection_options`
-- `Info.plist`、`build-manifest.json`：源码 revision、平台、最低系统版本、二进制校验和和导出符号
+- `Info.plist`：源码 revision、平台和最低系统版本
 
 真机和模拟器的 framework 不能混用。framework 没有用于分发的签名；在 Xcode 中以 **Embed & Sign** 方式加入 App 后，会随 App 一起签名。
 

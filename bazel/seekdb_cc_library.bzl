@@ -9,8 +9,6 @@ load(
     "SEEKDB_C_MODULE_COPTS",
     "SEEKDB_RELEASE_LOCAL_DEFINES",
     "SEEKDB_SEMANTIC_MODULE_COPTS",
-    "seekdb_arch_copts",
-    "seekdb_platform_local_defines",
     "seekdb_sanity_compiler_inputs",
     "seekdb_sanity_copts",
     "seekdb_sanity_cxxopts",
@@ -19,6 +17,13 @@ load(
     "seekdb_sanity_target_compatible_with",
 )
 load("//bazel:oblib_compile_deps.bzl", "oblib_compile_deps")
+load(
+    "//bazel:platforms.bzl",
+    "seekdb_arch_copts",
+    "seekdb_platform_compiler_inputs",
+    "seekdb_platform_copts",
+    "seekdb_platform_local_defines",
+)
 
 SeekdbUnitySourcesInfo = provider(
     doc = "Original checked-in sources included by one generated Unity source.",
@@ -64,19 +69,13 @@ def seekdb_cc_library(
         name = name,
         additional_compiler_inputs = (
             additional_compiler_inputs +
-            select({
-                "@platforms//os:android": ["//include:android_compat.h"],
-                "//conditions:default": [],
-            }) +
+            seekdb_platform_compiler_inputs() +
             seekdb_sanity_compiler_inputs(sanity_instrumentation)
         ),
         copts = (
             (SEEKDB_SEMANTIC_MODULE_COPTS if copts == None else copts) +
             seekdb_arch_copts() +
-            select({
-                "@platforms//os:android": ["-include", "include/android_compat.h"],
-                "//conditions:default": [],
-            }) +
+            seekdb_platform_copts() +
             seekdb_sanity_copts(sanity_instrumentation)
         ),
         cxxopts = cxxopts + seekdb_sanity_cxxopts(sanity_instrumentation),

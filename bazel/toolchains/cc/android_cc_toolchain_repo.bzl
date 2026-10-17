@@ -1,5 +1,7 @@
 """Configure the installed Android NDK for arm64, API 28."""
 
+load(":repository_utils.bzl", "host_substitutions")
+
 def _android_cc_toolchain_repository_impl(ctx):
     ndk = ctx.getenv("ANDROID_NDK_HOME")
     if not ndk:
@@ -15,11 +17,7 @@ def _android_cc_toolchain_repository_impl(ctx):
     if resource.return_code:
         fail("Cannot run Android NDK Clang: %s" % resource.stderr)
     version = resource.stdout.strip().split("/")[-1]
-    ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = {
-        "@HOST_CPU@": "aarch64" if ctx.os.arch in ["aarch64", "arm64"] else "x86_64",
-        "@HOST_OS@": "macos" if ctx.os.name == "mac os x" else "linux",
-        "@CLANG_VERSION@": version,
-    })
+    ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = host_substitutions(ctx) | {"@CLANG_VERSION@": version})
     ctx.template("toolchain_config.bzl", ctx.attr.config_file, substitutions = {
         "@CLANG_VERSION@": version,
         "@REPOSITORY_ROOT@": "external/" + ctx.name,

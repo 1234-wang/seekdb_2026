@@ -7,13 +7,7 @@ load(
     "use_cc_toolchain",
 )
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-
-def _target_is_apple(ctx):
-    return ctx.target_platform_has_constraint(
-        ctx.attr._macos_constraint[platform_common.ConstraintValueInfo],
-    ) or ctx.target_platform_has_constraint(
-        ctx.attr._ios_constraint[platform_common.ConstraintValueInfo],
-    )
+load("//bazel:platforms.bzl", "PLATFORM_ATTRS", "target_platform")
 
 def _direct_pic_objects(target):
     objects = []
@@ -35,7 +29,8 @@ def _seekdb_localized_partial_link_impl(ctx):
     if not objects:
         fail("%s received no direct C++ objects" % ctx.label)
 
-    is_apple = _target_is_apple(ctx)
+    platform = target_platform(ctx)
+    is_apple = platform.apple
     output = ctx.outputs.out
     # Apple ld -r already localizes hidden (private extern) symbols.
     temporary = output if is_apple else ctx.actions.declare_file(ctx.label.name + ".tmp.o")
@@ -86,11 +81,7 @@ seekdb_localized_partial_link = rule(
             providers = [CcInfo],
         ),
         "out": attr.output(mandatory = True),
-        "_macos_constraint": attr.label(
-            default = Label("@platforms//os:macos"),
-        ),
-        "_ios_constraint": attr.label(default = Label("@platforms//os:ios")),
-    } | CC_TOOLCHAIN_ATTRS,
+    } | CC_TOOLCHAIN_ATTRS | PLATFORM_ATTRS,
     fragments = ["cpp"],
     toolchains = use_cc_toolchain(),
 )

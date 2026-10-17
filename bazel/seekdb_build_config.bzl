@@ -11,21 +11,8 @@ SEEKDB_X86_SIMD_COPTS = [
     "-mavx512bw",
 ]
 
-# The legacy source tree still spells includes relative to src/ and a few
-# historical include roots. These search paths do not grant ownership: Bazel
-# places only declared action inputs in linux-sandbox, and generated owner
-# visibility rejects private inputs before compilation.
-SEEKDB_MIGRATION_COPTS = [
-    "-std=gnu++20",
-    "-I.",
-    "-Isrc",
-    "-Isrc/data_plane/api",
-    "-Isrc/query/api",
-    "-Isrc/objit/include",
-    "-Isrc/oblib/easy",
-    "-Isrc/oblib/easy/include",
-    "-Isrc/oblib",
-    "-Isrc/oblib/common",
+# Shared compiler flags; only legacy modules need workspace-relative includes.
+_COMMON_COPTS = [
     "-gdwarf-4",
     "-ffunction-sections",
     "-fdata-sections",
@@ -34,23 +21,14 @@ SEEKDB_MIGRATION_COPTS = [
     "-fno-strict-aliasing",
     "-fno-omit-frame-pointer",
     "-g",
-    # Keep the initial full-build migration focused on missing inputs and
-    # dependencies. Warning-policy tightening is independent follow-up work.
     "-Wno-everything",
+]
+_CXX_WARNINGS = [
     "-Wno-deprecated",
     "-Wno-reserved-user-defined-literal",
     "-Wno-unused-parameter",
 ]
-
-# Semantic module targets enable Clang's layering check. Treat private-header
-# violations as hard errors even while the broader migration suppresses legacy
-# warnings with -Wno-everything.
-SEEKDB_SEMANTIC_MODULE_COPTS = SEEKDB_MIGRATION_COPTS + [
-    "-Werror=private-header",
-]
-
-SEEKDB_C_MIGRATION_COPTS = [
-    "-std=gnu11",
+_MIGRATION_INCLUDES = [
     "-I.",
     "-Isrc",
     "-Isrc/data_plane/api",
@@ -60,24 +38,13 @@ SEEKDB_C_MIGRATION_COPTS = [
     "-Isrc/oblib/easy/include",
     "-Isrc/oblib",
     "-Isrc/oblib/common",
-    "-gdwarf-4",
-    "-ffunction-sections",
-    "-fdata-sections",
-    "-fdebug-info-for-profiling",
-    "-fmax-type-align=8",
-    "-fno-strict-aliasing",
-    "-fno-omit-frame-pointer",
-    "-g",
-    "-Wno-everything",
 ]
-
-# Native C Unity actions select the C language contract from the rule's
-# `language` attribute.  Keep this deliberately small: include ownership and
-# warning policy come from declared Bazel dependencies, not migration search
-# paths or blanket warning suppression.
-SEEKDB_C_MODULE_COPTS = [
-    "-std=gnu11",
-]
+SEEKDB_MIGRATION_COPTS = ["-std=gnu++20"] + _MIGRATION_INCLUDES + _COMMON_COPTS + _CXX_WARNINGS
+SEEKDB_C_MIGRATION_COPTS = ["-std=gnu11"] + _MIGRATION_INCLUDES + _COMMON_COPTS
+SEEKDB_SEMANTIC_MODULE_COPTS = SEEKDB_MIGRATION_COPTS + ["-Werror=private-header"]
+SEEKDB_C_MODULE_COPTS = ["-std=gnu11"]
+SEEKDB_OBLIB_COPTS = ["-std=gnu++20"] + _COMMON_COPTS + _CXX_WARNINGS
+SEEKDB_OBLIB_C_COPTS = ["-std=gnu11"] + _COMMON_COPTS
 
 SEEKDB_OBLIB_LOCAL_DEFINES = [
     'DEFAULT_LOG_FILE_SIZE_MB=256',
@@ -96,98 +63,15 @@ SEEKDB_OBLIB_LOCAL_DEFINES = [
     '__STDC_LIMIT_MACROS',
 ]
 
-# Native OBLib modules obtain project include paths from their declared Bazel
-# dependencies. These options deliberately contain no workspace-wide -I escape
-# hatch.
-SEEKDB_OBLIB_COPTS = [
-    "-std=gnu++20",
-    "-gdwarf-4",
-    "-ffunction-sections",
-    "-fdata-sections",
-    "-fdebug-info-for-profiling",
-    "-fmax-type-align=8",
-    "-fno-strict-aliasing",
-    "-fno-omit-frame-pointer",
-    "-g",
-    "-Wno-everything",
-    "-Wno-deprecated",
-    "-Wno-reserved-user-defined-literal",
-    "-Wno-unused-parameter",
-]
-
-SEEKDB_OBLIB_C_COPTS = [
-    "-std=gnu11",
-    "-gdwarf-4",
-    "-ffunction-sections",
-    "-fdata-sections",
-    "-fdebug-info-for-profiling",
-    "-fmax-type-align=8",
-    "-fno-strict-aliasing",
-    "-fno-omit-frame-pointer",
-    "-g",
-    "-Wno-everything",
-]
-
-SEEKDB_RELEASE_LOCAL_DEFINES = [
-    'DEFAULT_LOG_FILE_SIZE_MB=256',
-    'DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR',
-    'ENABLE_500_MEMORY_LIMIT',
-    'ENABLE_INITIAL_EXEC_TLS_MODEL',
-    'FATAL_ERROR_HANG',
-    'NDEBUG',
-    'OB_BUILD_LITE',
-    'OB_BUILD_OBSERVER_LITE',
-    'OB_BUILD_SYS_VEC_IDX',
-    'OCI_LINK_RUNTIME',
+SEEKDB_RELEASE_LOCAL_DEFINES = SEEKDB_OBLIB_LOCAL_DEFINES + [
     'PACKAGE_NAME=\\"OceanBase\\"',
     'PACKAGE_STRING=\\"OceanBase\\ %s\\"' % SEEKDB_VERSION,
     'PACKAGE_VERSION=\\"%s\\"' % SEEKDB_VERSION,
     'RELEASEID=\\"1\\"',
-    '_GLIBCXX_USE_CXX11_ABI=1',
-    '_NO_EXCEPTION',
-    '__STDC_CONSTANT_MACROS',
-    '__STDC_LIMIT_MACROS',
 ]
 
 _SEEKDB_SANITY_CONFIG = "//bazel:sanity_enabled"
 _SEEKDB_SANITY_PASS = "@seekdb_3rd_headers//:sanity_pass"
-
-def seekdb_arch_copts():
-    return select({
-        "@platforms//cpu:wasm32": [],
-        "@platforms//cpu:x86_64": ["-mtune=core2"],
-        "@platforms//cpu:aarch64": ["-march=armv8-a+crc+lse", "-mtune=generic"],
-        "//conditions:default": ["-mtune=generic"],
-    })
-
-def seekdb_platform_local_defines():
-    return select({
-        "@platforms//os:emscripten": [
-            "_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION",
-            "_XOPEN_SOURCE=700",
-            "VSAG_DISABLE_STATIC_HNSW",
-            "HAVE_LIBAIO=0",
-        ],
-        "@platforms//os:android": ["_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION"],
-        "@platforms//os:macos": ["_DARWIN_C_SOURCE"],
-        "@platforms//os:ios": [
-            "_DARWIN_C_SOURCE",
-            "_XOPEN_SOURCE=700",
-            "OB_HAVE_BUNDLED_JEMALLOC=1",
-            "BOOST_NO_CXX98_FUNCTION_BASE",
-        ],
-        "//conditions:default": [],
-    })
-
-def seekdb_openmp_copts():
-    # Apple Clang does not ship an OpenMP runtime. The affected implementation
-    # remains serial on macOS, matching the former CMake build.
-    return select({
-        "@platforms//os:emscripten": [],
-        "@platforms//os:macos": [],
-        "@platforms//os:ios": ["-Xpreprocessor", "-fopenmp"],
-        "//conditions:default": ["-fopenmp"],
-    })
 
 _SEEKDB_SANITY_NO_BUILTIN_COPTS = [
     "-fno-builtin-memset",

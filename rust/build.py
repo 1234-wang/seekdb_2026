@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--target")
     parser.add_argument("--target-dir", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--canonical-archives", action="store_true",
+                        help="export each Cargo static library once using its Cargo name")
     parser.add_argument("cargo_args", nargs="*",
                         help="extra arguments for cargo build, given after --")
     args = parser.parse_args()
@@ -60,11 +62,15 @@ def main():
         if cargo.wait():
             raise SystemExit(cargo.returncode)
     output.mkdir(parents=True, exist_ok=True)
+    copied = set()
     for name, export in exports.items():
         archive = libraries[export.get("library", name)]
         package = packages[export["crate"].replace("-", "_")]
-        library_name = name + ".lib" if archive.suffix == ".lib" else "lib" + name + ".a"
-        shutil.copyfile(archive, output / library_name)
+        library_name = archive.name if args.canonical_archives else (
+            name + ".lib" if archive.suffix == ".lib" else "lib" + name + ".a")
+        if library_name not in copied:
+            shutil.copyfile(archive, output / library_name)
+            copied.add(library_name)
         for header, source in export["headers"].items():
             destination = output / "include" / header
             destination.parent.mkdir(parents=True, exist_ok=True)

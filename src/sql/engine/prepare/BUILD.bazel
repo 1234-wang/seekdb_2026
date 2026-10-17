@@ -98,6 +98,5 @@ seekdb_generated_unity_cc_library(
     tags = ["manual"],
     visibility = [
         "//src/sql:__pkg__",
-        "//src/sql/bazel_pilot:__pkg__",
     ],
 )

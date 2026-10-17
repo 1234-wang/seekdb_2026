@@ -1,34 +1,7 @@
-"""Toolchain-backed final executable/shared link for seekdb.
+"""Ordered final link using the selected C++ toolchain.
 
-The rule deliberately exposes only the link-order concepts required by
-seekdb's release executable. CcInfo traversal, archive selection, toolchain flags,
-action inputs, and the compiler-driver invocation stay inside this module.
-
-Object-only cc_import inputs are kept when a dependency has no archive.  The
-emitted user-input order is:
-
-  direct objects
-  --start-group <group static inputs> --end-group
-  --whole-archive <whole-group transitive static inputs> --no-whole-archive
-  --whole-archive <whole static inputs> --no-whole-archive
-  <whole-target transitive inputs, then tail dependency static inputs>
-  <explicit ordered static/shared link files>
-  <toolchain static C++ runtime>
-  <system libraries>
-  <linkopts>
-
-`extra_inputs` declares runtime symlink chains and similar files without
-placing them on the link command line.
-
-Transitive CcInfo closures are de-duplicated by artifact path within each
-static-link section. This prevents a common dependency reached through
-multiple top-level modules from being linked more than once. To repeat one
-archive positionally, callers use distinct alias/filegroup labels in
-`ordered_link_files`; that explicitly ordered section preserves repetition.
-
-`shared = True` selects the toolchain's dynamic-library link action. The C++
-toolchain may add its own driver flags and runtime libraries around the
-ordered sequence.
+Inputs are direct objects, cyclic groups, whole archives, tail dependencies,
+then explicitly ordered files. Only ordered_link_files preserves repetition.
 """
 
 load(
@@ -44,15 +17,7 @@ load(
 )
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-
-_STATIC_ARCHIVE_SUFFIXES = (".a", ".lo", ".lib")
-
-def _target_is_apple(ctx):
-    return ctx.target_platform_has_constraint(
-        ctx.attr._macos_constraint[platform_common.ConstraintValueInfo],
-    ) or ctx.target_platform_has_constraint(
-        ctx.attr._ios_constraint[platform_common.ConstraintValueInfo],
-    )
+load("//bazel:platforms.bzl", "PLATFORM_ATTRS", "target_platform")
 
 def _append_unique(result, seen, files):
     for file in files:
@@ -87,75 +52,20 @@ def _selected_static_archive(library):
         return library.pic_static_library
     return library.static_library
 
-def _static_link_inputs(target):
+def _static_link_inputs(target, direct = False):
     inputs = []
     for linker_input in target[CcInfo].linking_context.linker_inputs.to_list():
-        for library in linker_input.libraries:
-            archive = _selected_static_archive(library)
-            if archive != None:
-                inputs.append(archive)
-            else:
-                # cc_import(objects = ...) intentionally has no archive.  It
-                # still belongs in the same ordered static-link position.
-                inputs.extend(_library_objects(library))
-    if not inputs:
-        fail("%s contributes no static archives or object files" % target.label)
-    return inputs
-
-def _direct_static_link_inputs(target):
-    inputs = []
-    for linker_input in target[CcInfo].linking_context.linker_inputs.to_list():
-        if linker_input.owner != target.label:
+        if direct and linker_input.owner != target.label:
             continue
         for library in linker_input.libraries:
             archive = _selected_static_archive(library)
-            if archive != None:
-                inputs.append(archive)
-            else:
-                inputs.extend(_library_objects(library))
+            inputs.extend([archive] if archive != None else _library_objects(library))
     if not inputs:
-        fail(
-            (
-                "%s contributes no direct static archive or object files; " +
-                "whole_archive_deps requires a source-owning target"
-            ) % target.label,
-        )
+        fail("%s contributes no %sstatic archive or object files" % (target.label, "direct " if direct else ""))
     return inputs
 
-def _is_supported_ordered_link_file(file):
-    if file.path.endswith(_STATIC_ARCHIVE_SUFFIXES):
-        return True
-    return (
-        file.basename.endswith(".so") or
-        ".so." in file.basename or
-        file.basename.endswith(".dylib")
-    )
-
-def _ordered_link_files_from_targets(targets):
-    link_files = []
-    for target in targets:
-        files = target[DefaultInfo].files.to_list()
-        if not files:
-            fail("%s contributes no ordered link files" % target.label)
-        for file in files:
-            if not _is_supported_ordered_link_file(file):
-                fail(
-                    "%s is not a supported static/shared link file from %s" %
-                    (file.path, target.label),
-                )
-        # Repetition is significant here: the release link deliberately names
-        # some archives more than once.
-        link_files.extend(files)
-    return link_files
-
 def _files_from_targets(targets):
-    files = []
-    for target in targets:
-        target_files = target[DefaultInfo].files.to_list()
-        if not target_files:
-            fail("%s contributes no extra input files" % target.label)
-        files.extend(target_files)
-    return files
+    return [file for target in targets for file in target[DefaultInfo].files.to_list()]
 
 def _static_inputs_from_deps(targets):
     inputs = []
@@ -175,7 +85,7 @@ def _whole_archive_inputs(targets):
         _append_unique(
             direct_inputs,
             direct_seen,
-            _direct_static_link_inputs(target),
+            _static_link_inputs(target, direct = True),
         )
 
     transitive_inputs = []
@@ -187,24 +97,24 @@ def _whole_archive_inputs(targets):
                 transitive_inputs.append(file)
     return direct_inputs, transitive_inputs
 
-def _system_library_flags(system_libs):
-    flags = []
-    for library in system_libs:
-        if not library or library.startswith("-") or "/" in library:
-            fail(
-                "system_libs entries are bare linker names such as 'pthread'; " +
-                "got %r" % library,
-            )
-        flags.append("-l" + library)
-    return flags
-
 def _file_paths(files):
     return [file.path for file in files]
 
+def _archive_group(files, apple, whole = False):
+    if not files:
+        return []
+    paths = _file_paths(files)
+    if apple:
+        # ld64 searches archives repeatedly; force_load retains every object.
+        return ["-Wl,-force_load," + path for path in paths] if whole else paths
+    start, end = ("--whole-archive", "--no-whole-archive") if whole else ("--start-group", "--end-group")
+    return ["-Wl," + start] + paths + ["-Wl," + end]
+
 def _seekdb_final_link_impl(ctx):
     cc_toolchain = find_cpp_toolchain(ctx)
-    is_apple = _target_is_apple(ctx)
-    is_wasm = ctx.target_platform_has_constraint(ctx.attr._wasm_constraint[platform_common.ConstraintValueInfo])
+    platform = target_platform(ctx)
+    is_apple = platform.apple
+    is_wasm = platform.os == "emscripten"
     needs_static_cpp_runtime = not is_apple and not is_wasm
     requested_features = ctx.features
     if needs_static_cpp_runtime and "static_link_cpp_runtimes" not in requested_features:
@@ -247,7 +157,7 @@ def _seekdb_final_link_impl(ctx):
         tail_seen,
         _static_inputs_from_deps(ctx.attr.tail_deps),
     )
-    ordered_link_files = _ordered_link_files_from_targets(
+    ordered_link_files = _files_from_targets(
         ctx.attr.ordered_link_files,
     )
     extra_inputs = _files_from_targets(ctx.attr.extra_inputs)
@@ -265,36 +175,13 @@ def _seekdb_final_link_impl(ctx):
         fail("%s has no object or archive inputs" % ctx.label)
 
     ordered_link_args = _file_paths(direct_objects)
-    if group_inputs and is_apple:
-        # ld64 repeatedly searches archives, so it does not need GNU ld's
-        # --start-group/--end-group cycle breaker.
-        ordered_link_args.extend(_file_paths(group_inputs))
-    elif group_inputs:
-        ordered_link_args.append("-Wl,--start-group")
-        ordered_link_args.extend(_file_paths(group_inputs))
-        ordered_link_args.append("-Wl,--end-group")
-    if whole_group_inputs and is_apple:
-        ordered_link_args.extend([
-            "-Wl,-force_load,%s" % path
-            for path in _file_paths(whole_group_inputs)
-        ])
-    elif whole_group_inputs:
-        ordered_link_args.append("-Wl,--whole-archive")
-        ordered_link_args.extend(_file_paths(whole_group_inputs))
-        ordered_link_args.append("-Wl,--no-whole-archive")
-    if whole_inputs and is_apple:
-        ordered_link_args.extend([
-            "-Wl,-force_load,%s" % path
-            for path in _file_paths(whole_inputs)
-        ])
-    elif whole_inputs:
-        ordered_link_args.append("-Wl,--whole-archive")
-        ordered_link_args.extend(_file_paths(whole_inputs))
-        ordered_link_args.append("-Wl,--no-whole-archive")
+    ordered_link_args.extend(_archive_group(group_inputs, is_apple))
+    ordered_link_args.extend(_archive_group(whole_group_inputs, is_apple, whole = True))
+    ordered_link_args.extend(_archive_group(whole_inputs, is_apple, whole = True))
     ordered_link_args.extend(_file_paths(tail_inputs))
     ordered_link_args.extend(_file_paths(ordered_link_files))
     ordered_link_args.extend(_file_paths(static_cpp_runtime_inputs))
-    ordered_link_args.extend(_system_library_flags(ctx.attr.system_libs))
+    ordered_link_args.extend(["-l" + library for library in ctx.attr.system_libs])
     ordered_link_args.extend([
         ctx.expand_location(option, targets = ctx.attr.extra_inputs)
         for option in ctx.attr.linkopts
@@ -375,12 +262,7 @@ seekdb_final_link = rule(
         "out": attr.output(mandatory = True),
         "side_outputs": attr.output_list(),
         "shared": attr.bool(default = False),
-        "_macos_constraint": attr.label(
-            default = Label("@platforms//os:macos"),
-        ),
-        "_wasm_constraint": attr.label(default = Label("@platforms//os:emscripten")),
-        "_ios_constraint": attr.label(default = Label("@platforms//os:ios")),
-    } | CC_TOOLCHAIN_ATTRS,
+    } | CC_TOOLCHAIN_ATTRS | PLATFORM_ATTRS,
     executable = True,
     fragments = ["cpp"],
     toolchains = use_cc_toolchain(),

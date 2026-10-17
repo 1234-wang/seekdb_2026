@@ -57,18 +57,16 @@ def seekdb_ios_framework():
     )
     apple_genrule(
         name = "_ios_framework_metadata",
-        srcs = [":_ios_framework_link", ":_ios_build_config", "ios/driver/seekdb.h", "ios/driver/exports.txt"],
+        srcs = [":_ios_framework_link", ":_ios_build_config", "ios/driver/seekdb.h"],
         tools = ["//tools/ios:package_framework.py"],
         outs = [
             "framework/SeekDB.framework/Headers/seekdb.h",
             "framework/SeekDB.framework/Info.plist",
-            "framework/SeekDB.framework/build-manifest.json",
         ],
         cmd = 'python3 "$(location //tools/ios:package_framework.py)"' +
               ' --binary "$(location :_ios_framework_link)" --config "$(location :_ios_build_config)"' +
-              ' --header "$(location ios/driver/seekdb.h)" --exports "$(location ios/driver/exports.txt)"' +
-              ' --output "$(@D)/framework/SeekDB.framework"' +
-              select({"//bazel:ios_simulator": " --simulator", "//conditions:default": ""}),
+              ' --header "$(location ios/driver/seekdb.h)"' +
+              ' --output "$(@D)/framework/SeekDB.framework"',
         target_compatible_with = ["@platforms//os:ios"],
         tags = ["manual"],
     )

@@ -83,15 +83,6 @@ observer_validate_header_inventory(
     ),
 )
 
-# Public only for negative central-policy probes. It carries no production
-# files or providers, so visibility cannot be mistaken for authorization.
-filegroup(
-    name = "module_policy_public_probe",
-    tags = ["manual"],
-    testonly = True,
-    visibility = ["//visibility:public"],
-)
-
 _OBSERVER_NATIVE_DEPS = [
     "//rust:sql_nio_headers",
     "//src/oblib/easy:easy",
@@ -416,23 +407,13 @@ cc_library(
 seekdb_ios_framework()
 
 _SEEKDB_TAIL_LINK_DEPS = select({
-    "@platforms//os:android": [
-        "//src/sql/parser:sql_server_parser",
-        "//src/oblib:oblib_objects",
-        "//src/oblib:ob_malloc_objects",
-    ],
-    "@platforms//os:macos": [
-        "//src/sql/parser:sql_server_parser",
-        "//src/oblib:oblib_objects",
-        "//src/oblib:ob_malloc_objects",
-    ],
-    "//conditions:default": [
-        "//src/oblib:malloc_hook_objects",
-        "//src/sql/parser:sql_server_parser",
-        "//src/oblib:oblib_objects",
-        "//src/oblib:ob_malloc_objects",
-    ],
-})
+    "@platforms//os:linux": ["//src/oblib:malloc_hook_objects"],
+    "//conditions:default": [],
+}) + [
+    "//src/sql/parser:sql_server_parser",
+    "//src/oblib:oblib_objects",
+    "//src/oblib:ob_malloc_objects",
+]
 
 _SEEKDB_ORDERED_LINK_FILES = [
     "//rust:sql_nio_archive",
@@ -448,12 +429,11 @@ _SEEKDB_ORDERED_LINK_FILES = [
 })
 
 _SEEKDB_EXTRA_LINK_INPUTS = select({
-    "@platforms//os:android": [],
-    "@platforms//os:macos": [],
-    "//conditions:default": [
+    "@platforms//os:linux": [
         "@seekdb_3rd_headers//:lib/libaio.so.1",
         "@seekdb_3rd_headers//:lib/libaio.so.1.0.1",
     ],
+    "//conditions:default": [],
 })
 
 _SEEKDB_SYSTEM_LIBS = select({

@@ -2,6 +2,10 @@
 common --lockfile_mode=error
 common --http_max_parallel_downloads=32
 build --verbose_failures
+build --aspects=//bazel/architecture:module_dependency_aspect.bzl%module_dependency_aspect
+build --experimental_disk_cache_gc_max_size=50G
+build --experimental_disk_cache_gc_max_age=14d
+build --experimental_disk_cache_gc_idle_delay=1m
 build --workspace_status_command=./tools/bazel_migration/workspace_status.sh
 build --enable_platform_specific_config
 # Release-compatible O2 is the default. O1 uses fastbuild only as its output
@@ -36,3 +40,8 @@ build:wasm --action_env=EM_CACHE
 
 # Native shorthand for the orthogonal custom memory-safety build setting.
 build --flag_alias=sanity=//bazel:enable_sanity
+
+# Only C++ compilation uses REAPI. Cargo and generators run locally.
+# Supply --remote_executor=grpc://HOST:PORT on the command line.
+build:remote --spawn_strategy=local
+build:remote --strategy=CppCompile=remote

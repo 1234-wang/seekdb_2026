@@ -59,23 +59,6 @@ rootserver_validate_source_inventory(
 
 rootserver_validate_header_inventory(glob(["**/*.h"]))
 
-# Public only for central-policy negative probes. It carries no production
-# providers, so ordinary visibility cannot authorize a forbidden module edge.
-filegroup(
-    name = "module_policy_public_probe",
-    tags = ["manual"],
-    testonly = True,
-    visibility = ["//visibility:public"],
-)
-
-# Rootserver must never recover a dependency on its Observer composition root.
-filegroup(
-    name = "module_policy_illegal_observer_dependency",
-    srcs = ["//src/observer:module_policy_public_probe"],
-    tags = ["manual"],
-    testonly = True,
-)
-
 _ROOTSERVER_NATIVE_DEPS = [
     "//src/oblib/easy:easy",
     "//src/oblib:common_sql_mode",

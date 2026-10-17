@@ -21,7 +21,6 @@ load(
 package(default_visibility = ["//visibility:private"])
 
 _OBLIB_INTERFACE_VISIBILITY = [
-    "//bazel/probes:__pkg__",
     "//src/oblib:__subpackages__",
     "//src:__subpackages__",
     "//unittest/oblib:__pkg__",

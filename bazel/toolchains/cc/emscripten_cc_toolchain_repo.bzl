@@ -1,5 +1,7 @@
 """Expose an installed Emscripten SDK as a C++ toolchain."""
 
+load(":repository_utils.bzl", "builtin_include_directories", "host_substitutions")
+
 def _emscripten_cc_toolchain_repository_impl(ctx):
     emscripten = ctx.getenv("EMSCRIPTEN")
     if not emscripten:
@@ -30,28 +32,8 @@ def _emscripten_cc_toolchain_repository_impl(ctx):
     if result.return_code:
         fail("Cannot locate Emscripten cache: %s" % result.stderr)
     ctx.symlink(ctx.path(result.stdout.strip()), "cache")
-    result = ctx.execute(
-        [emscripten + "/emcc", "-E", "-x", "c++", "/dev/null", "-v", "-pthread"],
-        environment = environment,
-    )
-    if result.return_code:
-        fail("Cannot run Emscripten: %s" % result.stderr)
-    includes = []
-    collecting = False
-    for line in result.stderr.splitlines():
-        value = line.strip()
-        if value == "#include <...> search starts here:":
-            collecting = True
-        elif value == "End of search list.":
-            collecting = False
-        elif collecting:
-            includes.append(value)
-    if not includes:
-        fail("Emscripten did not report its builtin include directories")
-    ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = {
-        "@HOST_CPU@": "aarch64" if ctx.os.arch in ["aarch64", "arm64"] else "x86_64",
-        "@HOST_OS@": "macos" if ctx.os.name == "mac os x" else "linux",
-    })
+    includes = builtin_include_directories(ctx, emscripten + "/emcc", flags = ["-pthread"], environment = environment)
+    ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = host_substitutions(ctx))
     ctx.template("toolchain_config.bzl", ctx.attr.config_file, substitutions = {
         "@INCLUDES@": repr(includes),
     })
