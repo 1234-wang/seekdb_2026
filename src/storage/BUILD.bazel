@@ -51,8 +51,6 @@ storage_validate_source_inventory(
         # Upstream checked-in prototype; no production caller uses it yet.
         "access/ob_advance_scanner.cpp",
         "memtable/mvcc/ob_keybtree.cpp",
-        # Legacy tenant-scoped metadata managers are not part of the single
-        # runtime SeekDB build; CMake selects only the storage-wide variants.
         "meta_mem/ob_meta_obj_pool.cpp",
         "meta_mem/ob_tablet_meta_mem_mgr.cpp",
     ] + STORAGE_TABLET_AUTOINCREMENT_STATE_SOURCES,

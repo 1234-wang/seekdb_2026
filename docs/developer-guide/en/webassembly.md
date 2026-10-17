@@ -6,7 +6,7 @@ Compile seekdb with Emscripten into a WebAssembly engine that runs inside a brow
 
 - macOS or Linux host
 - Emscripten 6.0.12, the version in `tools/wasm/emscripten-version`, with its `emcc` on `PATH`, for example from `brew install emscripten`
-- `rustup`, CMake 3.20 or later, Python 3.12 or later and `curl` on `PATH`
+- `rustup`, Python 3.12 or later and `curl` on `PATH`
 - Node.js 24 or later to run the tests
 - At least 20 GB of free disk space recommended for dependencies, the SDK and build directories
 

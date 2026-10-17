@@ -6,7 +6,7 @@
 
 - macOS 或 Linux 主机
 - Emscripten 6.0.12（即 `tools/wasm/emscripten-version` 中的版本），且其 `emcc` 在 `PATH` 中，例如通过 `brew install emscripten` 安装
-- 已将 `rustup`、CMake 3.20 及以上、Python 3.12 及以上和 `curl` 加入 `PATH`
+- 已将 `rustup`、Python 3.12 及以上和 `curl` 加入 `PATH`
 - 运行测试需要 Node.js 24 及以上
 - 建议至少 20 GB 可用磁盘空间，用于依赖、SDK 和构建目录
 

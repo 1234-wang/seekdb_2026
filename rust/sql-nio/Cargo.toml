@@ -35,7 +35,7 @@ slab = "0.4"
 # TCP keepalive configuration for accepted sockets on every supported OS.
 socket2 = { version = "0.6", optional = true, features = ["all"] }
 # TLS for the MySQL channel. default-features=false drops the aws-lc-rs
-# provider (which would need cmake + bindgen reachable from cargo); `ring`
+# provider; `ring`
 # ships pre-generated assembly and needs only the C compiler already required
 # by the rest of the build. tls12 stays on: MySQL 5.7-era libmysqlclient never
 # negotiates TLS 1.3.

@@ -50,26 +50,6 @@ $OutputDir = (Resolve-Path $OutputDir).Path
 
 # -- Auto-detect tools -----------------------------------------------
 
-# CMake
-$cmakeCmd = Get-Command cmake.exe -ErrorAction SilentlyContinue
-$CMakeDir = $null
-if ($cmakeCmd) {
-    $CMakeDir = Split-Path (Split-Path $cmakeCmd.Source) -Parent
-    Write-Log "CMake detected: $CMakeDir"
-} else {
-    Write-Err "cmake.exe not found in PATH. CMake will not be packaged."
-}
-
-# Ninja
-$ninjaCmd = Get-Command ninja.exe -ErrorAction SilentlyContinue
-$NinjaDir = $null
-if ($ninjaCmd) {
-    $NinjaDir = Split-Path $ninjaCmd.Source
-    Write-Log "Ninja detected: $NinjaDir"
-} else {
-    Write-Err "ninja.exe not found in PATH. Ninja will not be packaged."
-}
-
 # Flex & Bison (win_flex_bison)
 $flexCmd = Get-Command win_flex.exe -ErrorAction SilentlyContinue
 $FlexBisonDir = $null
@@ -175,26 +155,6 @@ if (Test-Path $OpenSSLDir) {
     if ($result) { $depsPackages += $result }
 } else {
     Write-Err "OpenSSL not found: $OpenSSLDir"
-}
-
-# 3. CMake
-if ($CMakeDir -and (Test-Path $CMakeDir)) {
-    $name = "obdevtools-cmake-$DateStamp.tar.gz"
-    Write-Log "Packing CMake from $CMakeDir ..."
-    $result = New-DepArchive -ArchiveName $name -TopDirName "obdevtools-cmake" -Mappings @{
-        "tools\cmake" = $CMakeDir
-    }
-    if ($result) { $toolsPackages += $result }
-}
-
-# 4. Ninja
-if ($NinjaDir -and (Test-Path $NinjaDir)) {
-    $name = "obdevtools-ninja-$DateStamp.tar.gz"
-    Write-Log "Packing Ninja from $NinjaDir ..."
-    $result = New-DepArchive -ArchiveName $name -TopDirName "obdevtools-ninja" -Mappings @{
-        "tools\ninja" = $NinjaDir
-    }
-    if ($result) { $toolsPackages += $result }
 }
 
 # 5. LLVM 18

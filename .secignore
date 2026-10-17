@@ -632,8 +632,6 @@
   https://obfarm-ce.oss-cn-hongkong.aliyuncs.com*
   https://rust-lang.github.io/*
   https://sh.rustup.rs*
-**/cmake/Rust.cmake
-  https://rustup.rs
 **/.github/actions/setup-rust/action.yml
   https://rsproxy.cn/index/
 **/.github/workflows/seekdb.yml

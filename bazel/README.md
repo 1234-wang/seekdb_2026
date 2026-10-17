@@ -7,8 +7,7 @@
 
 On Windows, use `python build.py` with the same commands. `init` selects the
 host's dependency initializer; `build`, `test`, `query`, `clean` and other commands
-are passed to Bazel. CMake configurations, where still needed, use `cmake`
-directly.
+are passed to Bazel.
 
 `build.py` downloads the version in `.bazelversion`, using the platform URL and
 SHA256 in `bazel/binaries.json`. It then runs Bazel. Build flags belong after the

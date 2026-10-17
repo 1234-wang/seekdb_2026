@@ -22,7 +22,7 @@ The repository's `build.py` installs the pinned Bazel and runs the requested com
 
 `init` prepares platform dependencies; run it on the first build or after dependency metadata changes. For incremental builds, repeat only the `build` command. The resulting binary is `build_bazel/bin/src/observer/seekdb`.
 
-On Windows, use `python build.py` with the same commands. See [Bazel build](../../../bazel/README.md) for concurrency, remote compilation and cross compilation. Linux module unit tests currently use the CMake configuration described in [Write and run unit tests](unittest.md).
+On Windows, use `python build.py` with the same commands. See [Bazel build](../../../bazel/README.md) for concurrency, remote compilation and cross compilation. For C++ test targets, see [Write and run unit tests](unittest.md).
 
 ## Build a Sanity binary
 

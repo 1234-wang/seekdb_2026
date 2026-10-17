@@ -22,7 +22,7 @@ cd seekdb
 
 `init` 准备平台依赖，首次编译或依赖定义变化后执行。后续增量编译只需重复 `build` 命令。产物位于 `build_bazel/bin/src/observer/seekdb`。
 
-Windows 使用 `python build.py`，命令参数相同。并发、远程编译和交叉编译参见 [Bazel 构建说明](../../../bazel/README.md)。Linux 模块单元测试暂时沿用 CMake，配置方式参见[编写与运行单元测试](unittest.md)。
+Windows 使用 `python build.py`，命令参数相同。并发、远程编译和交叉编译参见 [Bazel 构建说明](../../../bazel/README.md)。C++ 测试目标参见[编写与运行单元测试](unittest.md)。
 
 ## 编译 Sanity 二进制
 

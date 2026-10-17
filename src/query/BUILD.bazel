@@ -320,9 +320,6 @@ cc_library(
     visibility = ["//src:__subpackages__"],
 )
 
-# Server-parser view of the shared parse tree types.  SQL_PARSER_COMPILATION is
-# intentionally absent: the former CMake build defined it only for the proxy
-# parser, while seekdb links the observer/server parser.
 filegroup(
     name = "_sql_item_type_definition",
     srcs = ["api/query/parser/ob_item_type.h"],

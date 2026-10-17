@@ -57,7 +57,7 @@ def seekdb_platform_local_defines():
 
 def seekdb_openmp_copts():
     # Apple Clang does not ship an OpenMP runtime. The affected implementation
-    # remains serial on macOS, matching the former CMake build.
+    # remains serial on macOS.
     return select({
         "@platforms//os:emscripten": [],
         "@platforms//os:macos": [],
