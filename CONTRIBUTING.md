@@ -29,14 +29,16 @@ Use a focused branch name such as `fix/issue-123` or `feature/short-description`
 Install the supported toolchain first, then build the Release target:
 
 ```bash
-./build.sh release --init --make
+./build.py init
+./build.py build //src/observer:seekdb
 ```
 
-The seekdb binary is generated at `build_release/src/observer/seekdb`.
+The seekdb binary is generated at `build_bazel/bin/src/observer/seekdb`.
 
 On Linux, CMake provides unit-test targets by module. Build the affected module and run its registered CTest shards, for example:
 
 ```bash
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo
 make -C build_release observer_tests
 ./build_release/unittest/run_tests.sh \
   -R '^observer_tests_shard_[0-9]+$' \

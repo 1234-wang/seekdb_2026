@@ -1,6 +1,6 @@
 # Install the toolchain
 
-seekdb uses CMake, Rust, and a repository-managed compiler and dependency set. Install Rust and the host tools below, then let `./build.sh release --init` prepare the pinned C/C++ dependencies under `deps/3rd`.
+seekdb uses Bazel, Rust, and a repository-managed compiler and dependency set. Install Rust and the host tools below, then let `./build.py init` prepare the pinned C/C++ dependencies under `deps/3rd`.
 
 ## Rust
 
@@ -23,7 +23,7 @@ aarch64-apple-ios
 aarch64-apple-ios-sim
 ```
 
-The CMake build invokes Cargo from the Rust workspace when compiling the `sql-nio` library. Rustup then reads `rust/rust-toolchain.toml` and installs the pinned toolchain, components, and targets automatically. The first build may also download the locked Cargo dependencies; configure a crates.io mirror if the host cannot reach the default registry.
+Install the pinned Rust toolchain before building: run `rustup toolchain install --no-self-update` from the `rust/` directory. Bazel discovers the installed toolchain and runs Cargo to produce the Rust libraries and C++ headers. The first build may also download the locked Cargo dependencies; configure a crates.io mirror if the host cannot reach the default registry.
 
 ## Host detection and supported architectures
 
@@ -38,7 +38,7 @@ Do not infer aarch64 support for Fedora, openSUSE/SLES, UOS, or TencentOS from t
 
 The compatibility build also recognizes macOS 13 or later on both `arm64` and `x86_64`. Apple Silicon is the primary tested development platform; accepting an Intel host in the build scripts does not constitute a production-support guarantee.
 
-Windows 11 x64 uses `build.ps1` and a separate dependency flow.
+Windows 11 x64 uses `python build.py`; `init` selects the Windows dependency initializer.
 
 ## Linux host packages
 
@@ -76,7 +76,7 @@ brew install zstd lz4 utf8proc thrift re2 brotli
 
 See [Homebrew optimization](homebrew.md) if a mirror is required.
 
-### macOS 27 (Apple Silicon)
+### CMake compatibility build on macOS 27 (Apple Silicon)
 
 macOS 27 and later select `oceanbase.macos27.arm64.deps`, which does not download
 LLVM. Third-party libraries currently reuse packages from the macOS 15 repository.
@@ -85,7 +85,8 @@ developer tools first, then `/Library/Developer/CommandLineTools` if the active
 SDK is too old. It uses the selected tools' Apple Clang by default.
 
 ```bash
-bash build.sh release --init
+./build.py init
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build_release -j8
 ```
 
@@ -99,20 +100,20 @@ To use Homebrew LLVM compatible with the SDK 27 C++ headers:
 
 ```bash
 brew install llvm
-bash build.sh release --init -DOB_MACOS_LLVM_ROOT="$(brew --prefix llvm)"
+./build.py init
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_MACOS_LLVM_ROOT="$(brew --prefix llvm)"
 ```
 
 This selects Homebrew Clang/Clang++; the SDK and linker still come from the Apple
 developer installation. Configuration compiles and links a C++ standard-library
-probe to check LLVM/SDK compatibility. Use a fresh build directory or run
-`bash build.sh clean` before switching compilers in an existing full build.
+probe to check LLVM/SDK compatibility. Use a fresh CMake build directory when switching compilers.
 
 ## Windows host packages
 
 Install Python 3 and Visual Studio 2022 Build Tools with the **Desktop development with C++** workload. Then initialize the repository-managed CMake, Ninja, LLVM, win_flex_bison, OpenSSL, and third-party libraries:
 
 ```powershell
-.\build.ps1 init
+python .\build.py init
 ```
 
 .NET 8 and WiX v4 are optional and are required only for the configurator and MSI packaging path.
@@ -122,7 +123,8 @@ Install Python 3 and Visual Studio 2022 Build Tools with the **Desktop developme
 Return to the repository root and run:
 
 ```bash
-./build.sh release --init
+./build.py init
+./build.py version
 ```
 
 Continue with [Build and run seekdb](build-and-run.md).

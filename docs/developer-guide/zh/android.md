@@ -16,8 +16,8 @@
 ```bash
 export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.3.13750724"
 rustup target add aarch64-linux-android
-python3 bazel.py init --android
-python3 bazel.py build --config=android //src/observer:seekdb
+python3 build.py init --android
+python3 build.py build --config=android //src/observer:seekdb
 ```
 
 二进制文件位于：

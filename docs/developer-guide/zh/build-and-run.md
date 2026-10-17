@@ -13,51 +13,26 @@ cd seekdb
 
 ## 编译生产二进制
 
-当前构建支持 Release 模式（`RelWithDebInfo`、`-O2`），该模式在保留调试信息的同时启用生产优化。`build.sh` 不支持 Debug 模式。
+仓库的 `build.py` 安装指定版本的 Bazel，并执行构建命令。默认使用 `-O2` 优化，保留调试信息。
 
 ```bash
-./build.sh release --init --make
+./build.py init
+./build.py build //src/observer:seekdb
 ```
 
-`--init` 用于准备当前平台所需的依赖，首次编译或依赖定义变化后通常需要执行。编译产物位于：
+`init` 准备平台依赖，首次编译或依赖定义变化后执行。后续增量编译只需重复 `build` 命令。产物位于 `build_bazel/bin/src/observer/seekdb`。
 
-```text
-build_release/src/observer/seekdb
-```
-
-完成初始化后，可以使用以下命令进行增量编译：
-
-```bash
-./build.sh release --make
-```
-
-在 Linux 上，同一套 CMake 构建还提供模块单元测试目标和聚合目标 `pretest`，具体用法参见[编写与运行单元测试](unittest.md)。
+Windows 使用 `python build.py`，命令参数相同。并发、远程编译和交叉编译参见 [Bazel 构建说明](../../../bazel/README.md)。Linux 模块单元测试暂时沿用 CMake，配置方式参见[编写与运行单元测试](unittest.md)。
 
 ## 编译 Sanity 二进制
 
-在 Linux 上，可以使用独立的 CMake `sanity` 模式配置经过 Sanity 插桩的 seekdb 构建：
+Linux 上通过以下命令启用 Sanity 插桩：
 
 ```bash
-./build.sh sanity --init
+./build.py build --sanity=true //src/observer:seekdb
 ```
 
-`--init` 通常只在首次编译或依赖定义变化后使用。与 Release 模式相同，增加 `--make` 可以在配置后直接编译：
-
-```bash
-./build.sh sanity --init --make -j32
-```
-
-后续增量编译可以使用：
-
-```bash
-./build.sh sanity --make -j32
-```
-
-编译产物位于：
-
-```text
-build_sanity/src/observer/seekdb
-```
+产物路径与普通构建相同。如需保留独立的 Sanity 构建目录，在 `build` 前加 `--build-dir build_sanity`，产物将位于 `build_sanity/bin/src/observer/seekdb`。
 
 ## 运行本地实例
 

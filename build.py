@@ -2,18 +2,96 @@
 """Install the pinned Bazel and keep build outputs and caches in known locations."""
 
 import argparse
+import hashlib
+import json
 import os
 from pathlib import Path
+import platform
+import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
+import urllib.request
 from typing import List, Optional
 
-from tools.bazel_bootstrap import BootstrapError, ensure_bazel
+
+class BuildError(RuntimeError):
+    """The seekdb build environment could not be prepared."""
 
 
-class LauncherError(RuntimeError):
-    """Invalid seekdb initialization or output directory."""
+def _host_platform() -> str:
+    system = {"Linux": "linux", "Darwin": "darwin", "Windows": "windows"}.get(
+        platform.system()
+    )
+    machine = platform.machine().lower()
+    architecture = {
+        "x86_64": "x86_64", "amd64": "x86_64",
+        "aarch64": "arm64", "arm64": "arm64",
+    }.get(machine)
+    if not system or not architecture:
+        raise BuildError("unsupported Bazel host: %s %s" % (platform.system(), machine))
+    return "%s-%s%s" % (system, architecture, ".exe" if system == "windows" else "")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _download_binary(url: str, destination: Path, checksum: str) -> Path:
+    """Verify before atomic installation; use the environment's proxy settings."""
+    if destination.is_file() and _sha256_file(destination) == checksum:
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    opener = urllib.request.build_opener()
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=destination.name + ".", dir=str(destination.parent)
+    )
+    temporary = Path(temporary_name)
+    display_url = urllib.parse.urlsplit(url)._replace(query="", fragment="").geturl()
+    try:
+        print("Downloading Bazel: %s" % display_url, file=sys.stderr, flush=True)
+        request = urllib.request.Request(url, headers={"User-Agent": "seekdb-bazel-bootstrap/1"})
+        with os.fdopen(descriptor, "wb") as output:
+            with opener.open(request, timeout=30) as response:
+                for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                    output.write(chunk)
+        if _sha256_file(temporary) != checksum:
+            raise BuildError("SHA256 mismatch for %s" % display_url)
+        temporary.chmod(0o755)
+        os.replace(str(temporary), str(destination))
+        return destination
+    except (OSError, ValueError) as error:
+        raise BuildError("cannot download Bazel from %s: %s" % (display_url, error)) from error
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _ensure_bazel(root: Path, cache_directory: Path, version: str) -> Path:
+    manifest_path = root / "bazel" / "binaries.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        host = _host_platform()
+        binary = manifest["platforms"][host]
+        checksum = binary["sha256"]
+        if manifest["version"] != version or not re.fullmatch(r"[0-9a-f]{64}", checksum):
+            raise ValueError("version/checksum does not match .bazelversion")
+        url = binary["url"]
+        if not isinstance(url, str):
+            raise ValueError("url must be an HTTP or HTTPS URL")
+        source = urllib.parse.urlsplit(url)
+        if source.scheme not in ("http", "https") or not source.hostname or source.fragment:
+            raise ValueError("url must be an HTTP or HTTPS URL without a fragment")
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise BuildError("invalid Bazel binary manifest %s: %s" % (manifest_path, error))
+    filename = "bazel-%s-%s" % (version, host)
+    destination = cache_directory / "binaries" / version / filename
+    return _download_binary(url, destination, checksum)
 
 
 def _cache_directory() -> Path:
@@ -31,14 +109,22 @@ def _quote(value: str) -> str:
 def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
     if not arguments or arguments[0] != "init":
         return None
-    parser = argparse.ArgumentParser(prog="bazel.py init")
-    platform = parser.add_mutually_exclusive_group()
-    platform.add_argument("--android", action="store_true")
-    platform.add_argument("--ios", action="store_true")
+    parser = argparse.ArgumentParser(prog="build.py init")
+    target_platform = parser.add_mutually_exclusive_group()
+    target_platform.add_argument("--android", action="store_true")
+    target_platform.add_argument("--ios", action="store_true")
     parser.add_argument("--simulator", action="store_true")
     options = parser.parse_args(arguments[1:])
     if options.simulator and not options.ios:
         parser.error("--simulator requires --ios")
+    if os.name == "nt":
+        if options.android or options.ios:
+            parser.error("Android/iOS dependency initialization requires a Unix host")
+        return subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+             str(root / "deps/init/dep_create.ps1")],
+            cwd=str(root),
+        ).returncode
 
     initializer = root / "deps/init/dep_create.sh"
     environment = os.environ.copy()
@@ -50,7 +136,7 @@ def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
             ["xcrun", "--sdk", sdk, "--show-sdk-path"], env=environment,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         ).returncode:
-            raise LauncherError("iOS SDK unavailable; install Xcode and set DEVELOPER_DIR to its Contents/Developer directory")
+            raise BuildError("iOS SDK unavailable; install Xcode and set DEVELOPER_DIR to its Contents/Developer directory")
     status = subprocess.run(
         ["bash", initializer.name],
         cwd=str(initializer.parent),
@@ -89,7 +175,7 @@ def main(arguments: List[str]) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
         usage="%(prog)s [--build-dir PATH] [--launcher-cache-dir PATH] <bazel command> [args]",
-        epilog="Prepare project dependencies with: ./bazel.py init [--android | --ios [--simulator]]",
+        epilog="Prepare project dependencies with: ./build.py init [--android | --ios [--simulator]]",
         allow_abbrev=False,
     )
     parser.add_argument("--build-dir", type=Path, default=Path("build_bazel"))
@@ -98,10 +184,10 @@ def main(arguments: List[str]) -> int:
     options, startup_options = parser.parse_known_args(arguments)
     build_directory = (root / options.build_dir.expanduser()).resolve()
     if build_directory == root:
-        raise LauncherError("--build-dir must not name the workspace root")
+        raise BuildError("--build-dir must not name the workspace root")
     cache = options.launcher_cache_dir.expanduser().resolve()
     version = (root / ".bazelversion").read_text().strip()
-    bazel = ensure_bazel(root, cache, version)
+    bazel = _ensure_bazel(root, cache, version)
     build_directory.mkdir(parents=True, exist_ok=True)
 
     # Only machine-specific paths belong here. Build policy lives in .bazelrc;
@@ -126,7 +212,7 @@ def main(arguments: List[str]) -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main(sys.argv[1:]))
-    except (LauncherError, BootstrapError, OSError) as error:
+    except (BuildError, OSError) as error:
         print("ERROR: %s" % error, file=sys.stderr)
         sys.exit(2)
     except KeyboardInterrupt:

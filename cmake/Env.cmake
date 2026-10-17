@@ -30,7 +30,7 @@ ob_define(LTO_JOBS all)
 ob_define(LTO_CACHE_DIR "${CMAKE_BINARY_DIR}/cache")
 ob_define(LTO_CACHE_POLICY cache_size=100%:cache_size_bytes=0k:cache_size_files=0:prune_after=0s:prune_interval=72h)
 ob_define(NEED_PARSER_CACHE ON)
-# get compiler from build.sh
+# Optional explicit compiler paths.
 ob_define(OB_CC "")
 ob_define(OB_CXX "")
 ob_define(DEFAULT_LOG_LEVEL OB_LOG_LEVEL_ERROR)

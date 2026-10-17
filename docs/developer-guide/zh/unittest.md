@@ -7,10 +7,11 @@ seekdb 使用 [Google Test](https://google.github.io/googletest/) 编写 C++ 单
 CMake 单元测试目标仅在 Linux 上提供。编译模块测试前，先初始化依赖并配置 Release 构建：
 
 ```bash
-./build.sh release --init
+./build.py init
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ```
 
-`--init` 通常只在首次构建或依赖定义变化后使用。后续需要重新配置时，执行不带 `--init` 的 `./build.sh release`。
+`init` 通常只在首次构建或依赖定义变化后执行。后续需要重新配置时，重复执行 CMake 命令。
 
 ## 选择并编译模块
 

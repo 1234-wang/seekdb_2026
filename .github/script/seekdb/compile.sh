@@ -19,7 +19,7 @@ echo "[compile.sh] WORKSPACE=$WORKSPACE"
 echo "[compile.sh] pwd=$(pwd)"
 # shellcheck disable=SC2012
 ls -la "$WORKSPACE/" 2>/dev/null | head -20 || true
-echo "[compile.sh] build.sh: -f=$([[ -f "$WORKSPACE/build.sh" ]] && echo 1 || echo 0) -x=$([[ -x "$WORKSPACE/build.sh" ]] && echo 1 || echo 0)"
+echo "[compile.sh] build.py: -f=$([[ -f "$WORKSPACE/build.py" ]] && echo 1 || echo 0) -x=$([[ -x "$WORKSPACE/build.py" ]] && echo 1 || echo 0)"
 
 export GITHUB_WORKSPACE="$WORKSPACE"
 export SEEKDB_TASK_DIR="$TASK_DIR"
@@ -34,8 +34,14 @@ fi
 cd "$WORKSPACE"
 mkdir -p "$TASK_DIR"
 
-BUILD_TARGET="${PACKAGE_TYPE:-debug}"
+BUILD_TARGET="$PACKAGE_TYPE"
 BUILD_DIR="build_${BUILD_TARGET}"
+SANITY=OFF
+case "$BUILD_TARGET" in
+  release) ;;
+  sanity) SANITY=ON ;;
+  *) echo "Unsupported CMake build type: $BUILD_TARGET" >&2; exit 2 ;;
+esac
 compile_ret=0
 compile_start=$SECONDS
 
@@ -43,14 +49,14 @@ echo "[compile.sh] nproc=$(nproc 2>/dev/null || echo unknown)"
 [[ -f /sys/fs/cgroup/cpu.max ]] && echo "[compile.sh] cgroup cpu.max=$(< /sys/fs/cgroup/cpu.max)"
 [[ -f /sys/fs/cgroup/memory.max ]] && echo "[compile.sh] cgroup memory.max=$(< /sys/fs/cgroup/memory.max)"
 
-# 存在即可（不要求 -x），用 bash 执行
-if [[ ! -f "$WORKSPACE/build.sh" ]]; then
-  echo "[compile.sh] No build.sh at $WORKSPACE/build.sh, skip."
+# 存在即可（不要求 -x），用 Python 执行
+if [[ ! -f "$WORKSPACE/build.py" ]]; then
+  echo "[compile.sh] No build.py at $WORKSPACE/build.py, skip."
 else
   # Step 1: Build init（与 buildbase 一致，只传 init，先拉取/安装 deps 再才能用 cmake）
   phase_start=$SECONDS
   set +e
-  bash "$WORKSPACE/build.sh" init 2>&1 | tee "$TASK_DIR/compile_init.output"
+  python3 "$WORKSPACE/build.py" init 2>&1 | tee "$TASK_DIR/compile_init.output"
   phase_ret=${PIPESTATUS[0]}
   set -e
   echo "[compile.sh] dependency init elapsed=$((SECONDS - phase_start))s"
@@ -67,7 +73,10 @@ else
 
   phase_start=$SECONDS
   set +e
-  bash "$WORKSPACE/build.sh" "$BUILD_TARGET" -DOB_USE_CCACHE=ON -DNEED_PARSER_CACHE=OFF 2>&1 | tee "$TASK_DIR/compile_configure.output"
+  cmake -S "$WORKSPACE" -B "$BUILD_DIR" -G "Unix Makefiles" \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_ENABLE_UNITY=ON -DOB_USE_LLD=ON \
+    -DENABLE_SANITY="$SANITY" -DOB_USE_CCACHE=ON -DNEED_PARSER_CACHE=OFF \
+    2>&1 | tee "$TASK_DIR/compile_configure.output"
   phase_ret=${PIPESTATUS[0]}
   set -e
   echo "[compile.sh] configure elapsed=$((SECONDS - phase_start))s"

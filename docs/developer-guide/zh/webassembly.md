@@ -21,19 +21,19 @@ export PATH="$EMSCRIPTEN:$PATH"
 export SEEKDB_WASM_DEPS="$PWD/build_wasm_deps"
 
 # 已初始化 deps/3rd 时可跳过 init。
-python3 bazel.py init
+python3 build.py init
 rustup toolchain install "$(cat tools/wasm/rust-toolchain-version)" \
   --profile minimal --component rust-src --target wasm32-unknown-emscripten
 bash tools/wasm/build-deps.sh "$SEEKDB_WASM_DEPS"
 python3 tools/wasm/prepare-headers.py \
   --source deps/3rd/usr/local/oceanbase/deps/devel/include \
   --include "$SEEKDB_WASM_DEPS/include" --target-prefix "$SEEKDB_WASM_DEPS"
-python3 bazel.py build --config=wasm //src/wasm:database
+python3 build.py build --config=wasm //src/wasm:database
 ```
 
 `init` 准备宿主工具和头文件；`build-deps.sh` 用锁定源码构建 Wasm 第三方库。依赖已准备好后只需执行最后一条 Bazel 命令，并保留这些环境变量。Rust 库由 Bazel 构建，Wasm 专用补丁仅作用于构建目录中的依赖副本。切回本机或 Android 构建前执行 `unset SEEKDB_WASM_DEPS`，恢复对应平台的依赖目录。
 
-引擎和配套 JS、HTML、CSS 文件位于 `build_bazel/bin/src/wasm/dist/`。`python3 bazel.py clean` 清理 Bazel 编译产物，保留 `build_wasm_deps`。
+引擎和配套 JS、HTML、CSS 文件位于 `build_bazel/bin/src/wasm/dist/`。`python3 build.py clean` 清理 Bazel 编译产物，保留 `build_wasm_deps`。
 
 ## 构建目录内容
 

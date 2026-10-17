@@ -13,51 +13,26 @@ cd seekdb
 
 ## Build the production binary
 
-The build supports Release (`RelWithDebInfo`, `-O2`). It includes debug information while retaining production optimization. Debug is not a supported `build.sh` mode.
+The repository's `build.py` installs the pinned Bazel and runs the requested command. The default build uses `-O2` and includes debug information.
 
 ```bash
-./build.sh release --init --make
+./build.py init
+./build.py build //src/observer:seekdb
 ```
 
-`--init` prepares the repository's platform-specific dependencies. It is normally required on the first build or after dependency metadata changes. The resulting binary is:
+`init` prepares platform dependencies; run it on the first build or after dependency metadata changes. For incremental builds, repeat only the `build` command. The resulting binary is `build_bazel/bin/src/observer/seekdb`.
 
-```text
-build_release/src/observer/seekdb
-```
-
-For incremental builds after initialization, run:
-
-```bash
-./build.sh release --make
-```
-
-On Linux, the same CMake build also provides module unit-test targets and the `pretest` aggregate. See [Write and run unit tests](unittest.md).
+On Windows, use `python build.py` with the same commands. See [Bazel build](../../../bazel/README.md) for concurrency, remote compilation and cross compilation. Linux module unit tests currently use the CMake configuration described in [Write and run unit tests](unittest.md).
 
 ## Build a Sanity binary
 
-On Linux, use the dedicated CMake `sanity` mode to configure a seekdb build instrumented with Sanity:
+On Linux, enable Sanity instrumentation with:
 
 ```bash
-./build.sh sanity --init
+./build.py build --sanity=true //src/observer:seekdb
 ```
 
-`--init` is normally required only for the first build or after dependency metadata changes. As with Release mode, add `--make` to configure and compile in one command:
-
-```bash
-./build.sh sanity --init --make -j32
-```
-
-For later incremental builds, run:
-
-```bash
-./build.sh sanity --make -j32
-```
-
-The resulting binary is:
-
-```text
-build_sanity/src/observer/seekdb
-```
+The binary is written to the same output path. To keep a separate Sanity build directory, place `--build-dir build_sanity` before `build`; its binary will be `build_sanity/bin/src/observer/seekdb`.
 
 ## Run a local instance
 

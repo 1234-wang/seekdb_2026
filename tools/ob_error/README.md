@@ -4,27 +4,14 @@ ob_error is an error tool for OceanBase Database. ob_error returns information, 
 
 ## How to build
 
-### Debug mode
+The tool currently uses the CMake build:
 
 ```bash
-bash build.sh debug --init
-cd build_debug
-make ob_error
-cp tools/ob_error/src/ob_error /usr/local/bin
+./build.py init
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build_release --target ob_error
+cp build_release/tools/ob_error/src/ob_error /usr/local/bin
 ```
-
-The compiled product for `ob_error` is stored in `DEBUG_BUILD_DIR/tools/ob_error/src/ob_error` by default.
-
-### Release mode
-
-```bash
-bash build.sh release --init
-cd build_release
-make ob_error
-cp tools/ob_error/src/ob_error /usr/local/bin
-```
-
-The compiled product for `ob_error` is stored in `RELEASE_BUILD_DIR/tools/ob_error/src/ob_error` by default.
 
 ## How to use
 

@@ -1,6 +1,6 @@
 # 安装工具链
 
-seekdb 使用 CMake、Rust 以及仓库管理的编译器和依赖集合。先安装 Rust 和少量宿主机工具，再由 `./build.sh release --init` 将固定版本的 C/C++ 构建依赖准备到 `deps/3rd`。
+seekdb 使用 Bazel、Rust 以及仓库管理的编译器和依赖集合。先安装 Rust 和少量宿主机工具，再由 `./build.py init` 将固定版本的 C/C++ 构建依赖准备到 `deps/3rd`。
 
 ## Rust
 
@@ -45,7 +45,7 @@ aarch64-apple-ios
 aarch64-apple-ios-sim
 ```
 
-CMake 编译 `sql-nio` 库时会从 Rust 工作区调用 Cargo，rustup 随后会自动读取 `rust/rust-toolchain.toml`，并安装固定版本的工具链、组件和目标。首次构建还可能下载 Cargo 的锁定依赖；如果主机无法访问默认 registry，请配置 crates.io 镜像。
+编译前先在 `rust/` 目录执行 `rustup toolchain install --no-self-update`，安装固定版本的工具链、组件和目标。Bazel 查找已安装的工具链，并通过 Cargo 生成 Rust 库和 C++ 头文件。首次构建还可能下载 Cargo 的锁定依赖；如果主机无法访问默认 registry，请配置 crates.io 镜像。
 
 ## 宿主机检测与架构
 
@@ -60,7 +60,7 @@ CMake 编译 `sql-nio` 库时会从 Rust 工作区调用 Cargo，rustup 随后�
 
 兼容构建还可以识别 macOS 13 或更高版本的 `arm64` 和 `x86_64`。Apple Silicon 是主要测试的开发平台；构建脚本接受 Intel 主机并不等同于生产支持承诺。
 
-Windows 11 x64 使用 `build.ps1` 和独立的依赖流程。
+Windows 11 x64 使用 `python build.py`，`init` 会选择 Windows 依赖初始化脚本。
 
 ## Linux 宿主机依赖
 
@@ -98,7 +98,7 @@ brew install zstd lz4 utf8proc thrift re2 brotli
 
 需要使用镜像时，参见 [Homebrew 优化配置](homebrew.md)。
 
-### macOS 27（Apple Silicon）
+### macOS 27（Apple Silicon）的 CMake 兼容构建
 
 macOS 27 及以上使用独立的 `oceanbase.macos27.arm64.deps`，不再下载 LLVM。
 第三方库暂时复用 macOS 15 仓库中的包。请先安装带 macOS 27 SDK 的 Xcode 或
@@ -106,7 +106,8 @@ Command Line Tools；CMake 优先检查当前选中的开发工具，如果 SDK 
 `/Library/Developer/CommandLineTools`。默认使用选中工具集的 Apple Clang。
 
 ```bash
-bash build.sh release --init
+./build.py init
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build_release -j8
 ```
 
@@ -118,19 +119,20 @@ cmake --build build_release -j8
 
 ```bash
 brew install llvm
-bash build.sh release --init -DOB_MACOS_LLVM_ROOT="$(brew --prefix llvm)"
+./build.py init
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_MACOS_LLVM_ROOT="$(brew --prefix llvm)"
 ```
 
 此选项选择 Homebrew 的 Clang/Clang++，SDK 和链接器仍来自上述 Apple 开发工具。
 配置阶段会编译并链接一个使用 C++ 标准库的程序，以检查 LLVM 与 SDK 的兼容性。
-从旧编译器切换已有的完整构建目录时，建议使用新的构建目录或先运行 `bash build.sh clean`。
+切换编译器时，使用新的 CMake 构建目录。
 
 ## Windows 宿主机依赖
 
 安装 Python 3 和 Visual Studio 2022 Build Tools，并选择 **使用 C++ 的桌面开发** 工作负载。随后初始化仓库管理的 CMake、Ninja、LLVM、win_flex_bison、OpenSSL 和第三方库：
 
 ```powershell
-.\build.ps1 init
+python .\build.py init
 ```
 
 .NET 8 和 WiX v4 是可选依赖，仅配置器和 MSI 打包流程需要。
@@ -140,7 +142,8 @@ bash build.sh release --init -DOB_MACOS_LLVM_ROOT="$(brew --prefix llvm)"
 回到仓库根目录执行：
 
 ```bash
-./build.sh release --init
+./build.py init
+./build.py version
 ```
 
 然后继续阅读[获取代码、编译并运行 seekdb](build-and-run.md)。

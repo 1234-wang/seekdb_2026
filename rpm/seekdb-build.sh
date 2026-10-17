@@ -48,8 +48,16 @@ fi
 
 echo "[seekdb-rpm] source=${PROJECT_DIR} version=${VERSION} release=${RELEASE}"
 cd "${TOP_DIR}"
-./build.sh clean
-./build.sh rpm "${cmake_args[@]}" --init --make rpm
+./build.py init
+export PATH="${TOP_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin:$PATH"
+cmake -E remove_directory "${TOP_DIR}/build_rpm"
+cmake -S . -B build_rpm -G "Unix Makefiles" \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_ENABLE_UNITY=ON -DOB_USE_LLD=ON \
+  "${cmake_args[@]}" -DOB_BUILD_PACKAGE=ON -DOB_BUILD_RPM=ON \
+  -DOB_STATIC_LINK_LGPL_DEPS=ON -DDEFAULT_LOG_LEVEL=OB_LOG_LEVEL_DBA_WARN \
+  -DDEFAULT_LOG_FILE_SIZE_MB=16 -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON \
+  -DENABLE_HOTFUNC=ON
+cmake --build build_rpm --parallel "$(nproc)" --target rpm
 
 shopt -s nullglob
 packages=("${TOP_DIR}/build_rpm"/*.rpm)

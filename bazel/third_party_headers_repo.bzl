@@ -47,7 +47,7 @@ def _seekdb_third_party_headers_repository_impl(repository_ctx):
     if ios_sdk:
         prefix = str(repository_ctx.workspace_root) + "/deps/ios/" + ios_sdk + "/devel"
         if not repository_ctx.path(prefix + "/lib/libssl.a").exists:
-            fail("Missing iOS dependencies; run ./bazel.py init --ios" + (" --simulator" if ios_sdk == "iphonesimulator" else ""))
+            fail("Missing iOS dependencies; run ./build.py init --ios" + (" --simulator" if ios_sdk == "iphonesimulator" else ""))
         target_headers = repository_ctx.path(prefix + "/include")
         target_names = [child.basename for child in target_headers.readdir()]
         for child in repository_ctx.path(headers).readdir():

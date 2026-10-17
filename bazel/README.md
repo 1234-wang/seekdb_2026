@@ -1,17 +1,22 @@
 # Bazel build
 
 ```sh
-./bazel.py init
-./bazel.py build //src/observer:seekdb
+./build.py init
+./build.py build //src/observer:seekdb
 ```
 
-`bazel.py` downloads the version in `.bazelversion`, using the platform URL and
+On Windows, use `python build.py` with the same commands. `init` selects the
+host's dependency initializer; `build`, `test`, `query`, `clean` and other commands
+are passed to Bazel. CMake configurations, where still needed, use `cmake`
+directly.
+
+`build.py` downloads the version in `.bazelversion`, using the platform URL and
 SHA256 in `bazel/binaries.json`. It then runs Bazel. Build flags belong after the
 Bazel command; local job concurrency defaults to Bazel's CPU-based value.
 
 ```sh
-./bazel.py build --jobs=16 //src/observer:seekdb
-./bazel.py build --config=remote --remote_executor=grpc://HOST:PORT --jobs=100 //src/observer:seekdb
+./build.py build --jobs=16 //src/observer:seekdb
+./build.py build --config=remote --remote_executor=grpc://HOST:PORT --jobs=100 //src/observer:seekdb
 ```
 
 The remote configuration sends C++ compilation to REAPI. Cargo, generators and

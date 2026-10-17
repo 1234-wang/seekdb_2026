@@ -154,7 +154,10 @@ read -r -a MAKE_ARGUMENTS <<< "${MAKE_ARGS:--j$(cpu_count)}"
 render_maintainer_scripts "${MAINTAINER_SCRIPT_DIR}" "${VERSION}"
 
 cd "${TOP_DIR}"
-./build.sh release --init
+./build.py init
+export PATH="${TOP_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin:$PATH"
+cmake -S . -B build_release -G "Unix Makefiles" \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_ENABLE_UNITY=ON -DOB_USE_LLD=ON
 (cd build_release && make "${MAKE_ARGUMENTS[@]}")
 
 [[ -x "${TOP_DIR}/build_release/src/observer/seekdb" ]] ||

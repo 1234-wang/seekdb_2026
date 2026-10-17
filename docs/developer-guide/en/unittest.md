@@ -7,10 +7,11 @@ seekdb uses [Google Test](https://google.github.io/googletest/) for C++ unit tes
 CMake unit-test targets are available on Linux. Initialize the dependencies and configure the Release build before building a test module:
 
 ```bash
-./build.sh release --init
+./build.py init
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ```
 
-`--init` is normally required only for the first build or after dependency metadata changes. For later reconfiguration, run `./build.sh release` without `--init`.
+`init` is normally required only for the first build or after dependency metadata changes. Rerun the CMake command when reconfiguration is needed.
 
 ## Choose and build a module
 

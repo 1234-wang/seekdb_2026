@@ -163,7 +163,7 @@ def main():
             arguments.target,
         )
         labels = subprocess.check_output(
-            [str(repo / "bazel.py"), "query", query, "--output=label"],
+            [str(repo / "build.py"), "query", query, "--output=label"],
             cwd=str(repo),
             universal_newlines=True,
         )

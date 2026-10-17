@@ -165,7 +165,7 @@ jobs:
           chmod +x .github/script/seekdb/compile.sh
           export GITHUB_RUN_ID="${{ github.run_id }}"
           WS="${{ github.workspace }}"
-          if [[ ! -f "$WS/build.sh" ]] && [[ -f "$(pwd)/build.sh" ]]; then
+          if [[ ! -f "$WS/build.py" ]] && [[ -f "$(pwd)/build.py" ]]; then
             export GITHUB_WORKSPACE="$(pwd)"
           else
             export GITHUB_WORKSPACE="$WS"

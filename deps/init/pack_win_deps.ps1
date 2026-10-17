@@ -266,5 +266,5 @@ Write-Log ""
 Write-Log "  Next steps:"
 $step1 = "    1. Upload archives to $Repo/"
 Write-Log $step1
-Write-Log "    2. On target machine:  .\build.ps1 init"
+Write-Log "    2. On target machine:  python .\build.py init"
 Write-Log "==========================================================="

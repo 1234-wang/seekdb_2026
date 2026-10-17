@@ -21,19 +21,19 @@ export PATH="$EMSCRIPTEN:$PATH"
 export SEEKDB_WASM_DEPS="$PWD/build_wasm_deps"
 
 # Reuse deps/3rd if it is already initialized.
-python3 bazel.py init
+python3 build.py init
 rustup toolchain install "$(cat tools/wasm/rust-toolchain-version)" \
   --profile minimal --component rust-src --target wasm32-unknown-emscripten
 bash tools/wasm/build-deps.sh "$SEEKDB_WASM_DEPS"
 python3 tools/wasm/prepare-headers.py \
   --source deps/3rd/usr/local/oceanbase/deps/devel/include \
   --include "$SEEKDB_WASM_DEPS/include" --target-prefix "$SEEKDB_WASM_DEPS"
-python3 bazel.py build --config=wasm //src/wasm:database
+python3 build.py build --config=wasm //src/wasm:database
 ```
 
 `init` prepares host tools and headers; `build-deps.sh` builds Wasm third-party libraries from pinned sources. Once dependencies are ready, repeat only the final Bazel command with these environment variables set. Bazel builds the Rust libraries; Wasm-specific patches apply only to private dependency copies in the build directory. SDK selection follows the Bazel target platform; `SEEKDB_WASM_DEPS` only locates the Wasm SDK and does not affect native or Android builds.
 
-The engine and its JS, HTML and CSS assets are in `build_bazel/bin/src/wasm/dist/`. `python3 bazel.py clean` clears Bazel build outputs and preserves `build_wasm_deps`.
+The engine and its JS, HTML and CSS assets are in `build_bazel/bin/src/wasm/dist/`. `python3 build.py clean` clears Bazel build outputs and preserves `build_wasm_deps`.
 
 ## Build directory contents
 

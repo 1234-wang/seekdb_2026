@@ -56,12 +56,7 @@ function variables_prepare {
   fi
   IPADDRESS="127.0.0.1"
   COMPONENT="seekdb"
-  if grep 'dep_create.sh' $BASE_DIR/build.sh 2>&1 >/dev/null
-  then
-    DEP_PATH=$BASE_DIR/deps/3rd
-  else
-    DEP_PATH=$BASE_DIR/rpm/.dep_create/var
-  fi
+  DEP_PATH=$BASE_DIR/deps/3rd
 
   export LD_LIBRARY_PATH=$DEP_PATH/u01/obclient/lib:$LD_LIBRARY_PATH
 

@@ -37,7 +37,7 @@ def _query_xml(repo, expression):
     return ET.fromstring(
         subprocess.check_output(
             [
-                str(repo / "bazel.py"),
+                str(repo / "build.py"),
                 "query",
                 expression,
                 "--output=xml",
