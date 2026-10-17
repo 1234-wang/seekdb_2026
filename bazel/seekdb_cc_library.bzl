@@ -6,9 +6,9 @@ load(
 )
 load(
     "//bazel:seekdb_build_config.bzl",
-    "SEEKDB_C_MODULE_COPTS",
+    "SEEKDB_MODULE_C_COPTS",
     "SEEKDB_RELEASE_LOCAL_DEFINES",
-    "SEEKDB_SEMANTIC_MODULE_COPTS",
+    "SEEKDB_MODULE_CXX_COPTS",
     "seekdb_sanity_compiler_inputs",
     "seekdb_sanity_copts",
     "seekdb_sanity_cxxopts",
@@ -72,7 +72,7 @@ seekdb_cc_library = macro(
         "implementation_deps": attr.label_list(configurable = False),
         "additional_compiler_inputs": attr.label_list(allow_files = True),
         "additional_linker_inputs": attr.label_list(allow_files = True),
-        "copts": attr.string_list(default = SEEKDB_SEMANTIC_MODULE_COPTS),
+        "copts": attr.string_list(default = SEEKDB_MODULE_CXX_COPTS),
         "cxxopts": attr.string_list(),
         "conlyopts": attr.string_list(),
         "local_defines": attr.string_list(default = SEEKDB_RELEASE_LOCAL_DEFINES),
@@ -240,39 +240,7 @@ def seekdb_generated_unity_source(
 
     return ":" + unity_source_target
 
-def seekdb_unity_cc_library(
-        name,
-        unity_src,
-        unity_members,
-        public_hdrs = [],
-        private_hdrs = [],
-        deps = [],
-        implementation_deps = [],
-        copts = None,
-        local_defines = None,
-        sanity_instrumentation = True,
-        features = [],
-        tags = [],
-        visibility = None):
-    """Defines a Unity-only C++ library with one Unity translation unit."""
-
-    seekdb_multi_unity_cc_library(
-        name = name,
-        unity_srcs = [unity_src],
-        unity_members = unity_members,
-        public_hdrs = public_hdrs,
-        private_hdrs = private_hdrs,
-        deps = deps,
-        implementation_deps = implementation_deps,
-        copts = copts,
-        local_defines = local_defines,
-        sanity_instrumentation = sanity_instrumentation,
-        features = features,
-        tags = tags,
-        visibility = visibility,
-    )
-
-def seekdb_multi_unity_cc_library(
+def _unity_cc_library(
         name,
         unity_srcs,
         unity_members,
@@ -351,15 +319,15 @@ def seekdb_generated_unity_cc_library(
         tags = tags,
     )
 
-    seekdb_unity_cc_library(
+    _unity_cc_library(
         name = name,
-        unity_src = unity_source,
+        unity_srcs = [unity_source],
         unity_members = unity_members,
         public_hdrs = public_hdrs,
         private_hdrs = private_hdrs,
         deps = deps,
         implementation_deps = implementation_deps,
-        copts = SEEKDB_C_MODULE_COPTS if language == "c" and copts == None else copts,
+        copts = SEEKDB_MODULE_C_COPTS if language == "c" and copts == None else copts,
         local_defines = local_defines,
         sanity_instrumentation = sanity_instrumentation,
         features = features,
@@ -397,6 +365,9 @@ def seekdb_semantic_unity_cc_library(
 
     if language not in ("c", "c++"):
         fail("language must be 'c' or 'c++', got %s" % language)
+
+    if language == "c" and copts == None:
+        copts = SEEKDB_MODULE_C_COPTS
 
     unity_srcs = []
     unity_members = []
@@ -480,16 +451,16 @@ def seekdb_semantic_unity_cc_library(
         group_targets = []
         for definition in unity_definitions:
             group_target = "_" + name + "_" + definition.group_name + "_objects"
-            seekdb_unity_cc_library(
+            _unity_cc_library(
                 name = group_target,
-                unity_src = definition.unity_src,
+                unity_srcs = [definition.unity_src],
                 unity_members = definition.members,
                 deps = deps,
                 implementation_deps = (
                     implementation_deps +
                     group_implementation_deps[definition.group_name]
                 ),
-                copts = SEEKDB_C_MODULE_COPTS if language == "c" and copts == None else copts,
+                copts = copts,
                 local_defines = local_defines,
                 sanity_instrumentation = sanity_instrumentation,
                 features = features,
@@ -502,7 +473,7 @@ def seekdb_semantic_unity_cc_library(
             name = name,
             deps = deps,
             implementation_deps = group_targets,
-            copts = SEEKDB_C_MODULE_COPTS if language == "c" and copts == None else copts,
+            copts = copts,
             local_defines = local_defines,
             sanity_instrumentation = sanity_instrumentation,
             features = features,
@@ -510,7 +481,7 @@ def seekdb_semantic_unity_cc_library(
             visibility = visibility,
         )
     else:
-        seekdb_multi_unity_cc_library(
+        _unity_cc_library(
             name = name,
             unity_srcs = unity_srcs,
             unity_members = unity_members,
@@ -518,7 +489,7 @@ def seekdb_semantic_unity_cc_library(
             private_hdrs = private_hdrs,
             deps = deps,
             implementation_deps = implementation_deps,
-            copts = SEEKDB_C_MODULE_COPTS if language == "c" and copts == None else copts,
+            copts = copts,
             local_defines = local_defines,
             sanity_instrumentation = sanity_instrumentation,
             features = features,

@@ -6,19 +6,24 @@ load(
     "seekdb_final_link",
     "seekdb_semantic_unity_cc_library",
     "seekdb_source_ownership_check",
-    "seekdb_test_interface",
     "seekdb_version_source",
     cc_library = "seekdb_cc_library",
 )
 load(
-    ":observer_build_defs.bzl",
+    ":observer_source_inventory.bzl",
     "OBSERVER_IGNORED_SOURCES",
     "OBSERVER_IOS_SOURCES",
     "OBSERVER_MAIN_SOURCES",
-    "OBSERVER_PRIVATE_HEADERS",
     "OBSERVER_RETRIEVAL_COMPOSITION_SOURCES",
     "OBSERVER_STANDALONE_SOURCES",
     "OBSERVER_UNITY_GROUPS",
+)
+load(
+    ":observer_header_inventory.bzl",
+    "OBSERVER_PRIVATE_HEADERS",
+)
+load(
+    ":observer_module_sources.bzl",
     "observer_singleton_unity_groups",
     "observer_validate_header_inventory",
     "observer_validate_source_inventory",
@@ -263,11 +268,6 @@ cc_library(
     visibility = ["//src/wasm:__pkg__"],
 )
 
-seekdb_test_interface(
-    name = "observer_unit_test_interface",
-    deps = [":observer_internal_interface"],
-    visibility = ["//unittest/observer:__pkg__"],
-)
 
 _OBSERVER_RUNTIME_UNITY_GROUPS = OBSERVER_UNITY_GROUPS + observer_singleton_unity_groups(
     OBSERVER_STANDALONE_SOURCES,

@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_C_MIGRATION_COPTS",
-    "SEEKDB_MIGRATION_COPTS",
+    "SEEKDB_MIGRATION_C_COPTS",
+    "SEEKDB_MIGRATION_CXX_COPTS",
     "seekdb_generated_unity_source",
     cc_library = "seekdb_cc_library",
 )
@@ -171,7 +171,7 @@ cc_library(
         "//src/sql:sql_runtime_interface",
         "//src/sql:sql_runtime_internal_headers",
     ],
-    copts = SEEKDB_C_MIGRATION_COPTS,
+    copts = SEEKDB_MIGRATION_C_COPTS,
     tags = ["manual"],
 )
 
@@ -198,7 +198,7 @@ cc_library(
         "//src/sql:sql_runtime_interface",
         "//src/sql:sql_runtime_internal_headers",
     ],
-    copts = SEEKDB_MIGRATION_COPTS,
+    copts = SEEKDB_MIGRATION_CXX_COPTS,
     tags = ["manual"],
 )
 

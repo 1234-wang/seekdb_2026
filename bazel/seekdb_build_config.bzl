@@ -39,11 +39,11 @@ _MIGRATION_INCLUDES = [
     "-Isrc/oblib",
     "-Isrc/oblib/common",
 ]
-SEEKDB_MIGRATION_COPTS = ["-std=gnu++20"] + _MIGRATION_INCLUDES + _COMMON_COPTS + _CXX_WARNINGS
-SEEKDB_C_MIGRATION_COPTS = ["-std=gnu11"] + _MIGRATION_INCLUDES + _COMMON_COPTS
-SEEKDB_SEMANTIC_MODULE_COPTS = SEEKDB_MIGRATION_COPTS + ["-Werror=private-header"]
-SEEKDB_C_MODULE_COPTS = ["-std=gnu11"]
-SEEKDB_OBLIB_COPTS = ["-std=gnu++20"] + _COMMON_COPTS + _CXX_WARNINGS
+SEEKDB_MIGRATION_CXX_COPTS = ["-std=gnu++20"] + _MIGRATION_INCLUDES + _COMMON_COPTS + _CXX_WARNINGS
+SEEKDB_MIGRATION_C_COPTS = ["-std=gnu11"] + _MIGRATION_INCLUDES + _COMMON_COPTS
+SEEKDB_MODULE_CXX_COPTS = SEEKDB_MIGRATION_CXX_COPTS + ["-Werror=private-header"]
+SEEKDB_MODULE_C_COPTS = ["-std=gnu11"]
+SEEKDB_OBLIB_CXX_COPTS = ["-std=gnu++20"] + _COMMON_COPTS + _CXX_WARNINGS
 SEEKDB_OBLIB_C_COPTS = ["-std=gnu11"] + _COMMON_COPTS
 
 SEEKDB_OBLIB_LOCAL_DEFINES = [
@@ -134,13 +134,5 @@ def seekdb_sanity_compiler_inputs(instrument):
 def seekdb_sanity_implementation_deps():
     return select({
         _SEEKDB_SANITY_CONFIG: ["@seekdb_3rd_headers//:sanity_headers"],
-        "//conditions:default": [],
-    })
-
-def seekdb_sanity_test_deps():
-    return select({
-        _SEEKDB_SANITY_CONFIG: [
-            "@seekdb_3rd_headers//:sanity_headers",
-        ],
         "//conditions:default": [],
     })

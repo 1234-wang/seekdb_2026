@@ -1,18 +1,23 @@
 load(
     "//bazel:defs.bzl",
     "seekdb_semantic_unity_cc_library",
-    "seekdb_test_interface",
     cc_library = "seekdb_cc_library",
 )
 load(
-    ":rootserver_build_defs.bzl",
+    ":rootserver_source_inventory.bzl",
     "ROOTSERVER_IGNORED_SOURCES",
-    "ROOTSERVER_PRIVATE_HEADERS",
-    "ROOTSERVER_PUBLIC_HEADERS",
     "ROOTSERVER_STANDALONE_SOURCES",
     "ROOTSERVER_UNITY_GROUPS",
-    "rootserver_singleton_unity_groups",
+)
+load(
+    ":rootserver_header_inventory.bzl",
+    "ROOTSERVER_PRIVATE_HEADERS",
+    "ROOTSERVER_PUBLIC_HEADERS",
     "rootserver_validate_header_inventory",
+)
+load(
+    ":rootserver_module_sources.bzl",
+    "rootserver_singleton_unity_groups",
     "rootserver_validate_source_inventory",
 )
 load(
@@ -338,16 +343,6 @@ cc_library(
     tags = ["manual"],
 )
 
-seekdb_test_interface(
-    name = "rootserver_unit_test_interface",
-    deps = (
-        [":rootserver_internal_headers"] +
-        _ROOTSERVER_HEADER_SHARE_DEPS +
-        _ROOTSERVER_HEADER_OBLIB_DEPS +
-        _ROOTSERVER_HEADER_CROSS_MODULE_DEPS
-    ),
-    visibility = ["//unittest/rootserver:__pkg__"],
-)
 
 alias(
     name = "major_freeze_interface",

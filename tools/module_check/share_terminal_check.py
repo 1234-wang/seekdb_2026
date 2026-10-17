@@ -502,17 +502,17 @@ def _check_share_build(parsed, forbidden_targets, errors):
             for token in parsed.tokens
             if (
                 token.type == tokenize.NAME
-                and token.string == "SEEKDB_C_MIGRATION_COPTS"
+                and token.string == "SEEKDB_MIGRATION_C_COPTS"
             )
             or (
                 token.type == tokenize.STRING
-                and _literal_string(token) == "SEEKDB_C_MIGRATION_COPTS"
+                and _literal_string(token) == "SEEKDB_MIGRATION_C_COPTS"
             )
         }
     )
     for line in migration_lines:
         errors.add(
-            "%s:%d: SEEKDB_C_MIGRATION_COPTS is forbidden in Share"
+            "%s:%d: SEEKDB_MIGRATION_C_COPTS is forbidden in Share"
             % (relative, line)
         )
 

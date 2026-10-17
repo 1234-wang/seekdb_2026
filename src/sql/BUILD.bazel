@@ -1,9 +1,8 @@
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_SEMANTIC_MODULE_COPTS",
+    "SEEKDB_MODULE_CXX_COPTS",
     "SEEKDB_X86_SIMD_COPTS",
     "seekdb_semantic_unity_cc_library",
-    "seekdb_test_interface",
     cc_library = "seekdb_cc_library",
 )
 load(
@@ -250,30 +249,9 @@ cc_library(
 # Unit tests exercise the same external SQL seam as production callers while
 # receiving implementation symbols only from liboceanbase.so.  This forwards
 # compilation inputs and deliberately discards the interface's link inputs.
-seekdb_test_interface(
-    name = "sql_public_test_interface",
-    deps = [":sql_runtime_interface"],
-    visibility = ["//unittest/sql:__subpackages__"],
-)
 
 # SQL-owned unit tests may compile against the Module's private implementation
 # headers, but receive all implementation symbols from liboceanbase.so.
-seekdb_test_interface(
-    name = "sql_unit_test_interface",
-    deps = [
-        ":_textual_sql_map_inputs",
-        ":sql_runtime_internal_headers",
-    ] + sorted({
-        dep: True
-        for dep in (
-            SQL_RUNTIME_NATIVE_DEPS +
-            sql_runtime_test_oblib_deps() +
-            sql_runtime_simd_test_oblib_deps() +
-            sql_runtime_without_pass_test_oblib_deps()
-        )
-    }.keys()),
-    visibility = ["//unittest/sql:__pkg__"],
-)
 
 _SQL_STANDALONE_SANITY_PARTITION = sql_partition_sources(
     SQL_STANDALONE_SOURCES,
@@ -352,7 +330,7 @@ seekdb_semantic_unity_cc_library(
     copts = select({
         "@platforms//cpu:x86_64": SEEKDB_X86_SIMD_COPTS,
         "//conditions:default": [],
-    }) + SEEKDB_SEMANTIC_MODULE_COPTS,
+    }) + SEEKDB_MODULE_CXX_COPTS,
     tags = ["manual"],
     # Observer's composition root names this archive directly in the final
     # ordered link; it remains unavailable to every other module.

@@ -1,22 +1,27 @@
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_SEMANTIC_MODULE_COPTS",
+    "SEEKDB_MODULE_CXX_COPTS",
     "SEEKDB_X86_SIMD_COPTS",
     "seekdb_generated_unity_cc_library",
     "seekdb_semantic_unity_cc_library",
-    "seekdb_test_interface",
     cc_library = "seekdb_cc_library",
 )
 load(
-    ":storage_build_defs.bzl",
+    ":storage_source_inventory.bzl",
     "STORAGE_EXTRA_SOURCES",
-    "STORAGE_INTERFACE_CLOSURE_HEADERS",
-    "STORAGE_PRIVATE_HEADERS",
-    "STORAGE_PUBLIC_HEADER_ROOTS",
     "STORAGE_SIMD_UNITY_GROUPS",
     "STORAGE_STANDALONE_SOURCES",
     "STORAGE_TABLET_AUTOINCREMENT_STATE_SOURCES",
     "STORAGE_UNITY_GROUPS",
+)
+load(
+    ":storage_header_inventory.bzl",
+    "STORAGE_INTERFACE_CLOSURE_HEADERS",
+    "STORAGE_PRIVATE_HEADERS",
+    "STORAGE_PUBLIC_HEADER_ROOTS",
+)
+load(
+    ":storage_module_sources.bzl",
     "storage_singleton_unity_groups",
     "storage_validate_source_inventory",
 )
@@ -466,13 +471,6 @@ cc_library(
     ],
 )
 
-seekdb_test_interface(
-    name = "storage_unit_test_interface",
-    deps = [
-        ":storage_runtime_internal_headers",
-    ] + _STORAGE_HEADER_SHARE_DEPS + storage_test_oblib_deps(),
-    visibility = ["//unittest/storage:__pkg__"],
-)
 
 _STORAGE_RUNTIME_UNITY_GROUPS = STORAGE_UNITY_GROUPS + storage_singleton_unity_groups(
     STORAGE_STANDALONE_SOURCES,
@@ -2424,7 +2422,7 @@ seekdb_semantic_unity_cc_library(
     copts = select({
         "@platforms//cpu:x86_64": SEEKDB_X86_SIMD_COPTS,
         "//conditions:default": [],
-    }) + SEEKDB_SEMANTIC_MODULE_COPTS,
+    }) + SEEKDB_MODULE_CXX_COPTS,
     features = ["layering_check"],
     tags = ["manual"],
 )

@@ -1,7 +1,7 @@
 """Native Bazel entry point for the embedded iOS framework."""
 
 load("//bazel:defs.bzl", "seekdb_final_link", "seekdb_version_source", cc_library = "seekdb_cc_library")
-load("//bazel:seekdb_build_config.bzl", "SEEKDB_MIGRATION_COPTS")
+load("//bazel:seekdb_build_config.bzl", "SEEKDB_MIGRATION_CXX_COPTS")
 load("@apple_support//rules:apple_genrule.bzl", "apple_genrule")
 
 def seekdb_ios_framework():
@@ -14,7 +14,7 @@ def seekdb_ios_framework():
     cc_library(
         name = "_ios_entry",
         srcs = ["ios/seekdb_ios.cpp", "ios/driver/seekdb_lifecycle.cpp"],
-        copts = SEEKDB_MIGRATION_COPTS + ["-include", "$(location :_ios_build_config)"],
+        copts = SEEKDB_MIGRATION_CXX_COPTS + ["-include", "$(location :_ios_build_config)"],
         additional_compiler_inputs = [":_ios_build_config"],
         deps = [
             ":observer_internal_interface",

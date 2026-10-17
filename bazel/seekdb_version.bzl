@@ -71,7 +71,7 @@ sed \
 
     return [DefaultInfo(files = depset([output]))]
 
-_seekdb_version_source = rule(
+seekdb_version_source = rule(
     implementation = _seekdb_version_source_impl,
     attrs = {
         "out": attr.output(mandatory = True),
@@ -81,19 +81,3 @@ _seekdb_version_source = rule(
         ),
     },
 )
-
-def seekdb_version_source(
-        name,
-        template,
-        out,
-        tags = [],
-        visibility = None):
-    """Expands ob_version.cpp.in into an action-local generated source."""
-
-    _seekdb_version_source(
-        name = name,
-        template = template,
-        out = out,
-        tags = tags,
-        visibility = visibility,
-    )

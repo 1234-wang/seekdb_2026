@@ -2,17 +2,25 @@ load(
     "//bazel:defs.bzl",
     "seekdb_generated_unity_cc_library",
     "seekdb_semantic_unity_cc_library",
-    "seekdb_test_interface",
     cc_library = "seekdb_cc_library",
 )
 load(
-    ":share_build_defs.bzl",
+    ":share_source_inventory.bzl",
     "SHARE_DATUM_STANDALONE_SOURCES",
-    "SHARE_IMPLEMENTATION_HEADERS",
     "SHARE_STANDALONE_SOURCES",
     "SHARE_UNITY_GROUPS",
+)
+load(
+    ":share_header_inventory.bzl",
+    "SHARE_IMPLEMENTATION_HEADERS",
+)
+load(
+    ":inner_table_schema.bzl",
     "inner_table_schema_cpp_outputs",
     "inner_table_schema_source_replacements",
+)
+load(
+    ":share_module_sources.bzl",
     "share_remaining_unity_groups",
     "share_select_unity_groups",
     "share_select_unity_sources",
@@ -1727,14 +1735,6 @@ cc_library(
     visibility = ["//unittest/share:__pkg__"],
 )
 
-seekdb_test_interface(
-    name = "share_unit_test_interface",
-    deps = _SHARE_UNIT_TEST_DEPS + _SHARE_RUNTIME_OBLIB_DEPS + [
-        ":share_test_support",
-        "@seekdb_3rd_headers//:roaring_headers",
-    ],
-    visibility = ["//unittest/share:__pkg__"],
-)
 
 _SHARE_RUNTIME_UNITY_GROUPS = share_remaining_unity_groups(
     SHARE_UNITY_GROUPS,

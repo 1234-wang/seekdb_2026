@@ -1,7 +1,6 @@
 load(
     "//bazel:defs.bzl",
     "seekdb_semantic_unity_cc_library",
-    "seekdb_test_interface",
     cc_library = "seekdb_cc_library",
 )
 load(":logservice_build_defs.bzl", "LOGSERVICE_UNITY_GROUPS")
@@ -175,11 +174,6 @@ seekdb_semantic_unity_cc_library(
     ],
 )
 
-seekdb_test_interface(
-    name = "logservice_unit_test_interface",
-    deps = [":logservice"],
-    visibility = ["//unittest/logservice:__pkg__"],
-)
 
 filegroup(
     name = "logservice_build",

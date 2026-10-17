@@ -10,7 +10,6 @@ exports_files([
     "seekdb_build_config.bzl",
     "seekdb_build_settings.bzl",
     "seekdb_final_link.bzl",
-    "seekdb_cc_test.bzl",
     "seekdb_partial_link.bzl",
     "third_party_headers_repo.bzl",
 ])
