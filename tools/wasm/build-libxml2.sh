@@ -37,14 +37,16 @@ source = root / spec["source_directory"]
 with tarfile.open(archive) as files:
     files.extractall(root, filter="data")
 build = prefix / "build" / "libxml2"
-subprocess.run(["emcmake", "cmake", "-S", str(source), "-B", str(build),
-                "-DCMAKE_BUILD_TYPE=MinSizeRel", "-DCMAKE_INSTALL_PREFIX=" + str(prefix),
-                "-DCMAKE_C_FLAGS=-pthread", "-DBUILD_SHARED_LIBS=OFF",
-                "-DLIBXML2_WITH_THREADS=ON", "-DLIBXML2_WITH_ICONV=ON",
-                "-DLIBXML2_WITH_PYTHON=OFF", "-DLIBXML2_WITH_PROGRAMS=OFF",
-                "-DLIBXML2_WITH_TESTS=OFF", "-DLIBXML2_WITH_HTTP=OFF",
-                "-DLIBXML2_WITH_FTP=OFF", "-DLIBXML2_WITH_LZMA=OFF",
-                "-DLIBXML2_WITH_ZLIB=OFF", "-DLIBXML2_WITH_MODULES=OFF"], check=True)
-subprocess.run(["cmake", "--build", str(build), "--parallel", "3"], check=True)
-subprocess.run(["cmake", "--install", str(build)], check=True)
+build.mkdir(parents=True, exist_ok=True)
+subprocess.run(["emconfigure", str(source / "configure"),
+                "--host=wasm32-unknown-emscripten", "--prefix=" + str(prefix),
+                "--disable-shared", "--enable-static", "--with-threads",
+                "--with-iconv", "--without-python",
+                "--without-http", "--without-ftp", "--without-lzma",
+                "--without-zlib", "--without-modules", "CFLAGS=-Oz -pthread"],
+               cwd=build, check=True)
+subprocess.run(["emmake", "make", "-j3", "libxml2.la"], cwd=build, check=True)
+subprocess.run(["emmake", "make", "install-libLTLIBRARIES", "install-nodist_pkgconfigDATA"],
+               cwd=build, check=True)
+subprocess.run(["emmake", "make", "-C", "include", "install"], cwd=build, check=True)
 PY

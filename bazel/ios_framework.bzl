@@ -36,11 +36,11 @@ def seekdb_ios_framework():
         name = "_ios_framework_link",
         direct_object_deps = [":_ios_entry"],
         group_deps = [":observer_embedded_runtime"],
+        sdk_deps = ["//bazel/sdk_sources:source_sdk", "@seekdb_3rd_headers//:base_libraries"],
         ordered_link_files = [
             "//rust:sql_nio_archive", "//rust:config_archive",
             "//rust:local_archive", "//rust:logger_archive",
             "//deps/external:jemalloc_archive",
-            "@seekdb_3rd_headers//:ios_static_libraries",
         ],
         extra_inputs = ["ios/driver/exports.txt"],
         linkopts = [

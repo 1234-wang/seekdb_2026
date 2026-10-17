@@ -44,12 +44,12 @@ seekdb_final_link(
     name = "database_link",
     direct_object_deps = [":database_entry"],
     group_deps = ["//src/observer:observer_embedded_runtime"],
+    sdk_deps = ["//bazel/sdk_sources:source_sdk", "@seekdb_3rd_headers//:base_libraries"],
     ordered_link_files = [
         "//rust:sql_nio_archive",
         "//rust:config_archive",
         "//rust:local_archive",
         "//rust:logger_archive",
-        "@seekdb_3rd_headers//:wasm_static_libraries",
     ],
     linkopts = [
         "-Oz", "--emit-symbol-map", "-pthread", "-msimd128", "-sUSE_ZLIB=1",

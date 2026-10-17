@@ -1,13 +1,17 @@
 filegroup(
     name = "rust_build_tools",
     srcs = [
-        "prepare-rust-sysroot.py",
-        "prepare-rust-workspace.py",
         "dependencies.json",
         "emscripten-version",
+        "prepare-rust-sysroot.py",
+        "prepare-rust-workspace.py",
         "rust-toolchain-version",
     ],
     visibility = ["//rust:__pkg__"],
 )
 
-exports_files(["build-rust-nio.sh"])
+alias(
+    name = "source_sdk",
+    actual = "//bazel/sdk_sources:source_sdk",
+    visibility = ["//visibility:public"],
+)

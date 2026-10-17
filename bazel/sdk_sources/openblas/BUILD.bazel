@@ -1,0 +1,7 @@
+exports_files(
+    [
+        "BUILD.sdk",
+        "blas_abi.h",
+    ],
+    visibility = ["//visibility:public"],
+)

@@ -184,7 +184,7 @@ def main():
     subcommands = parser.add_subparsers(dest="command", required=True)
     pack = subcommands.add_parser("package", help="copy a complete build into a new release directory")
     pack.add_argument("output", type=Path, help="new output directory; existing directories are rejected")
-    pack.add_argument("--build-dir", type=Path, default=DEVELOPMENT["ROOT"] / "build_wasm_engine")
+    pack.add_argument("--build-dir", type=Path, default=DEVELOPMENT["ROOT"] / "build_bazel/bin/src/wasm/dist")
     pack.add_argument("--brotli", action="store_true", help="also precompress with an existing brotli executable")
     serve = subcommands.add_parser("serve", help="preview a packaged release with compression and isolation headers")
     serve.add_argument("directory", type=Path)

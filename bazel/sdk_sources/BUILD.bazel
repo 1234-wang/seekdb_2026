@@ -1,0 +1,84 @@
+load(":archives.bzl", "sdk_archives")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "dependencies.json",
+    "prepare.py",
+])
+
+alias(
+    name = "base_crypto",
+    actual = select({
+        "@platforms//os:emscripten": "@seekdb_3rd_wasm//:libcrypto",
+        "//bazel:ios_simulator": "@seekdb_3rd_ios_simulator//:libcrypto",
+        "//conditions:default": "@seekdb_3rd_ios//:libcrypto",
+    }),
+    target_compatible_with = select({
+        "@platforms//os:ios": [],
+        "@platforms//os:emscripten": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
+sdk_archives(
+    name = "source_sdk",
+    target_compatible_with = select({
+        "@platforms//os:ios": [],
+        "@platforms//os:emscripten": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = ["@seekdb_sdk_roaring//:library"] + select({
+        "@platforms//os:emscripten": [
+            "@seekdb_sdk_icu//:library",
+            "@seekdb_sdk_s2_wasm//:library",
+            "@seekdb_sdk_vsag_wasm//:library",
+        ],
+        "//conditions:default": [
+            "@seekdb_sdk_s2_ios//:library",
+            "@seekdb_sdk_vsag_ios//:library",
+        ],
+    }),
+)
+
+filegroup(
+    name = "ios_source_metadata",
+    srcs = [
+        "@seekdb_sdk_abseil//:source_metadata",
+        "@seekdb_sdk_antlr4//:source_metadata",
+        "@seekdb_sdk_boost//:source_metadata",
+        "@seekdb_sdk_cpuinfo//:source_metadata",
+        "@seekdb_sdk_fmt//:source_metadata",
+        "@seekdb_sdk_lapack//:source_metadata",
+        "@seekdb_sdk_nlohmann_json//:source_metadata",
+        "@seekdb_sdk_openmp//:source_metadata",
+        "@seekdb_sdk_roaring//:source_metadata",
+        "@seekdb_sdk_robin_map//:source_metadata",
+        "@seekdb_sdk_s2_ios//:source_metadata",
+        "@seekdb_sdk_spdlog//:source_metadata",
+        "@seekdb_sdk_thread_pool//:source_metadata",
+        "@seekdb_sdk_vsag_ios//:source_metadata",
+    ],
+    target_compatible_with = ["@platforms//os:ios"],
+)
+
+filegroup(
+    name = "ios_licenses",
+    srcs = [
+        "@seekdb_sdk_abseil//:licenses",
+        "@seekdb_sdk_antlr4//:licenses",
+        "@seekdb_sdk_boost//:licenses",
+        "@seekdb_sdk_cpuinfo//:licenses",
+        "@seekdb_sdk_fmt//:licenses",
+        "@seekdb_sdk_lapack//:licenses",
+        "@seekdb_sdk_nlohmann_json//:licenses",
+        "@seekdb_sdk_openmp//:licenses",
+        "@seekdb_sdk_roaring//:licenses",
+        "@seekdb_sdk_robin_map//:licenses",
+        "@seekdb_sdk_s2_ios//:licenses",
+        "@seekdb_sdk_spdlog//:licenses",
+        "@seekdb_sdk_thread_pool//:licenses",
+        "@seekdb_sdk_vsag_ios//:licenses",
+    ],
+    target_compatible_with = ["@platforms//os:ios"],
+)

@@ -18,19 +18,17 @@ def header_variant(patch, digest, fields):
 
 
 def copy_headers(source, include, manifest, target_prefix=None):
-    patches = [manifest["boost_mpl_backport"], manifest["s2_wasm_port"]]
+    patches = [manifest["boost_mpl_backport"]]
     patches += manifest["boost_numeric_backport"]["headers"]
     patches += manifest["boost_geometry_math"]["headers"]
     patched = {patch["path"]: patch for patch in patches}
     trees = [(name, name) for name in (
-        "fast_float", "s2", "absl", "rapidjson", "roaring", "vsag", "curl",
-        "boost", "protobuf-c", "libxml2", "icu")]
-    trees += [("libxml2/libxml", "libxml"), ("icu/common/unicode", "unicode"),
-              ("icu/i18n/unicode", "unicode")]
+        "fast_float", "rapidjson", "curl",
+        "boost", "protobuf-c", "libxml2")]
+    trees += [("libxml2/libxml", "libxml")]
     for source_tree, target_tree in trees:
         tree = source / source_tree
-        if target_prefix and (source_tree.startswith("libxml2") or source_tree.startswith("icu")
-                              or source_tree in ("s2", "absl", "protobuf-c", "vsag")):
+        if target_prefix and (source_tree.startswith("libxml2") or source_tree == "protobuf-c"):
             # xmlversion.h describes compiled features. Never pair the native
             # configuration header with the Wasm library.
             tree = target_prefix / "include" / source_tree
@@ -104,11 +102,6 @@ def main():
         apply_header(args.include, patch, [
             (old.encode(), new.encode()) for old, new in patch["replacements"]
         ])
-
-    # S2's fallback conflicts with musl when another header included byteswap.h.
-    apply_header(args.include, manifest["s2_wasm_port"], [(
-        b"#elif defined(__GLIBC__) || defined(__BIONIC__) || defined(__ASYLO__) || ",
-        b"#elif defined(__EMSCRIPTEN__) || defined(__GLIBC__) || defined(__BIONIC__) || defined(__ASYLO__) || ")])
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 """Ordered final link using the selected C++ toolchain.
 
 Inputs are direct objects, cyclic groups, whole archives, tail dependencies,
-then explicitly ordered files. Only ordered_link_files preserves repetition.
+then explicitly ordered files and the source SDK closure. Only ordered_link_files
+preserves repetition.
 """
 
 load(
@@ -188,9 +189,15 @@ def _seekdb_final_link_impl(ctx):
     ordered_link_files = _files_from_targets(
         ctx.attr.ordered_link_files,
     )
+    sdk_inputs = _static_inputs_from_deps(ctx.attr.sdk_deps)
+    sdk_paths = {file.path: True for file in sdk_inputs}
+    group_inputs = [file for file in group_inputs if file.path not in sdk_paths]
+    whole_group_inputs = [file for file in whole_group_inputs if file.path not in sdk_paths]
+    whole_inputs = [file for file in whole_inputs if file.path not in sdk_paths]
+    tail_inputs = [file for file in tail_inputs if file.path not in sdk_paths]
     dependency_flags, dependency_inputs, alwayslink = _dependency_link_metadata(
         ctx.attr.direct_object_deps + ctx.attr.group_deps + ctx.attr.whole_group_deps +
-        ctx.attr.whole_archive_deps + ctx.attr.tail_deps,
+        ctx.attr.whole_archive_deps + ctx.attr.tail_deps + ctx.attr.sdk_deps,
     )
     extra_inputs = _files_from_targets(ctx.attr.extra_inputs) + dependency_inputs
 
@@ -201,6 +208,7 @@ def _seekdb_final_link_impl(ctx):
         whole_inputs +
         tail_inputs +
         ordered_link_files +
+        sdk_inputs +
         static_cpp_runtime_inputs
     )
     if not link_inputs:
@@ -212,6 +220,7 @@ def _seekdb_final_link_impl(ctx):
     ordered_link_args.extend(_archive_group(whole_inputs, is_apple, whole = True))
     ordered_link_args.extend(_archive_args(tail_inputs, is_apple, alwayslink))
     ordered_link_args.extend(_file_paths(ordered_link_files))
+    ordered_link_args.extend(_archive_group(sdk_inputs, is_apple, alwayslink = alwayslink))
     ordered_link_args.extend(_file_paths(static_cpp_runtime_inputs))
     ordered_link_args.extend(dependency_flags)
     ordered_link_args.extend(["-l" + library for library in ctx.attr.system_libs])
@@ -274,6 +283,7 @@ def _seekdb_final_link_impl(ctx):
     )
 
     return [
+        OutputGroupInfo(link_inputs = depset(link_inputs)),
         DefaultInfo(
             executable = output,
             files = depset([output] + ctx.outputs.side_outputs),
@@ -288,6 +298,7 @@ seekdb_final_link = rule(
         "whole_group_deps": attr.label_list(providers = [CcInfo]),
         "whole_archive_deps": attr.label_list(providers = [CcInfo]),
         "tail_deps": attr.label_list(providers = [CcInfo]),
+        "sdk_deps": attr.label_list(providers = [CcInfo]),
         "ordered_link_files": attr.label_list(allow_files = True),
         "extra_inputs": attr.label_list(allow_files = True),
         "system_libs": attr.string_list(),
