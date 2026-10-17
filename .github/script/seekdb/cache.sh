@@ -31,7 +31,7 @@ NFS_ROOT="${SEEKDB_CACHE_NFS_ROOT:-}"
 LOCAL_ROOT="${SEEKDB_CACHE_LOCAL_ROOT:-${RUNNER_TEMP:-/tmp}/seekdb-ci-cache}"
 RUST_ROOT="${SEEKDB_RUST_CACHE_ROOT:-${RUNNER_TEMP:-/tmp}/seekdb-rust}"
 DEP_CACHE_DIR="${DEP_CACHE_DIR:-$LOCAL_ROOT/deps}"
-CCACHE_DIR="${CCACHE_DIR:-$LOCAL_ROOT/ccache}"
+BAZEL_DISK_CACHE="${BAZEL_DISK_CACHE:-$LOCAL_ROOT/bazel}"
 CARGO_HOME="${CARGO_HOME:-$RUST_ROOT/cargo}"
 RUSTUP_HOME="${RUSTUP_HOME:-$RUST_ROOT/rustup}"
 PR_NUMBER="${SEEKDB_PR_NUMBER:-}"
@@ -43,7 +43,7 @@ BUILD_MODE="${PACKAGE_TYPE:-release}"
 PR_MAX_BYTES="${SEEKDB_PR_CACHE_MAX_BYTES:-3221225472}"
 PR_GLOBAL_MAX_BYTES="${SEEKDB_PR_CACHE_GLOBAL_MAX_BYTES:-32212254720}"
 PR_TTL_DAYS="${SEEKDB_PR_CACHE_TTL_DAYS:-7}"
-BASELINE_FILE="$LOCAL_ROOT/ccache-baseline.files"
+BASELINE_FILE="$LOCAL_ROOT/bazel-baseline.files"
 DOWNLOAD_DIR="$LOCAL_ROOT/downloads"
 
 validate_environment()
@@ -128,9 +128,12 @@ cache_key()
       digest="$(cargo_digest)" || return 1
       printf 'cargo-v1-rsproxy-%s\n' "$digest"
       ;;
-    ccache)
-      digest="$(deps_digest)" || return 1
-      printf 'ccache-v1-%s-relwithdebinfo-unity-%s-%s\n' \
+    bazel)
+      digest="$(hash_inputs \
+        "$WORKSPACE/.bazelversion" \
+        "$WORKSPACE/deps/init/oceanbase.el9.x86_64.deps" \
+        "$WORKSPACE/deps/init/dep_create.sh")" || return 1
+      printf 'bazel-v1-%s-%s-%s\n' \
         "$PLATFORM" "$safe_mode" "$digest"
       ;;
     *)
@@ -146,7 +149,7 @@ cache_destination()
     deps) printf '%s\n' "$DEP_CACHE_DIR" ;;
     rustup) printf '%s\n' "$RUST_ROOT" ;;
     cargo) printf '%s\n' "$CARGO_HOME" ;;
-    ccache) printf '%s\n' "$CCACHE_DIR" ;;
+    bazel) printf '%s\n' "$BAZEL_DISK_CACHE" ;;
     *) return 1 ;;
   esac
 }
@@ -159,7 +162,7 @@ master_snapshot_parent()
 pr_snapshot_parent()
 {
   [[ -n "$PR_NUMBER" ]] || return 1
-  printf '%s/pr/pr-%s/ccache/%s/snapshots\n' "$NFS_ROOT" "$PR_NUMBER" "$1"
+  printf '%s/pr/pr-%s/bazel/%s/snapshots\n' "$NFS_ROOT" "$PR_NUMBER" "$1"
 }
 
 manifest_value()
@@ -281,18 +284,18 @@ restore_latest_master()
   return 1
 }
 
-restore_pr_ccache_deltas()
+restore_pr_bazel_deltas()
 {
   local key="$1" destination="$2" parent snapshot restored=0
   [[ -n "$PR_NUMBER" ]] || return 0
   parent="$(pr_snapshot_parent "$key")"
   while IFS= read -r snapshot; do
     [[ -n "$snapshot" ]] || continue
-    if restore_snapshot "$snapshot" ccache pr "$key" "$PR_NUMBER" "$destination"; then
+    if restore_snapshot "$snapshot" bazel pr "$key" "$PR_NUMBER" "$destination"; then
       restored=$((restored + 1))
     fi
   done < <(snapshot_directories "$parent" oldest)
-  log "restored $restored PR ccache delta(s) for PR $PR_NUMBER"
+  log "restored $restored PR bazel delta(s) for PR $PR_NUMBER"
 }
 
 restore_cache()
@@ -303,20 +306,18 @@ restore_cache()
   started=$SECONDS
   mkdir -p "$destination"
   restore_latest_master "$kind" "$key" "$destination" || true
-  if [[ "$kind" == "ccache" ]]; then
-    restore_pr_ccache_deltas "$key" "$destination"
+  if [[ "$kind" == "bazel" ]]; then
+    restore_pr_bazel_deltas "$key" "$destination"
   fi
   log "restore $kind finished in $((SECONDS - started))s (key=$key)"
 }
 
-ccache_file_list()
+bazel_file_list()
 {
   local output="$1"
-  mkdir -p "$CCACHE_DIR"
-  find -P "$CCACHE_DIR" -type f -printf '%P\n' \
+  mkdir -p "$BAZEL_DISK_CACHE"
+  find -P "$BAZEL_DISK_CACHE" -type f -printf '%P\n' \
     | awk '
-        $0 == "CACHEDIR.TAG" { next }
-        $0 == "stats" || $0 ~ /\/stats$/ { next }
         $0 ~ /(^|\/)tmp\// { next }
         $0 ~ /(^|\/)[^/]*\.lock$/ { next }
         $0 ~ /(^|\/)\.nfs/ { next }
@@ -326,10 +327,10 @@ ccache_file_list()
     | LC_ALL=C sort -u > "$output"
 }
 
-baseline_ccache()
+baseline_bazel()
 {
-  ccache_file_list "$BASELINE_FILE"
-  log "recorded ccache baseline with $(wc -l < "$BASELINE_FILE") file(s)"
+  bazel_file_list "$BASELINE_FILE"
+  log "recorded bazel baseline with $(wc -l < "$BASELINE_FILE") file(s)"
 }
 
 archive_file_list()
@@ -372,14 +373,14 @@ create_archive()
         | zstd -q -T0 -1 -f -o "$output"
       ARCHIVE_ENTRY_COUNT="$(find -P "${cargo_paths[@]/#/$CARGO_HOME/}" -type f 2>/dev/null | wc -l)"
       ;;
-    ccache)
+    bazel)
       if [[ -z "$list_file" ]]; then
-        list_file="$LOCAL_ROOT/ccache-publish.files"
-        ccache_file_list "$list_file"
+        list_file="$LOCAL_ROOT/bazel-publish.files"
+        bazel_file_list "$list_file"
       fi
       ARCHIVE_ENTRY_COUNT="$(wc -l < "$list_file")"
       (( ARCHIVE_ENTRY_COUNT > 0 )) || return 1
-      archive_file_list "$CCACHE_DIR" "$list_file" "$output"
+      archive_file_list "$BAZEL_DISK_CACHE" "$list_file" "$output"
       ;;
     *)
       return 1
@@ -508,38 +509,38 @@ publish_master()
   log "publish master $kind finished in $((SECONDS - started))s"
 }
 
-publish_pr_ccache()
+publish_pr_bazel()
 {
   local key current_list delta_list archive started
   [[ -n "$PR_NUMBER" ]] || {
-    log "not a pull request; PR ccache publish skipped"
+    log "not a pull request; PR bazel publish skipped"
     return 0
   }
   [[ -f "$BASELINE_FILE" ]] || {
-    warn "ccache baseline missing; PR delta publish skipped"
+    warn "bazel baseline missing; PR delta publish skipped"
     return 0
   }
-  key="$(cache_key ccache)" || return 1
-  current_list="$LOCAL_ROOT/ccache-current.files"
-  delta_list="$LOCAL_ROOT/ccache-delta.files"
-  ccache_file_list "$current_list"
+  key="$(cache_key bazel)" || return 1
+  current_list="$LOCAL_ROOT/bazel-current.files"
+  delta_list="$LOCAL_ROOT/bazel-delta.files"
+  bazel_file_list "$current_list"
   comm -13 "$BASELINE_FILE" "$current_list" > "$delta_list"
   if [[ ! -s "$delta_list" ]]; then
-    log "no new ccache files for PR $PR_NUMBER; delta publish skipped"
+    log "no new bazel files for PR $PR_NUMBER; delta publish skipped"
     return 0
   fi
 
-  archive="$(mktemp "$LOCAL_ROOT/ccache-pr.XXXXXX.tar.zst")"
+  archive="$(mktemp "$LOCAL_ROOT/bazel-pr.XXXXXX.tar.zst")"
   started=$SECONDS
-  if ! create_archive ccache "$archive" "$delta_list"; then
-    warn "failed to create PR ccache delta"
+  if ! create_archive bazel "$archive" "$delta_list"; then
+    warn "failed to create PR bazel delta"
     rm -f -- "$archive"
     return 1
   fi
-  publish_archive ccache pr "$key" "$PR_NUMBER" "$archive" "$ARCHIVE_ENTRY_COUNT"
+  publish_archive bazel pr "$key" "$PR_NUMBER" "$archive" "$ARCHIVE_ENTRY_COUNT"
   rm -f -- "$archive"
   prune_snapshots "$(pr_snapshot_parent "$key")" 8 "$PR_MAX_BYTES"
-  log "publish PR ccache delta finished in $((SECONDS - started))s"
+  log "publish PR bazel delta finished in $((SECONDS - started))s"
 }
 
 prune_master_keys()
@@ -595,7 +596,7 @@ garbage_collect()
   prune_master_keys deps 2
   prune_master_keys rustup 2
   prune_master_keys cargo 2
-  prune_master_keys ccache 2
+  prune_master_keys bazel 2
   gc_pr_caches
 }
 
@@ -603,12 +604,12 @@ usage()
 {
   cat <<'EOF'
 Usage:
-  cache.sh restore <deps|rustup|cargo|ccache>
-  cache.sh baseline-ccache
-  cache.sh publish-master <deps|rustup|cargo|ccache>
-  cache.sh publish-pr-ccache
+  cache.sh restore <deps|rustup|cargo|bazel>
+  cache.sh baseline-bazel
+  cache.sh publish-master <deps|rustup|cargo|bazel>
+  cache.sh publish-pr-bazel
   cache.sh gc
-  cache.sh key <deps|rustup|cargo|ccache>
+  cache.sh key <deps|rustup|cargo|bazel>
 EOF
 }
 
@@ -620,14 +621,14 @@ main()
     restore)
       restore_cache "$kind"
       ;;
-    baseline-ccache)
-      baseline_ccache
+    baseline-bazel)
+      baseline_bazel
       ;;
     publish-master)
       publish_master "$kind"
       ;;
-    publish-pr-ccache)
-      publish_pr_ccache
+    publish-pr-bazel)
+      publish_pr_bazel
       ;;
     gc)
       garbage_collect

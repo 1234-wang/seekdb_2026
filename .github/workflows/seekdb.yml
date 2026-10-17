@@ -23,11 +23,10 @@ permissions:
 
 env:
   MYSQLTEST_SLICES: "4"
-  SEEKDB_BINARY_PATH: build_release/src/observer/seekdb
+  SEEKDB_BINARY_PATH: build_bazel/bin/src/observer/seekdb
   SEEKDB_RESULT_NFS_ROOT: /data/storage/jenkins_on_k8s/results/seekdb
   # V1 integrity checks detect corruption but do not authenticate NFS writers.
   SEEKDB_CACHE_NFS_ROOT: /data/storage/jenkins_on_k8s/results/seekdb/_cache
-  SEEKDB_CCACHE_MAX_SIZE: "3G"
   SEEKDB_PR_CACHE_MAX_BYTES: "3221225472"
   SEEKDB_PR_CACHE_GLOBAL_MAX_BYTES: "32212254720"
   SEEKDB_PR_CACHE_TTL_DAYS: "7"
@@ -99,7 +98,7 @@ jobs:
           set -euo pipefail
           CACHE_ROOT="${RUNNER_TEMP:-/tmp}/seekdb-ci-cache"
           RUST_ROOT="${RUNNER_TEMP:-/tmp}/seekdb-rust"
-          mkdir -p "$CACHE_ROOT/deps" "$CACHE_ROOT/ccache" "$CACHE_ROOT/ccache-tmp"
+          mkdir -p "$CACHE_ROOT/deps" "$CACHE_ROOT/bazel"
           mkdir -p "$RUST_ROOT/cargo" "$RUST_ROOT/rustup"
           {
             echo "SEEKDB_CACHE_LOCAL_ROOT=$CACHE_ROOT"
@@ -107,10 +106,7 @@ jobs:
             echo "SEEKDB_PR_NUMBER=${PR_NUMBER:-}"
             echo "SEEKDB_SOURCE_SHA=$SOURCE_SHA"
             echo "DEP_CACHE_DIR=$CACHE_ROOT/deps"
-            echo "CCACHE_DIR=$CACHE_ROOT/ccache"
-            echo "CCACHE_TEMPDIR=$CACHE_ROOT/ccache-tmp"
-            echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE"
-            echo "CCACHE_COMPILERCHECK=content"
+            echo "BAZEL_DISK_CACHE=$CACHE_ROOT/bazel"
             echo "CARGO_HOME=$RUST_ROOT/cargo"
             echo "RUSTUP_HOME=$RUST_ROOT/rustup"
           } >> "$GITHUB_ENV"
@@ -120,7 +116,7 @@ jobs:
         shell: bash
         run: |
           set -u
-          for kind in deps rustup cargo ccache; do
+          for kind in deps rustup cargo bazel; do
             if ! bash .github/script/seekdb/cache.sh restore "$kind"; then
               echo "cache restore failed for $kind; continuing with a cold cache"
             fi
@@ -184,18 +180,18 @@ jobs:
         shell: bash
         run: |
           set -u
-          for kind in deps cargo ccache; do
+          for kind in deps cargo bazel; do
             bash .github/script/seekdb/cache.sh publish-master "$kind" || true
           done
         continue-on-error: true
 
-      - name: Publish PR ccache delta
+      - name: Publish PR bazel delta
         if: >-
           ${{ always() &&
               github.event_name == 'pull_request' &&
               github.event.pull_request.number != null }}
         shell: bash
-        run: bash .github/script/seekdb/cache.sh publish-pr-ccache
+        run: bash .github/script/seekdb/cache.sh publish-pr-bazel
         continue-on-error: true
 
       - name: Garbage collect shared caches

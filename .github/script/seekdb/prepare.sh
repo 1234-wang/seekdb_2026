@@ -15,7 +15,7 @@ for i in $(seq 0 $((SLICES - 1))); do
   echo "++mysqltest++${i}++" >> "$TASK_DIR/run_jobs.output"
 done
 
-# jobargs.output: the GitHub build is always the Bazel release Unity build.
+# jobargs.output: the GitHub build is always the Bazel release build.
 {
   echo '++release_mode++'
   echo '++need_agentserver++0'
