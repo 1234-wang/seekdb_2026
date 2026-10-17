@@ -10,30 +10,14 @@ import shutil
 import shlex
 import subprocess
 
-from vsag_packages import PACKAGES as VSAG_PACKAGES
-
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PACKAGES = ("zlib", "openssl", "curl", "abseil", "s2", "roaring",
-                    "lzma", "libxml2", "protobuf-c",
-                    "icu", "openmp", "lapack", "vsag")
+DEFAULT_PACKAGES = ("zlib", "openssl", "curl", "lzma", "libxml2", "protobuf-c", "icu")
+ICU_SOURCE = json.loads((ROOT / "bazel/sdk_sources/dependencies.json").read_text())["sources"]["icu"]
 
 PACKAGES = {
-    "lapack": ("3.12.0", "https://codeload.github.com/Reference-LAPACK/lapack/tar.gz/refs/tags/v3.12.0",
-               "eac9570f8e0ad6f30ce4b963f4f033f0f643e7c3912fc9ee6cd99120675ad48b"),
-    "openmp": ("21.1.8", "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/openmp-21.1.8.src.tar.xz",
-               "856b023748b41ac7b2c83fd8e9f765ff48a4df2fe6777d2811ef7c7ed8f2f977"),
-    "llvm-cmake": ("21.1.8", "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/cmake-21.1.8.src.tar.xz",
-                   "85735f20fd8c81ecb0a09abb0c267018475420e93b65050cc5b7634eab744de9"),
     "lzma": ("5.4.7", "https://codeload.github.com/tukaani-project/xz/tar.gz/refs/tags/v5.4.7",
              "87ef1bb0183ce477ba3ddb2700000b4c1e723f8d984e8f678dddcb11c5bf4f99"),
-    "icu": ("69.1", "https://github.com/unicode-org/icu/releases/download/release-69-1/icu4c-69_1-src.tgz",
-            "4cba7b7acd1d3c42c44bb0c14be6637098c7faf2b330ce876bc5f3b915d09745"),
-    "abseil": ('20211102.0', 'https://codeload.github.com/abseil/abseil-cpp/tar.gz/refs/tags/20211102.0',
-        'dcf71b9cba8dc0ca9940c4b316a0c796be8fab42b070bb6b7cab62b48f0e66c4'),
-    "s2": ('0.10.0', 'https://codeload.github.com/google/s2geometry/tar.gz/refs/tags/v0.10.0',
-        '1c17b04f1ea20ed09a67a83151ddd5d8529716f509dde49a8190618d70532a3d'),
-    "roaring": ('3.0.0', 'https://codeload.github.com/RoaringBitmap/CRoaring/tar.gz/refs/tags/v3.0.0',
-        '25183bc54ab650d964256d547869a34573a13d06f7e6a369b79e77f5c1feb8ba'),
+    "icu": tuple(ICU_SOURCE[key] for key in ("version", "url", "sha256")),
     "libxml2": ('2.10.4', 'https://codeload.github.com/GNOME/libxml2/tar.gz/refs/tags/v2.10.4',
         '6f6fb27f91bb65f9d7196e3c616901b3e18a7dea31ccc2ae857940b125faa780'),
     "protobuf-c": ('1.4.1', 'https://codeload.github.com/protobuf-c/protobuf-c/tar.gz/refs/tags/v1.4.1',
@@ -46,8 +30,6 @@ PACKAGES = {
     "openssl": ("1.1.1u", "https://codeload.github.com/openssl/openssl/tar.gz/refs/tags/OpenSSL_1_1_1u",
                 "fafe27202bde4238dce258d82ec8a8592a657842e5431264620a933a0c9436b7"),
 }
-
-PACKAGES.update(VSAG_PACKAGES)
 
 
 def run(command, directory, environment):
@@ -75,6 +57,8 @@ def source_package(name, environment):
     source = cache / "sources" / (name + "-" + version)
     marker = source / ".seekdb-source-sha256"
     if not marker.exists() or marker.read_text() != digest:
+        if source.exists():
+            shutil.rmtree(source)
         source.mkdir(parents=True, exist_ok=True)
         if suffix == ".zip":
             run(["unzip", "-q", "-o", archive, "-d", source], ROOT, environment)
@@ -109,16 +93,11 @@ def build_zlib(source, build, prefix, sdk, options, environment):
         header.write_text(content.replace(original, patched))
     elif patched not in content:
         raise RuntimeError("Unrecognized zlib platform guard")
-    run(["cmake", "-S", source, "-B", build, "-DCMAKE_SYSTEM_NAME=iOS",
-         "-DCMAKE_OSX_SYSROOT=" + sdk, "-DCMAKE_OSX_ARCHITECTURES=arm64",
-         "-DCMAKE_OSX_DEPLOYMENT_TARGET=" + options.deployment_target,
-         "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"], ROOT, environment)
-    run(["cmake", "--build", build, "--target", "zlibstatic", "--parallel", str(options.jobs)], ROOT, environment)
-    archive = build / "libz.a"
-    verify_archive(archive, options.simulator, environment)
-    shutil.copy2(archive, prefix / "lib/libz.a")
-    shutil.copy2(source / "zlib.h", prefix / "include/zlib.h")
-    shutil.copy2(build / "zconf.h", prefix / "include/zconf.h")
+    environment = target_environment(sdk, options, environment)
+    run([source / "configure", "--static", "--prefix=" + str(prefix)], build, environment)
+    run(["make", "-j" + str(options.jobs), "libz.a"], build, environment)
+    verify_archive(build / "libz.a", options.simulator, environment)
+    run(["make", "install"], build, environment)
 
 
 def build_openssl(source, build, prefix, sdk, options, environment):
@@ -143,68 +122,75 @@ def build_curl(source, build, prefix, sdk, options, environment):
     """Build libcurl against the verified local OpenSSL and zlib archives."""
     for library in ("libssl.a", "libcrypto.a", "libz.a"):
         verify_archive(prefix / "lib" / library, options.simulator, environment)
-    run(["cmake", "-S", source, "-B", build, "-DCMAKE_SYSTEM_NAME=iOS",
-         "-DCMAKE_OSX_SYSROOT=" + sdk, "-DCMAKE_OSX_ARCHITECTURES=arm64",
-         "-DCMAKE_OSX_DEPLOYMENT_TARGET=" + options.deployment_target,
-         "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=" + str(prefix),
-         "-DBUILD_CURL_EXE=OFF", "-DBUILD_SHARED_LIBS=OFF", "-DBUILD_TESTING=OFF",
-         "-DCURL_USE_OPENSSL=ON", "-DCURL_USE_SECTRANSP=OFF", "-DCURL_USE_LIBPSL=OFF",
-         "-DCURL_USE_LIBSSH2=OFF", "-DUSE_NGHTTP2=OFF", "-DCURL_ZSTD=OFF",
-         "-DCURL_BROTLI=OFF", "-DCURL_USE_LIBIDN2=OFF", "-DCURL_DISABLE_LDAP=ON",
-         "-DCURL_DISABLE_LDAPS=ON", "-DCURL_ZLIB=ON",
-         "-DOPENSSL_INCLUDE_DIR=" + str(prefix / "include"),
-         "-DOPENSSL_SSL_LIBRARY=" + str(prefix / "lib/libssl.a"),
-         "-DOPENSSL_CRYPTO_LIBRARY=" + str(prefix / "lib/libcrypto.a"),
-         "-DZLIB_INCLUDE_DIR=" + str(prefix / "include"),
-         "-DZLIB_LIBRARY=" + str(prefix / "lib/libz.a")], ROOT, environment)
-    run(["cmake", "--build", build, "--parallel", str(options.jobs)], ROOT, environment)
-    verify_archive(build / "lib/libcurl.a", options.simulator, environment)
-    run(["cmake", "--install", build], ROOT, environment)
+    environment = target_environment(sdk, options, environment, prefix)
+    run([source / "configure", "--host=aarch64-apple-darwin", "--disable-shared",
+         "--enable-static", "--disable-dependency-tracking", "--disable-ldap",
+         "--disable-ldaps", "--without-libpsl", "--without-libssh2", "--without-libssh",
+         "--without-wolfssh", "--without-nghttp2", "--without-nghttp3", "--without-ngtcp2",
+         "--without-zstd", "--without-brotli", "--without-libidn2", "--without-librtmp",
+         "--without-gssapi", "--without-apple-idn", "--without-secure-transport",
+         "--without-quiche", "--without-msh3", "--without-libuv", "--without-libgsasl",
+         "--with-openssl=" + str(prefix), "--with-zlib=" + str(prefix),
+         "--prefix=" + str(prefix)], build, environment)
+    run(["make", "-C", "lib", "-j" + str(options.jobs)], build, environment)
+    verify_archive(build / "lib/.libs/libcurl.a", options.simulator, environment)
+    run(["make", "-C", "lib", "install"], build, environment)
+    run(["make", "-C", "include", "install"], build, environment)
 
 
-def build_cmake_package(name, source, build, prefix, sdk, options, environment):
-    """Build a static CMake dependency using only target SDK and prefix libraries."""
-    if name == "s2":
-        # S2 overrides the cache standard; Abseil's string_view ABI must match.
-        project_file = source / "CMakeLists.txt"
-        content = project_file.read_text()
-        original = "set(CMAKE_CXX_STANDARD 11)"
-        replacement = "set(CMAKE_CXX_STANDARD 17)"
-        if original not in content and replacement not in content:
-            raise RuntimeError("Unexpected S2 C++ standard configuration")
-        project_file.write_text(content.replace(original, replacement))
-    settings = {
-        "lzma": [],
-        "lapack": ["-DLAPACK_SOURCE=" + str(source)],
-        "abseil": ["-DABSL_BUILD_TESTING=OFF", "-DABSL_PROPAGATE_CXX_STD=ON", "-DABSL_ENABLE_INSTALL=ON"],
-        "s2": ["-DBUILD_EXAMPLES=OFF", "-DWITH_GLOG=OFF", "-DWITH_GFLAGS=OFF",
-               "-Dabsl_DIR=" + str(prefix / "lib/cmake/absl")],
-        "roaring": ["-DENABLE_ROARING_TESTS=OFF", "-DROARING_BUILD_STATIC=ON"],
-        "libxml2": ["-DLIBXML2_WITH_PROGRAMS=OFF", "-DLIBXML2_WITH_PYTHON=OFF",
-                    "-DLIBXML2_WITH_TESTS=OFF", "-DLIBXML2_WITH_LZMA=ON",
-                    "-DLIBLZMA_INCLUDE_DIR=" + str(prefix / "include"),
-                    "-DLIBLZMA_LIBRARY=" + str(prefix / "lib/liblzma.a")],
-    }
-    project = ROOT / "deps/ios-build/lapacke" if name == "lapack" else source
-    run(["cmake", "-S", project, "-B", build, "-DCMAKE_SYSTEM_NAME=iOS",
-         "-DCMAKE_OSX_SYSROOT=" + sdk, "-DCMAKE_OSX_ARCHITECTURES=arm64",
-         "-DCMAKE_OSX_DEPLOYMENT_TARGET=" + options.deployment_target,
-         "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=" + str(prefix),
-         "-DCMAKE_PREFIX_PATH=" + str(prefix), "-DCMAKE_INSTALL_LIBDIR=lib",
-         "-DCMAKE_CXX_STANDARD=17", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
-         "-DBUILD_SHARED_LIBS=OFF", "-DBUILD_TESTING=OFF",
-         "-DOPENSSL_INCLUDE_DIR=" + str(prefix / "include"),
-         "-DOPENSSL_SSL_LIBRARY=" + str(prefix / "lib/libssl.a"),
-         "-DOPENSSL_CRYPTO_LIBRARY=" + str(prefix / "lib/libcrypto.a"),
-         "-DZLIB_INCLUDE_DIR=" + str(prefix / "include"),
-         "-DZLIB_LIBRARY=" + str(prefix / "lib/libz.a"), *settings[name]], ROOT, environment)
-    run(["cmake", "--build", build, "--parallel", str(options.jobs)], ROOT, environment)
-    archives = list(build.rglob("lib*.a"))
-    if not archives:
-        raise RuntimeError("No static library produced: " + name)
-    for archive in archives:
-        verify_archive(archive, options.simulator, environment)
-    run(["cmake", "--install", build], ROOT, environment)
+def target_environment(sdk, options, environment, prefix=None):
+    """Use only the selected Apple compiler and target dependency prefix."""
+    result = dict(environment)
+    sdk_name = "iphonesimulator" if options.simulator else "iphoneos"
+    triple = "arm64-apple-ios" + options.deployment_target
+    if options.simulator:
+        triple += "-simulator"
+    for variable, tool in (("CC", "clang"), ("CXX", "clang++"), ("AR", "ar"), ("RANLIB", "ranlib")):
+        result[variable] = subprocess.check_output(
+            ["xcrun", "--sdk", sdk_name, "--find", tool], env=environment, text=True).strip()
+    flags = "-O2 -fPIC -target " + triple + " -isysroot " + shlex.quote(sdk)
+    result["CFLAGS"] = flags
+    result["CXXFLAGS"] = flags
+    result["LDFLAGS"] = "-target " + triple + " -isysroot " + shlex.quote(sdk)
+    result["PKG_CONFIG"] = "false"
+    result["PKG_CONFIG_LIBDIR"] = ""
+    result["PKG_CONFIG_PATH"] = ""
+    if prefix:
+        result["CPPFLAGS"] = "-I" + shlex.quote(str(prefix / "include"))
+        result["LDFLAGS"] += " -L" + shlex.quote(str(prefix / "lib"))
+    return result
+
+
+def build_lzma(source, build, prefix, sdk, options, environment):
+    """Bootstrap the pinned XZ tag and build only its static library and headers."""
+    if not (source / "configure").exists():
+        run(["sh", "autogen.sh", "--no-po4a", "--no-doxygen"], source, environment)
+    environment = target_environment(sdk, options, environment)
+    run([source / "configure", "--host=aarch64-apple-darwin", "--enable-static",
+         "--disable-shared", "--disable-dependency-tracking", "--disable-nls",
+         "--disable-xz", "--disable-xzdec", "--disable-lzmadec", "--disable-lzmainfo",
+         "--disable-lzma-links", "--disable-scripts", "--with-pic",
+         "--prefix=" + str(prefix)], build, environment)
+    run(["make", "-C", "src/liblzma", "-j" + str(options.jobs)], build, environment)
+    verify_archive(build / "src/liblzma/.libs/liblzma.a", options.simulator, environment)
+    run(["make", "-C", "src/liblzma", "install"], build, environment)
+
+
+def build_libxml2(source, build, prefix, sdk, options, environment):
+    """Configure libxml2 with local zlib and liblzma and the target SDK's iconv."""
+    if not (source / "configure").exists():
+        run(["autoreconf", "--install", "--force"], source, environment)
+    for library in ("libz.a", "liblzma.a"):
+        verify_archive(prefix / "lib" / library, options.simulator, environment)
+    environment = target_environment(sdk, options, environment, prefix)
+    run([source / "configure", "--host=aarch64-apple-darwin", "--enable-static",
+         "--disable-shared", "--disable-dependency-tracking", "--without-python",
+         "--without-readline", "--with-zlib=" + str(prefix), "--with-lzma=" + str(prefix),
+         "--prefix=" + str(prefix)], build, environment)
+    run(["make", "-j" + str(options.jobs), "libxml2.la"], build, environment)
+    verify_archive(build / ".libs/libxml2.a", options.simulator, environment)
+    run(["make", "install-libLTLIBRARIES"], build, environment)
+    run(["make", "-C", "include", "install"], build, environment)
 
 
 def build_protobuf_c(source, build, prefix, sdk, options, environment):
@@ -227,72 +213,6 @@ def build_protobuf_c(source, build, prefix, sdk, options, environment):
     shutil.copy2(archive, destination)
     for header in headers:
         shutil.copy2(header, header_directory / header.name)
-
-
-
-
-def build_vsag(source, build, prefix, sdk, options, environment):
-    """Compile pinned VSAG and C++ dependencies with the repository's iOS adapter."""
-    for library in ("libomp.a", "liblapacke.a", "libroaring.a"):
-        verify_archive(prefix / "lib" / library, options.simulator, environment)
-    adapter = ROOT / "deps/ios-build/vsag"
-    dependencies = []
-    for name in VSAG_PACKAGES:
-        if name not in ("vsag", "boost"):
-            path = source_package(name, environment)
-            variable = name.upper().replace("-", "_")
-            dependencies.append("-DSEEKDB_" + variable + "=" + str(path))
-    shutil.copyfile(adapter / "CMakeLists.txt", source / "CMakeLists.txt")
-    for relative in ("src/simd/CMakeLists.txt", "extern/diskann/diskann.cmake"):
-        file = source / relative
-        content = file.read_text()
-        original = "-fopenmp -fopenmp-simd"
-        replacement = "-Xpreprocessor -fopenmp"
-        if original not in content and replacement not in content:
-            raise RuntimeError("Unexpected VSAG OpenMP flags in " + relative)
-        file.write_text(content.replace(original, replacement))
-    boost = source_package("boost", environment)
-    if not (boost / "boost/version.hpp").exists():
-        raise RuntimeError("Pinned Boost headers are missing")
-    run(["cmake", "-S", source, "-B", build, "-DCMAKE_SYSTEM_NAME=iOS",
-         "-DCMAKE_OSX_SYSROOT=" + sdk, "-DCMAKE_OSX_ARCHITECTURES=arm64",
-         "-DCMAKE_OSX_DEPLOYMENT_TARGET=" + options.deployment_target,
-         "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
-         "-DSEEKDB_PREFIX=" + str(prefix), "-DSEEKDB_ADAPTER=" + str(adapter),
-         "-DSEEKDB_BOOST_INCLUDE=" + str(boost), *dependencies], ROOT, environment)
-    run(["cmake", "--build", build, "--target", "vsag_static", "--parallel",
-         str(options.jobs)], ROOT, environment)
-    destination = prefix / "lib/vsag_lib"
-    destination.mkdir(parents=True, exist_ok=True)
-    archives = list(build.rglob("lib*.a"))
-    if not any(path.name == "libvsag_static.a" for path in archives):
-        raise RuntimeError("VSAG archive was not produced")
-    for archive in archives:
-        verify_archive(archive, options.simulator, environment)
-        shutil.copy2(archive, destination / archive.name)
-    shutil.copytree(source / "include/vsag", prefix / "include/vsag", dirs_exist_ok=True)
-
-
-def build_openmp(source, build, prefix, sdk, options, environment):
-    """Build the static LLVM OpenMP runtime without host Homebrew dependencies."""
-    utilities = source_package("llvm-cmake", environment)
-    project = source / "CMakeLists.txt"
-    original = "set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)"
-    replacement = 'set(LLVM_COMMON_CMAKE_UTILS "${SEEKDB_LLVM_CMAKE}")'
-    content = project.read_text()
-    if original not in content and replacement not in content:
-        raise RuntimeError("Unexpected OpenMP CMake utility path")
-    project.write_text(content.replace(original, replacement))
-    run(["cmake", "-S", source, "-B", build, "-DCMAKE_SYSTEM_NAME=iOS",
-         "-DCMAKE_OSX_SYSROOT=" + sdk, "-DCMAKE_OSX_ARCHITECTURES=arm64",
-         "-DCMAKE_OSX_DEPLOYMENT_TARGET=" + options.deployment_target,
-         "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=" + str(prefix),
-         "-DSEEKDB_LLVM_CMAKE=" + str(utilities), "-DLIBOMP_ENABLE_SHARED=OFF",
-         "-DOPENMP_ENABLE_LIBOMPTARGET=OFF", "-DOPENMP_ENABLE_OMPT_TOOLS=OFF",
-         "-DLIBOMP_OMPT_SUPPORT=OFF", "-DLIBOMP_USE_HWLOC=OFF"], ROOT, environment)
-    run(["cmake", "--build", build, "--parallel", str(options.jobs)], ROOT, environment)
-    verify_archive(build / "runtime/src/libomp.a", options.simulator, environment)
-    run(["cmake", "--install", build], ROOT, environment)
 
 
 def build_icu(source, build, prefix, sdk, options, environment):
@@ -322,21 +242,15 @@ def build_icu(source, build, prefix, sdk, options, environment):
     run(["make", "install"], build, cross_env)
 
 
-
 PACKAGE_OUTPUTS = {
-    "zlib": ("lib/libz.a", "include/zlib.h"),
+    "zlib": ("lib/libz.a", "include/zlib.h", "include/zconf.h"),
     "openssl": ("lib/libssl.a", "lib/libcrypto.a", "include/openssl/ssl.h"),
     "curl": ("lib/libcurl.a", "include/curl/curl.h"),
-    "abseil": ("lib/libabsl_*.a", "include/absl/base/config.h"),
-    "s2": ("lib/libs2.a", "include/s2/s2cell.h"),
-    "roaring": ("lib/libroaring.a", "include/roaring/roaring.h"),
     "lzma": ("lib/liblzma.a", "include/lzma.h"),
-    "libxml2": ("lib/libxml2.a", "include/libxml2/libxml/parser.h"),
+    "libxml2": ("lib/libxml2.a", "include/libxml2/libxml/parser.h",
+                "include/libxml2/libxml/xmlversion.h"),
     "protobuf-c": ("lib/libprotobuf-c.a", "include/protobuf-c/protobuf-c.h"),
     "icu": ("lib/libicuuc.a", "lib/libicui18n.a", "lib/libicudata.a", "include/unicode/utypes.h"),
-    "openmp": ("lib/libomp.a", "include/omp.h"),
-    "lapack": ("lib/liblapacke.a", "include/lapacke.h"),
-    "vsag": ("lib/vsag_lib/lib*.a", "lib/vsag_lib/libvsag_static.a", "include/vsag/vsag.h"),
 }
 
 
@@ -365,11 +279,9 @@ def reusable_package(marker, identity, prefix):
 def builder_identity():
     """Bind cache reuse to tracked dependency recipes and package version definitions."""
     digest = hashlib.sha256()
-    for path in sorted((ROOT / "deps/ios-build").rglob("*")):
-        if path.is_file() and path.suffix in {".py", ".txt", ".cmake"}:
-            digest.update(str(path.relative_to(ROOT)).encode())
-            digest.update(path.read_bytes())
+    digest.update(Path(__file__).read_bytes())
     return digest.hexdigest()
+
 
 def main():
     """Select a target SDK, isolate host flags, and build only requested packages."""
@@ -380,7 +292,7 @@ def main():
     parser.add_argument("--deployment-target", default="18.0")
     parser.add_argument("packages", nargs="*", metavar="PACKAGE")
     options = parser.parse_args()
-    unknown = set(options.packages) - (set(PACKAGES) - {"llvm-cmake"} - (set(VSAG_PACKAGES) - {"vsag"}))
+    unknown = set(options.packages) - set(PACKAGES)
     if unknown:
         parser.error("unknown packages: " + ", ".join(sorted(unknown)))
     if options.jobs < 1 or not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,2}", options.deployment_target):
@@ -400,8 +312,7 @@ def main():
     recipe = builder_identity()
     rebuilt = False
     for name in options.packages or DEFAULT_PACKAGES:
-        build_name = name + "-" + PACKAGES[name][0] if name == "openmp" else name
-        build = ROOT / "deps/ios" / sdk_name / "build" / build_name
+        build = ROOT / "deps/ios" / sdk_name / "build" / name
         identity = {
             "package": name, "version": PACKAGES[name][0], "sha256": PACKAGES[name][2],
             "sdk": sdk, "deployment_target": options.deployment_target,
@@ -412,22 +323,13 @@ def main():
             continue
         # Rebuild downstream packages when an earlier dependency has changed.
         rebuilt = True
-        marker.unlink(missing_ok=True)
+        if build.exists():
+            shutil.rmtree(build)
         source = source_package(name, environment)
         build.mkdir(parents=True, exist_ok=True)
-        if name == "vsag":
-            build_vsag(source, build, prefix, sdk, options, environment)
-        elif name == "openmp":
-            build_openmp(source, build, prefix, sdk, options, environment)
-        elif name == "icu":
-            build_icu(source, build, prefix, sdk, options, environment)
-        elif name in ("abseil", "s2", "roaring", "libxml2", "lzma", "lapack"):
-            build_cmake_package(name, source, build, prefix, sdk, options, environment)
-        elif name == "protobuf-c":
-            build_protobuf_c(source, build, prefix, sdk, options, environment)
-        else:
-            {"zlib": build_zlib, "openssl": build_openssl, "curl": build_curl}[name](
-                source, build, prefix, sdk, options, environment)
+        {"zlib": build_zlib, "openssl": build_openssl, "curl": build_curl,
+         "lzma": build_lzma, "libxml2": build_libxml2, "icu": build_icu,
+         "protobuf-c": build_protobuf_c}[name](source, build, prefix, sdk, options, environment)
         outputs = installed_output_hashes(name, prefix)
         if outputs is None:
             raise RuntimeError("Missing installed dependency outputs: " + name)
