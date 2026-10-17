@@ -1,17 +1,11 @@
 def _source_impl(ctx):
     manifest = json.decode(ctx.read(ctx.attr.manifest))
     source = manifest["sources"][ctx.attr.package]
-    cache = ctx.getenv("SEEKDB_SDK_SOURCE_CACHE")
-    url = source["url"]
-    if cache:
-        archive = ctx.path(cache + "/" + ctx.attr.package + ".tar.gz")
-        if archive.exists:
-            url = "file://" + str(archive)
     ctx.download_and_extract(
         sha256 = source["sha256"],
         stripPrefix = source["source_directory"],
         type = "tar.xz" if source["url"].endswith(".xz") else ("tar.bz2" if source["url"].endswith(".bz2") else "tar.gz"),
-        url = url,
+        url = source["url"],
     )
     result = ctx.execute([
         "python3",
@@ -34,7 +28,6 @@ _source = repository_rule(
         "prepare": attr.label(default = Label("//bazel/sdk_sources:prepare.py")),
         "build_file": attr.label(mandatory = True),
     },
-    environ = ["SEEKDB_SDK_SOURCE_CACHE"],
     implementation = _source_impl,
 )
 
