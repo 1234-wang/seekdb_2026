@@ -201,13 +201,13 @@ python3 bazel.py \
 
 ## seekdb 编译平台与 Bazel 覆盖
 
-“Bazel 能在此宿主机运行”不等于“seekdb 的 Bazel 构建已经完整适配”。前者可由官方发行二进制和规则支持判断；后者取决于本仓库的平台约束、编译选项、依赖和链接规则。以下是静态分析结论。
+“Bazel 能在此宿主机运行”不等于“seekdb 的 Bazel 构建已经完整适配”。前者可由官方发行二进制和规则支持判断；后者取决于本仓库的平台约束、编译选项、依赖和链接规则。以下以静态分析为基础，并标注已完成的构建验证。
 
 | 平台/目标 | seekdb 现有构建范围 | Bazel 本身或生态能力 | 本仓库 Bazel 接入情况 |
 | --- | --- | --- | --- |
 | Linux x86_64 | `build.sh`/CMake；依赖初始化识别多种 Linux 发行版 | 8.2.1 与 9.3.0 均有官方宿主二进制 | 当前最明确的自有 C++ 工具链：execution/target 都限定 Linux x86_64 |
 | Linux aarch64 | `build.sh`/CMake；依赖初始化支持的发行版子集见下文 | 有官方 `linux-arm64` 二进制；可配置 ARM64 C++ 工具链 | 当前自有工具链没有 ARM64 配置，不能推断为与 x86_64 同等完成 |
-| macOS 13+ arm64 | Apple Silicon 为主要测试开发平台；macOS 27 有独立 Apple Clang/SDK 流程 | 有官方 `darwin-arm64` 二进制，可使用 Xcode/Command Line Tools | 有 macOS 分支及 `rules_cc` 原生宿主工具链回退；自有 repository 初始化仍检查 bundled LLVM，不能据此宣称所有新 macOS 流程完整可用 |
+| macOS 13+ arm64 | Apple Silicon 为主要测试开发平台；macOS 27 有独立 Apple Clang/SDK 流程 | 有官方 `darwin-arm64` 二进制，可使用 Xcode/Command Line Tools | 已在 macOS 15.5 ARM64 完成 Bazel 9.3.0 构建和 `seekdb --version` 验证，见下文；现有依赖带最低系统版本警告，未验证 macOS 13 运行兼容性 |
 | macOS x86_64 | 检测脚本接受，但目前没有对应 x86_64 macOS deps 文件；不能等同开箱完整支持 | 有官方 `darwin-x86_64` 二进制 | Bazel 平台有能力；seekdb 依赖与仓库接入仍有缺口 |
 | Windows 11 x64 | `build.ps1` 及独立 Windows 依赖流程 | 有官方 `windows-x86_64.exe`；C++ 工具链需要单独配置 | 有部分 Rust 平台分支，但 C++ 工具链及默认链接规则未呈现完整 Windows 适配 |
 | Android arm64-v8a、API 28+ | 文档入口为 macOS + NDK 27.x，`build.sh --android` | `rules_android_ndk` 支持 Android NDK 25b+，有 ARM64 toolchain/platform | 未发现 Android 专用 Bazel 平台/规则接入；现有入口为 CMake |
@@ -257,6 +257,17 @@ source ~/.bashrc
 构建和 `seekdb_source_ownership` 检查均成功，产物为 `build_bazel/bin/src/observer/seekdb`。执行 `--version` 返回 0，报告 `seekdb 1.4.0.0`、分支 `bazel`、revision `1-a8afc89e9bb3fd4db41cefcb77274a1fe35879cc`。`git diff --check` 通过。本次没有部署数据库或运行 SQL 功能测试。
 
 额外运行的独立静态检查仍有既有陈旧项：`share_header_ownership_check.py` 报告 `geo/geo_math.h`、`ob_tenant_role_transition_service.h` 缺少清单归属，以及 `resource/ob_server_resource.h` 分类需更新；`generate_oblib_header_inventory.py --check` 报告生成清单与当前源码不一致。此次仅修复编译所需的头文件声明，没有整体重分配 OBLib 公共接口归属。这些检查不应记为通过。
+
+## macOS ARM64 构建验证
+
+2026-10-17 在用户 Mac `30.174.76.160` 的 `/Users/nijia.nj/dev/seekdb` 复现并修复两处失败。环境为 macOS 15.5 ARM64、Apple Clang 17.0.0、Rust 1.97.1、Bazel 9.3.0，复用已有第三方依赖与编译缓存。
+
+- Rust 日志代码向 `pthread_threadid_np` 传入空指针，但锁定的 libc 0.2.189 要求 `pthread_t`，编译报 E0308。改为传入 `pthread_self()` 返回的当前线程句柄。
+- zstd 的额外 `llvm-objcopy --localize-hidden` 动作在 Darwin 沙箱中被终止。工具在沙箱外可运行，而 Apple `ld -r` 的产物已经完成符号本地化；实际对比 objcopy 前后外部符号表完全一致。因此 macOS 直接使用部分链接产物，Linux 保留原有 objcopy 动作。
+
+修复后运行 `python3 bazel.py build //src/observer:seekdb` 成功，耗时 255.892 秒，执行 569 个动作并复用 1268 个动作缓存结果。产物 `build_bazel/bin/src/observer/seekdb` 执行 `--version` 返回 0，报告 `seekdb 1.4.0.0`。Rust 静态库目标、Mac 与 Linux 的 zstd 部分链接目标均通过；两平台产物的 `ZSTD_compress`、`ZSTD_decompress`、`ZSTD_versionNumber` 仍为局部符号，Mac 的 C++ 包装接口导出保持不变。现有 Rust 测试 `tests::ecosystem_logs_share_session_modules_trace_and_lifecycle` 在 Mac release 配置下通过。
+
+完整构建日志保留于 Mac 的 `/tmp/seekdb-bazel-mac-full-build-fixed.log`。链接器仍提示部分预编译依赖（如 ICU、protobuf-c）最低系统版本为 macOS 15.0，而当前目标配置为 13.0；本次确认在 15.5 构建及版本命令运行成功，未验证 13/14 的运行兼容性，也未部署数据库或运行 SQL 测试。
 
 ## 可写输出与 Bazel 9.3.0 实测
 

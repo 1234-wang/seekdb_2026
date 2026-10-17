@@ -33,8 +33,10 @@ def _seekdb_localized_partial_link_impl(ctx):
     if not objects:
         fail("%s received no direct C++ objects" % ctx.label)
 
-    temporary = ctx.actions.declare_file(ctx.label.name + ".tmp.o")
+    is_macos = _target_is_macos(ctx)
     output = ctx.outputs.out
+    # Apple ld -r already localizes hidden (private extern) symbols.
+    temporary = output if is_macos else ctx.actions.declare_file(ctx.label.name + ".tmp.o")
 
     link_args = ctx.actions.args()
     link_args.add("-r")
@@ -53,24 +55,21 @@ def _seekdb_localized_partial_link_impl(ctx):
         progress_message = "Partially linking %{output}",
     )
 
+    if is_macos:
+        return [DefaultInfo(files = depset([output]))]
+
     objcopy_args = ctx.actions.args()
     objcopy_args.add("--localize-hidden")
     objcopy_args.add(temporary)
     objcopy_args.add(output)
-    macos_objcopy = ctx.attr._macos_objcopy[DefaultInfo].files_to_run
     ctx.actions.run(
-        executable = (
-            macos_objcopy
-            if _target_is_macos(ctx)
-            else cc_toolchain.objcopy_executable
-        ),
+        executable = cc_toolchain.objcopy_executable,
         arguments = [objcopy_args],
         inputs = depset(
             direct = [temporary],
             transitive = [cc_toolchain.all_files],
         ),
         outputs = [output],
-        tools = [macos_objcopy] if _target_is_macos(ctx) else [],
         mnemonic = "SeekdbLocalizeHidden",
         progress_message = "Localizing hidden symbols in %{output}",
     )
@@ -87,12 +86,6 @@ seekdb_localized_partial_link = rule(
         "out": attr.output(mandatory = True),
         "_macos_constraint": attr.label(
             default = Label("@platforms//os:macos"),
-        ),
-        "_macos_objcopy": attr.label(
-            allow_files = True,
-            default = Label("@seekdb_3rd_headers//:devtools/bin/llvm-objcopy"),
-            cfg = "exec",
-            executable = True,
         ),
     } | CC_TOOLCHAIN_ATTRS,
     fragments = ["cpp"],
