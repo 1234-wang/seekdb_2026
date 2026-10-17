@@ -153,7 +153,6 @@ seekdb_semantic_unity_cc_library(
         SQL_UNITY_GROUPS,
         SQL_OPTIMIZER_GROUP_NAMES,
     ),
-    expected_group_names = SQL_OPTIMIZER_GROUP_NAMES,
     group_implementation_deps = _OPTIMIZER_GROUP_IMPLEMENTATION_DEPS,
     deps = [
         ":optimizer_public_headers",

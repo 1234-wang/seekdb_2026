@@ -20,10 +20,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/ob_timeout_ctx.cpp",
                 "src/oblib/common/ob_version_def.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_common_mixed_0",
@@ -44,10 +40,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/rowkey/ob_store_rowkey.cpp",
                 "src/oblib/common/sql_mode/ob_sql_mode_utils.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_log_0",
@@ -61,10 +53,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/log/ob_log_reader.cpp",
                 "src/oblib/common/log/ob_single_log_reader.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_reloc_datum_0",
@@ -72,20 +60,12 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/common/datum/ob_datum.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_reloc_enumset_0",
             language = "c++",
             srcs = [
                 "src/oblib/common/enumset/ob_enum_set_meta.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -100,20 +80,12 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/json_type/ob_json_schema.cpp",
                 "src/oblib/common/json_type/ob_json_diff.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_reloc_lob_0",
             language = "c++",
             srcs = [
                 "src/oblib/common/lob/ob_lob_base.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -126,20 +98,12 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/mysqlclient/ob_mysql_transaction.cpp",
                 "src/oblib/common/mysqlclient/ob_single_connection_proxy.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_reloc_number_0",
             language = "c++",
             srcs = [
                 "src/oblib/common/number/ob_number_v2.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -148,10 +112,6 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/common/timezone/ob_time_convert.cpp",
                 "src/oblib/common/timezone/ob_timezone_info.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -167,10 +127,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/udt/ob_vector_type.cpp",
                 "src/oblib/common/udt/ob_map_type.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_reloc_wide_integer_0",
@@ -179,10 +135,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/wide_integer/ob_wide_integer.cpp",
                 "src/oblib/common/wide_integer/ob_wide_integer_cmp_funcs.cpp",
                 "src/oblib/common/wide_integer/ob_wide_integer_str_funcs.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -201,10 +153,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/common/xml/ob_path_parser.cpp",
                 "src/oblib/common/xml/ob_binary_aggregate.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_common_storage_0",
@@ -212,10 +160,6 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/common/storage/ob_freeze_define.cpp",
                 "src/oblib/common/storage/ob_sequence.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
     ],
@@ -252,10 +196,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/utility/ob_mod_define.cpp",
                 "src/oblib/lib/allocator/ob_page_manager.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "ob_malloc_object_list_common_alloc_1",
@@ -263,10 +203,6 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/lib/allocator/ob_slice_alloc.cpp",
                 "src/oblib/lib/allocator/ob_tc_malloc.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
     ],
@@ -284,10 +220,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/charset/ob_dtoa.cc",
                 "src/oblib/lib/charset/ob_charset.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_lib_codec_0",
@@ -295,10 +227,6 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/lib/codec/ob_fast_bp_func.cpp",
                 "src/oblib/lib/codec/ob_generated_scalar_bp_func.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -313,10 +241,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/ob_running_mode.cpp",
                 "src/oblib/lib/runtime.cpp",
                 "src/oblib/lib/worker.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -350,20 +274,12 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/thread/ob_dedup_queue.cpp",
                 "src/oblib/lib/queue/ob_lighty_queue.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_lib_common_mixed_0",
             language = "c",
             srcs = [
                 "src/oblib/lib/hash_func/xxhash.c",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -400,10 +316,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/locale/ob_locale_type.cc",
                 "src/oblib/lib/locale/ob_locale.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_lib_downsink_0",
@@ -416,10 +328,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/utility/ob_common_utility.cpp",
                 "src/oblib/lib/utility/data_buffer.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_lib_downsink_qt_0",
@@ -427,10 +335,6 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/lib/thread/ob_queue_thread.cpp",
                 "src/oblib/lib/thread/ob_balance_filter.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -447,10 +351,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/lock/ob_bucket_qsync_lock.cpp",
                 "src/oblib/lib/lock/ob_qsync_lock.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_lib_ob_vector_util_0",
@@ -458,10 +358,6 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/lib/vector/ob_vector_util.cpp",
                 "src/oblib/lib/vector/ob_vsag_adaptor.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -474,10 +370,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/oblog/ob_trace_log.cpp",
                 "src/oblib/lib/oblog/ob_warning_buffer.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_lib_signal_0",
@@ -487,20 +379,12 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/signal/ob_signal_struct.cpp",
                 "src/oblib/lib/signal/ob_signal_utils.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_lib_signal_0",
             language = "c",
             srcs = [
                 "src/oblib/lib/signal/ob_libunwind.c",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -517,10 +401,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/thread/ob_thread_hook.cpp",
                 "src/oblib/lib/thread/ob_pthread.cpp",
                 "src/oblib/lib/thread/ob_thread_name.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -539,10 +419,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/lib/utility/ob_backtrace.cpp",
                 "src/oblib/lib/utility/ob_hyperloglog.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
     ],
     "src/oblib/lib:oblib_lib_bitmap": [
@@ -551,10 +427,6 @@ OBLIB_UNITY_GROUPS = {
             language = "c++",
             srcs = [
                 "src/oblib/lib/container/ob_bitmap.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
     ],
@@ -565,10 +437,6 @@ OBLIB_UNITY_GROUPS = {
             srcs = [
                 "src/oblib/lib/codec/ob_fast_delta.cpp",
                 "src/oblib/lib/codec/ob_generated_unalign_simd_bp_func.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
     ],
@@ -581,10 +449,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/rpc/ob_request.cpp",
                 "src/oblib/rpc/ob_sql_request_operator.cpp",
                 "src/oblib/rpc/ob_sql_mem_pool.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
         struct(
@@ -599,10 +463,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/rpc/frame/ob_req_translator.cpp",
                 "src/oblib/rpc/frame/ob_sql_processor.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_rpc_obmysql_0",
@@ -614,10 +474,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/rpc/obmysql/ob_sql_sock_handler.cpp",
                 "src/oblib/rpc/obmysql/ob_sql_sock_session.cpp",
             ],
-            generated_srcs = [
-            ],
-            external_srcs = [
-            ],
         ),
         struct(
             name = "oblib_rpc_obmysql_packet_0",
@@ -628,10 +484,6 @@ OBLIB_UNITY_GROUPS = {
                 "src/oblib/rpc/obmysql/packet/ompk_local_infile.cpp",
                 "src/oblib/rpc/obmysql/packet/ompk_ok.cpp",
                 "src/oblib/rpc/obmysql/packet/ompk_auth_switch.cpp",
-            ],
-            generated_srcs = [
-            ],
-            external_srcs = [
             ],
         ),
     ],

@@ -361,6 +361,8 @@ def seekdb_semantic_unity_cc_library(
     cc_library with the common implementation_deps plus the dependencies
     declared for that group.  The public target remains one linkable module
     whose linking context contains every private group archive.
+
+    expected_group_names checks raw inventories; omit it after an exact group selection.
     """
 
     if language not in ("c", "c++"):
@@ -380,10 +382,6 @@ def seekdb_semantic_unity_cc_library(
         seen_group_names[group.name] = True
         if group.language != language:
             fail("%s expects %s Unity groups, got %s" % (name, language, group.language))
-        if group.generated_srcs:
-            fail("%s still contains generated sources: %s" % (group.name, group.generated_srcs))
-        if group.external_srcs:
-            fail("%s still contains external sources: %s" % (group.name, group.external_srcs))
 
         members = []
         for source in group.srcs:

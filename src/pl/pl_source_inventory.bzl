@@ -28,8 +28,6 @@ PL_UNITY_GROUPS = [
             "src/pl/ob_pl_type.cpp",
             "src/pl/ob_pl_user_type.cpp",
         ],
-        generated_srcs = [],
-        external_srcs = [],
     ),
     struct(
         name = "pl_cache",
@@ -40,8 +38,6 @@ PL_UNITY_GROUPS = [
             "src/pl/pl_cache/ob_pl_cache_object.cpp",
             "src/pl/ob_pl_server_cursor.cpp",
         ],
-        generated_srcs = [],
-        external_srcs = [],
     ),
     struct(
         name = "pl_recompile",
@@ -49,8 +45,6 @@ PL_UNITY_GROUPS = [
         srcs = [
             "src/pl/ob_pl_dependency_util.cpp",
         ],
-        generated_srcs = [],
-        external_srcs = [],
     ),
     struct(
         name = "pl_sys_package",
@@ -68,8 +62,6 @@ PL_UNITY_GROUPS = [
             "src/pl/sys_package/ob_dbms_ai_service.cpp",
             "src/pl/sys_package/ob_dbms_index_manager.cpp",
         ],
-        generated_srcs = [],
-        external_srcs = [],
     ),
 ]
 

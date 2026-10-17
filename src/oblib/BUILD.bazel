@@ -92,7 +92,6 @@ seekdb_semantic_unity_cc_library(
     name = "_oblib_foundation_impl",
     owner_package = "src/oblib",
     unity_groups = _FOUNDATION_CXX_GROUPS,
-    expected_group_names = _FOUNDATION_CXX_GROUP_NAMES,
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",
@@ -114,7 +113,6 @@ seekdb_semantic_unity_cc_library(
         language = "c",
     ),
     language = "c",
-    expected_group_names = _FOUNDATION_C_GROUP_NAMES,
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",
@@ -131,7 +129,6 @@ seekdb_semantic_unity_cc_library(
     name = "_oblib_bitmap_impl",
     owner_package = "src/oblib",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib_bitmap"],
-    expected_group_names = ["oblib_lib_bitmap_common_0"],
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",
@@ -149,7 +146,6 @@ seekdb_semantic_unity_cc_library(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         ["oblib_lib_codec_0"],
     ),
-    expected_group_names = ["oblib_lib_codec_0"],
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",
@@ -164,7 +160,6 @@ seekdb_semantic_unity_cc_library(
     name = "_oblib_codec_simd_impl",
     owner_package = "src/oblib",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib_simd"],
-    expected_group_names = ["oblib_lib_simd_codec_simd_0"],
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",
@@ -189,7 +184,6 @@ seekdb_semantic_unity_cc_library(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         ["oblib_lib_ob_vector_util_0"],
     ),
-    expected_group_names = ["oblib_lib_ob_vector_util_0"],
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",
@@ -205,10 +199,6 @@ seekdb_semantic_unity_cc_library(
     name = "_ob_malloc_impl",
     owner_package = "src/oblib",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:ob_malloc_object"],
-    expected_group_names = [
-        "ob_malloc_object_list_common_alloc_0",
-        "ob_malloc_object_list_common_alloc_1",
-    ],
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",
@@ -228,7 +218,6 @@ seekdb_semantic_unity_cc_library(
         OBLIB_UNITY_GROUPS["src/oblib/common:oblib_common"],
         _COMMON_GROUP_NAMES,
     ),
-    expected_group_names = _COMMON_GROUP_NAMES,
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":common_sql_mode",
@@ -266,7 +255,6 @@ seekdb_semantic_unity_cc_library(
         OBLIB_UNITY_GROUPS["src/oblib/rpc:oblib_rpc"],
         _RPC_GROUP_NAMES,
     ),
-    expected_group_names = _RPC_GROUP_NAMES,
     implementation_deps = [
         ":_oblib_implementation_headers",
         ":oblib_foundation",

@@ -1,18 +1,11 @@
 """Helpers for declaring OBLib's semantic native source groups."""
 
-def oblib_select_unity_groups(groups, names, language = "c++"):
-    requested = {name: False for name in names}
-    selected = []
-    for group in groups:
-        if group.language == language and group.name in requested:
-            if requested[group.name]:
-                fail("duplicate %s Unity group %s" % (language, group.name))
-            requested[group.name] = True
-            selected.append(group)
-    missing = sorted([name for name, found in requested.items() if not found])
-    if missing:
-        fail("missing %s Unity groups: %s" % (language, missing))
-    return selected
+load(
+    "//bazel:module_sources.bzl",
+    _select_unity_groups = "select_unity_groups",
+)
+
+oblib_select_unity_groups = _select_unity_groups
 
 def oblib_standalone_sources(sources, key, language = "c++"):
     prefix = "src/oblib/"
