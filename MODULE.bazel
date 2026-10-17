@@ -26,7 +26,21 @@ seekdb_cc_toolchain_repository = use_repo_rule(
 
 seekdb_cc_toolchain_repository(name = "seekdb_cc_toolchain")
 
-register_toolchains("@seekdb_cc_toolchain//:local_compile_toolchain")
+register_toolchains("@seekdb_cc_toolchain//:all")
+
+android_cc_toolchain_repository = use_repo_rule(
+    "//bazel/toolchains/cc:android_cc_toolchain_repo.bzl",
+    "android_cc_toolchain_repository",
+)
+android_cc_toolchain_repository(name = "seekdb_android_ndk")
+register_toolchains("@seekdb_android_ndk//:all")
+
+emscripten_cc_toolchain_repository = use_repo_rule(
+    "//bazel/toolchains/cc:emscripten_cc_toolchain_repo.bzl",
+    "emscripten_cc_toolchain_repository",
+)
+emscripten_cc_toolchain_repository(name = "seekdb_emscripten")
+register_toolchains("@seekdb_emscripten//:all")
 
 # Keep the repository-owned Clang toolchain as the reproducible Linux build
 # toolchain. rules_cc configures other native hosts; apple_support registers

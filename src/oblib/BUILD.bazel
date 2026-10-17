@@ -171,6 +171,7 @@ seekdb_semantic_unity_cc_library(
             "-mavx2",
             "-mssse3",
         ],
+        "@platforms//cpu:wasm32": ["-msse4.1"],
         "//conditions:default": [],
     }),
     local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
@@ -288,7 +289,12 @@ cc_library(
         "ZDICTLIB_VISIBILITY=",
         "ZSTDERRORLIB_VISIBILITY=",
         "ZSTDLIB_VISIBILITY=",
-    ],
+    ] + select({
+        # Wasm objcopy does not isolate the bundled xxHash symbols the way
+        # ELF --localize-hidden does. Use xxHash's supported symbol prefix.
+        "@platforms//os:emscripten": ["XXH_NAMESPACE=seekdb_zstd_1_3_8_"],
+        "//conditions:default": [],
+    }),
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -307,7 +313,10 @@ cc_library(
         "ZDICTLIB_VISIBILITY=",
         "ZSTDERRORLIB_VISIBILITY=",
         "ZSTDLIB_VISIBILITY=",
-    ],
+    ] + select({
+        "@platforms//os:emscripten": ["XXH_NAMESPACE=seekdb_zstd_1_3_8_"],
+        "//conditions:default": [],
+    }),
     features = ["layering_check"],
     tags = ["manual"],
 )

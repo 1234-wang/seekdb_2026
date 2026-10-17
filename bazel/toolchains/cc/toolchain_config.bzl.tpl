@@ -11,7 +11,7 @@ def seekdb_cc_toolchain_config(name, compiler_path, toolchain_identifier):
     cc_toolchain_config(
         name = name,
         abi_libc_version = "glibc",
-        abi_version = "x86_64",
+        abi_version = "@HOST_CPU@",
         all_compile_flags = [],
         compile_flags = [
             "-Wall",
@@ -26,7 +26,7 @@ def seekdb_cc_toolchain_config(name, compiler_path, toolchain_identifier):
         conly_flags = [],
         coverage_compile_flags = ["--coverage"],
         coverage_link_flags = ["--coverage"],
-        cpu = "k8",
+        cpu = "@BAZEL_CPU@",
         cxx_builtin_include_directories = _CXX_BUILTIN_INCLUDE_DIRECTORIES,
         cxx_flags = ["-std=c++17"],
         dbg_compile_flags = [
@@ -55,7 +55,7 @@ def seekdb_cc_toolchain_config(name, compiler_path, toolchain_identifier):
         opt_link_flags = [],
         supports_start_end_lib = True,
         target_libc = "glibc",
-        target_system_name = "x86_64-redhat-linux",
+        target_system_name = "@HOST_CPU@-redhat-linux",
         tool_paths = {
             "ar": "devtools/bin/llvm-ar",
             "c++filt": "devtools/bin/llvm-cxxfilt",

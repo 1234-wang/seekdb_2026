@@ -8,26 +8,32 @@
 - Emscripten 6.0.12（即 `tools/wasm/emscripten-version` 中的版本），且其 `emcc` 在 `PATH` 中，例如通过 `brew install emscripten` 安装
 - 已将 `rustup`、CMake 3.20 及以上、Python 3.12 及以上和 `curl` 加入 `PATH`
 - 运行测试需要 Node.js 24 及以上
-- 约 5 GB 可用磁盘空间，用于依赖和构建目录
+- 建议至少 20 GB 可用磁盘空间，用于依赖、SDK 和构建目录
 
 ## 构建
 
-使用 WebAssembly 构建入口，一次完成依赖初始化、配置和编译：
+激活固定版本的 Emscripten SDK，准备依赖后用 Bazel 编译：
 
 ```bash
-./build.sh release --wasm --init --make
+# emcc 使用项目固定版本的 Emscripten SDK。
+export EMSCRIPTEN=/path/to/emsdk/upstream/emscripten
+export PATH="$EMSCRIPTEN:$PATH"
+export SEEKDB_WASM_DEPS="$PWD/build_wasm_deps"
+
+# 已初始化 deps/3rd 时可跳过 init。
+python3 bazel.py init
+rustup toolchain install "$(cat tools/wasm/rust-toolchain-version)" \
+  --profile minimal --component rust-src --target wasm32-unknown-emscripten
+bash tools/wasm/build-deps.sh "$SEEKDB_WASM_DEPS"
+python3 tools/wasm/prepare-headers.py \
+  --source deps/3rd/usr/local/oceanbase/deps/devel/include \
+  --include "$SEEKDB_WASM_DEPS/include" --target-prefix "$SEEKDB_WASM_DEPS"
+python3 bazel.py build --config=wasm //src/wasm:database
 ```
 
-`--init` 只从原生依赖列表中下载 WebAssembly 构建需要的 bison、flex 和源码头文件，`deps/3rd` 中已经有这些包时跳过；安装 `tools/wasm/rust-toolchain-version` 中固定版本的 Rust nightly 及 `wasm32-unknown-emscripten` target；并用 `tools/wasm/dependencies.json` 中固定版本的源码编译第三方库，安装到 `build_wasm_deps`。每次执行还会用 `rust/build.py` 把 Rust crate（memory NIO、`config` 和 `local`）编译到 `build_wasm_rust_runtime`。依赖准备好后可以去掉 `--init`。不加 `--make` 时，`build.sh` 只生成构建规则。
+`init` 准备宿主工具和头文件；`build-deps.sh` 用锁定源码构建 Wasm 第三方库。依赖已准备好后只需执行最后一条 Bazel 命令，并保留这些环境变量。Rust 库由 Bazel 构建，Wasm 专用补丁仅作用于构建目录中的依赖副本。切回本机或 Android 构建前执行 `unset SEEKDB_WASM_DEPS`，恢复对应平台的依赖目录。
 
-引擎位于：
-
-```text
-build_wasm_engine/seekdb_wasm_database.mjs    # Emscripten 模块
-build_wasm_engine/seekdb_wasm_database.wasm   # 引擎
-```
-
-CMake 选项写在 `--make` 之前，make 选项写在它之后，例如 `--make -j8`。`./build.sh clean` 会删除 `build_wasm_engine` 和 `build_wasm_rust_runtime`，保留 `build_wasm_deps`。
+引擎和配套 JS、HTML、CSS 文件位于 `build_bazel/bin/src/wasm/dist/`。`python3 bazel.py clean` 清理 Bazel 编译产物，保留 `build_wasm_deps`。
 
 ## 构建目录内容
 
@@ -43,7 +49,7 @@ CMake 选项写在 `--make` 之前，make 选项写在它之后，例如 `--make
 用构建目录启动 shell，打开它输出的 URL：
 
 ```bash
-python3 tools/wasm/serve-shell.py --build-dir build_wasm_engine
+python3 tools/wasm/serve-shell.py --build-dir build_bazel/bin/src/wasm/dist
 ```
 
 shell 的命令和存储模式见 `docs/webassembly-shell.md`。

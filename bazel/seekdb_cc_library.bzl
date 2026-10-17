@@ -64,11 +64,19 @@ def seekdb_cc_library(
         name = name,
         additional_compiler_inputs = (
             additional_compiler_inputs +
+            select({
+                "@platforms//os:android": ["//include:android_compat.h"],
+                "//conditions:default": [],
+            }) +
             seekdb_sanity_compiler_inputs(sanity_instrumentation)
         ),
         copts = (
             (SEEKDB_SEMANTIC_MODULE_COPTS if copts == None else copts) +
             seekdb_arch_copts() +
+            select({
+                "@platforms//os:android": ["-include", "include/android_compat.h"],
+                "//conditions:default": [],
+            }) +
             seekdb_sanity_copts(sanity_instrumentation)
         ),
         cxxopts = cxxopts + seekdb_sanity_cxxopts(sanity_instrumentation),

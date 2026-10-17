@@ -13,10 +13,19 @@ build --force_pic
 build --experimental_writable_outputs
 # Cargo is installed with the developer's toolchain and must be on PATH.
 build --action_env=PATH
+# Cargo also needs its user cache in containers whose UID has no passwd entry.
+build --action_env=HOME
+build --action_env=CARGO_HOME
+build --action_env=RUSTUP_HOME
 build:O1 --compilation_mode=fastbuild
 build:O1 --copt=-O1
 build:O2 --compilation_mode=opt
 build:macos --macos_minimum_os=13.0
+build:android --platforms=//bazel/platforms:android_arm64
+build:wasm --platforms=//bazel/platforms:wasm32
+build:wasm --//src/standby:enable_standby=false
+build:wasm --action_env=EM_CONFIG
+build:wasm --action_env=EM_CACHE
 
 # Native shorthand for the orthogonal custom memory-safety build setting.
 build --flag_alias=sanity=//bazel:enable_sanity

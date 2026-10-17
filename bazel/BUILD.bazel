@@ -13,6 +13,12 @@ exports_files([
     "third_party_headers_repo.bzl",
 ])
 
+config_setting(
+    name = "linux_arm64",
+    constraint_values = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
+    visibility = ["//visibility:public"],
+)
+
 seekdb_bool_flag(
     name = "enable_sanity",
     build_setting_default = False,

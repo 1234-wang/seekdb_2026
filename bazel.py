@@ -483,15 +483,15 @@ def _run_management_command(root: Path, arguments: List[str]) -> Optional[int]:
         ).returncode
     if not arguments or arguments[0] != "init":
         return None
-    if arguments != ["init"]:
-        raise LauncherError("usage: ./bazel.py init")
+    if arguments not in (["init"], ["init", "--android"]):
+        raise LauncherError("usage: ./bazel.py init [--android]")
 
     initializer = root / "deps" / "init" / "dep_create.sh"
     if not initializer.is_file():
         raise LauncherError("dependency initializer not found: %s" % initializer)
 
     environment = os.environ.copy()
-    environment["ANDROID_BUILD"] = "false"
+    environment["ANDROID_BUILD"] = "true" if "--android" in arguments else "false"
     return subprocess.run(
         ["bash", initializer.name],
         cwd=str(initializer.parent),

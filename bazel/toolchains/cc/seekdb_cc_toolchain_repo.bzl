@@ -104,7 +104,12 @@ def _write_builtin_module_map(repository_ctx, builtin_include_directories):
     repository_ctx.file("module.modulemap", "\n".join(lines) + "\n")
 
 def _seekdb_cc_toolchain_repository_impl(repository_ctx):
+    if repository_ctx.os.name != "linux":
+        repository_ctx.file("BUILD.bazel", "# The bundled toolchain is Linux-only.\n")
+        return
     workspace_root = str(repository_ctx.workspace_root)
+    architecture = repository_ctx.os.arch
+    architecture = "aarch64" if architecture in ["aarch64", "arm64"] else "x86_64"
     devtools = repository_ctx.path(workspace_root + "/" + repository_ctx.attr.devtools_path)
     tools = {}
     for tool_name in [
@@ -132,6 +137,7 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
     repository_ctx.template(
         "BUILD.bazel",
         repository_ctx.attr.build_file,
+        substitutions = {"@HOST_CPU@": architecture},
         executable = False,
     )
     repository_ctx.template(
@@ -149,6 +155,8 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
         repository_ctx.attr.toolchain_config,
         substitutions = {
             "@CXX_BUILTIN_INCLUDE_DIRECTORIES@": _format_string_list(builtin_include_directories),
+            "@HOST_CPU@": architecture,
+            "@BAZEL_CPU@": "aarch64" if architecture == "aarch64" else "k8",
         },
         executable = False,
     )

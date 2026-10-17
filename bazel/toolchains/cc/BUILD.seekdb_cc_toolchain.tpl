@@ -46,7 +46,9 @@ filegroup(
     # The Linux bundle provides libstdc++ here.  Native macOS builds use the
     # system libc++ selected by Apple's configured toolchain instead.
     srcs = glob(
-        ["devtools/lib64/libstdc++.a"],
+        ["devtools/lib64/libstdc++.a"] + (
+            ["devtools/lib64/libatomic.a"] if "@HOST_CPU@" == "aarch64" else []
+        ),
         allow_empty = True,
     ),
 )
@@ -128,11 +130,11 @@ cc_toolchain(
 toolchain(
     name = "local_compile_toolchain",
     exec_compatible_with = [
-        "@platforms//cpu:x86_64",
+        "@platforms//cpu:@HOST_CPU@",
         "@platforms//os:linux",
     ],
     target_compatible_with = [
-        "@platforms//cpu:x86_64",
+        "@platforms//cpu:@HOST_CPU@",
         "@platforms//os:linux",
     ],
     toolchain = ":local_compile_cc_toolchain",

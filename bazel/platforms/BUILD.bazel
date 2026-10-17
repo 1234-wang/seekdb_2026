@@ -1,0 +1,14 @@
+package(default_visibility = ["//visibility:public"])
+
+platform(
+    name = "android_arm64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:android",
+    ],
+)
+
+platform(
+    name = "wasm32",
+    constraint_values = ["@platforms//cpu:wasm32", "@platforms//os:emscripten"],
+)

@@ -846,6 +846,7 @@ _SHARE_RUNTIME_GROUP_OBLIB_DEPS = {
         "//src/oblib:oblib_foundation_integration",
         "//src/oblib:oblib_foundation_services",
         "//src/oblib:oblib_foundation_support",
+        "//src/oblib:oblib_io_primitives",
         "//src/oblib:oblib_io_runtime",
         "//src/oblib:oblib_mysql_client_domain",
         "//src/oblib:oblib_restore_advanced",

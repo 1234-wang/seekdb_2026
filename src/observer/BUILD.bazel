@@ -1,3 +1,4 @@
+load(":observer_link_deps.bzl", "observer_third_party_link_files")
 load(
     "//bazel:defs.bzl",
     "cc_import",
@@ -265,6 +266,7 @@ cc_library(
     deps = _OBSERVER_HEADER_NATIVE_DEPS,
     features = ["layering_check"],
     tags = ["manual"],
+    visibility = ["//src/wasm:__pkg__"],
 )
 
 seekdb_test_interface(
@@ -399,7 +401,21 @@ _SEEKDB_CORE_LINK_DEPS = [
     "//src/oblib:oblib_objects",
 ]
 
+cc_library(
+    name = "observer_embedded_runtime",
+    deps = _SEEKDB_CORE_LINK_DEPS + _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS + [
+        "//src/sql/parser:sql_server_parser",
+    ],
+    tags = ["manual"],
+    visibility = ["//src/wasm:__pkg__"],
+)
+
 _SEEKDB_TAIL_LINK_DEPS = select({
+    "@platforms//os:android": [
+        "//src/sql/parser:sql_server_parser",
+        "//src/oblib:oblib_objects",
+        "//src/oblib:ob_malloc_objects",
+    ],
     "@platforms//os:macos": [
         "//src/sql/parser:sql_server_parser",
         "//src/oblib:oblib_objects",
@@ -413,199 +429,21 @@ _SEEKDB_TAIL_LINK_DEPS = select({
     ],
 })
 
-_SEEKDB_ABSL_ARCHIVE_NAMES = [
-    "libabsl_base.a",
-    "libabsl_city.a",
-    "libabsl_debugging_internal.a",
-    "libabsl_demangle_internal.a",
-    "libabsl_hash.a",
-    "libabsl_int128.a",
-    "libabsl_low_level_hash.a",
-    "libabsl_malloc_internal.a",
-    "libabsl_raw_hash_set.a",
-    "libabsl_raw_logging_internal.a",
-    "libabsl_spinlock_wait.a",
-    "libabsl_stacktrace.a",
-    "libabsl_str_format_internal.a",
-    "libabsl_strings.a",
-    "libabsl_strings_internal.a",
-    "libabsl_symbolize.a",
-    "libabsl_synchronization.a",
-    "libabsl_throw_delegate.a",
-    "libabsl_time.a",
-    "libabsl_time_zone.a",
-]
-
-_SEEKDB_GRPC_CORE_ARCHIVE_NAMES = [
-    "libgrpc++.a",
-    "libgrpc.a",
-    "libgrpc_unsecure.a",
-    "libgrpc++_reflection.a",
-    "libgrpc++_error_details.a",
-    "libgrpc_plugin_support.a",
-    "libgrpcpp_channelz.a",
-    "libgpr.a",
-    "libaddress_sorting.a",
-    "libre2.a",
-    "libupb.a",
-]
-
-_SEEKDB_GRPC_ABSL_ARCHIVE_NAMES = [
-    "libabsl_base.a",
-    "libabsl_int128.a",
-    "libabsl_throw_delegate.a",
-    "libabsl_raw_logging_internal.a",
-    "libabsl_log_severity.a",
-    "libabsl_spinlock_wait.a",
-    "libabsl_malloc_internal.a",
-    "libabsl_debugging_internal.a",
-    "libabsl_demangle_internal.a",
-    "libabsl_stacktrace.a",
-    "libabsl_symbolize.a",
-    "libabsl_examine_stack.a",
-    "libabsl_failure_signal_handler.a",
-    "libabsl_strerror.a",
-    "libabsl_strings.a",
-    "libabsl_strings_internal.a",
-    "libabsl_str_format_internal.a",
-    "libabsl_cord.a",
-    "libabsl_cord_internal.a",
-    "libabsl_cordz_info.a",
-    "libabsl_cordz_handle.a",
-    "libabsl_cordz_functions.a",
-    "libabsl_cordz_sample_token.a",
-    "libabsl_hash.a",
-    "libabsl_low_level_hash.a",
-    "libabsl_city.a",
-    "libabsl_raw_hash_set.a",
-    "libabsl_hashtablez_sampler.a",
-    "libabsl_status.a",
-    "libabsl_statusor.a",
-    "libabsl_bad_any_cast_impl.a",
-    "libabsl_bad_optional_access.a",
-    "libabsl_bad_variant_access.a",
-    "libabsl_synchronization.a",
-    "libabsl_graphcycles_internal.a",
-    "libabsl_time.a",
-    "libabsl_time_zone.a",
-    "libabsl_civil_time.a",
-    "libabsl_exponential_biased.a",
-    "libabsl_periodic_sampler.a",
-    "libabsl_random_distributions.a",
-    "libabsl_random_seed_sequences.a",
-    "libabsl_random_seed_gen_exception.a",
-    "libabsl_random_internal_pool_urbg.a",
-    "libabsl_random_internal_randen.a",
-    "libabsl_random_internal_randen_hwaes.a",
-    "libabsl_random_internal_randen_hwaes_impl.a",
-    "libabsl_random_internal_randen_slow.a",
-    "libabsl_random_internal_seed_material.a",
-    "libabsl_random_internal_platform.a",
-    "libabsl_random_internal_distribution_test_util.a",
-    "libabsl_flags.a",
-    "libabsl_flags_commandlineflag.a",
-    "libabsl_flags_commandlineflag_internal.a",
-    "libabsl_flags_config.a",
-    "libabsl_flags_internal.a",
-    "libabsl_flags_marshalling.a",
-    "libabsl_flags_parse.a",
-    "libabsl_flags_private_handle_accessor.a",
-    "libabsl_flags_program_name.a",
-    "libabsl_flags_reflection.a",
-    "libabsl_flags_usage.a",
-    "libabsl_flags_usage_internal.a",
-    "libabsl_leak_check.a",
-    "libabsl_leak_check_disable.a",
-    "libabsl_scoped_set_env.a",
-]
-
 _SEEKDB_ORDERED_LINK_FILES = [
     "//rust:sql_nio_archive",
     "//rust:config_archive",
 ] + select({
-    "//bazel:sanity_enabled": [
-        "//deps/external:jemalloc_archive",
-    ],
+    "//bazel:sanity_enabled": ["//deps/external:jemalloc_archive"],
     "//conditions:default": [],
-}) + [
-    "@seekdb_3rd_headers//:lib/libxml2.a",
-    "@seekdb_3rd_headers//:lib/liblzma.a",
-    "@seekdb_3rd_headers//:lib/vsag_lib/libcpuinfo.a",
-    "@seekdb_3rd_headers//:lib/vsag_lib/libsimd.a",
-    "@seekdb_3rd_headers//:lib/vsag_lib/libvsag_static.a",
-    "@seekdb_3rd_headers//:lib/vsag_lib/libdiskann.a",
-] + select({
-    "@platforms//os:macos": [
-        "@seekdb_3rd_headers//:lib/vsag_lib/libio.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libgfortran_static.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libquadmath_static.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libgcc.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libomp_static.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libopenblas.a",
-    ],
-    "//conditions:default": [
-        "@seekdb_3rd_headers//:lib/vsag_lib/libopenblas.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libgfortran_static.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libquadmath_static.a",
-        "@seekdb_3rd_headers//:lib/vsag_lib/libgomp_static.a",
-    ],
-}) + [
-    ":_roaring_vsag_link",
-    "@seekdb_3rd_headers//:lib/vsag_lib/libantlr4-runtime.a",
-    "@seekdb_3rd_headers//:lib/vsag_lib/libantlr4-autogen.a",
-    "@seekdb_3rd_headers//:lib/vsag_lib/libfmt.a",
-    "@seekdb_3rd_headers//:lib/libcurl.a",
-    "@seekdb_3rd_headers//:lib/libssl.a",
-    "@seekdb_3rd_headers//:lib/libcrypto.a",
-    "@seekdb_3rd_headers//:lib64/libs2.a",
-] + [
-    "@seekdb_3rd_headers//:lib/grpc/%s" % archive
-    for archive in _SEEKDB_GRPC_CORE_ARCHIVE_NAMES
-] + select({
-    "@platforms//os:macos": [
-        "@seekdb_3rd_headers//:lib/grpc/%s" % archive
-        for archive in _SEEKDB_GRPC_ABSL_ARCHIVE_NAMES
-    ] + [
-        "@seekdb_3rd_headers//:lib/grpc/libcares.a",
-        "@seekdb_3rd_headers//:lib/grpc/libprotobuf.a",
-    ],
-    "//conditions:default": [
-        "@seekdb_3rd_headers//:lib64/grpc/%s" % archive
-        for archive in _SEEKDB_GRPC_ABSL_ARCHIVE_NAMES
-    ] + [
-        "@seekdb_3rd_headers//:lib64/grpc/libcares.a",
-        "@seekdb_3rd_headers//:lib64/grpc/libprotobuf.a",
-    ],
 }) + select({
-    "@platforms//os:macos": [
-        "@seekdb_3rd_headers//:lib/%s" % archive
-        for archive in _SEEKDB_ABSL_ARCHIVE_NAMES
-    ],
-    "//conditions:default": [
-        "@seekdb_3rd_headers//:lib64/%s" % archive
-        for archive in _SEEKDB_ABSL_ARCHIVE_NAMES
-    ],
-}) + [
-    ":_roaring_core_link",
-] + select({
-    "@platforms//os:macos": [],
-    "//conditions:default": [
-        "@seekdb_3rd_headers//:lib/libunwind.a",
-    ],
-}) + [
-    "@seekdb_3rd_headers//:lib/libz.a",
-    "@seekdb_3rd_headers//:lib/libicui18n.a",
-    "@seekdb_3rd_headers//:lib/libicustubdata.a",
-    "@seekdb_3rd_headers//:lib/libicuuc.a",
-    "@seekdb_3rd_headers//:lib/libprotobuf-c.a",
-] + select({
-    "@platforms//os:macos": [],
-    "//conditions:default": [
-        "@seekdb_3rd_headers//:lib/libaio.so",
-    ],
+    "@platforms//os:android": observer_third_party_link_files("android"),
+    "@platforms//os:macos": observer_third_party_link_files("macos"),
+    "//bazel:linux_arm64": observer_third_party_link_files("linux_arm64"),
+    "//conditions:default": observer_third_party_link_files("linux_x86_64"),
 })
 
 _SEEKDB_EXTRA_LINK_INPUTS = select({
+    "@platforms//os:android": [],
     "@platforms//os:macos": [],
     "//conditions:default": [
         "@seekdb_3rd_headers//:lib/libaio.so.1",
@@ -614,6 +452,7 @@ _SEEKDB_EXTRA_LINK_INPUTS = select({
 })
 
 _SEEKDB_SYSTEM_LIBS = select({
+    "@platforms//os:android": ["dl", "m", "log", "android", "atomic"],
     "@platforms//os:macos": [
         "pthread",
         "dl",
@@ -629,6 +468,7 @@ _SEEKDB_SYSTEM_LIBS = select({
 })
 
 _SEEKDB_EXECUTABLE_LINKOPTS = select({
+    "@platforms//os:android": ["-pie", "-fopenmp", "-static-openmp", "-Wl,--gc-sections", "-Wl,--build-id=sha1"],
     "@platforms//os:macos": [
         "-Wl,-dead_strip",
         "-Wl,-framework,Security",

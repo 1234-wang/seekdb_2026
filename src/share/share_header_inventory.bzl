@@ -30,6 +30,7 @@ SHARE_PUBLIC_HEADER_ROOTS = [
     "datum/ob_datum_funcs.h",
     "datum/ob_datum_util.h",
     "diagnosis/ob_sql_monitor_statname.h",
+    "geo/geo_math.h",
     "geo/ob_geo.h",
     "geo/ob_geo_3d.h",
     "geo/ob_geo_bin.h",

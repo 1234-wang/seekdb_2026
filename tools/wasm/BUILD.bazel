@@ -1,0 +1,16 @@
+filegroup(
+    name = "rust_build_tools",
+    srcs = [
+        "build-rust-nio.sh",
+        "rust-build-env.sh",
+        "prepare-rust-sysroot.py",
+        "prepare-rust-workspace.py",
+        "rust-nio-manifest.py",
+        "dependencies.json",
+        "emscripten-version",
+        "rust-toolchain-version",
+    ],
+    visibility = ["//rust:__pkg__"],
+)
+
+exports_files(["build-rust-nio.sh"])

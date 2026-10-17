@@ -632,5 +632,17 @@
         "all(not(target_vendor = \"apple\"), any(not(target_family = \"wasm\"), target_os = \"emscripten\"), target_family = \"unix\"),"
       ]
     ]
+  },
+  "spdlog_rs_emscripten": {
+    "version": "0.5.3",
+    "path": "src/record.rs",
+    "input_sha256": "81f9b24c1f0b17b96355a3d168885f360195b64cd8b5b8da84412d73cf087b3d",
+    "output_sha256": "b1ad646964d9f4a72b0042a48a8e14e39e92cc1d668722971dcd3821f397b288",
+    "replacements": [
+      [
+        "    #[cfg(target_os = \"freebsd\")]\n",
+        "    #[cfg(target_os = \"emscripten\")]\n    #[must_use]\n    fn get_current_tid_inner() -> u64 {\n        // Emscripten represents a pthread by its address in shared Wasm memory.\n        unsafe { libc::pthread_self() as u64 }\n    }\n\n    #[cfg(target_os = \"freebsd\")]\n"
+      ]
+    ]
   }
 }

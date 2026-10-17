@@ -202,8 +202,10 @@ def _file_paths(files):
 def _seekdb_final_link_impl(ctx):
     cc_toolchain = find_cpp_toolchain(ctx)
     is_macos = _target_is_macos(ctx)
+    is_wasm = ctx.target_platform_has_constraint(ctx.attr._wasm_constraint[platform_common.ConstraintValueInfo])
+    needs_static_cpp_runtime = not is_macos and not is_wasm
     requested_features = ctx.features
-    if not is_macos and "static_link_cpp_runtimes" not in requested_features:
+    if needs_static_cpp_runtime and "static_link_cpp_runtimes" not in requested_features:
         requested_features = requested_features + ["static_link_cpp_runtimes"]
     feature_configuration = cc_common.configure_features(
         ctx = ctx,
@@ -212,11 +214,11 @@ def _seekdb_final_link_impl(ctx):
         unsupported_features = ctx.disabled_features,
     )
     static_cpp_runtime_inputs = []
-    if not is_macos:
+    if needs_static_cpp_runtime:
         static_cpp_runtime_inputs = cc_toolchain.static_runtime_lib(
             feature_configuration = feature_configuration,
         ).to_list()
-    if not is_macos and not static_cpp_runtime_inputs:
+    if needs_static_cpp_runtime and not static_cpp_runtime_inputs:
         fail(
             "%s requires a toolchain-provided static C++ runtime" % ctx.label,
         )
@@ -321,6 +323,10 @@ def _seekdb_final_link_impl(ctx):
         action_name = action_name,
         variables = link_variables,
     )
+    if is_wasm:
+        # The toolchain repository prepares the sysroot. Frozen mode also
+        # disables Emscripten's writable JavaScript symbol cache in the sandbox.
+        environment = environment | {"EM_FROZEN_CACHE": "1"}
 
     args = ctx.actions.args()
     args.add_all(command_line)
@@ -332,7 +338,7 @@ def _seekdb_final_link_impl(ctx):
             direct = link_inputs + extra_inputs,
             transitive = [cc_toolchain.all_files],
         ),
-        outputs = [output],
+        outputs = [output] + ctx.outputs.side_outputs,
         mnemonic = "SeekdbFinalLink",
         progress_message = (
             "Linking seekdb shared library %{output}"
@@ -345,7 +351,7 @@ def _seekdb_final_link_impl(ctx):
     return [
         DefaultInfo(
             executable = output,
-            files = depset([output]),
+            files = depset([output] + ctx.outputs.side_outputs),
         ),
     ]
 
@@ -362,10 +368,12 @@ seekdb_final_link = rule(
         "system_libs": attr.string_list(),
         "linkopts": attr.string_list(),
         "out": attr.output(mandatory = True),
+        "side_outputs": attr.output_list(),
         "shared": attr.bool(default = False),
         "_macos_constraint": attr.label(
             default = Label("@platforms//os:macos"),
         ),
+        "_wasm_constraint": attr.label(default = Label("@platforms//os:emscripten")),
     } | CC_TOOLCHAIN_ATTRS,
     executable = True,
     fragments = ["cpp"],

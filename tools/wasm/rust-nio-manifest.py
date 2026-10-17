@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 OceanBase. SPDX-License-Identifier: Apache-2.0
-"""Reject stale externally built NIO archives when CMake builds the engine."""
+"""Record and verify the inputs of exported Wasm Rust archives."""
 import argparse
 import hashlib
 import json
@@ -19,12 +19,15 @@ paths = [
             for pattern in ("src/**/*.rs", "include/*.h", "*.toml", "*.rs", "*.yaml")
             for path in (repo / "rust" / crate).glob(pattern)),
     *(repo / name for name in (
-        "rust/Cargo.toml", "rust/Cargo.lock", "rust/build.py", "rust/exports.json",
+        "rust/Cargo.toml", "rust/build.py", "rust/exports.json",
         "tools/wasm/rust-toolchain-version", "tools/wasm/emscripten-version",
         "tools/wasm/build-rust-nio.sh", "tools/wasm/rust-build-env.sh",
         "tools/wasm/prepare-rust-sysroot.py", "tools/wasm/rust-nio-manifest.py",
+        "tools/wasm/prepare-rust-workspace.py",
     )),
 ]
+if (repo / "rust/Cargo.lock").exists():
+    paths.append(repo / "rust/Cargo.lock")
 
 def digest(path):
     with path.open("rb") as source:
@@ -32,6 +35,9 @@ def digest(path):
 
 try:
     std_patch = json.loads((repo / "tools/wasm/dependencies.json").read_text())["rust_std_tls_patch"]
+    log_patch = json.loads((repo / "tools/wasm/dependencies.json").read_text())["spdlog_rs_emscripten"]
+    if digest(build / "patched-crates/spdlog-rs" / log_patch["path"]) != log_patch["output_sha256"]:
+        raise ValueError("private spdlog-rs Emscripten patch does not match")
     std_path = build / "sysroot/lib/rustlib/src" / std_patch["path"]
     if digest(std_path) != std_patch["output_sha256"]:
         raise ValueError("private Rust standard-library TLS patch does not match")
@@ -42,6 +48,8 @@ try:
         "rustflags": "-Ctarget-feature=+atomics,+bulk-memory,+mutable-globals -Cpanic=abort",
         "inputs": {str(path.relative_to(repo)): digest(path) for path in paths},
         "std_patch": std_patch,
+        "log_patch": log_patch,
+        "workspace_lock_sha256": digest(build / "workspace/Cargo.lock"),
         "archive_sha256": {name: digest(path) for name, path in archives.items()},
     }
     if args.record:

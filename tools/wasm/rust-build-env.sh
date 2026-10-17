@@ -11,7 +11,7 @@ if ! emcc --version | head -n 1 | grep -Eq " ${sdk_version//./\\.}([ -]|$)"; the
 fi
 export RUSTUP_TOOLCHAIN="${rust_version}"
 export CARGO_TARGET_DIR="${build_dir}/target"
-export CARGO_HOME="${build_dir}/cargo"
+export CARGO_HOME="${CARGO_HOME:-${build_dir}/cargo}"
 SEEKDB_RUSTC="$(rustup which rustc --toolchain "${rust_version}")"
 export SEEKDB_RUSTC
 export SEEKDB_RUST_SYSROOT="${build_dir}/sysroot"

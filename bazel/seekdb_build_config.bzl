@@ -1,5 +1,7 @@
 """Shared settings for the seekdb Bazel build."""
 
+SEEKDB_VERSION = "1.4.0.0"
+
 SEEKDB_X86_SIMD_COPTS = [
     "-mtune=core-avx2",
     "-mavx2",
@@ -138,8 +140,8 @@ SEEKDB_RELEASE_LOCAL_DEFINES = [
     'OB_BUILD_SYS_VEC_IDX',
     'OCI_LINK_RUNTIME',
     'PACKAGE_NAME=\\"OceanBase\\"',
-    'PACKAGE_STRING=\\"OceanBase\\ 1.4.0.0\\"',
-    'PACKAGE_VERSION=\\"1.4.0.0\\"',
+    'PACKAGE_STRING=\\"OceanBase\\ %s\\"' % SEEKDB_VERSION,
+    'PACKAGE_VERSION=\\"%s\\"' % SEEKDB_VERSION,
     'RELEASEID=\\"1\\"',
     '_GLIBCXX_USE_CXX11_ABI=1',
     '_NO_EXCEPTION',
@@ -152,12 +154,21 @@ _SEEKDB_SANITY_PASS = "@seekdb_3rd_headers//:sanity_pass"
 
 def seekdb_arch_copts():
     return select({
+        "@platforms//cpu:wasm32": [],
         "@platforms//cpu:x86_64": ["-mtune=core2"],
+        "@platforms//cpu:aarch64": ["-march=armv8-a+crc+lse", "-mtune=generic"],
         "//conditions:default": ["-mtune=generic"],
     })
 
 def seekdb_platform_local_defines():
     return select({
+        "@platforms//os:emscripten": [
+            "_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION",
+            "_XOPEN_SOURCE=700",
+            "VSAG_DISABLE_STATIC_HNSW",
+            "HAVE_LIBAIO=0",
+        ],
+        "@platforms//os:android": ["_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION"],
         "@platforms//os:macos": ["_DARWIN_C_SOURCE"],
         "//conditions:default": [],
     })
@@ -166,6 +177,7 @@ def seekdb_openmp_copts():
     # Apple Clang does not ship an OpenMP runtime. The affected implementation
     # remains serial on macOS, matching the former CMake build.
     return select({
+        "@platforms//os:emscripten": [],
         "@platforms//os:macos": [],
         "//conditions:default": ["-fopenmp"],
     })

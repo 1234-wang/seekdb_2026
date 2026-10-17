@@ -349,6 +349,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
     ),
     "geo_algorithms": struct(
         hdrs = [
+            "geo/geo_math.h",
             "geo/ob_geo_dispatcher.h",
             "geo/ob_geo_func_area.h",
             "geo/ob_geo_func_box.h",

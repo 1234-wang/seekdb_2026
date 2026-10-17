@@ -31,15 +31,25 @@ def cargo_workspace(exports, srcs):
     for platform in ["unix", "windows"]:
         windows = platform == "windows"
         command = '"$(location build.py)" --target-dir "$(@D)/cargo-target" --output "$(@D)/%s"' % platform
-        native.genrule(
-            name = "_rust_static_" + platform,
-            srcs = srcs,
-            outs = [platform + "/" + _archive(name, windows) for name in exports] +
-                   [platform + "/" + h for h in headers],
-            cmd = """set -eu
+        android_inputs = [] if windows else select({
+            "@platforms//os:android": ["@seekdb_android_ndk//:rust_env.sh"],
+            "@platforms//os:emscripten": ["//tools/wasm:rust_build_tools", "//tools/wasm:build-rust-nio.sh"],
+            "//conditions:default": [],
+        })
+        unix_command = """set -eu
 export DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
 export CXXFLAGS="$${CXXFLAGS:-} -D_GLIBCXX_USE_CXX11_ABI=1"
-python3 """ + command if not windows else "",
+""" + select({
+            "@platforms//os:emscripten": 'bash "$(location //tools/wasm:build-rust-nio.sh)" "$(@D)/wasm-rust"\nmkdir -p "$(@D)/unix"\ncp -R "$(@D)/wasm-rust/exports/." "$(@D)/unix/"',
+            "@platforms//os:android": 'source "$(location @seekdb_android_ndk//:rust_env.sh)"\npython3 ' + command + " --target aarch64-linux-android",
+            "//conditions:default": "python3 " + command,
+        })
+        native.genrule(
+            name = "_rust_static_" + platform,
+            srcs = srcs + android_inputs,
+            outs = [platform + "/" + _archive(name, windows) for name in exports] +
+                   [platform + "/" + h for h in headers],
+            cmd = unix_command if not windows else "",
             cmd_bat = "set DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR\npython " + command if windows else "",
             tags = ["no-remote", "no-sandbox"],
             target_compatible_with = select({
@@ -51,6 +61,8 @@ python3 """ + command if not windows else "",
     cc_library(
         name = "_rust_runtime",
         linkopts = select({
+            "@platforms//os:emscripten": [],
+            "@platforms//os:android": ["-ldl", "-lm"],
             ":windows": ["ntdll.lib", "userenv.lib", "ws2_32.lib", "bcrypt.lib", "advapi32.lib", "synchronization.lib"],
             ":macos": [],
             "//conditions:default": ["-lpthread", "-ldl", "-lm"],

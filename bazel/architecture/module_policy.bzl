@@ -21,11 +21,13 @@ MODULE_ROOTS = {
     "standby": "src/standby",
     "sql": "src/sql",
     "storage": "src/storage",
+    "wasm": "src/wasm",
 }
 
 # Authoritative production module graph. Every direct cross-module BUILD edge
 # must be present here, and entries without a real BUILD edge are removed.
 ALLOWED_MODULE_DEPS = {
+    "wasm": ["observer", "oblib"],
     "data_plane": [
         "oblib",
         "share",

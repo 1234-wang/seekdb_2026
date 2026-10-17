@@ -42,6 +42,11 @@ filegroup(
     srcs = glob(["devtools/share/bison/**/*"], allow_empty = True),
 )
 
+filegroup(
+    name = "wasm_static_libraries",
+    srcs = glob(["lib/*.a"], allow_empty = True),
+)
+
 cc_import(
     name = "gtest_archive",
     static_library = "lib/libgtest.a",
@@ -257,6 +262,11 @@ def _seekdb_third_party_headers_repository_impl(repository_ctx):
     devtools = str(repository_ctx.workspace_root) + "/" + repository_ctx.attr.devtools_path
     libraries = str(repository_ctx.workspace_root) + "/" + repository_ctx.attr.libraries_path
     libraries64 = str(repository_ctx.workspace_root) + "/" + repository_ctx.attr.libraries64_path
+    wasm_deps = repository_ctx.getenv("SEEKDB_WASM_DEPS")
+    if wasm_deps:
+        headers = wasm_deps + "/include"
+        libraries = wasm_deps + "/lib"
+        libraries64 = libraries
     repository_ctx.symlink(headers, "include")
     repository_ctx.symlink(devtools, "devtools")
     repository_ctx.symlink(libraries, "lib")

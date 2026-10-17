@@ -8,26 +8,32 @@ Compile seekdb with Emscripten into a WebAssembly engine that runs inside a brow
 - Emscripten 6.0.12, the version in `tools/wasm/emscripten-version`, with its `emcc` on `PATH`, for example from `brew install emscripten`
 - `rustup`, CMake 3.20 or later, Python 3.12 or later and `curl` on `PATH`
 - Node.js 24 or later to run the tests
-- About 5 GB of free disk space for the dependencies and the build directories
+- At least 20 GB of free disk space recommended for dependencies, the SDK and build directories
 
 ## Build
 
-Use the WebAssembly entry point. It initializes the dependencies, configures the build, and builds the engine:
+Activate the pinned Emscripten SDK, prepare dependencies, then build with Bazel:
 
 ```bash
-./build.sh release --wasm --init --make
+# emcc must come from the pinned Emscripten SDK.
+export EMSCRIPTEN=/path/to/emsdk/upstream/emscripten
+export PATH="$EMSCRIPTEN:$PATH"
+export SEEKDB_WASM_DEPS="$PWD/build_wasm_deps"
+
+# Reuse deps/3rd if it is already initialized.
+python3 bazel.py init
+rustup toolchain install "$(cat tools/wasm/rust-toolchain-version)" \
+  --profile minimal --component rust-src --target wasm32-unknown-emscripten
+bash tools/wasm/build-deps.sh "$SEEKDB_WASM_DEPS"
+python3 tools/wasm/prepare-headers.py \
+  --source deps/3rd/usr/local/oceanbase/deps/devel/include \
+  --include "$SEEKDB_WASM_DEPS/include" --target-prefix "$SEEKDB_WASM_DEPS"
+python3 bazel.py build --config=wasm //src/wasm:database
 ```
 
-`--init` downloads only bison, flex and the source headers the WebAssembly build needs from the native dependency list, unless `deps/3rd` already has them; installs the pinned Rust nightly from `tools/wasm/rust-toolchain-version` with the `wasm32-unknown-emscripten` target; and builds the third-party libraries from the pinned sources in `tools/wasm/dependencies.json` into `build_wasm_deps`. Every run also builds the Rust crates (the memory NIO, `config` and `local`) with `rust/build.py` into `build_wasm_rust_runtime`. Leave out `--init` once the dependencies exist. Without `--make`, `build.sh` only configures the build.
+`init` prepares host tools and headers; `build-deps.sh` builds Wasm third-party libraries from pinned sources. Once dependencies are ready, repeat only the final Bazel command with these environment variables set. Bazel builds the Rust libraries; Wasm-specific patches apply only to private dependency copies in the build directory. Run `unset SEEKDB_WASM_DEPS` before switching back to native or Android builds to restore their dependency directories.
 
-The engine is generated at:
-
-```text
-build_wasm_engine/seekdb_wasm_database.mjs    # Emscripten module
-build_wasm_engine/seekdb_wasm_database.wasm   # engine
-```
-
-Pass CMake options before `--make`, and make options after it, such as `--make -j8`. `./build.sh clean` removes `build_wasm_engine` and `build_wasm_rust_runtime` and keeps `build_wasm_deps`.
+The engine and its JS, HTML and CSS assets are in `build_bazel/bin/src/wasm/dist/`. `python3 bazel.py clean` clears Bazel build outputs and preserves `build_wasm_deps`.
 
 ## Build directory contents
 
@@ -43,7 +49,7 @@ Serve these files from `localhost` or over HTTPS with `Cross-Origin-Opener-Polic
 Serve the shell from the build directory and open the URL it prints:
 
 ```bash
-python3 tools/wasm/serve-shell.py --build-dir build_wasm_engine
+python3 tools/wasm/serve-shell.py --build-dir build_bazel/bin/src/wasm/dist
 ```
 
 The shell's commands and storage modes are described in `docs/webassembly-shell.md`.
