@@ -9,12 +9,7 @@ load(
     "SEEKDB_MODULE_C_COPTS",
     "SEEKDB_RELEASE_LOCAL_DEFINES",
     "SEEKDB_MODULE_CXX_COPTS",
-    "seekdb_sanity_compiler_inputs",
-    "seekdb_sanity_copts",
-    "seekdb_sanity_cxxopts",
-    "seekdb_sanity_implementation_deps",
-    "seekdb_sanity_local_defines",
-    "seekdb_sanity_target_compatible_with",
+    "seekdb_sanity_settings",
 )
 load("//bazel:oblib_compile_deps.bzl", "oblib_compile_deps")
 load(
@@ -44,16 +39,17 @@ def _seekdb_cc_library_impl(
         for dependency in oblib_compile_deps(name)
         if Label(dependency) not in implementation_deps
     ]
+    sanity = seekdb_sanity_settings(sanity_instrumentation)
     _rules_cc_library(
         name = name,
         visibility = visibility,
-        additional_compiler_inputs = additional_compiler_inputs + seekdb_platform_compiler_inputs() + seekdb_sanity_compiler_inputs(sanity_instrumentation),
-        copts = copts + seekdb_arch_copts() + seekdb_platform_copts() + seekdb_sanity_copts(sanity_instrumentation),
-        cxxopts = cxxopts + seekdb_sanity_cxxopts(sanity_instrumentation),
-        implementation_deps = implementation_deps + seekdb_sanity_implementation_deps(),
+        additional_compiler_inputs = additional_compiler_inputs + seekdb_platform_compiler_inputs() + sanity.additional_compiler_inputs,
+        copts = copts + seekdb_arch_copts() + seekdb_platform_copts() + sanity.copts,
+        cxxopts = cxxopts + sanity.cxxopts,
+        implementation_deps = implementation_deps + sanity.implementation_deps,
         linkstatic = True,
-        local_defines = local_defines + seekdb_platform_local_defines() + seekdb_sanity_local_defines(),
-        target_compatible_with = target_compatible_with + seekdb_sanity_target_compatible_with(),
+        local_defines = local_defines + seekdb_platform_local_defines() + sanity.local_defines,
+        target_compatible_with = target_compatible_with + sanity.target_compatible_with,
         **kwargs
     )
 
