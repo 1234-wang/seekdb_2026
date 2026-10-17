@@ -1,0 +1,4 @@
+#pragma once
+
+#define SEEKDB_IOS_BUILD_ID "@GIT_REVISION@"
+#define SEEKDB_IOS_HOOK_MODE "disabled"

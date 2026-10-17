@@ -1,4 +1,5 @@
 load(":observer_link_deps.bzl", "observer_third_party_link_files")
+load("//bazel:ios_framework.bzl", "seekdb_ios_framework")
 load(
     "//bazel:defs.bzl",
     "cc_import",
@@ -12,6 +13,7 @@ load(
 load(
     ":observer_build_defs.bzl",
     "OBSERVER_IGNORED_SOURCES",
+    "OBSERVER_IOS_SOURCES",
     "OBSERVER_MAIN_SOURCES",
     "OBSERVER_PRIVATE_HEADERS",
     "OBSERVER_RETRIEVAL_COMPOSITION_SOURCES",
@@ -46,6 +48,7 @@ observer_validate_source_inventory(
         OBSERVER_MAIN_SOURCES,
         OBSERVER_RETRIEVAL_COMPOSITION_SOURCES,
         OBSERVER_STANDALONE_SOURCES,
+        OBSERVER_IOS_SOURCES,
     ],
     glob(
         [
@@ -409,6 +412,8 @@ cc_library(
     tags = ["manual"],
     visibility = ["//src/wasm:__pkg__"],
 )
+
+seekdb_ios_framework()
 
 _SEEKDB_TAIL_LINK_DEPS = select({
     "@platforms//os:android": [

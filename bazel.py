@@ -483,8 +483,8 @@ def _run_management_command(root: Path, arguments: List[str]) -> Optional[int]:
         ).returncode
     if not arguments or arguments[0] != "init":
         return None
-    if arguments not in (["init"], ["init", "--android"]):
-        raise LauncherError("usage: ./bazel.py init [--android]")
+    if arguments not in (["init"], ["init", "--android"], ["init", "--ios"], ["init", "--ios", "--simulator"]):
+        raise LauncherError("usage: ./bazel.py init [--android | --ios [--simulator]]")
 
     initializer = root / "deps" / "init" / "dep_create.sh"
     if not initializer.is_file():
@@ -492,10 +492,31 @@ def _run_management_command(root: Path, arguments: List[str]) -> Optional[int]:
 
     environment = os.environ.copy()
     environment["ANDROID_BUILD"] = "true" if "--android" in arguments else "false"
-    return subprocess.run(
+    ios = "--ios" in arguments
+    if ios:
+        sdk = "iphonesimulator" if "--simulator" in arguments else "iphoneos"
+        if sys.platform != "darwin" or subprocess.run(
+            ["xcrun", "--sdk", sdk, "--show-sdk-path"], env=environment,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ).returncode:
+            raise LauncherError("iOS SDK unavailable; install Xcode and set DEVELOPER_DIR to its Contents/Developer directory")
+    status = subprocess.run(
         ["bash", initializer.name],
         cwd=str(initializer.parent),
         env=environment,
+    ).returncode
+    if status or not ios:
+        return status
+    target = "aarch64-apple-ios-sim" if "--simulator" in arguments else "aarch64-apple-ios"
+    status = subprocess.run(
+        ["rustup", "target", "add", target], cwd=str(root / "rust"), env=environment,
+    ).returncode
+    if status:
+        return status
+    return subprocess.run(
+        [sys.executable, str(root / "deps/ios-build/build.py"), "--reuse", "--jobs", str(os.cpu_count() or 1)]
+        + (["--simulator"] if "--simulator" in arguments else []),
+        cwd=str(root), env=environment,
     ).returncode
 
 

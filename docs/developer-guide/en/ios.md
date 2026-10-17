@@ -11,31 +11,40 @@ Cross-compile seekdb on an Apple Silicon Mac into `SeekDB.framework`, a dynamic 
 
 ## Build
 
-Use the iOS entry point. It initializes the dependencies, configures the build, and builds the framework:
+Initialize the dependencies, then build the arm64 device framework with Bazel:
 
 ```bash
-./build.sh release --ios --init --make -j8               # arm64 device
-./build.sh release --ios --simulator --init --make -j8   # arm64 simulator
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+./bazel.py init --ios
+./bazel.py build --config=ios //src/observer:seekdb_ios_framework
 ```
 
-`--init` runs `dep_create.sh` and `rustup toolchain install` as the Android build does, and also builds the iOS libraries from the pinned sources in `deps/ios-build` into `deps/ios/<sdk>/devel`; later runs reuse the libraries that are still current. Leave out `--init` once the dependencies exist. Without `--make`, `build.sh` only configures the build.
+`init --ios` prepares the host tools and Rust iOS target, and builds the iOS libraries from the pinned sources in `deps/ios-build` into `deps/ios/iphoneos/devel`. Use `build` directly for subsequent builds; initialization reuses dependencies that are still current. The project's `.bazelversion` pins Bazel, which `bazel.py` downloads on first use.
+
+The arm64 simulator uses a separate dependency directory and configuration:
+
+```bash
+./bazel.py init --ios --simulator
+./bazel.py build --config=ios-simulator //src/observer:seekdb_ios_framework
+```
+
+The minimum deployment version is iOS 18.0. Both configurations compile the engine directly with the Apple C++ toolchain and disable physical standby support.
 
 The framework is generated at:
 
 ```text
-build_ios_release/framework/SeekDB.framework             # device
-build_ios_simulator_release/framework/SeekDB.framework   # simulator
+build_bazel/bin/src/observer/framework/SeekDB.framework
 ```
 
-Pass CMake options before `--make`: `-DCMAKE_BUILD_TYPE=Debug` builds a Debug framework, and `-DDEP_DIR=/path` uses another iOS dependency directory. `./build.sh clean` removes both build directories.
+Both configurations use the same output path. To retain both, specify `--build-dir build_bazel_ios` and `--build-dir build_bazel_ios_simulator` before `build`, or copy the framework before switching configurations.
 
-The iOS CMake build does not provide an `all_tests` target. Validate affected unit tests on a supported Linux host by following [Write and run unit tests](unittest.md).
+Validate affected unit tests on a supported Linux host by following [Write and run unit tests](unittest.md).
 
 ## Framework contents
 
 - `SeekDB`: the engine, its Rust libraries and third-party libraries linked into one arm64 dynamic library that depends only on system libraries
 - `Headers/seekdb.h`: `seekdb_open`, `seekdb_close` and `seekdb_connection_options`
-- `Info.plist`, `build-manifest.json` (source revision, checksums, exported symbols), `rust-Cargo.lock` and `Licenses/`
+- `Info.plist`, `build-manifest.json`: source revision, platform, minimum OS version, binary checksum and exported symbols
 
 The device and simulator frameworks are not interchangeable. The framework is not signed for distribution; Xcode signs it with the app when it is added with **Embed & Sign**.
 

@@ -1,6 +1,7 @@
 """Expose the Cargo workspace's declared C++ exports to Bazel."""
 
 load("//bazel:defs.bzl", cc_library = "seekdb_cc_library")
+load("@apple_support//rules:apple_genrule.bzl", "apple_genrule")
 
 def _cargo_exports_repository_impl(ctx):
     exports = json.decode(ctx.read(ctx.attr.manifest))
@@ -20,6 +21,7 @@ def _platform_files(unix, windows = None):
         windows = unix
     return select({
         ":windows": ["windows/" + f for f in windows],
+        "@platforms//os:ios": ["ios/" + f for f in unix],
         "//conditions:default": ["unix/" + f for f in unix],
     })
 
@@ -28,8 +30,9 @@ def cargo_workspace(exports, srcs):
     native.config_setting(name = "windows", constraint_values = ["@platforms//os:windows"])
     native.config_setting(name = "macos", constraint_values = ["@platforms//os:macos"])
     headers = {"include/" + h: True for export in exports.values() for h in export["headers"]}
-    for platform in ["unix", "windows"]:
+    for platform in ["unix", "windows", "ios"]:
         windows = platform == "windows"
+        ios = platform == "ios"
         command = '"$(location build.py)" --target-dir "$(@D)/cargo-target" --output "$(@D)/%s"' % platform
         android_inputs = [] if windows else select({
             "@platforms//os:android": ["@seekdb_android_ndk//:rust_env.sh"],
@@ -40,22 +43,29 @@ def cargo_workspace(exports, srcs):
 export DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR
 export CXXFLAGS="$${CXXFLAGS:-} -D_GLIBCXX_USE_CXX11_ABI=1"
 """ + select({
+            "//bazel:ios_simulator": 'export SDKROOT="$$(xcrun --sdk iphonesimulator --show-sdk-path)"\nexport IPHONEOS_DEPLOYMENT_TARGET=18.0\npython3 ' + command + " --target aarch64-apple-ios-sim",
+            "@platforms//os:ios": 'export SDKROOT="$$(xcrun --sdk iphoneos --show-sdk-path)"\nexport IPHONEOS_DEPLOYMENT_TARGET=18.0\npython3 ' + command + " --target aarch64-apple-ios",
             "@platforms//os:emscripten": 'bash "$(location //tools/wasm:build-rust-nio.sh)" "$(@D)/wasm-rust"\nmkdir -p "$(@D)/unix"\ncp -R "$(@D)/wasm-rust/exports/." "$(@D)/unix/"',
             "@platforms//os:android": 'source "$(location @seekdb_android_ndk//:rust_env.sh)"\npython3 ' + command + " --target aarch64-linux-android",
             "//conditions:default": "python3 " + command,
         })
-        native.genrule(
+        genrule = apple_genrule if ios else native.genrule
+        platform_args = {"no_sandbox": True} if ios else {
+            "cmd_bat": "set DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR\npython " + command if windows else "",
+        }
+        genrule(
             name = "_rust_static_" + platform,
             srcs = srcs + android_inputs,
             outs = [platform + "/" + _archive(name, windows) for name in exports] +
                    [platform + "/" + h for h in headers],
             cmd = unix_command if not windows else "",
-            cmd_bat = "set DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR\npython " + command if windows else "",
             tags = ["no-remote", "no-sandbox"],
             target_compatible_with = select({
                 ":windows": [] if windows else ["@platforms//:incompatible"],
-                "//conditions:default": ["@platforms//:incompatible"] if windows else [],
+                "@platforms//os:ios": [] if ios else ["@platforms//:incompatible"],
+                "//conditions:default": [] if platform == "unix" else ["@platforms//:incompatible"],
             }),
+            **platform_args
         )
 
     cc_library(
@@ -65,6 +75,7 @@ export CXXFLAGS="$${CXXFLAGS:-} -D_GLIBCXX_USE_CXX11_ABI=1"
             "@platforms//os:android": ["-ldl", "-lm"],
             ":windows": ["ntdll.lib", "userenv.lib", "ws2_32.lib", "bcrypt.lib", "advapi32.lib", "synchronization.lib"],
             ":macos": [],
+            "@platforms//os:ios": [],
             "//conditions:default": ["-lpthread", "-ldl", "-lm"],
         }),
     )

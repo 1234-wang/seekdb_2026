@@ -47,9 +47,11 @@ load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 
 _STATIC_ARCHIVE_SUFFIXES = (".a", ".lo", ".lib")
 
-def _target_is_macos(ctx):
+def _target_is_apple(ctx):
     return ctx.target_platform_has_constraint(
         ctx.attr._macos_constraint[platform_common.ConstraintValueInfo],
+    ) or ctx.target_platform_has_constraint(
+        ctx.attr._ios_constraint[platform_common.ConstraintValueInfo],
     )
 
 def _append_unique(result, seen, files):
@@ -201,9 +203,9 @@ def _file_paths(files):
 
 def _seekdb_final_link_impl(ctx):
     cc_toolchain = find_cpp_toolchain(ctx)
-    is_macos = _target_is_macos(ctx)
+    is_apple = _target_is_apple(ctx)
     is_wasm = ctx.target_platform_has_constraint(ctx.attr._wasm_constraint[platform_common.ConstraintValueInfo])
-    needs_static_cpp_runtime = not is_macos and not is_wasm
+    needs_static_cpp_runtime = not is_apple and not is_wasm
     requested_features = ctx.features
     if needs_static_cpp_runtime and "static_link_cpp_runtimes" not in requested_features:
         requested_features = requested_features + ["static_link_cpp_runtimes"]
@@ -263,7 +265,7 @@ def _seekdb_final_link_impl(ctx):
         fail("%s has no object or archive inputs" % ctx.label)
 
     ordered_link_args = _file_paths(direct_objects)
-    if group_inputs and is_macos:
+    if group_inputs and is_apple:
         # ld64 repeatedly searches archives, so it does not need GNU ld's
         # --start-group/--end-group cycle breaker.
         ordered_link_args.extend(_file_paths(group_inputs))
@@ -271,7 +273,7 @@ def _seekdb_final_link_impl(ctx):
         ordered_link_args.append("-Wl,--start-group")
         ordered_link_args.extend(_file_paths(group_inputs))
         ordered_link_args.append("-Wl,--end-group")
-    if whole_group_inputs and is_macos:
+    if whole_group_inputs and is_apple:
         ordered_link_args.extend([
             "-Wl,-force_load,%s" % path
             for path in _file_paths(whole_group_inputs)
@@ -280,7 +282,7 @@ def _seekdb_final_link_impl(ctx):
         ordered_link_args.append("-Wl,--whole-archive")
         ordered_link_args.extend(_file_paths(whole_group_inputs))
         ordered_link_args.append("-Wl,--no-whole-archive")
-    if whole_inputs and is_macos:
+    if whole_inputs and is_apple:
         ordered_link_args.extend([
             "-Wl,-force_load,%s" % path
             for path in _file_paths(whole_inputs)
@@ -293,7 +295,10 @@ def _seekdb_final_link_impl(ctx):
     ordered_link_args.extend(_file_paths(ordered_link_files))
     ordered_link_args.extend(_file_paths(static_cpp_runtime_inputs))
     ordered_link_args.extend(_system_library_flags(ctx.attr.system_libs))
-    ordered_link_args.extend(ctx.attr.linkopts)
+    ordered_link_args.extend([
+        ctx.expand_location(option, targets = ctx.attr.extra_inputs)
+        for option in ctx.attr.linkopts
+    ])
 
     output = ctx.outputs.out
     action_name = (
@@ -374,6 +379,7 @@ seekdb_final_link = rule(
             default = Label("@platforms//os:macos"),
         ),
         "_wasm_constraint": attr.label(default = Label("@platforms//os:emscripten")),
+        "_ios_constraint": attr.label(default = Label("@platforms//os:ios")),
     } | CC_TOOLCHAIN_ATTRS,
     executable = True,
     fragments = ["cpp"],

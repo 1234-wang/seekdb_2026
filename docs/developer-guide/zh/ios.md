@@ -11,31 +11,40 @@
 
 ## 构建
 
-使用 iOS 构建入口，一次完成依赖初始化、配置和编译：
+初始化依赖，再用 Bazel 编译 arm64 真机 framework：
 
 ```bash
-./build.sh release --ios --init --make -j8               # arm64 真机
-./build.sh release --ios --simulator --init --make -j8   # arm64 模拟器
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+./bazel.py init --ios
+./bazel.py build --config=ios //src/observer:seekdb_ios_framework
 ```
 
-`--init` 与 Android 构建一样执行 `dep_create.sh` 和 `rustup toolchain install`，另外会用 `deps/ios-build` 中固定版本的源码编译 iOS 依赖库，安装到 `deps/ios/<sdk>/devel`；之后再执行时，仍然有效的依赖库会直接复用。依赖准备好后可以去掉 `--init`。不加 `--make` 时，`build.sh` 只生成构建规则。
+`init --ios` 准备宿主工具、Rust iOS target，并用 `deps/ios-build` 中固定版本的源码编译 iOS 依赖库，安装到 `deps/ios/iphoneos/devel`。后续编译直接运行 `build`；再次初始化时会复用仍然有效的依赖库。Bazel 版本由项目的 `.bazelversion` 固定，首次使用时由 `bazel.py` 下载。
+
+arm64 模拟器使用独立的依赖目录和配置：
+
+```bash
+./bazel.py init --ios --simulator
+./bazel.py build --config=ios-simulator //src/observer:seekdb_ios_framework
+```
+
+最低部署版本为 iOS 18.0。两种配置均通过 Apple C++ 工具链直接编译引擎，并关闭物理备库功能。
 
 framework 位于：
 
 ```text
-build_ios_release/framework/SeekDB.framework             # 真机
-build_ios_simulator_release/framework/SeekDB.framework   # 模拟器
+build_bazel/bin/src/observer/framework/SeekDB.framework
 ```
 
-CMake 选项写在 `--make` 之前：`-DCMAKE_BUILD_TYPE=Debug` 构建 Debug 版本，`-DDEP_DIR=/path` 使用其他 iOS 依赖目录。`./build.sh clean` 会删除这两个构建目录。
+两种配置的输出路径相同。需要同时保留时，在 `build` 之前分别指定 `--build-dir build_bazel_ios` 和 `--build-dir build_bazel_ios_simulator`，或在切换配置前复制 framework。
 
-iOS CMake 构建不提供 `all_tests` 目标。单元测试修改应按照[编写与运行单元测试](unittest.md)中的流程，在受支持的 Linux 主机上验证。
+单元测试修改应按照[编写与运行单元测试](unittest.md)中的流程，在受支持的 Linux 主机上验证。
 
 ## framework 内容
 
 - `SeekDB`：引擎、Rust 库和第三方库链接成的一个 arm64 动态库，只依赖系统库
 - `Headers/seekdb.h`：声明 `seekdb_open`、`seekdb_close` 和 `seekdb_connection_options`
-- `Info.plist`、`build-manifest.json`（源码 revision、校验和、导出符号）、`rust-Cargo.lock` 和 `Licenses/`
+- `Info.plist`、`build-manifest.json`：源码 revision、平台、最低系统版本、二进制校验和和导出符号
 
 真机和模拟器的 framework 不能混用。framework 没有用于分发的签名；在 Xcode 中以 **Embed & Sign** 方式加入 App 后，会随 App 一起签名。
 

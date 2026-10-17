@@ -22,6 +22,13 @@ build:O1 --copt=-O1
 build:O2 --compilation_mode=opt
 build:macos --macos_minimum_os=13.0
 build:android --platforms=//bazel/platforms:android_arm64
+build:ios --platforms=@apple_support//platforms:ios_arm64
+build:ios --ios_minimum_os=18.0
+build:ios --//src/standby:enable_standby=false
+build:ios --repo_env=SEEKDB_IOS_SDK=iphoneos
+build:ios-simulator --config=ios
+build:ios-simulator --platforms=@apple_support//platforms:ios_sim_arm64
+build:ios-simulator --repo_env=SEEKDB_IOS_SDK=iphonesimulator
 build:wasm --platforms=//bazel/platforms:wasm32
 build:wasm --//src/standby:enable_standby=false
 build:wasm --action_env=EM_CONFIG

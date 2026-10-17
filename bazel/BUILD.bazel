@@ -14,6 +14,12 @@ exports_files([
 ])
 
 config_setting(
+    name = "ios_simulator",
+    constraint_values = ["@platforms//os:ios", "@apple_support//constraints:simulator"],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
     name = "linux_arm64",
     constraint_values = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
     visibility = ["//visibility:public"],

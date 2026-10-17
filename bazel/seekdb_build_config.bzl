@@ -170,6 +170,12 @@ def seekdb_platform_local_defines():
         ],
         "@platforms//os:android": ["_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION"],
         "@platforms//os:macos": ["_DARWIN_C_SOURCE"],
+        "@platforms//os:ios": [
+            "_DARWIN_C_SOURCE",
+            "_XOPEN_SOURCE=700",
+            "OB_HAVE_BUNDLED_JEMALLOC=1",
+            "BOOST_NO_CXX98_FUNCTION_BASE",
+        ],
         "//conditions:default": [],
     })
 
@@ -179,6 +185,7 @@ def seekdb_openmp_copts():
     return select({
         "@platforms//os:emscripten": [],
         "@platforms//os:macos": [],
+        "@platforms//os:ios": ["-Xpreprocessor", "-fopenmp"],
         "//conditions:default": ["-fopenmp"],
     })
 

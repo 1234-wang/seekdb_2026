@@ -8,9 +8,11 @@ load(
 )
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 
-def _target_is_macos(ctx):
+def _target_is_apple(ctx):
     return ctx.target_platform_has_constraint(
         ctx.attr._macos_constraint[platform_common.ConstraintValueInfo],
+    ) or ctx.target_platform_has_constraint(
+        ctx.attr._ios_constraint[platform_common.ConstraintValueInfo],
     )
 
 def _direct_pic_objects(target):
@@ -33,10 +35,10 @@ def _seekdb_localized_partial_link_impl(ctx):
     if not objects:
         fail("%s received no direct C++ objects" % ctx.label)
 
-    is_macos = _target_is_macos(ctx)
+    is_apple = _target_is_apple(ctx)
     output = ctx.outputs.out
     # Apple ld -r already localizes hidden (private extern) symbols.
-    temporary = output if is_macos else ctx.actions.declare_file(ctx.label.name + ".tmp.o")
+    temporary = output if is_apple else ctx.actions.declare_file(ctx.label.name + ".tmp.o")
 
     link_args = ctx.actions.args()
     link_args.add("-r")
@@ -55,7 +57,7 @@ def _seekdb_localized_partial_link_impl(ctx):
         progress_message = "Partially linking %{output}",
     )
 
-    if is_macos:
+    if is_apple:
         return [DefaultInfo(files = depset([output]))]
 
     objcopy_args = ctx.actions.args()
@@ -87,6 +89,7 @@ seekdb_localized_partial_link = rule(
         "_macos_constraint": attr.label(
             default = Label("@platforms//os:macos"),
         ),
+        "_ios_constraint": attr.label(default = Label("@platforms//os:ios")),
     } | CC_TOOLCHAIN_ATTRS,
     fragments = ["cpp"],
     toolchains = use_cc_toolchain(),
