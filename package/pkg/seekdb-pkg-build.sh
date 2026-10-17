@@ -230,17 +230,13 @@ cat > "$COMPONENT_PLIST" <<'CPEOF'
 </plist>
 CPEOF
 
-component_args=()
+component_command=(pkgbuild --root "$STAGING" --identifier com.seekdb.server
+                   --version "$VERSION" --scripts "$MACPKG_DIR/launchd/profile")
 if [[ -d "$STAGING/Applications/$APP_BUNDLE_NAME" ]]; then
-  component_args+=(--component-plist "$COMPONENT_PLIST")
+  component_command+=(--component-plist "$COMPONENT_PLIST")
 fi
-pkgbuild \
-  --root "$STAGING" \
-  --identifier "com.seekdb.server" \
-  --version "$VERSION" \
-  --scripts "$MACPKG_DIR/launchd/profile" \
-  "${component_args[@]}" \
-  "$COMPONENT_PKG"
+component_command+=("$COMPONENT_PKG")
+"${component_command[@]}"
 
 info "Building product archive ..."
 # Create a minimal distribution.xml

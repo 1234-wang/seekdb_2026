@@ -18,7 +18,7 @@ Summary: seekdb single-node database
 License: Apache-2.0
 URL: https://www.oceanbase.ai
 Group: Applications/Databases
-Requires: libaio, systemd
+Requires: seekdb-libs%{?_isa} = %{version}-%{release}, systemd
 %description
 seekdb single-node relational database.
 %package libs

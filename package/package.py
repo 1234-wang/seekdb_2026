@@ -94,7 +94,7 @@ def deb(payload, output, version, release):
     control.mkdir()
     (control / "control").write_text(
         "Package: seekdb\nVersion: %s-%s\nSection: database\nPriority: optional\n"
-        "Architecture: %s\nMaintainer: OceanBase\nDepends: libaio1 | libaio1t64, systemd\n"
+        "Architecture: %s\nMaintainer: OceanBase\nDepends: systemd\n"
         "Description: seekdb single-node database\n" % (version, release, architecture))
     (control / "conffiles").write_text("/etc/seekdb/seekdb.cnf\n")
     for name, script in LIFECYCLE.items():
@@ -141,7 +141,8 @@ def main():
     parser.add_argument("format", choices=("stage", "rpm", "deb", "tgz"))
     parser.add_argument("--version", required=True)
     parser.add_argument("--release", required=True)
-    parser.add_argument("--artifacts", type=Path, default=ROOT / "build_bazel/bin")
+    parser.add_argument("--artifacts", type=Path, default=ROOT / "build_bazel/bin",
+                        help="Bazel bin directory from a --config=package build on Linux")
     parser.add_argument("--dependencies", type=Path, default=ROOT / "deps/3rd")
     parser.add_argument("--timezone-file", type=Path)
     parser.add_argument("--layout", choices=("linux", "macos", "windows"), default="linux")
@@ -169,6 +170,8 @@ def main():
                   options.version, options.release, "libs")
             rpm(payload, libs, work, output, options.version, options.release, options.dependencies.resolve())
         elif options.format == "deb":
+            stage(payload, options.artifacts.resolve(), options.dependencies.resolve(), "linux",
+                  options.version, options.release, "libs")
             deb(payload, output, options.version, options.release)
         elif options.format == "tgz":
             tgz(payload, output, options.version, options.release, options.component, options.layout)
