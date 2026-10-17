@@ -8,30 +8,17 @@ translation unit's repository include closure until it reaches OBLib, then
 records the fine-grained owners of those directly reached OBLib headers.
 """
 
-from collections import defaultdict
 from pathlib import Path
 import argparse
-import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+from oblib_dependencies import (
+    INCLUDE_RE, SourceIndex, component_closures, load_owners, oblib_header, read,
+)
 
-SOURCE_SUFFIXES = {
-    ".c",
-    ".cc",
-    ".cpp",
-    ".cxx",
-    ".def",
-    ".h",
-    ".hh",
-    ".hpp",
-    ".hxx",
-    ".inc",
-    ".inl",
-    ".ipp",
-    ".tcc",
-}
+
 COMPILE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 PARTITIONED_TARGET_PREFIXES = (
     "//src/observer:_observer_main_",
@@ -44,14 +31,6 @@ PARTITIONED_TARGET_PREFIXES = (
     "//src/sql:_sql_runtime_",
     "//src/storage:_storage_runtime_",
 )
-INCLUDE_RE = re.compile(
-    r'^\s*#\s*include\s*[<"]([^>"]+)[>"]',
-    re.MULTILINE,
-)
-
-
-def _read(path):
-    return path.read_text(encoding="utf-8", errors="surrogateescape")
 
 
 def _query_xml(repo, expression):
@@ -66,70 +45,6 @@ def _query_xml(repo, expression):
             cwd=str(repo),
         )
     )
-
-
-def _load_owners(repo):
-    namespace = {}
-    inventory = repo / "src" / "oblib" / "oblib_header_inventory.bzl"
-    exec(compile(_read(inventory), str(inventory), "exec"), {}, namespace)
-    return {
-        header: "//src/oblib" + owner
-        for header, owner in namespace[
-            "OBLIB_HEADER_TARGET_FOR_HEADER"
-        ].items()
-    }
-
-
-def _source_index(repo):
-    relative = {}
-    source_root = repo / "src"
-    for path in source_root.rglob("*"):
-        if path.is_file() and path.suffix.lower() in SOURCE_SUFFIXES:
-            relative[path.relative_to(repo).as_posix()] = path.resolve()
-    suffixes = defaultdict(list)
-    basenames = defaultdict(list)
-    for name, path in relative.items():
-        basenames[path.name].append(path)
-        if name.startswith("src/"):
-            suffixes[name[len("src/") :]].append(path)
-        for marker in ("src/query/api/", "src/data_plane/api/"):
-            if name.startswith(marker):
-                suffixes[name[len(marker) :]].append(path)
-    return relative, suffixes, basenames
-
-
-def _resolve_include(source, include, repo, index):
-    if include.startswith("emscripten/"):
-        return None
-    relative, suffixes, basenames = index
-    candidates = [
-        (source.parent / include).resolve(),
-        (repo / include).resolve(),
-        (repo / "src" / include).resolve(),
-        (repo / "src" / "oblib" / include).resolve(),
-        (repo / "src" / "query" / "api" / include).resolve(),
-        (repo / "src" / "data_plane" / "api" / include).resolve(),
-    ]
-    for candidate in candidates:
-        try:
-            name = candidate.relative_to(repo).as_posix()
-        except ValueError:
-            continue
-        if name in relative:
-            return relative[name]
-    matches = suffixes.get(include, ())
-    if len(matches) == 1:
-        return matches[0]
-    matches = basenames.get(Path(include).name, ())
-    return matches[0] if len(matches) == 1 else None
-
-
-def _oblib_header(path, repo):
-    try:
-        relative = path.relative_to(repo / "src" / "oblib").as_posix()
-    except ValueError:
-        return None
-    return None if relative.startswith("easy/") else relative
 
 
 def _list_labels(rule, attribute):
@@ -173,70 +88,8 @@ def _label_sources(label, repo, generated_unity_members, resolving=None):
     return [path.resolve()] if path.is_file() else []
 
 
-def _component_closures(graph, direct_owners):
-    indices = {}
-    lowlinks = {}
-    stack = []
-    on_stack = set()
-    components = []
-
-    def visit(node):
-        indices[node] = len(indices)
-        lowlinks[node] = indices[node]
-        stack.append(node)
-        on_stack.add(node)
-        for dependency in graph.get(node, ()):
-            if dependency not in indices:
-                visit(dependency)
-                lowlinks[node] = min(lowlinks[node], lowlinks[dependency])
-            elif dependency in on_stack:
-                lowlinks[node] = min(lowlinks[node], indices[dependency])
-        if lowlinks[node] == indices[node]:
-            component = []
-            while True:
-                member = stack.pop()
-                on_stack.remove(member)
-                component.append(member)
-                if member == node:
-                    break
-            components.append(component)
-
-    for node in graph:
-        if node not in indices:
-            visit(node)
-
-    component_by_path = {
-        path: index
-        for index, component in enumerate(components)
-        for path in component
-    }
-    component_graph = {index: set() for index in range(len(components))}
-    component_owners = {index: set() for index in range(len(components))}
-    for path, dependencies in graph.items():
-        owner = component_by_path[path]
-        component_owners[owner].update(direct_owners[path])
-        for dependency in dependencies:
-            dependency_owner = component_by_path[dependency]
-            if owner != dependency_owner:
-                component_graph[owner].add(dependency_owner)
-
-    cache = {}
-
-    def closure(component):
-        if component not in cache:
-            result = set(component_owners[component])
-            for dependency in component_graph[component]:
-                result.update(closure(dependency))
-            cache[component] = result
-        return cache[component]
-
-    for component in component_graph:
-        closure(component)
-    return component_by_path, cache
-
-
 def _build_registry(repo):
-    owners = _load_owners(repo)
+    owners = load_owners(repo)
     generated_unity_members = _generated_unity_members(repo)
     cc_rules = _query_xml(
         repo,
@@ -270,7 +123,7 @@ def _build_registry(repo):
             roots_by_target[target] = roots
             all_roots.update(roots)
 
-    index = _source_index(repo)
+    index = SourceIndex(repo)
     graph = {}
     direct_owners = {}
     pending = list(all_roots)
@@ -280,11 +133,11 @@ def _build_registry(repo):
             continue
         dependencies = set()
         path_owners = set()
-        for include in INCLUDE_RE.findall(_read(path)):
-            dependency = _resolve_include(path, include, repo, index)
+        for include in INCLUDE_RE.findall(read(path)):
+            dependency = index.resolve(path, include)
             if dependency is None:
                 continue
-            header = _oblib_header(dependency, repo)
+            header = oblib_header(dependency, repo)
             if header is not None:
                 owner = owners.get(header)
                 if owner is None:
@@ -299,7 +152,7 @@ def _build_registry(repo):
         graph[path] = dependencies
         direct_owners[path] = path_owners
 
-    component_by_path, closures = _component_closures(
+    component_by_path, closures = component_closures(
         graph,
         direct_owners,
     )
@@ -350,7 +203,7 @@ def main():
     output = arguments.output or repo / "bazel" / "oblib_compile_deps.bzl"
     rendered = _render(_build_registry(repo))
     if arguments.check:
-        if not output.is_file() or _read(output) != rendered:
+        if not output.is_file() or read(output) != rendered:
             print(
                 "OBLib compile dependency registry is stale: %s" % output,
                 file=sys.stderr,

@@ -1,28 +1,15 @@
 #!/usr/bin/env python3
 """Verify Storage's native public/closure/private header ownership."""
 
-import ast
-import re
 import sys
 from pathlib import Path
 
-
-HEADER_SUFFIXES = {
-    ".def",
-    ".h",
-    ".hh",
-    ".hpp",
-    ".hxx",
-    ".inc",
-    ".inl",
-    ".ipp",
-    ".tcc",
-}
-SOURCE_SUFFIXES = HEADER_SUFFIXES | {".c", ".cc", ".cpp", ".cxx"}
-INCLUDE_PATTERN = re.compile(
-    r'^[ \t]*#[ \t]*include[ \t]*[<"]([^">]+)[">]',
-    re.MULTILINE,
+from inventory import (
+    HEADER_SUFFIXES, SOURCE_SUFFIXES, INCLUDE_PATTERN,
+    load_inventory, header_ownership, files_under,
 )
+
+
 EXPECTED_COUNTS = {
     "STORAGE_PUBLIC_HEADER_ROOTS": 131,
     "STORAGE_INTERFACE_CLOSURE_HEADERS": 469,
@@ -39,95 +26,16 @@ EXPECTED_SEMANTIC_HEADERS = {
 }
 
 
-def _relative_to(path, root):
-    try:
-        return path.relative_to(root)
-    except ValueError:
-        return None
-
-
-def _load_inventory(path):
-    tree = ast.parse(path.read_text(), filename=str(path))
-    values = {}
-    for node in tree.body:
-        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
-            continue
-        target = node.targets[0]
-        if isinstance(target, ast.Name) and target.id in EXPECTED_COUNTS:
-            values[target.id] = ast.literal_eval(node.value)
-    missing = sorted(set(EXPECTED_COUNTS) - set(values))
-    if missing:
-        raise ValueError("missing inventory assignments: %s" % missing)
-    return values
-
-
-def _tracked_storage_headers(storage_root):
-    return {
-        path.relative_to(storage_root).as_posix(): path
-        for path in storage_root.rglob("*")
-        if path.is_file() and path.suffix in HEADER_SUFFIXES
-    }
-
-
-def _resolve_storage_header(include, source, storage_root, headers):
-    candidates = []
-    if include.startswith("storage/"):
-        candidates.append(include[len("storage/") :])
-    if include.startswith("src/storage/"):
-        candidates.append(include[len("src/storage/") :])
-    source_relative = _relative_to(source, storage_root)
-    if source_relative is not None:
-        candidates.append((source_relative.parent / include).as_posix())
-    candidates.append(include)
-    for candidate in candidates:
-        normalized = str(Path(candidate))
-        if normalized in headers:
-            return normalized
-    return None
-
-
 def _derive_ownership(repo, storage_root, headers):
-    public_roots = set()
-    consumers = {}
-    storage_edges = {header: set() for header in headers}
-
-    for source in (repo / "src").rglob("*"):
-        if not source.is_file() or source.suffix not in SOURCE_SUFFIXES:
-            continue
-        source_relative = _relative_to(source, storage_root)
-        for include in INCLUDE_PATTERN.findall(source.read_text(errors="ignore")):
-            header = _resolve_storage_header(
-                include, source, storage_root, headers
-            )
-            if header is None:
-                continue
-            if source_relative is None:
-                public_roots.add(header)
-                consumers.setdefault(header, set()).add(
-                    source.relative_to(repo).as_posix()
-                )
-            elif source_relative.as_posix() in headers:
-                storage_edges[source_relative.as_posix()].add(header)
-
-    reachable = set(public_roots)
-    pending = list(public_roots)
-    while pending:
-        header = pending.pop()
-        for dependency in storage_edges[header]:
-            if dependency not in reachable:
-                reachable.add(dependency)
-                pending.append(dependency)
-
-    semantic_headers = set(EXPECTED_SEMANTIC_HEADERS)
+    public, closure, private, consumers = header_ownership(
+        repo, storage_root, headers, files_under(repo / "src", SOURCE_SUFFIXES).values(),
+    )
+    special = set(EXPECTED_SEMANTIC_HEADERS)
     return {
-        "STORAGE_PUBLIC_HEADER_ROOTS": public_roots - semantic_headers,
-        "STORAGE_INTERFACE_CLOSURE_HEADERS": (
-            reachable - public_roots - semantic_headers
-        ),
-        "STORAGE_PRIVATE_HEADERS": (
-            set(headers) - reachable - semantic_headers
-        ),
-        "STORAGE_SEMANTIC_HEADERS": semantic_headers,
+        "STORAGE_PUBLIC_HEADER_ROOTS": public - special,
+        "STORAGE_INTERFACE_CLOSURE_HEADERS": closure - special,
+        "STORAGE_PRIVATE_HEADERS": private - special,
+        "STORAGE_SEMANTIC_HEADERS": special,
     }, consumers
 
 
@@ -155,9 +63,9 @@ def main():
     inventory_path = storage_root / "storage_header_inventory.bzl"
     inventory = {
         name: set(values)
-        for name, values in _load_inventory(inventory_path).items()
+        for name, values in load_inventory(inventory_path, EXPECTED_COUNTS).items()
     }
-    headers = _tracked_storage_headers(storage_root)
+    headers = files_under(storage_root, HEADER_SUFFIXES)
     derived, consumers = _derive_ownership(repo, storage_root, headers)
 
     errors = []

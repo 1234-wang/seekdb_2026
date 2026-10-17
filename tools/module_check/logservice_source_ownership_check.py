@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Verify that Logservice's Unity inventory owns every checked-in source once."""
 
-import re
-import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
 
+from inventory import COMPILE_SUFFIXES, load_inventory, source_paths, tracked_files
 
-SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
+
 EXPECTED_GROUPS = {
     "ob_logservice_common_0",
     "ob_logservice_common_mixed_0",
@@ -19,41 +18,16 @@ EXPECTED_GROUPS = {
 EXPECTED_SOURCE_COUNT = 58
 
 
-def _tracked_sources(repo):
-    output = subprocess.check_output(
-        [
-            "git",
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "src/logservice",
-        ],
-        cwd=repo,
-        universal_newlines=True,
-    )
-    return {
-        path
-        for path in output.splitlines()
-        if Path(path).suffix in SOURCE_SUFFIXES and (repo / path).is_file()
-    }
-
-
-def _inventory(repo):
-    manifest = (repo / "src/logservice/logservice_build_defs.bzl").read_text(
-        encoding="utf-8"
-    )
-    groups = set(re.findall(r'name = "(ob_logservice_[^"]+)"', manifest))
-    sources = re.findall(
-        r'"(src/logservice/[^"\n]+\.(?:c|cc|cpp|cxx))"',
-        manifest,
-    )
-    return groups, sources
-
-
 def check(repo):
-    groups, owned = _inventory(repo)
-    tracked = _tracked_sources(repo)
+    records = load_inventory(
+        repo / "src/logservice/logservice_build_defs.bzl", ["LOGSERVICE_UNITY_GROUPS"],
+    )["LOGSERVICE_UNITY_GROUPS"]
+    groups = {group["name"] for group in records}
+    owned = source_paths(records)
+    tracked = {
+        path.relative_to(repo).as_posix()
+        for path in tracked_files(repo, repo / "src/logservice", COMPILE_SUFFIXES).values()
+    }
     owned_set = set(owned)
     errors = []
 

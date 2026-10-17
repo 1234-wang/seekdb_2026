@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Verify that SQL's native inventory owns every checked-in source exactly once."""
 
-import re
-import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import List
+
+from inventory import COMPILE_SUFFIXES, load_inventory, source_paths, tracked_files
 
 
-SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 INVENTORY_NAMES = (
     "SQL_UNITY_GROUPS",
     "SQL_SIMD_UNITY_GROUPS",
@@ -24,51 +23,19 @@ SEPARATELY_OWNED_SOURCES = {
 }
 
 
-def _workspace_sql_sources(repo: Path) -> Set[str]:
-    output = subprocess.check_output(
-        [
-            "git",
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "src/sql",
-        ],
-        cwd=repo,
-        universal_newlines=True,
-    )
-    return {
-        path
-        for path in output.splitlines()
-        if Path(path).suffix in SOURCE_SUFFIXES and (repo / path).is_file()
-    }
-
-
-def _inventory_sections(text: str) -> Dict[str, List[str]]:
-    starts = {
-        name: text.index(f"{name} = [")
-        for name in INVENTORY_NAMES
-    }
-    sections = {}  # type: Dict[str, List[str]]
-    for name, start in starts.items():
-        end = min(
-            [value for value in starts.values() if value > start],
-            default=len(text),
-        )
-        sections[name] = re.findall(
-            r'"(src/sql/[^"\n]+\.(?:c|cc|cpp|cxx))"',
-            text[start:end],
-        )
-    return sections
-
-
 def check(repo: Path) -> List[str]:
     inventory = repo / "src/sql/sql_source_inventory.bzl"
-    sections = _inventory_sections(inventory.read_text(encoding="utf-8"))
+    sections = {
+        name: source_paths(records)
+        for name, records in load_inventory(inventory, INVENTORY_NAMES).items()
+    }
     owned = [path for paths in sections.values() for path in paths]
     duplicates = sorted(path for path, count in Counter(owned).items() if count > 1)
 
-    tracked = _workspace_sql_sources(repo)
+    tracked = {
+        path.relative_to(repo).as_posix()
+        for path in tracked_files(repo, repo / "src/sql", COMPILE_SUFFIXES).values()
+    }
     separate = tracked & SEPARATELY_OWNED_SOURCES
     expected_inventory = tracked - separate
     actual_inventory = set(owned)
@@ -107,7 +74,7 @@ def main() -> int:
         for error in errors:
             print(error, file=sys.stderr)
         return 1
-    print("sql source ownership: 1151 production + 7 separate = 1158 workspace")
+    print("sql source ownership: inventory matches workspace sources")
     return 0
 
 

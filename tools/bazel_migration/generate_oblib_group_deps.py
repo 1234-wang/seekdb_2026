@@ -7,119 +7,18 @@ walks through the repository include graph until it reaches OBLib's public
 header seam.
 """
 
-from collections import defaultdict
 from pathlib import Path
 import argparse
 import re
 import subprocess
 import sys
 
-
-SOURCE_SUFFIXES = {
-    ".c",
-    ".cc",
-    ".cpp",
-    ".cxx",
-    ".def",
-    ".h",
-    ".hh",
-    ".hpp",
-    ".hxx",
-    ".inc",
-    ".inl",
-    ".ipp",
-    ".tcc",
-}
-INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
-
-
-def _read(path):
-    return path.read_text(encoding="utf-8", errors="surrogateescape")
-
-
-def _load_owners(repo):
-    namespace = {}
-    inventory = repo / "src" / "oblib" / "oblib_header_inventory.bzl"
-    exec(compile(_read(inventory), str(inventory), "exec"), {}, namespace)
-    return {
-        header: "//src/oblib" + target
-        for header, target in namespace[
-            "OBLIB_HEADER_TARGET_FOR_HEADER"
-        ].items()
-    }
-
-
-def _source_index(repo):
-    relative = {}
-    source_root = repo / "src"
-    for path in source_root.rglob("*"):
-        if path.is_file() and path.suffix.lower() in SOURCE_SUFFIXES:
-            relative[path.relative_to(repo).as_posix()] = path
-    generated_root = repo / "build_bazel" / "bin" / "src"
-    if generated_root.exists():
-        for path in generated_root.rglob("*"):
-            if path.is_file() and path.suffix.lower() in SOURCE_SUFFIXES:
-                relative[
-                    "src/" + path.relative_to(generated_root).as_posix()
-                ] = path
-    suffixes = defaultdict(list)
-    basenames = defaultdict(list)
-    for name, path in relative.items():
-        basenames[path.name].append(path)
-        if name.startswith("src/"):
-            suffixes[name[len("src/") :]].append(path)
-        for marker in ("src/query/api/", "src/data_plane/api/"):
-            if name.startswith(marker):
-                suffixes[name[len(marker) :]].append(path)
-    return relative, suffixes, basenames
-
-
-def _resolve_include(source, include, repo, relative, suffixes, basenames):
-    if include.startswith("emscripten/"):
-        return None
-    candidates = []
-    if source is not None:
-        candidates.append((source.parent / include).resolve())
-    candidates.extend(
-        [
-            (repo / include).resolve(),
-            (repo / "src" / include).resolve(),
-            (repo / "src" / "oblib" / include).resolve(),
-            (repo / "src" / "query" / "api" / include).resolve(),
-            (repo / "src" / "data_plane" / "api" / include).resolve(),
-        ]
-    )
-    for candidate in candidates:
-        try:
-            name = candidate.relative_to(repo).as_posix()
-        except ValueError:
-            continue
-        if name in relative:
-            return relative[name]
-    matches = suffixes.get(include, ())
-    if len(matches) == 1:
-        return matches[0]
-    resolved_matches = {path.resolve() for path in matches}
-    if len(resolved_matches) == 1:
-        return next(iter(resolved_matches))
-    matches = basenames.get(Path(include).name, ())
-    if len(matches) == 1:
-        return matches[0]
-    resolved_matches = {path.resolve() for path in matches}
-    return next(iter(resolved_matches)) if len(resolved_matches) == 1 else None
-
-
-def _oblib_header(path, repo):
-    oblib = repo / "src" / "oblib"
-    try:
-        relative = path.relative_to(oblib).as_posix()
-    except ValueError:
-        return None
-    return None if relative.startswith("easy/") else relative
+from oblib_dependencies import (
+    INCLUDE_RE, SourceIndex, component_closures, load_owners, oblib_header, read,
+)
 
 
 def _all_group_deps(unity_sources, target_prefix, repo, owner_by_header, index):
-    relative, suffixes, basenames = index
     group_roots = {}
     pending = []
     prefix = target_prefix + "_"
@@ -128,10 +27,8 @@ def _all_group_deps(unity_sources, target_prefix, repo, owner_by_header, index):
         suffix = ".unity.cpp" if name.endswith(".unity.cpp") else ".unity.c"
         group = name[len(prefix) : -len(suffix)]
         roots = []
-        for include in INCLUDE_RE.findall(_read(unity_source)):
-            resolved = _resolve_include(
-                unity_source, include, repo, relative, suffixes, basenames
-            )
+        for include in INCLUDE_RE.findall(read(unity_source)):
+            resolved = index.resolve(unity_source, include)
             if resolved is None:
                 raise ValueError(
                     "%s: cannot resolve Unity member %s"
@@ -149,24 +46,22 @@ def _all_group_deps(unity_sources, target_prefix, repo, owner_by_header, index):
         if path in visited:
             continue
         visited.add(path)
-        header = _oblib_header(path, repo)
+        header = oblib_header(path, repo)
         if header is not None:
             continue
         dependencies = set()
         owners = set()
-        for include in INCLUDE_RE.findall(_read(path)):
-            dependency = _resolve_include(
-                path, include, repo, relative, suffixes, basenames
-            )
+        for include in INCLUDE_RE.findall(read(path)):
+            dependency = index.resolve(path, include)
             if dependency is None:
                 continue
-            oblib_header = _oblib_header(dependency, repo)
-            if oblib_header is not None:
-                owner = owner_by_header.get(oblib_header)
+            dependency_header = oblib_header(dependency, repo)
+            if dependency_header is not None:
+                owner = owner_by_header.get(dependency_header)
                 if owner is None:
                     raise ValueError(
                         "%s reaches private OBLib header %s"
-                        % (path, oblib_header)
+                        % (path, dependency_header)
                     )
                 owners.add(owner)
             else:
@@ -175,71 +70,13 @@ def _all_group_deps(unity_sources, target_prefix, repo, owner_by_header, index):
         graph[path] = dependencies
         direct_owners[path] = owners
 
-    # The source include graph contains legitimate same-module cycles. Collapse
-    # them once, then propagate OBLib header owners over the resulting DAG.
-    indices = {}
-    lowlinks = {}
-    stack = []
-    on_stack = set()
-    components = []
-    next_index = [0]
-
-    def visit(node):
-        indices[node] = next_index[0]
-        lowlinks[node] = next_index[0]
-        next_index[0] += 1
-        stack.append(node)
-        on_stack.add(node)
-        for dependency in graph.get(node, ()):
-            if dependency not in indices:
-                visit(dependency)
-                lowlinks[node] = min(lowlinks[node], lowlinks[dependency])
-            elif dependency in on_stack:
-                lowlinks[node] = min(lowlinks[node], indices[dependency])
-        if lowlinks[node] == indices[node]:
-            component = []
-            while True:
-                member = stack.pop()
-                on_stack.remove(member)
-                component.append(member)
-                if member == node:
-                    break
-            components.append(component)
-
-    for node in sorted(graph, key=str):
-        if node not in indices:
-            visit(node)
-
-    component_by_path = {
-        path: index
-        for index, component in enumerate(components)
-        for path in component
-    }
-    component_graph = {index: set() for index in range(len(components))}
-    component_owners = {index: set() for index in range(len(components))}
-    for path, dependencies in graph.items():
-        owner = component_by_path[path]
-        component_owners[owner].update(direct_owners[path])
-        for dependency in dependencies:
-            dependency_owner = component_by_path[dependency]
-            if owner != dependency_owner:
-                component_graph[owner].add(dependency_owner)
-
-    closure_cache = {}
-
-    def closure(component):
-        if component not in closure_cache:
-            result = set(component_owners[component])
-            for dependency in component_graph[component]:
-                result.update(closure(dependency))
-            closure_cache[component] = result
-        return closure_cache[component]
+    component_by_path, closures = component_closures(graph, direct_owners)
 
     result = {}
     for group, roots in group_roots.items():
         owners = set()
         for root in roots:
-            header = _oblib_header(root, repo)
+            header = oblib_header(root, repo)
             if header is not None:
                 owner = owner_by_header.get(header)
                 if owner is None:
@@ -248,7 +85,7 @@ def _all_group_deps(unity_sources, target_prefix, repo, owner_by_header, index):
                     )
                 owners.add(owner)
             else:
-                owners.update(closure(component_by_path[root]))
+                owners.update(closures[component_by_path[root]])
         result[group] = sorted(owners)
     return result
 
@@ -314,7 +151,7 @@ def main():
         current_groups = set(
             re.findall(
                 r'^    "([^"]+)": \[$',
-                _read(arguments.groups_file),
+                read(arguments.groups_file),
                 re.MULTILINE,
             )
         )
@@ -371,8 +208,8 @@ def main():
         )
         return 1
 
-    owner_by_header = _load_owners(repo)
-    index = _source_index(repo)
+    owner_by_header = load_owners(repo)
+    index = SourceIndex(repo, include_generated=True)
     group_deps = _all_group_deps(
         unity_sources,
         arguments.target_prefix,
@@ -390,7 +227,7 @@ def main():
         return 1
     rendered = _render(arguments.symbol, group_deps)
     if arguments.check:
-        if not arguments.output.is_file() or _read(arguments.output) != rendered:
+        if not arguments.output.is_file() or read(arguments.output) != rendered:
             print(
                 "OBLib Unity dependency map is stale: %s" % arguments.output,
                 file=sys.stderr,

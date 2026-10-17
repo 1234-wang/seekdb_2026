@@ -1,28 +1,15 @@
 #!/usr/bin/env python3
 """Verify Share's native public/closure/private header ownership."""
 
-import ast
-import re
 import sys
 from pathlib import Path
 
-
-HEADER_SUFFIXES = {
-    ".def",
-    ".h",
-    ".hh",
-    ".hpp",
-    ".hxx",
-    ".inc",
-    ".inl",
-    ".ipp",
-    ".tcc",
-}
-SOURCE_SUFFIXES = HEADER_SUFFIXES | {".c", ".cc", ".cpp", ".cxx"}
-INCLUDE_PATTERN = re.compile(
-    r'^[ \t]*#[ \t]*include[ \t]*[<"]([^">]+)[">]',
-    re.MULTILINE,
+from inventory import (
+    HEADER_SUFFIXES, SOURCE_SUFFIXES, INCLUDE_PATTERN,
+    load_inventory, header_ownership, files_under,
 )
+
+
 INVENTORY_NAMES = {
     "SHARE_PUBLIC_HEADER_ROOTS",
     "SHARE_INTERFACE_CLOSURE_HEADERS",
@@ -43,90 +30,15 @@ DECLARED_PUBLIC_HEADER_ROOTS = {
 }
 
 
-def _relative_to(path, root):
-    try:
-        return path.relative_to(root)
-    except ValueError:
-        return None
-
-
-def _load_inventory(path):
-    tree = ast.parse(path.read_text(), filename=str(path))
-    values = {}
-    for node in tree.body:
-        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
-            continue
-        target = node.targets[0]
-        if isinstance(target, ast.Name) and target.id in INVENTORY_NAMES:
-            values[target.id] = ast.literal_eval(node.value)
-    missing = sorted(INVENTORY_NAMES - set(values))
-    if missing:
-        raise ValueError("missing inventory assignments: %s" % missing)
-    return values
-
-
-def _tracked_share_headers(repo, share_root):
-    return {
-        path.relative_to(share_root).as_posix(): path
-        for path in share_root.rglob("*")
-        if path.is_file()
-        and path.suffix in HEADER_SUFFIXES
-        and path.relative_to(share_root).as_posix() not in GENERATED_SOURCE_TREE_HEADERS
-    }
-
-
-def _resolve_share_header(include, source, share_root, headers):
-    candidates = []
-    if include.startswith("share/"):
-        candidates.append(include[len("share/") :])
-    if include.startswith("src/share/"):
-        candidates.append(include[len("src/share/") :])
-    source_relative = _relative_to(source, share_root)
-    if source_relative is not None:
-        candidates.append((source_relative.parent / include).as_posix())
-    candidates.append(include)
-    for candidate in candidates:
-        normalized = str(Path(candidate))
-        if normalized in headers:
-            return normalized
-    return None
-
-
 def _derive_ownership(repo, share_root, headers):
-    public_roots = set()
-    consumers = {}
-    share_edges = {header: set() for header in headers}
-
-    for source in (repo / "src").rglob("*"):
-        if not source.is_file() or source.suffix not in SOURCE_SUFFIXES:
-            continue
-        source_relative = _relative_to(source, share_root)
-        for include in INCLUDE_PATTERN.findall(source.read_text(errors="ignore")):
-            header = _resolve_share_header(include, source, share_root, headers)
-            if header is None:
-                continue
-            if source_relative is None:
-                public_roots.add(header)
-                consumers.setdefault(header, set()).add(
-                    source.relative_to(repo).as_posix()
-                )
-            elif source_relative.as_posix() in headers:
-                share_edges[source_relative.as_posix()].add(header)
-
-    public_roots.update(DECLARED_PUBLIC_HEADER_ROOTS & set(headers))
-    reachable = set(public_roots)
-    pending = list(public_roots)
-    while pending:
-        header = pending.pop()
-        for dependency in share_edges[header]:
-            if dependency not in reachable:
-                reachable.add(dependency)
-                pending.append(dependency)
-
+    public, closure, private, consumers = header_ownership(
+        repo, share_root, headers, files_under(repo / "src", SOURCE_SUFFIXES).values(),
+        declared_public=DECLARED_PUBLIC_HEADER_ROOTS,
+    )
     return {
-        "SHARE_PUBLIC_HEADER_ROOTS": public_roots,
-        "SHARE_INTERFACE_CLOSURE_HEADERS": reachable - public_roots,
-        "SHARE_PRIVATE_HEADERS": set(headers) - reachable,
+        "SHARE_PUBLIC_HEADER_ROOTS": public,
+        "SHARE_INTERFACE_CLOSURE_HEADERS": closure,
+        "SHARE_PRIVATE_HEADERS": private,
     }, consumers
 
 
@@ -136,9 +48,9 @@ def main():
     inventory_path = share_root / "share_header_inventory.bzl"
     inventory = {
         name: set(values)
-        for name, values in _load_inventory(inventory_path).items()
+        for name, values in load_inventory(inventory_path, INVENTORY_NAMES).items()
     }
-    headers = _tracked_share_headers(repo, share_root)
+    headers = files_under(share_root, HEADER_SUFFIXES, GENERATED_SOURCE_TREE_HEADERS)
     derived, consumers = _derive_ownership(repo, share_root, headers)
 
     errors = []
