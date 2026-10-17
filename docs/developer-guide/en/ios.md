@@ -6,7 +6,7 @@ Cross-compile seekdb on an Apple Silicon Mac into `SeekDB.framework`, a dynamic 
 
 - Apple Silicon Mac
 - Xcode with the iOS SDKs, at `/Applications/Xcode.app` or pointed to by `DEVELOPER_DIR`
-- `rustup` on `PATH`
+- `rustup`, Autoconf, Automake 1.16.3 or later, Libtool, and Gettext on `PATH` (`brew install autoconf automake libtool gettext`)
 - About 10 GB of free disk space for the dependencies and one build directory
 
 ## Build
@@ -19,7 +19,7 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ./build.py build --config=ios //src/observer:seekdb_ios_framework
 ```
 
-`init --ios` prepares the host tools and Rust iOS target, and builds the iOS libraries from the pinned sources in `deps/ios-build` into `deps/ios/iphoneos/devel`. Use `build` directly for subsequent builds; initialization reuses dependencies that are still current. The project's `.bazelversion` pins Bazel, which `build.py` downloads on first use.
+`init --ios` prepares the host tools and Rust iOS target, and builds the base libraries into `deps/ios/iphoneos/devel`. Bazel builds the remaining pinned source dependencies through `//bazel/sdk_sources:source_sdk`. Use `build` directly for subsequent builds; initialization reuses dependencies that are still current. The project's `.bazelversion` pins Bazel, which `build.py` downloads on first use.
 
 The arm64 simulator uses a separate dependency directory and configuration:
 
@@ -45,6 +45,7 @@ Validate affected unit tests on a supported Linux host by following [Write and r
 - `SeekDB`: the engine, its Rust libraries and third-party libraries linked into one arm64 dynamic library that depends only on system libraries
 - `Headers/seekdb.h`: `seekdb_open`, `seekdb_close` and `seekdb_connection_options`
 - `Info.plist`: source revision, platform and minimum OS version
+- `build-manifest.json`, `rust-Cargo.lock`, and `Licenses.tar`: linked archive hashes, dependency source records, and license notices
 
 The device and simulator frameworks are not interchangeable. The framework is not signed for distribution; Xcode signs it with the app when it is added with **Embed & Sign**.
 

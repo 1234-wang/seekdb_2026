@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Bundle and relocate the non-system dylib closure of a macOS release."""
 
 from collections import deque
 from pathlib import Path

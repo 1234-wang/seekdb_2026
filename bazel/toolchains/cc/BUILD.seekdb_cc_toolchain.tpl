@@ -1,4 +1,5 @@
 load("@rules_cc//cc/toolchains:cc_toolchain.bzl", "cc_toolchain")
+load("@rules_cc//cc/toolchains:feature.bzl", "cc_feature")
 load(":toolchain_config.bzl", "seekdb_cc_toolchain_config")
 
 package(default_visibility = ["//visibility:public"])
@@ -102,6 +103,12 @@ filegroup(
         ":common_tool_files",
         ":local_compiler_files",
     ],
+)
+
+cc_feature(
+    name = "static_cpp_runtime_feature",
+    feature_name = "seekdb_static_cpp_runtime",
+    implies = ["@rules_cc//cc/toolchains/features:static_link_cpp_runtimes"],
 )
 
 seekdb_cc_toolchain_config(

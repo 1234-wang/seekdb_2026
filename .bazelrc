@@ -8,7 +8,6 @@ build --experimental_disk_cache_gc_max_age=14d
 build --experimental_disk_cache_gc_idle_delay=1m
 build --workspace_status_command=./tools/bazel_migration/workspace_status.sh
 build --enable_platform_specific_config
-build:linux --features=static_link_cpp_runtimes
 # Release-compatible O2 is the default. O1 uses fastbuild only as its output
 # configuration; the explicit copt also makes O1 portable to the native macOS
 # toolchain, whose fastbuild flags are not repository-owned.
@@ -31,6 +30,7 @@ build:ios-simulator --platforms=@apple_support//platforms:ios_sim_arm64
 build:wasm --platforms=//bazel/platforms:wasm32
 build:wasm --//src/standby:enable_standby=false
 build:wasm --action_env=EM_CONFIG
+build:wasm --action_env=EMSDK_PYTHON
 
 # Native shorthand for the orthogonal custom memory-safety build setting.
 build --flag_alias=sanity=//bazel:enable_sanity
@@ -39,3 +39,7 @@ build --flag_alias=sanity=//bazel:enable_sanity
 # Supply --remote_executor=grpc://HOST:PORT on the command line.
 build:remote --spawn_strategy=local
 build:remote --strategy=CppCompile=remote
+
+build:package --//bazel:package_runtime=true
+build:rpm --config=package
+build:rpm --//bazel:rpm_logging=true

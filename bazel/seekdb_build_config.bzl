@@ -47,8 +47,6 @@ SEEKDB_OBLIB_CXX_COPTS = ["-std=gnu++20"] + _COMMON_COPTS + _CXX_WARNINGS
 SEEKDB_OBLIB_C_COPTS = ["-std=gnu11"] + _COMMON_COPTS
 
 SEEKDB_OBLIB_LOCAL_DEFINES = [
-    'DEFAULT_LOG_FILE_SIZE_MB=256',
-    'DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR',
     'ENABLE_500_MEMORY_LIMIT',
     'ENABLE_INITIAL_EXEC_TLS_MODEL',
     'FATAL_ERROR_HANG',
@@ -133,4 +131,10 @@ def seekdb_sanity_linkopts():
             "-Wl,--wrap=snprintf",
         ],
         "//conditions:default": [],
+    })
+
+def seekdb_logging_defines():
+    return select({
+        "//bazel:rpm_logging_enabled": ["DEFAULT_LOG_FILE_SIZE_MB=16", "DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_DBA_WARN"],
+        "//conditions:default": ["DEFAULT_LOG_FILE_SIZE_MB=256", "DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR"],
     })

@@ -47,3 +47,28 @@ cc_library(
 
 toolchain_type(name = "cargo_toolchain_type", visibility = ["//visibility:public"])
 exports_files(["cargo_toolchain.bzl", "prepare_cargo.py", "cargo_runner.py", "third_party_targets.bzl"])
+
+seekdb_bool_flag(
+    name = "package_runtime",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "linux_package_runtime",
+    flag_values = {":package_runtime": "true"},
+    constraint_values = ["@platforms//os:linux"],
+    visibility = ["//visibility:public"],
+)
+
+seekdb_bool_flag(
+    name = "rpm_logging",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "rpm_logging_enabled",
+    flag_values = {":rpm_logging": "true"},
+    visibility = ["//visibility:public"],
+)

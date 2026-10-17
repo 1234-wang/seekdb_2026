@@ -157,11 +157,17 @@ def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
     ).returncode
     if status or options.android:
         return status
-    return subprocess.run(
+    status = subprocess.run(
         [sys.executable, str(root / "deps/ios-build/build.py"), "--reuse", "--jobs", str(os.cpu_count() or 1)]
         + (["--simulator"] if options.simulator else []),
         cwd=str(root), env=environment,
     ).returncode
+    if status:
+        return status
+    return main([
+        "build", "--config=" + ("ios-simulator" if options.simulator else "ios"),
+        "//bazel/sdk_sources:source_sdk",
+    ])
 
 
 def main(arguments: List[str]) -> int:

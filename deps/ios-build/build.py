@@ -139,7 +139,6 @@ def build_curl(source, build, prefix, sdk, options, environment):
 
 
 def target_environment(sdk, options, environment, prefix=None):
-    """Use only the selected Apple compiler and target dependency prefix."""
     result = dict(environment)
     sdk_name = "iphonesimulator" if options.simulator else "iphoneos"
     triple = "arm64-apple-ios" + options.deployment_target
@@ -162,7 +161,6 @@ def target_environment(sdk, options, environment, prefix=None):
 
 
 def build_lzma(source, build, prefix, sdk, options, environment):
-    """Bootstrap the pinned XZ tag and build only its static library and headers."""
     if not (source / "configure").exists():
         run(["sh", "autogen.sh", "--no-po4a", "--no-doxygen"], source, environment)
     environment = target_environment(sdk, options, environment)
@@ -177,7 +175,6 @@ def build_lzma(source, build, prefix, sdk, options, environment):
 
 
 def build_libxml2(source, build, prefix, sdk, options, environment):
-    """Configure libxml2 with local zlib and liblzma and the target SDK's iconv."""
     if not (source / "configure").exists():
         run(["autoreconf", "--install", "--force"], source, environment)
     for library in ("libz.a", "liblzma.a"):
@@ -277,7 +274,6 @@ def reusable_package(marker, identity, prefix):
 
 
 def publish_metadata(name, source, marker, prefix):
-    """Expose base build records and notices as declared SDK inputs."""
     notices = set()
     for pattern in ("LICENSE*", "COPYING*", "Copyright", "license.html"):
         notices.update(path for path in source.glob(pattern) if path.is_file())

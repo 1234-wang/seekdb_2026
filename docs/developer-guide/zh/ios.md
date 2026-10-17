@@ -6,7 +6,7 @@
 
 - Apple Silicon Mac
 - 安装了 iOS SDK 的 Xcode，位于 `/Applications/Xcode.app`，或通过 `DEVELOPER_DIR` 指定
-- 已将 `rustup` 加入 `PATH`
+- 已将 `rustup`、Autoconf、Automake 1.16.3 及以上、Libtool、Gettext 加入 `PATH`（`brew install autoconf automake libtool gettext`）
 - 约 10 GB 可用磁盘空间，用于依赖和一个构建目录
 
 ## 构建
@@ -19,7 +19,7 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ./build.py build --config=ios //src/observer:seekdb_ios_framework
 ```
 
-`init --ios` 准备宿主工具、Rust iOS target，并用 `deps/ios-build` 中固定版本的源码编译 iOS 依赖库，安装到 `deps/ios/iphoneos/devel`。后续编译直接运行 `build`；再次初始化时会复用仍然有效的依赖库。Bazel 版本由项目的 `.bazelversion` 固定，首次使用时由 `build.py` 下载。
+`init --ios` 准备宿主工具、Rust iOS target，并编译基础依赖库，安装到 `deps/ios/iphoneos/devel`。其余固定版本源码依赖由 Bazel 的 `//bazel/sdk_sources:source_sdk` 构建。后续编译直接运行 `build`；再次初始化时会复用仍然有效的依赖库。Bazel 版本由项目的 `.bazelversion` 固定，首次使用时由 `build.py` 下载。
 
 arm64 模拟器使用独立的依赖目录和配置：
 
@@ -45,6 +45,7 @@ build_bazel/bin/src/observer/framework/SeekDB.framework
 - `SeekDB`：引擎、Rust 库和第三方库链接成的一个 arm64 动态库，只依赖系统库
 - `Headers/seekdb.h`：声明 `seekdb_open`、`seekdb_close` 和 `seekdb_connection_options`
 - `Info.plist`：源码 revision、平台和最低系统版本
+- `build-manifest.json`、`rust-Cargo.lock`、`Licenses.tar`：链接归档哈希、依赖来源记录和许可证
 
 真机和模拟器的 framework 不能混用。framework 没有用于分发的签名；在 Xcode 中以 **Embed & Sign** 方式加入 App 后，会随 App 一起签名。
 

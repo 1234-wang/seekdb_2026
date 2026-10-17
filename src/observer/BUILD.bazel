@@ -510,7 +510,10 @@ seekdb_final_link(
     ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
     extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
     system_libs = _SEEKDB_SYSTEM_LIBS,
-    linkopts = _SEEKDB_EXECUTABLE_LINKOPTS + seekdb_sanity_linkopts(),
+    linkopts = _SEEKDB_EXECUTABLE_LINKOPTS + seekdb_sanity_linkopts() + select({
+        "//bazel:linux_package_runtime": ["-Wl,-rpath,$ORIGIN/../libexec/seekdb/lib"],
+        "//conditions:default": [],
+    }),
     out = "seekdb",
     tags = ["manual"],
     visibility = ["//visibility:public"],

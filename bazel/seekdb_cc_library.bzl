@@ -10,6 +10,7 @@ load(
     "SEEKDB_RELEASE_LOCAL_DEFINES",
     "SEEKDB_MODULE_CXX_COPTS",
     "seekdb_sanity_settings",
+    "seekdb_logging_defines",
 )
 load("//bazel:oblib_compile_deps.bzl", "oblib_compile_deps")
 load(
@@ -48,7 +49,7 @@ def _seekdb_cc_library_impl(
         cxxopts = cxxopts + sanity.cxxopts,
         implementation_deps = implementation_deps + sanity.implementation_deps,
         linkstatic = True,
-        local_defines = local_defines + seekdb_platform_local_defines() + sanity.local_defines,
+        local_defines = local_defines + seekdb_logging_defines() + seekdb_platform_local_defines() + sanity.local_defines,
         target_compatible_with = target_compatible_with + sanity.target_compatible_with,
         **kwargs
     )

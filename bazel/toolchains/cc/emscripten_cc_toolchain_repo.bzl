@@ -19,7 +19,7 @@ def _emscripten_cc_toolchain_repository_impl(ctx):
     if resource.return_code:
         fail("Cannot inspect Emscripten Clang: " + resource.stderr)
     ctx.symlink(resource.stdout.strip() + "/include", "clang_builtin_include")
-    includes = [str(ctx.path(path)) for path in [
+    includes = ["%crosstool_top%/" + path for path in [
         "cache/sysroot/include/c++/v1", "clang_builtin_include",
         "cache/sysroot/include", "cache/sysroot/include/compat",
     ]] + [str(cache) + "/sysroot/include", resource.stdout.strip() + "/include"]
@@ -30,7 +30,7 @@ if [ ! -d "$EM_CACHE/sysroot" ]; then
   echo "Missing Emscripten sysroot; run tools/wasm/build-deps.sh for this Wasm SDK" >&2
   exit 1
 fi
-exec "$(dirname "$0")/sdk/emscripten/emcc" "$@"
+exec "$(dirname "$0")/sdk/emscripten/emcc" --sysroot="$(dirname "$0")/cache/sysroot" "$@"
 """)
     ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = host_substitutions(ctx))
     ctx.template("toolchain_config.bzl", ctx.attr.config_file, substitutions = {

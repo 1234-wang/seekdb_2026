@@ -1,0 +1,1 @@
+exports_files(["LICENSE"], visibility = ["//src/observer:__pkg__"])

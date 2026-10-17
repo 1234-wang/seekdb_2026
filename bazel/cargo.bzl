@@ -11,6 +11,7 @@ load("@rules_cc//cc:find_cc_toolchain.bzl", "CC_TOOLCHAIN_ATTRS", "find_cpp_tool
 CARGO_TOOLCHAINS = use_cc_toolchain() + [CARGO_TOOLCHAIN_TYPE]
 
 CARGO_ACTION_ATTRS = PLATFORM_ATTRS | CC_TOOLCHAIN_ATTRS | apple_support.action_required_attrs() | apple_support.platform_constraint_attrs() | {
+    "default_log_level": attr.string(default = "OB_LOG_LEVEL_ERROR"),
     "_cargo_runner": attr.label(default = Label("//bazel:cargo_runner.py"), allow_single_file = True),
 }
 
@@ -28,7 +29,7 @@ def cargo_action(ctx, command, inputs, outputs, work_dir, source_files, **kwargs
         "--sources", sources.path, "--target", platform.rust_target, "--cc", cc.compiler_executable, "--ar", cc.ar_executable,
         "--",
     ]
-    environment = {"DEFAULT_LOG_LEVEL": "OB_LOG_LEVEL_ERROR", "PYTHONHOME": toolchain.python_home}
+    environment = {"DEFAULT_LOG_LEVEL": ctx.attr.default_log_level, "PYTHONHOME": toolchain.python_home}
     run = ctx.actions.run
     if platform.os == "windows":
         # MSVC needs INCLUDE/LIB/PATH from its configured execution toolchain.
@@ -137,6 +138,10 @@ def cargo_workspace(exports, srcs):
     _cargo_build(
         name = "_rust_static",
         exports = json.encode(exports),
+        default_log_level = select({
+            "//bazel:rpm_logging_enabled": "OB_LOG_LEVEL_DBA_WARN",
+            "//conditions:default": "OB_LOG_LEVEL_ERROR",
+        }),
         srcs = srcs,
         platform_inputs = select({
             "@platforms//os:emscripten": ["//tools/wasm:rust_build_tools"],

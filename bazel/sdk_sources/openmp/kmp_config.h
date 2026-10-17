@@ -1,6 +1,3 @@
-/*
- * kmp_config.h -- Feature macros
- */
 //===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -96,16 +93,7 @@
 #define OPENMP_ENABLE_LIBOMPTARGET 0
 #define ENABLE_LIBOMPTARGET OPENMP_ENABLE_LIBOMPTARGET
 
-// Configured cache line based on architecture
-#if KMP_ARCH_PPC64 || KMP_ARCH_PPC
-# define CACHE_LINE 128
-#elif KMP_ARCH_AARCH64_A64FX
-# define CACHE_LINE 256
-#elif KMP_ARCH_S390X
-# define CACHE_LINE 256
-#else
-# define CACHE_LINE 64
-#endif
+#define CACHE_LINE 64
 
 #if ! KMP_32_BIT_ARCH
 # define BUILD_I8 1
@@ -135,10 +123,4 @@
 #else
 # define BUILD_TV
 # define KMP_GOMP_COMPAT
-#endif
-
-// use shared memory with dynamic library (except Android, where shm_*
-// functions don't exist).
-#if KMP_OS_UNIX && KMP_DYNAMIC_LIB && !__ANDROID__
-#define KMP_USE_SHM
 #endif

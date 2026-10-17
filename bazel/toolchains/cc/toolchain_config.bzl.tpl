@@ -40,6 +40,7 @@ def seekdb_cc_toolchain_config(name, compiler_path, toolchain_identifier):
             ],
         },
         fastbuild_compile_flags = [],
+        extra_enabled_features = [":static_cpp_runtime_feature"],
         host_system_name = "local",
         link_flags = [
             "-fuse-ld=lld",

@@ -55,18 +55,50 @@ def seekdb_ios_framework():
         target_compatible_with = ["@platforms//os:ios"],
         tags = ["manual"],
     )
+    native.filegroup(
+        name = "_ios_framework_link_inputs",
+        srcs = [":_ios_framework_link"],
+        output_group = "link_inputs",
+    )
+    native.genrule(
+        name = "_ios_framework_link_manifest",
+        srcs = [":_ios_framework_link_inputs"],
+        outs = ["ios-link-inputs.txt"],
+        cmd = "printf '%s\\n' $(locations :_ios_framework_link_inputs) > $@",
+        target_compatible_with = ["@platforms//os:ios"],
+        tags = ["manual"],
+    )
     apple_genrule(
         name = "_ios_framework_metadata",
-        srcs = [":_ios_framework_link", ":_ios_build_config", "ios/driver/seekdb.h"],
+        srcs = [
+            ":_ios_framework_link", ":_ios_build_config", ":_ios_framework_link_inputs",
+            ":_ios_framework_link_manifest", "ios/driver/seekdb.h", "ios/driver/exports.txt",
+            "//:LICENSE", "//rust:Cargo.lock", "@seekdb_cargo_native_sources//:vendor.tar",
+            "//bazel/sdk_sources:ios_source_metadata", "//bazel/sdk_sources:ios_licenses",
+            "@seekdb_3rd_headers//:ios_base_metadata", "@seekdb_3rd_headers//:ios_base_licenses",
+        ],
         tools = ["//tools/ios:package_framework.py"],
         outs = [
             "framework/SeekDB.framework/Headers/seekdb.h",
             "framework/SeekDB.framework/Info.plist",
+            "framework/SeekDB.framework/build-manifest.json",
+            "framework/SeekDB.framework/rust-Cargo.lock",
+            "framework/SeekDB.framework/Licenses.tar",
         ],
         cmd = 'python3 "$(location //tools/ios:package_framework.py)"' +
               ' --binary "$(location :_ios_framework_link)" --config "$(location :_ios_build_config)"' +
-              ' --header "$(location ios/driver/seekdb.h)"' +
-              ' --output "$(@D)/framework/SeekDB.framework"',
+              ' --header "$(location ios/driver/seekdb.h)" --exports "$(location ios/driver/exports.txt)"' +
+              ' --link-inputs "$(location :_ios_framework_link_manifest)"' +
+              ' --rust-lock "$(location //rust:Cargo.lock)"' +
+              ' --cargo-sources "$(location @seekdb_cargo_native_sources//:vendor.tar)"' +
+              ' --source-metadata $(locations //bazel/sdk_sources:ios_source_metadata)' +
+              ' $(locations @seekdb_3rd_headers//:ios_base_metadata)' +
+              ' --licenses $(location //:LICENSE) $(locations //bazel/sdk_sources:ios_licenses)' +
+              ' $(locations @seekdb_3rd_headers//:ios_base_licenses)' +
+              ' --output "$(@D)/framework/SeekDB.framework" --platform ' + select({
+                  "//bazel:ios_simulator": "IOSSIMULATOR",
+                  "//conditions:default": "IOS",
+              }),
         target_compatible_with = ["@platforms//os:ios"],
         tags = ["manual"],
     )

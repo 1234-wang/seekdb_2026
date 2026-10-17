@@ -3,17 +3,14 @@ CONFIG_FILE="/etc/seekdb/seekdb.cnf"
 BASE_DIR="/var/lib/seekdb"
 STOP_TIMEOUT="${SEEKDB_STOP_TIMEOUT:-30}"
 
-# Function to read base-dir from configuration file (consistent with start script)
 read_base_dir_from_config() {
     if [ -f "$CONFIG_FILE" ]; then
         while IFS= read -r line; do
-            # Skip empty lines and comments
             [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
             key="${line%%=*}"
             value="${line#*=}"
 
-            # Trim whitespace
             key="$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
             value="$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 

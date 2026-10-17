@@ -5,7 +5,7 @@ load(":toolchain_config.bzl", "emscripten_toolchain_config")
 package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "sdk",
-    srcs = ["emcc.sh"] + glob(["sdk/**", "clang_builtin_include/**"], exclude = ["sdk/**/*.pyc"]) + glob(["cache/sysroot/**"], allow_empty = True),
+    srcs = ["emcc.sh"] + glob(["sdk/**", "clang_builtin_include/**"], exclude = ["sdk/**/*.pyc"]) + glob(["cache/sysroot/**", "cache/sysroot_install.stamp", "cache/ports/**"], allow_empty = True),
 )
 filegroup(name = "empty")
 cc_library(

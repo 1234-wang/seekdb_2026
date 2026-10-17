@@ -1,5 +1,3 @@
-"""Configured headers for LLVM OpenMP 21.1.8 on Apple arm64."""
-
 def _openmp_headers_impl(ctx):
     substitutions = {
         "@LIBOMP_VERSION_MAJOR@": "5",
