@@ -51,3 +51,13 @@ bash "${repo_root}/tools/wasm/build-icu.sh" "${install_prefix}"
 bash "${repo_root}/tools/wasm/build-s2.sh" "${install_prefix}"
 bash "${repo_root}/tools/wasm/build-protobuf-c.sh" "${install_prefix}"
 bash "${repo_root}/tools/wasm/build-vsag.sh" "${install_prefix}"
+
+# Package the system libraries for seekdb's thread/exception ABI with this SDK.
+# Bazel consumes this cache read-only; repository discovery never compiles.
+export EM_CACHE="${install_prefix}/em-cache"
+probe_dir="$(mktemp -d "${install_prefix}/sysroot.XXXXXX")"
+trap 'rm -rf "${probe_dir}"' EXIT
+printf 'int main() { return 0; }\n' > "${probe_dir}/main.cpp"
+emcc "${probe_dir}/main.cpp" -Oz -pthread -fexceptions -msimd128 \
+  -sUSE_ZLIB=1 -sWASMFS -sASSERTIONS=2 -sPROXY_TO_PTHREAD=1 -sEXIT_RUNTIME=1 \
+  -o "${probe_dir}/main.mjs"

@@ -32,17 +32,19 @@ def _seekdb_third_party_headers_repository_impl(repository_ctx):
     headers = sdk + "/deps/devel/include"
     libraries = sdk + "/deps/devel/lib"
     libraries64 = sdk + "/deps/devel/lib64"
-    wasm_deps = repository_ctx.getenv("SEEKDB_WASM_DEPS")
-    ios_sdk = repository_ctx.getenv("SEEKDB_IOS_SDK")
-    if wasm_deps and ios_sdk:
-        fail("SEEKDB_WASM_DEPS and SEEKDB_IOS_SDK select different dependency platforms")
-    if wasm_deps:
-        headers = wasm_deps + "/include"
-        libraries = wasm_deps + "/lib"
+    platform = repository_ctx.attr.platform
+    ios_sdk = platform if platform in ["iphoneos", "iphonesimulator"] else ""
+    if platform == "android":
+        prefix = str(repository_ctx.workspace_root) + "/deps/android/usr/local/oceanbase/deps/devel"
+        headers = prefix + "/include"
+        libraries = prefix + "/lib"
+        libraries64 = prefix + "/lib64"
+    if platform == "wasm":
+        prefix = repository_ctx.getenv("SEEKDB_WASM_DEPS") or str(repository_ctx.workspace_root) + "/build_wasm_deps"
+        headers = prefix + "/include"
+        libraries = prefix + "/lib"
         libraries64 = libraries
     if ios_sdk:
-        if ios_sdk not in ["iphoneos", "iphonesimulator"]:
-            fail("SEEKDB_IOS_SDK must be iphoneos or iphonesimulator")
         prefix = str(repository_ctx.workspace_root) + "/deps/ios/" + ios_sdk + "/devel"
         if not repository_ctx.path(prefix + "/lib/libssl.a").exists:
             fail("Missing iOS dependencies; run ./bazel.py init --ios" + (" --simulator" if ios_sdk == "iphonesimulator" else ""))
@@ -65,7 +67,17 @@ def _seekdb_third_party_headers_repository_impl(repository_ctx):
 seekdb_third_party_headers_repository = repository_rule(
     implementation = _seekdb_third_party_headers_repository_impl,
     attrs = {
+        "platform": attr.string(default = "native", values = ["native", "android", "iphoneos", "iphonesimulator", "wasm"]),
         "build_file": attr.label(default = Label("//bazel:third_party.BUILD"), allow_single_file = True),
     },
     local = True,
 )
+
+
+def _sdk_aliases_impl(ctx):
+    ctx.file("BUILD.bazel", '''load("@seekdb//bazel:third_party_targets.bzl", "sdk_aliases")
+package(default_visibility = ["//visibility:public"])
+sdk_aliases()
+''')
+
+seekdb_sdk_aliases = repository_rule(implementation = _sdk_aliases_impl)

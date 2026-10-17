@@ -108,6 +108,7 @@ _SEEKDB_GRPC_ABSL_ARCHIVE_NAMES = [
 
 def observer_third_party_link_files(platform):
     android = platform == "android"
+    repository = "@seekdb_3rd_android" if android else "@seekdb_3rd_native"
     macos = platform == "macos"
     lib64 = "lib" if android or macos else "lib64"
     vsag = "lib" if android else "lib/vsag_lib"
@@ -128,7 +129,7 @@ def observer_third_party_link_files(platform):
             if platform == "linux_x86_64":
                 files += [vsag + "/libquadmath_static.a"]
             files += [vsag + "/libgomp_static.a"]
-    labels = ["@seekdb_3rd_headers//:" + file for file in files]
+    labels = [repository + "//:" + file for file in files]
     labels += [":_roaring_vsag_link"]
     files = [vsag + "/" + name for name in [
         "libantlr4-runtime.a", "libantlr4-autogen.a", "libfmt.a",
@@ -143,7 +144,7 @@ def observer_third_party_link_files(platform):
         "libcares.a", "libprotobuf.a",
     ]]
     files += [lib64 + "/" + name for name in _SEEKDB_ABSL_ARCHIVE_NAMES]
-    labels += ["@seekdb_3rd_headers//:" + file for file in files]
+    labels += [repository + "//:" + file for file in files]
     labels += [":_roaring_core_link"]
     files = ["lib/libunwind.a"] if platform == "linux_x86_64" else []
     files += ["lib/" + name for name in [
@@ -151,4 +152,4 @@ def observer_third_party_link_files(platform):
     ]]
     if not macos and not android:
         files += ["lib/libaio.so"]
-    return labels + ["@seekdb_3rd_headers//:" + file for file in files]
+    return labels + [repository + "//:" + file for file in files]

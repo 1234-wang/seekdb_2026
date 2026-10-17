@@ -3,31 +3,62 @@
 load("//bazel:defs.bzl", cc_library = "seekdb_cc_library")
 load("@apple_support//lib:apple_support.bzl", "apple_support")
 load("//bazel:platforms.bzl", "PLATFORM_ATTRS", "target_platform")
+load("//bazel:cargo_toolchain.bzl", "CARGO_TOOLCHAIN_TYPE")
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
+load("@rules_cc//cc:action_names.bzl", "CPP_COMPILE_ACTION_NAME")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "CC_TOOLCHAIN_ATTRS", "find_cpp_toolchain", "use_cc_toolchain")
 
-CARGO_ACTION_ATTRS = PLATFORM_ATTRS | apple_support.action_required_attrs() | apple_support.platform_constraint_attrs()
+CARGO_TOOLCHAINS = use_cc_toolchain() + [CARGO_TOOLCHAIN_TYPE]
 
-def cargo_action(ctx, command, inputs, outputs, **kwargs):
-    """Run Cargo locally with the selected Apple SDK when cross compiling."""
+CARGO_ACTION_ATTRS = PLATFORM_ATTRS | CC_TOOLCHAIN_ATTRS | apple_support.action_required_attrs() | apple_support.platform_constraint_attrs() | {
+    "_cargo_runner": attr.label(default = Label("//bazel:cargo_runner.py"), allow_single_file = True),
+}
+
+def cargo_action(ctx, command, inputs, outputs, work_dir, source_files, **kwargs):
+    """Run a sandboxed, offline Cargo action using the selected local toolchain."""
     platform = target_platform(ctx)
-    environment = {"DEFAULT_LOG_LEVEL": "OB_LOG_LEVEL_ERROR"}
-    run_shell = ctx.actions.run_shell
-    if platform.os == "ios":
-        config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]
-        environment["IPHONEOS_DEPLOYMENT_TARGET"] = str(config.minimum_os_for_platform_type(apple_common.platform_type.ios))
-        command = 'export SDKROOT="$(xcrun --sdk %s --show-sdk-path)"\n' % platform.ios_sdk + command
-        run_shell = apple_support.run_shell
-        kwargs.update(
-            actions = ctx.actions,
-            xcode_config = config,
-            apple_platform_info = apple_support.platform_info_from_rule_ctx(ctx),
-        )
-    run_shell(
-        command = "set -eu\n" + command,
-        inputs = inputs,
-        outputs = outputs,
+    toolchain = ctx.toolchains[CARGO_TOOLCHAIN_TYPE]
+    cc = find_cpp_toolchain(ctx)
+    sources = ctx.actions.declare_file(ctx.label.name + ".cargo-sources.json")
+    ctx.actions.write(sources, json.encode([file.path for file in source_files]))
+    arguments = [
+        ctx.file._cargo_runner.path,
+        "--work-dir", work_dir.path, "--vendor", toolchain.vendor.path,
+        "--cargo", toolchain.cargo.path, "--rustc", toolchain.rustc.path,
+        "--sources", sources.path, "--target", platform.rust_target, "--cc", cc.compiler_executable, "--ar", cc.ar_executable,
+        "--",
+    ]
+    environment = {"DEFAULT_LOG_LEVEL": "OB_LOG_LEVEL_ERROR", "PYTHONHOME": toolchain.python_home}
+    run = ctx.actions.run
+    if platform.os == "windows":
+        # MSVC needs INCLUDE/LIB/PATH from its configured execution toolchain.
+        features = cc_common.configure_features(ctx = ctx, cc_toolchain = cc)
+        environment.update(ctx.configuration.default_shell_env)
+        environment.update(cc_common.get_environment_variables(
+            feature_configuration = features,
+            action_name = CPP_COMPILE_ACTION_NAME,
+            variables = cc_common.create_compile_variables(cc_toolchain = cc, feature_configuration = features),
+        ))
+        arguments += command
+    else:
+        if platform.os == "ios":
+            config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]
+            environment["IPHONEOS_DEPLOYMENT_TARGET"] = str(config.minimum_os_for_platform_type(apple_common.platform_type.ios))
+            command = 'export SDKROOT="$(xcrun --sdk %s --show-sdk-path)"\n' % platform.ios_sdk + command
+            run = apple_support.run
+            kwargs.update(actions = ctx.actions, xcode_config = config, apple_platform_info = apple_support.platform_info_from_rule_ctx(ctx))
+        arguments += ["/bin/bash", "-c", "set -eu\n" + command, "cargo-action"] + kwargs.pop("arguments", [])
+    run(
+        executable = toolchain.python,
+        arguments = arguments,
+        inputs = depset(
+            direct = [ctx.file._cargo_runner, sources, toolchain.vendor],
+            transitive = [inputs if type(inputs) == "depset" else depset(inputs), toolchain.files, cc.all_files],
+        ),
+        outputs = outputs + [work_dir],
         env = environment,
-        execution_requirements = {"no-remote": "1", "no-sandbox": "1"},
-        use_default_shell_env = True,
+        # The installed toolchain uses this machine's system runtime and SDK.
+        execution_requirements = {"no-remote": "1"},
         **kwargs
     )
 
@@ -64,45 +95,30 @@ def _cargo_build_impl(ctx):
     outputs = libraries.values() + generated_headers.values()
     directory = ctx.bin_dir.path + "/" + ctx.label.package
     inputs = ctx.files.srcs + ctx.files.platform_inputs
-    command = '"%s" --target-dir "%s/cargo-target" --output "%s/cargo" --canonical-archives' % (ctx.file.builder.path, directory, directory)
+    work_dir = ctx.actions.declare_directory("cargo-work")
+    command = 'python "$CARGO_WORKSPACE/rust/build.py" --cargo "$CARGO" --target-dir "$CARGO_TARGET_DIR" --output "%s/cargo" --canonical-archives' % directory
     if platform.rust_target:
         command += " --target " + platform.rust_target
     if platform.os == "windows":
-        # No Bash dependency for the native Windows Cargo build.
-        ctx.actions.run(
-            executable = "python",
-            arguments = [ctx.file.builder.path, "--target-dir", directory + "/cargo-target", "--output", directory + "/cargo", "--canonical-archives"],
-            inputs = inputs,
-            outputs = outputs,
-            env = {"DEFAULT_LOG_LEVEL": "OB_LOG_LEVEL_ERROR"},
-            use_default_shell_env = True,
-            execution_requirements = {"no-remote": "1", "no-sandbox": "1"},
-            mnemonic = "CargoBuild",
-        )
-    else:
-        command = "python3 " + command
-        if platform.os == "android":
-            command = 'source "%s"\n' % ctx.files.platform_inputs[0].path + command
-        elif platform.os == "emscripten":
-            # The standalone Wasm bootstrap still exports the per-crate names.
-            # Expose each underlying Cargo library only once to the C++ graph.
-            command = 'bash "%s" "%s/wasm-rust"\nmkdir -p "%s/cargo"\ncp -R "%s/wasm-rust/exports/include" "%s/cargo/"' % (
-                ctx.file._wasm_builder.path, directory, directory, directory, directory,
-            )
-            copied = {}
-            for name, export in exports.items():
-                library_name = export.get("library", name)
-                if library_name not in copied:
-                    command += '\ncp "%s/wasm-rust/exports/lib%s.a" "%s"' % (directory, name, libraries[library_name].path)
-                    copied[library_name] = True
-        cargo_action(
-            ctx,
-            command = 'export CXXFLAGS="${CXXFLAGS:-} -D_GLIBCXX_USE_CXX11_ABI=1"\n' + command,
-            inputs = inputs,
-            outputs = outputs,
-            mnemonic = "CargoBuild",
-            progress_message = "Building Rust libraries for " + platform.os,
-        )
+        command = ["python", "${CARGO_WORKSPACE}/rust/build.py", "--cargo", "${CARGO}", "--target-dir", "${CARGO_TARGET_DIR}", "--output", directory + "/cargo", "--canonical-archives"]
+    elif platform.os == "emscripten":
+        command = '''wasm="$CARGO_TARGET_DIR/wasm"
+python "$CARGO_WORKSPACE/tools/wasm/prepare-rust-sysroot.py" "$("$RUSTC" --print sysroot)" "$wasm/sysroot"
+python "$CARGO_WORKSPACE/tools/wasm/prepare-rust-workspace.py" "$wasm"
+export RUSTFLAGS="--sysroot=$wasm/sysroot -Ctarget-feature=+atomics,+bulk-memory,+mutable-globals -Cpanic=abort"
+export CXXFLAGS_wasm32_unknown_emscripten="-pthread -fexceptions"
+python "$wasm/workspace/build.py" --cargo "$CARGO" --target wasm32-unknown-emscripten --target-dir "$CARGO_TARGET_DIR" --output "%s/cargo" --canonical-archives -- --no-default-features --features sql-nio/memory-transport -Zbuild-std=std,panic_abort
+''' % directory
+    cargo_action(
+        ctx,
+        command = command,
+        inputs = inputs,
+        outputs = outputs,
+        work_dir = work_dir,
+        source_files = inputs,
+        mnemonic = "CargoBuild",
+        progress_message = "Building Rust libraries for " + platform.os,
+    )
     return [DefaultInfo(files = depset(outputs)), OutputGroupInfo(**groups)]
 
 _cargo_build = rule(
@@ -110,11 +126,10 @@ _cargo_build = rule(
     attrs = CARGO_ACTION_ATTRS | {
         "exports": attr.string(mandatory = True),
         "srcs": attr.label_list(allow_files = True),
-        "builder": attr.label(allow_single_file = True),
         "platform_inputs": attr.label_list(allow_files = True),
-        "_wasm_builder": attr.label(default = Label("//tools/wasm:build-rust-nio.sh"), allow_single_file = True),
     },
-    fragments = ["apple"],
+    fragments = ["apple", "cpp"],
+    toolchains = CARGO_TOOLCHAINS,
 )
 
 def cargo_workspace(exports, srcs):
@@ -123,9 +138,7 @@ def cargo_workspace(exports, srcs):
         name = "_rust_static",
         exports = json.encode(exports),
         srcs = srcs,
-        builder = "build.py",
         platform_inputs = select({
-            "@platforms//os:android": ["@seekdb_android_ndk//:rust_env.sh"],
             "@platforms//os:emscripten": ["//tools/wasm:rust_build_tools"],
             "//conditions:default": [],
         }),

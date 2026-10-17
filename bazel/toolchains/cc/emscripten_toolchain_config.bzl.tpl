@@ -22,8 +22,8 @@ def emscripten_toolchain_config(name):
         opt_link_flags = ["-Oz"],
         dbg_compile_flags = ["-O0", "-g"],
         tool_paths = {
-            "gcc": "sdk/emscripten/emcc",
-            "cpp": "sdk/emscripten/emcc",
+            "gcc": "emcc.sh",
+            "cpp": "emcc.sh",
             "ld": "sdk/bin/wasm-ld",
             "ar": "sdk/emscripten/emar",
             "nm": "sdk/bin/llvm-nm",

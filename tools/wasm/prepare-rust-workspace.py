@@ -39,17 +39,13 @@ for directory, subdirectories, files in os.walk(workspace):
     subdirectories[:] = [name for name in subdirectories if name != ".cargo"]
     for name in files:
         path = Path(directory) / name
-        # A fresh checkout has no tracked Cargo.lock. Keep the lock Cargo
-        # generated for this private workspace across incremental builds.
-        if path == workspace / "Cargo.lock":
-            continue
         if path.suffix in extensions and path not in staged_sources:
             path.unlink()
 
 patched_file = dependency / patch["path"]
 if not patched_file.exists():
     metadata = json.loads(subprocess.check_output([
-        "cargo", "metadata", "--format-version", "1", "--manifest-path", str(workspace / "Cargo.toml"),
+        "cargo", "metadata", "--locked", "--format-version", "1", "--manifest-path", str(workspace / "Cargo.toml"),
     ], cwd=workspace, text=True))
     package = next(package for package in metadata["packages"]
                    if package["name"] == "spdlog-rs" and package["version"] == patch["version"])
@@ -71,3 +67,10 @@ elif hashlib.sha256(patched_file.read_bytes()).hexdigest() != patch["output_sha2
 write_changed(workspace / ".cargo/config.toml", (
     '[patch.crates-io]\nspdlog-rs = { path = ' + json.dumps(str(dependency)) + ' }\n'
 ).encode())
+
+# The path patch changes this private workspace's lock entry. Resolve that
+# change offline now; the subsequent compilation still runs with --locked.
+subprocess.run([
+    "cargo", "metadata", "--offline", "--format-version", "1",
+    "--manifest-path", str(workspace / "Cargo.toml"),
+], cwd=workspace, check=True, stdout=subprocess.DEVNULL)

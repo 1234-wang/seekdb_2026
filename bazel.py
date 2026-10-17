@@ -42,7 +42,8 @@ def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
 
     initializer = root / "deps/init/dep_create.sh"
     environment = os.environ.copy()
-    environment["ANDROID_BUILD"] = "true" if options.android else "false"
+    environment["ANDROID_BUILD"] = "false"
+    environment["WORKSPACE_DEPS_3RD"] = str(root / "deps/3rd")
     if options.ios:
         sdk = "iphonesimulator" if options.simulator else "iphoneos"
         if sys.platform != "darwin" or subprocess.run(
@@ -55,13 +56,20 @@ def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
         cwd=str(initializer.parent),
         env=environment,
     ).returncode
-    if status or not options.ios:
+    if status:
         return status
-    target = "aarch64-apple-ios-sim" if options.simulator else "aarch64-apple-ios"
+    if options.android:
+        environment["ANDROID_BUILD"] = "true"
+        environment["WORKSPACE_DEPS_3RD"] = str(root / "deps/android")
+        status = subprocess.run(["bash", initializer.name], cwd=str(initializer.parent), env=environment).returncode
+    if status or not (options.ios or options.android):
+        return status
+    target = "aarch64-linux-android" if options.android else (
+        "aarch64-apple-ios-sim" if options.simulator else "aarch64-apple-ios")
     status = subprocess.run(
         ["rustup", "target", "add", target], cwd=str(root / "rust"), env=environment,
     ).returncode
-    if status:
+    if status or options.android:
         return status
     return subprocess.run(
         [sys.executable, str(root / "deps/ios-build/build.py"), "--reuse", "--jobs", str(os.cpu_count() or 1)]

@@ -14,34 +14,23 @@
 
 """Build and expose the native artifacts from seekdb-jemalloc-sys."""
 
-load(
-    "@rules_cc//cc:find_cc_toolchain.bzl",
-    "CC_TOOLCHAIN_ATTRS",
-    "find_cpp_toolchain",
-    "use_cc_toolchain",
-)
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//bazel:cargo.bzl", "CARGO_ACTION_ATTRS", "cargo_action")
+load("//bazel:cargo.bzl", "CARGO_ACTION_ATTRS", "CARGO_TOOLCHAINS", "cargo_action")
 load("//bazel:platforms.bzl", "target_platform")
 
 def _seekdb_jemalloc_build_impl(ctx):
-    cc_toolchain = find_cpp_toolchain(ctx)
     archive = ctx.actions.declare_file("jemalloc/lib/libjemalloc_pic.a")
     public_header = ctx.actions.declare_file(
         "jemalloc/include/jemalloc/jemalloc.h",
     )
-    cargo_target = ctx.actions.declare_directory("jemalloc/cargo-target")
+    cargo_target = ctx.actions.declare_directory("jemalloc/cargo-work")
 
     platform = target_platform(ctx)
-    command = """export CC="$1" AR="$2"
-case "$CC" in /*) ;; *) CC="$PWD/$CC" ;; esac
-case "$AR" in /*) ;; *) AR="$PWD/$AR" ;; esac
-export CFLAGS='-O2 -fPIC'
+    command = """export CFLAGS='-O2 -fPIC'
 export MAKEFLAGS=
-export CARGO_TARGET_DIR="$PWD/$3"
-export JEMALLOC_SYS_OUTPUT_DIR="$PWD/$4"
+export JEMALLOC_SYS_OUTPUT_DIR="$PWD/$1"
 export JEMALLOC_SYS_CONFIGURE_ARGS='--with-jemalloc-prefix=je_'
-manifest="$PWD/$5"
+manifest="$CARGO_WORKSPACE/$2"
 """
     if platform.os == "ios":
         command += """export CC="$(xcrun --sdk %s --find clang)"
@@ -54,21 +43,17 @@ export JEMALLOC_SYS_CONFIGURE_ARGS='--with-jemalloc-prefix=je_
 --with-lg-page=14
 --disable-zone-allocator'
 """ % (platform.ios_sdk, platform.ios_sdk, "-simulator" if platform.ios_sdk == "iphonesimulator" else "")
-    # Both builds resolve Cargo from the Rust workspace's pinned toolchain.
-    command += 'cd "$(dirname "$6")"\ncargo build --locked --release --jobs 4 --manifest-path "$manifest"'
+    command += '"$CARGO" build --offline --locked --release --jobs 4 --manifest-path "$manifest"'
     if platform.rust_target:
         command += " --target " + platform.rust_target
     cargo_action(
         ctx,
         command = command,
-        inputs = depset(
-            direct = [ctx.file.external_src, ctx.file.lockfile, ctx.file.manifest, ctx.file._rust_toolchain],
-            transitive = [cc_toolchain.all_files],
-        ),
-        outputs = [archive, public_header, cargo_target],
-        arguments = [cc_toolchain.compiler_executable, cc_toolchain.ar_executable,
-                     cargo_target.path, archive.dirname + "/..", ctx.file.manifest.path,
-                     ctx.file._rust_toolchain.path],
+        inputs = [ctx.file.external_src, ctx.file.lockfile, ctx.file.manifest],
+        outputs = [archive, public_header],
+        work_dir = cargo_target,
+        source_files = [ctx.file.external_src, ctx.file.lockfile, ctx.file.manifest],
+        arguments = [archive.dirname + "/..", ctx.file.manifest.path],
         mnemonic = "SeekdbJemallocBuild",
         progress_message = "Building seekdb-jemalloc-sys for " + platform.os,
     )
@@ -87,10 +72,9 @@ _seekdb_jemalloc_build = rule(
         "external_src": attr.label(allow_single_file = True, mandatory = True),
         "lockfile": attr.label(allow_single_file = True, mandatory = True),
         "manifest": attr.label(allow_single_file = True, mandatory = True),
-        "_rust_toolchain": attr.label(default = Label("//rust:rust-toolchain.toml"), allow_single_file = True),
-    } | CC_TOOLCHAIN_ATTRS | CARGO_ACTION_ATTRS,
+    } | CARGO_ACTION_ATTRS,
     fragments = ["cpp", "apple"],
-    toolchains = use_cc_toolchain(),
+    toolchains = CARGO_TOOLCHAINS,
 )
 
 def seekdb_jemalloc(name, external_src, lockfile, manifest):

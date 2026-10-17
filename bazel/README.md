@@ -39,3 +39,14 @@ Cross compilation uses `--config=android`, `--config=wasm`, `--config=ios` or
 [iOS](../docs/developer-guide/en/ios.md) setup instructions. iOS and WebAssembly
 have dedicated framework/shell targets; the server target above is for native
 Linux/macOS and Android builds.
+
+Cargo uses the installed Rust version pinned in `rust/rust-toolchain.toml`
+(and the separate Wasm pin). Bazel declares the compiler, Python runtime and
+locked crate sources as inputs. Dependency fetching uses Cargo's configured
+source/cache; compilation runs offline in a sandbox with a private Cargo home.
+Commit changes to `rust/Cargo.lock` together with dependency changes.
+
+Each target platform selects its SDK independently: host tools stay in
+`deps/3rd`, Android libraries in `deps/android`, and iOS SDKs in `deps/ios`.
+The Wasm dependency setup also prepares its Emscripten system libraries under
+`build_wasm_deps/em-cache`; Bazel uses that cache read-only.

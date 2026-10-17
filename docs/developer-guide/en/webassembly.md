@@ -31,7 +31,7 @@ python3 tools/wasm/prepare-headers.py \
 python3 bazel.py build --config=wasm //src/wasm:database
 ```
 
-`init` prepares host tools and headers; `build-deps.sh` builds Wasm third-party libraries from pinned sources. Once dependencies are ready, repeat only the final Bazel command with these environment variables set. Bazel builds the Rust libraries; Wasm-specific patches apply only to private dependency copies in the build directory. Run `unset SEEKDB_WASM_DEPS` before switching back to native or Android builds to restore their dependency directories.
+`init` prepares host tools and headers; `build-deps.sh` builds Wasm third-party libraries from pinned sources. Once dependencies are ready, repeat only the final Bazel command with these environment variables set. Bazel builds the Rust libraries; Wasm-specific patches apply only to private dependency copies in the build directory. SDK selection follows the Bazel target platform; `SEEKDB_WASM_DEPS` only locates the Wasm SDK and does not affect native or Android builds.
 
 The engine and its JS, HTML and CSS assets are in `build_bazel/bin/src/wasm/dist/`. `python3 bazel.py clean` clears Bazel build outputs and preserves `build_wasm_deps`.
 

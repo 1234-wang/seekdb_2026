@@ -35,67 +35,57 @@ SeekdbSourceOwnershipInfo = provider(
     fields = ["owners"],
 )
 
-def seekdb_cc_library(
-        name,
-        copts = None,
-        local_defines = None,
-        sanity_instrumentation = True,
-        **kwargs):
-    """Defines a first-party library with seekdb's standard compile contract.
-
-    Callers only spell copts/local_defines when a target intentionally differs
-    from the normal semantic-module release build.
-    """
-
-    additional_compiler_inputs = kwargs.pop("additional_compiler_inputs", [])
-    cxxopts = kwargs.pop("cxxopts", [])
-    implementation_deps = kwargs.pop("implementation_deps", [])
-    public_deps = kwargs.get("deps", [])
-    target_compatible_with = kwargs.pop("target_compatible_with", [])
-    if type(implementation_deps) == "list":
-        automatic_oblib_deps = [
-            dependency
-            for dependency in oblib_compile_deps(name)
-            if dependency not in public_deps and dependency not in implementation_deps
-        ]
-    else:
-        automatic_oblib_deps = [
-            dependency
-            for dependency in oblib_compile_deps(name)
-            if dependency not in public_deps
-        ]
-
+def _seekdb_cc_library_impl(
+        name, visibility, copts, local_defines, sanity_instrumentation,
+        additional_compiler_inputs, cxxopts, implementation_deps,
+        target_compatible_with, **kwargs):
+    implementation_deps = implementation_deps + [
+        Label(dependency)
+        for dependency in oblib_compile_deps(name)
+        if Label(dependency) not in implementation_deps
+    ]
     _rules_cc_library(
         name = name,
-        additional_compiler_inputs = (
-            additional_compiler_inputs +
-            seekdb_platform_compiler_inputs() +
-            seekdb_sanity_compiler_inputs(sanity_instrumentation)
-        ),
-        copts = (
-            (SEEKDB_SEMANTIC_MODULE_COPTS if copts == None else copts) +
-            seekdb_arch_copts() +
-            seekdb_platform_copts() +
-            seekdb_sanity_copts(sanity_instrumentation)
-        ),
+        visibility = visibility,
+        additional_compiler_inputs = additional_compiler_inputs + seekdb_platform_compiler_inputs() + seekdb_sanity_compiler_inputs(sanity_instrumentation),
+        copts = copts + seekdb_arch_copts() + seekdb_platform_copts() + seekdb_sanity_copts(sanity_instrumentation),
         cxxopts = cxxopts + seekdb_sanity_cxxopts(sanity_instrumentation),
-        implementation_deps = (
-            implementation_deps +
-            automatic_oblib_deps +
-            seekdb_sanity_implementation_deps()
-        ),
+        implementation_deps = implementation_deps + seekdb_sanity_implementation_deps(),
         linkstatic = True,
-        local_defines = (
-            (SEEKDB_RELEASE_LOCAL_DEFINES if local_defines == None else local_defines) +
-            seekdb_platform_local_defines() +
-            seekdb_sanity_local_defines()
-        ),
-        target_compatible_with = (
-            target_compatible_with +
-            seekdb_sanity_target_compatible_with()
-        ),
+        local_defines = local_defines + seekdb_platform_local_defines() + seekdb_sanity_local_defines(),
+        target_compatible_with = target_compatible_with + seekdb_sanity_target_compatible_with(),
         **kwargs
     )
+
+# rules_cc's public cc_library entry point is a legacy forwarding function,
+# so declare our supported C++ attributes and inherit Bazel's common attrs.
+seekdb_cc_library = macro(
+    implementation = _seekdb_cc_library_impl,
+    inherit_attrs = "common",
+    attrs = {
+        "srcs": attr.label_list(allow_files = True),
+        "hdrs": attr.label_list(allow_files = True),
+        "textual_hdrs": attr.label_list(allow_files = True),
+        "deps": attr.label_list(),
+        # The generated ownership map is merged into these direct compile
+        # dependencies; deduplication needs a concrete list at loading time.
+        "implementation_deps": attr.label_list(configurable = False),
+        "additional_compiler_inputs": attr.label_list(allow_files = True),
+        "additional_linker_inputs": attr.label_list(allow_files = True),
+        "copts": attr.string_list(default = SEEKDB_SEMANTIC_MODULE_COPTS),
+        "cxxopts": attr.string_list(),
+        "conlyopts": attr.string_list(),
+        "local_defines": attr.string_list(default = SEEKDB_RELEASE_LOCAL_DEFINES),
+        "defines": attr.string_list(),
+        "includes": attr.string_list(),
+        "include_prefix": attr.string(),
+        "strip_include_prefix": attr.string(),
+        "linkopts": attr.string_list(),
+        "alwayslink": attr.bool(default = False),
+        "target_compatible_with": attr.label_list(),
+        "sanity_instrumentation": attr.bool(default = True, configurable = False),
+    },
+)
 
 def _dedupe(values):
     seen = {}

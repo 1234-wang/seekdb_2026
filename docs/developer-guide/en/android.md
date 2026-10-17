@@ -15,10 +15,13 @@ Set the installed NDK path, initialize Android dependencies, then build with Baz
 
 ```bash
 export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.3.13750724"
-rustup target add aarch64-linux-android
 python3 bazel.py init --android
 python3 bazel.py build --config=android //src/observer:seekdb
 ```
+
+`init --android` prepares host tools in `deps/3rd` and Android dependencies in
+`deps/android`, and installs the Android target for the pinned Rust toolchain.
+Native and Android builds can share one checkout.
 
 The binary is generated at:
 

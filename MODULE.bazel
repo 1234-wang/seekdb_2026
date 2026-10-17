@@ -17,7 +17,13 @@ seekdb_third_party_headers_repository = use_repo_rule(
     "seekdb_third_party_headers_repository",
 )
 
-seekdb_third_party_headers_repository(name = "seekdb_3rd_headers")
+seekdb_third_party_headers_repository(name = "seekdb_3rd_native")
+seekdb_third_party_headers_repository(name = "seekdb_3rd_android", platform = "android")
+seekdb_third_party_headers_repository(name = "seekdb_3rd_ios", platform = "iphoneos")
+seekdb_third_party_headers_repository(name = "seekdb_3rd_ios_simulator", platform = "iphonesimulator")
+seekdb_third_party_headers_repository(name = "seekdb_3rd_wasm", platform = "wasm")
+seekdb_sdk_aliases = use_repo_rule("//bazel:third_party_headers_repo.bzl", "seekdb_sdk_aliases")
+seekdb_sdk_aliases(name = "seekdb_3rd_headers")
 
 seekdb_cc_toolchain_repository = use_repo_rule(
     "//bazel/toolchains/cc:seekdb_cc_toolchain_repo.bzl",
@@ -63,3 +69,17 @@ register_toolchains("@local_config_cc_toolchains//:all")
 # needed during repository discovery or Bazel analysis.
 cargo_exports_repository = use_repo_rule("//bazel:cargo.bzl", "cargo_exports_repository")
 cargo_exports_repository(name = "cargo_exports", manifest = "//rust:exports.json")
+
+local_cargo_repository = use_repo_rule("//bazel:cargo_toolchain.bzl", "local_cargo_repository")
+local_cargo_repository(name = "seekdb_cargo")
+register_toolchains("@seekdb_cargo//:all")
+
+cargo_sources_repository = use_repo_rule("//bazel:cargo_toolchain.bzl", "cargo_sources_repository")
+_CARGO_MANIFESTS = [
+    "//rust:Cargo.toml", "//rust:config/Cargo.toml", "//rust:kv/Cargo.toml",
+    "//rust:local/Cargo.toml", "//rust:sql-nio/Cargo.toml", "//rust:logger/Cargo.toml",
+    "//rust:seekdb-rust/Cargo.toml", "//deps/external:Cargo.toml",
+]
+_CARGO_LOCKS = ["//rust:Cargo.lock", "//deps/external:Cargo.lock"]
+cargo_sources_repository(name = "seekdb_cargo_native_sources", kind = "native", manifests = _CARGO_MANIFESTS, locks = _CARGO_LOCKS)
+cargo_sources_repository(name = "seekdb_cargo_wasm_sources", kind = "wasm", manifests = _CARGO_MANIFESTS, locks = _CARGO_LOCKS)

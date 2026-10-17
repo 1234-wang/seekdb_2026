@@ -60,8 +60,6 @@ def _static_link_inputs(target, direct = False):
         for library in linker_input.libraries:
             archive = _selected_static_archive(library)
             inputs.extend([archive] if archive != None else _library_objects(library))
-    if not inputs:
-        fail("%s contributes no %sstatic archive or object files" % (target.label, "direct " if direct else ""))
     return inputs
 
 def _files_from_targets(targets):
@@ -100,15 +98,45 @@ def _whole_archive_inputs(targets):
 def _file_paths(files):
     return [file.path for file in files]
 
-def _archive_group(files, apple, whole = False):
+def _archive_args(files, apple, alwayslink):
+    args = []
+    for file in files:
+        if file.path in alwayslink:
+            args.extend(["-Wl,-force_load," + file.path] if apple else [
+                "-Wl,--whole-archive", file.path, "-Wl,--no-whole-archive",
+            ])
+        else:
+            args.append(file.path)
+    return args
+
+def _dependency_link_metadata(targets):
+    # Merge linker inputs as a depset: shared dependencies contribute flags once,
+    # while repetition within one library's flags retains its meaning.
+    linker_inputs = depset(transitive = [
+        target[CcInfo].linking_context.linker_inputs
+        for target in targets
+    ]).to_list()
+    flags = []
+    inputs = []
+    alwayslink = {}
+    for linker_input in linker_inputs:
+        flags.extend(linker_input.user_link_flags)
+        inputs.extend(linker_input.additional_inputs)
+        for library in linker_input.libraries:
+            archive = _selected_static_archive(library)
+            if archive != None and library.alwayslink:
+                alwayslink[archive.path] = True
+    return flags, inputs, alwayslink
+
+def _archive_group(files, apple, whole = False, alwayslink = {}):
     if not files:
         return []
     paths = _file_paths(files)
     if apple:
         # ld64 searches archives repeatedly; force_load retains every object.
-        return ["-Wl,-force_load," + path for path in paths] if whole else paths
+        return ["-Wl,-force_load," + path for path in paths] if whole else _archive_args(files, apple, alwayslink)
     start, end = ("--whole-archive", "--no-whole-archive") if whole else ("--start-group", "--end-group")
-    return ["-Wl," + start] + paths + ["-Wl," + end]
+    return ["-Wl," + start] + (paths if whole else _archive_args(files, apple, alwayslink)) + ["-Wl," + end]
 
 def _seekdb_final_link_impl(ctx):
     cc_toolchain = find_cpp_toolchain(ctx)
@@ -160,7 +188,11 @@ def _seekdb_final_link_impl(ctx):
     ordered_link_files = _files_from_targets(
         ctx.attr.ordered_link_files,
     )
-    extra_inputs = _files_from_targets(ctx.attr.extra_inputs)
+    dependency_flags, dependency_inputs, alwayslink = _dependency_link_metadata(
+        ctx.attr.direct_object_deps + ctx.attr.group_deps + ctx.attr.whole_group_deps +
+        ctx.attr.whole_archive_deps + ctx.attr.tail_deps,
+    )
+    extra_inputs = _files_from_targets(ctx.attr.extra_inputs) + dependency_inputs
 
     link_inputs = (
         direct_objects +
@@ -175,12 +207,13 @@ def _seekdb_final_link_impl(ctx):
         fail("%s has no object or archive inputs" % ctx.label)
 
     ordered_link_args = _file_paths(direct_objects)
-    ordered_link_args.extend(_archive_group(group_inputs, is_apple))
+    ordered_link_args.extend(_archive_group(group_inputs, is_apple, alwayslink = alwayslink))
     ordered_link_args.extend(_archive_group(whole_group_inputs, is_apple, whole = True))
     ordered_link_args.extend(_archive_group(whole_inputs, is_apple, whole = True))
-    ordered_link_args.extend(_file_paths(tail_inputs))
+    ordered_link_args.extend(_archive_args(tail_inputs, is_apple, alwayslink))
     ordered_link_args.extend(_file_paths(ordered_link_files))
     ordered_link_args.extend(_file_paths(static_cpp_runtime_inputs))
+    ordered_link_args.extend(dependency_flags)
     ordered_link_args.extend(["-l" + library for library in ctx.attr.system_libs])
     ordered_link_args.extend([
         ctx.expand_location(option, targets = ctx.attr.extra_inputs)

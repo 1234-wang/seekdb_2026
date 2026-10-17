@@ -3,7 +3,10 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(":toolchain_config.bzl", "emscripten_toolchain_config")
 
 package(default_visibility = ["//visibility:public"])
-filegroup(name = "sdk", srcs = glob(["sdk/**", "cache/sysroot/**"], exclude = ["sdk/**/*.pyc"]))
+filegroup(
+    name = "sdk",
+    srcs = ["emcc.sh"] + glob(["sdk/**", "clang_builtin_include/**"], exclude = ["sdk/**/*.pyc"]) + glob(["cache/sysroot/**"], allow_empty = True),
+)
 filegroup(name = "empty")
 cc_library(
     name = "wasmfs_headers",
