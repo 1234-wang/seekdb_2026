@@ -23,7 +23,7 @@ python3 build.py build --config=android //src/observer:seekdb
 二进制文件位于：
 
 ```text
-build_bazel/bin/src/observer/seekdb
+build/bin/src/observer/seekdb
 ```
 
 该配置构建 API 28、支持 16 KiB 内存页的 ARM64 PIE，静态链接 C++ 运行库。单元测试修改应按照[编写与运行单元测试](unittest.md)中的流程，在受支持的 Linux 主机上验证。
@@ -34,7 +34,7 @@ macOS 自带的 `strip` 无法处理 Android ELF 二进制，必须使用 NDK �
 
 ```bash
 NDK_STRIP="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip"
-"$NDK_STRIP" -o /tmp/seekdb build_bazel/bin/src/observer/seekdb
+"$NDK_STRIP" -o /tmp/seekdb build/bin/src/observer/seekdb
 adb push /tmp/seekdb /data/local/tmp/seekdb
 adb shell chmod +x /data/local/tmp/seekdb
 ```

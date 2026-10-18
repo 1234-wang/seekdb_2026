@@ -185,7 +185,7 @@ def main(arguments: List[str]) -> int:
         epilog="Prepare project dependencies with: ./build.py init [--android | --ios [--simulator]]",
         allow_abbrev=False,
     )
-    parser.add_argument("--build-dir", type=Path, default=Path("build_bazel"))
+    parser.add_argument("--build-dir", type=Path, default=Path("build"))
     parser.add_argument("--launcher-cache-dir", type=Path, default=_cache_directory())
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     options, startup_options = parser.parse_known_args(arguments)

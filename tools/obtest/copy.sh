@@ -18,7 +18,7 @@ if [[ "$compile" == true ]]; then
   (cd "$source_dir" && python3 ./build.py build --jobs="$jobs" \
     //src/observer:seekdb //src/share/inner_table/sys_package:syspack_release)
 fi
-artifacts="$source_dir/build_bazel/bin"
+artifacts="$source_dir/build/bin"
 mkdir -p "bin${VER:-}" lib admin etc agent
 install -m 0755 "$artifacts/src/observer/seekdb" "bin${VER:-}/observer"
 install -m 0644 "$artifacts"/src/share/inner_table/sys_package/bazel_generated/syspack_release/*.sql admin/

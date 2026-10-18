@@ -87,7 +87,7 @@ python build.py init
 python build.py build //src/observer:seekdb
 ```
 
-`build.py` selects clang-cl from `deps\3rd\tools\llvm18`. The executable is `build_bazel\bin\src\observer\seekdb.exe`. The build retains `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH` to bypass the compiler version check in newer MSVC standard library headers, for both project C++ and Cargo's C++ bridges.
+`build.py` selects clang-cl from `deps\3rd\tools\llvm18`. The executable is `build\bin\src\observer\seekdb.exe`. The build retains `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH` to bypass the compiler version check in newer MSVC standard library headers, for both project C++ and Cargo's C++ bridges.
 
 .NET 8 and WiX v4 are optional and are required only for the configurator and MSI packaging path.
 

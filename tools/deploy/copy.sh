@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-artifacts="${1:-$source_dir/build_bazel/bin}"
+artifacts="${1:-$source_dir/build/bin}"
 if (( $# > 1 )); then
   echo "Usage: $0 [Bazel artifact directory]" >&2
   exit 64

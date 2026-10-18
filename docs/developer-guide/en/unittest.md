@@ -10,7 +10,7 @@ C++ unit tests use Google Test and explicit Bazel `cc_test` targets. The current
 ./build.py build --sanity //unittest/oblib:test_jemalloc_hook
 ```
 
-`build` compiles and links the tests without running them. The jemalloc hook test requires `--sanity`, which enables the bundled jemalloc backend. Test binaries appear under `build_bazel/bin/` in their target's package directory.
+`build` compiles and links the tests without running them. The jemalloc hook test requires `--sanity`, which enables the bundled jemalloc backend. Test binaries appear under `build/bin/` in their target's package directory.
 
 List the checked-in test targets with:
 

@@ -33,7 +33,7 @@ python3 build.py build --config=wasm //src/wasm:database
 
 `init` prepares host tools and headers; `build-deps.py` builds Wasm third-party libraries from pinned sources. Once dependencies are ready, repeat only the final Bazel command with these environment variables set. Bazel builds the Rust libraries; Wasm-specific patches apply only to private dependency copies in the build directory. SDK selection follows the Bazel target platform; `SEEKDB_WASM_DEPS` only locates the Wasm SDK and does not affect native or Android builds.
 
-The engine and its JS, HTML and CSS assets are in `build_bazel/bin/src/wasm/dist/`. `python3 build.py clean` clears Bazel build outputs and preserves `build_wasm_deps`.
+The engine and its JS, HTML and CSS assets are in `build/bin/src/wasm/dist/`. `python3 build.py clean` clears Bazel build outputs and preserves `build_wasm_deps`.
 
 ## Build directory contents
 
@@ -49,7 +49,7 @@ Serve these files from `localhost` or over HTTPS with `Cross-Origin-Opener-Polic
 Serve the shell from the build directory and open the URL it prints:
 
 ```bash
-python3 tools/wasm/serve-shell.py --build-dir build_bazel/bin/src/wasm/dist
+python3 tools/wasm/serve-shell.py --build-dir build/bin/src/wasm/dist
 ```
 
 The shell's commands and storage modes are described in `docs/webassembly-shell.md`.

@@ -109,7 +109,7 @@ python build.py init
 python build.py build //src/observer:seekdb
 ```
 
-`build.py` 固定选择 `deps\3rd\tools\llvm18` 中的 clang-cl，产物是 `build_bazel\bin\src\observer\seekdb.exe`。构建沿用原有的 `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`，跳过新版 MSVC 标准库的编译器版本检查；该选项同时用于项目 C++ 和 Cargo 的 C++ 桥接代码。
+`build.py` 固定选择 `deps\3rd\tools\llvm18` 中的 clang-cl，产物是 `build\bin\src\observer\seekdb.exe`。构建沿用原有的 `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`，跳过新版 MSVC 标准库的编译器版本检查；该选项同时用于项目 C++ 和 Cargo 的 C++ 桥接代码。
 
 .NET 8 和 WiX v4 是可选依赖，仅配置器和 MSI 打包流程需要。
 

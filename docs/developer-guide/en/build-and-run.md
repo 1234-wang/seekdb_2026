@@ -20,7 +20,7 @@ The repository's `build.py` downloads the Bazel version pinned in `.bazelversion
 ./build.py build //src/observer:seekdb
 ```
 
-`init` prepares platform dependencies; run it on the first build or after dependency metadata changes. For incremental builds, repeat only the `build` command. The resulting binary is `build_bazel/bin/src/observer/seekdb`.
+`init` prepares platform dependencies; run it on the first build or after dependency metadata changes. For incremental builds, repeat only the `build` command. The resulting binary is `build/bin/src/observer/seekdb`.
 
 On Windows, use `python build.py` with the same commands. For C++ test targets, see [Write and run unit tests](unittest.md). When you change Rust dependencies, commit the updated `rust/Cargo.lock`.
 

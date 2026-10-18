@@ -33,7 +33,7 @@ python3 build.py build --config=wasm //src/wasm:database
 
 `init` 准备宿主工具和头文件；`build-deps.py` 用锁定源码构建 Wasm 第三方库。依赖已准备好后只需执行最后一条 Bazel 命令，并保留这些环境变量。Rust 库由 Bazel 构建，Wasm 专用补丁仅作用于构建目录中的依赖副本。SDK 按 Bazel 目标平台选择；`SEEKDB_WASM_DEPS` 只指定 Wasm SDK 的位置，不影响本机或 Android 构建。
 
-引擎和配套 JS、HTML、CSS 文件位于 `build_bazel/bin/src/wasm/dist/`。`python3 build.py clean` 清理 Bazel 编译产物，保留 `build_wasm_deps`。
+引擎和配套 JS、HTML、CSS 文件位于 `build/bin/src/wasm/dist/`。`python3 build.py clean` 清理 Bazel 编译产物，保留 `build_wasm_deps`。
 
 ## 构建目录内容
 
@@ -49,7 +49,7 @@ python3 build.py build --config=wasm //src/wasm:database
 用构建目录启动 shell，打开它输出的 URL：
 
 ```bash
-python3 tools/wasm/serve-shell.py --build-dir build_bazel/bin/src/wasm/dist
+python3 tools/wasm/serve-shell.py --build-dir build/bin/src/wasm/dist
 ```
 
 shell 的命令和存储模式见 `docs/webassembly-shell.md`。

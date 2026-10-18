@@ -70,7 +70,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     parser.add_argument("--release", type=int, required=True)
-    parser.add_argument("--artifacts", type=Path, default=ROOT / "build_bazel/bin")
+    parser.add_argument("--artifacts", type=Path, default=ROOT / "build/bin")
     parser.add_argument("--dependencies", type=Path, default=ROOT / "deps/3rd")
     parser.add_argument("--dll-dir", type=Path, action="append", default=[])
     parser.add_argument("--configurator", type=Path)

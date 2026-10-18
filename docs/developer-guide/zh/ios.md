@@ -33,10 +33,10 @@ arm64 模拟器使用独立的依赖目录和配置：
 framework 位于：
 
 ```text
-build_bazel/bin/src/observer/framework/SeekDB.framework
+build/bin/src/observer/framework/SeekDB.framework
 ```
 
-两种配置的输出路径相同。需要同时保留时，在 `build` 之前分别指定 `--build-dir build_bazel_ios` 和 `--build-dir build_bazel_ios_simulator`，或在切换配置前复制 framework。
+两种配置的输出路径相同。需要同时保留时，在 `build` 之前分别指定 `--build-dir build_ios` 和 `--build-dir build_ios_simulator`，或在切换配置前复制 framework。
 
 单元测试修改应按照[编写与运行单元测试](unittest.md)中的流程，在受支持的 Linux 主机上验证。
 

@@ -33,7 +33,7 @@ Install the supported toolchain first, then build the Release target:
 ./build.py build //src/observer:seekdb
 ```
 
-The seekdb binary is generated at `build_bazel/bin/src/observer/seekdb`.
+The seekdb binary is generated at `build/bin/src/observer/seekdb`.
 
 Build the existing C++ tests on Linux without running them:
 

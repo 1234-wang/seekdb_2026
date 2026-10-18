@@ -13,7 +13,7 @@
 #   # produces: package/pkg/seekdb-1.4.0-1-macos15-arm64.pkg
 #
 # Env:
-#   SEEKDB_BUILD   Build directory (default: <repo>/build_bazel/bin)
+#   SEEKDB_BUILD   Build directory (default: <repo>/build/bin)
 
 set -euo pipefail
 
@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOPDIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MACPKG_DIR="$TOPDIR/tools/macpkg"
 
-SEEKDB_BUILD="${SEEKDB_BUILD:-$TOPDIR/build_bazel/bin}"
+SEEKDB_BUILD="${SEEKDB_BUILD:-$TOPDIR/build/bin}"
 
 DO_MENUBAR=true
 
@@ -39,7 +39,7 @@ Options:
 
 Environment:
   SEEKDB_BUILD    Directory containing existing macOS artifacts
-                  (default: <repo>/build_bazel/bin)
+                  (default: <repo>/build/bin)
 
 Typical workflow:
   cd <oceanbase-lite>

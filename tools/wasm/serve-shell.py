@@ -98,8 +98,8 @@ def main():
         description="Run the seekdb WebAssembly shell using an existing engine build."
     )
     parser.add_argument(
-        "--build-dir", type=Path, default=ROOT / "build_bazel/bin/src/wasm/dist",
-        help="directory containing seekdb_wasm_database.mjs and .wasm (default: build_bazel/bin/src/wasm/dist)",
+        "--build-dir", type=Path, default=ROOT / "build/bin/src/wasm/dist",
+        help="directory containing seekdb_wasm_database.mjs and .wasm (default: build/bin/src/wasm/dist)",
     )
     parser.add_argument("--port", type=int, default=8767, help="loopback port (default: 8767)")
     args = parser.parse_args()

@@ -1,4 +1,0 @@
-build_bazel
-deps/3rd
-deps/ios
-deps/android

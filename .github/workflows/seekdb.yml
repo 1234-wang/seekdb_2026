@@ -23,7 +23,7 @@ permissions:
 
 env:
   MYSQLTEST_SLICES: "4"
-  SEEKDB_BINARY_PATH: build_bazel/bin/src/observer/seekdb
+  SEEKDB_BINARY_PATH: build/bin/src/observer/seekdb
   SEEKDB_RESULT_NFS_ROOT: /data/storage/jenkins_on_k8s/results/seekdb
   # V1 integrity checks detect corruption but do not authenticate NFS writers.
   SEEKDB_CACHE_NFS_ROOT: /data/storage/jenkins_on_k8s/results/seekdb/_cache

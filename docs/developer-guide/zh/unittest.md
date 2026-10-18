@@ -10,7 +10,7 @@ C++ 单元测试使用 Google Test，并通过 Bazel `cc_test` 显式声明。�
 ./build.py build --sanity //unittest/oblib:test_jemalloc_hook
 ```
 
-`build` 只编译和链接，不运行测试。jemalloc hook 测试需要 `--sanity`，以启用项目自带的 jemalloc 后端。测试二进制位于 `build_bazel/bin/` 下对应的 target 包目录。
+`build` 只编译和链接，不运行测试。jemalloc hook 测试需要 `--sanity`，以启用项目自带的 jemalloc 后端。测试二进制位于 `build/bin/` 下对应的 target 包目录。
 
 列出仓库中的测试目标：
 

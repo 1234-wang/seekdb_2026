@@ -26,7 +26,7 @@ Native and Android builds can share one checkout.
 The binary is generated at:
 
 ```text
-build_bazel/bin/src/observer/seekdb
+build/bin/src/observer/seekdb
 ```
 
 This configuration produces an API 28 ARM64 PIE with 16 KiB page alignment and a statically linked C++ runtime. Validate affected unit tests on a supported Linux host by following [Write and run unit tests](unittest.md).
@@ -37,7 +37,7 @@ Use the NDK strip tool because the macOS `strip` command cannot process Android 
 
 ```bash
 NDK_STRIP="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip"
-"$NDK_STRIP" -o /tmp/seekdb build_bazel/bin/src/observer/seekdb
+"$NDK_STRIP" -o /tmp/seekdb build/bin/src/observer/seekdb
 adb push /tmp/seekdb /data/local/tmp/seekdb
 adb shell chmod +x /data/local/tmp/seekdb
 ```

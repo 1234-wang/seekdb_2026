@@ -14,7 +14,7 @@ From this checkout, pass an engine build made from this branch (see
 
 ```sh
 python3 tools/wasm/serve-shell.py \
-  --build-dir build_bazel/bin/src/wasm/dist \
+  --build-dir build/bin/src/wasm/dist \
   --port 8767
 ```
 
@@ -140,7 +140,7 @@ After changing engine sources, rebuild and serve the generated assets:
 
 ```sh
 ./build.py build --config=wasm //src/wasm:database
-python3 tools/wasm/serve-shell.py --build-dir build_bazel/bin/src/wasm/dist
+python3 tools/wasm/serve-shell.py --build-dir build/bin/src/wasm/dist
 ```
 
 `./build.py clean` clears Bazel outputs and preserves `build_wasm_deps/`.
@@ -161,7 +161,7 @@ the engine or reading live source files:
 ```sh
 ./build.py build --config=wasm --jobs=3 //src/wasm:database
 python3 tools/wasm/release-shell.py package build_wasm_release \
-  --build-dir build_bazel/bin/src/wasm/dist
+  --build-dir build/bin/src/wasm/dist
 python3 tools/wasm/release-shell.py serve build_wasm_release --port 0
 ```
 

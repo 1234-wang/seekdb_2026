@@ -138,7 +138,7 @@ def main():
     parser.add_argument("format", choices=("stage", "rpm", "deb", "tgz"))
     parser.add_argument("--version", required=True)
     parser.add_argument("--release", required=True)
-    parser.add_argument("--artifacts", type=Path, default=ROOT / "build_bazel/bin",
+    parser.add_argument("--artifacts", type=Path, default=ROOT / "build/bin",
                         help="Bazel bin directory from a --config=package build on Linux")
     parser.add_argument("--dependencies", type=Path, default=ROOT / "deps/3rd")
     parser.add_argument("--timezone-file", type=Path)

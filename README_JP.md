@@ -372,7 +372,7 @@ cd seekdb
 ./build.py init
 ./build.py build //src/observer:seekdb
 mkdir -p ~/seekdb/bin
-cp build_bazel/bin/src/observer/seekdb ~/seekdb/bin
+cp build/bin/src/observer/seekdb ~/seekdb/bin
 cd ~/seekdb
 ./bin/seekdb
 ```

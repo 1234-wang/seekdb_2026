@@ -33,10 +33,10 @@ The minimum deployment version is iOS 18.0. Both configurations compile the engi
 The framework is generated at:
 
 ```text
-build_bazel/bin/src/observer/framework/SeekDB.framework
+build/bin/src/observer/framework/SeekDB.framework
 ```
 
-Both configurations use the same output path. To retain both, specify `--build-dir build_bazel_ios` and `--build-dir build_bazel_ios_simulator` before `build`, or copy the framework before switching configurations.
+Both configurations use the same output path. To retain both, specify `--build-dir build_ios` and `--build-dir build_ios_simulator` before `build`, or copy the framework before switching configurations.
 
 Validate affected unit tests on a supported Linux host by following [Write and run unit tests](unittest.md).
 
