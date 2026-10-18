@@ -59,4 +59,4 @@ emcc "${probe_dir}/main.cpp" -Oz -pthread -fexceptions -msimd128 \
   -o "${probe_dir}/main.mjs"
 
 cd "${repo_root}"
-SEEKDB_WASM_DEPS="${install_prefix}" ./build.py build --config=wasm //tools/wasm:source_sdk
+SEEKDB_WASM_DEPS="${install_prefix}" ./build.py build --config=wasm //bazel/sdk_sources:source_sdk

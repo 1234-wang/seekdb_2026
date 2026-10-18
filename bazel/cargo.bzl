@@ -97,18 +97,17 @@ def _cargo_build_impl(ctx):
     directory = ctx.bin_dir.path + "/" + ctx.label.package
     inputs = ctx.files.srcs + ctx.files.platform_inputs
     work_dir = ctx.actions.declare_directory("cargo-work")
-    command = 'python "$CARGO_WORKSPACE/rust/build.py" --cargo "$CARGO" --target-dir "$CARGO_TARGET_DIR" --output "%s/cargo" --canonical-archives' % directory
+    command = 'python "$CARGO_WORKSPACE/rust/build.py" --cargo "$CARGO" --target-dir "$CARGO_TARGET_DIR" --output "%s/cargo"' % directory
     if platform.rust_target:
         command += " --target " + platform.rust_target
     if platform.os == "windows":
-        command = ["python", "${CARGO_WORKSPACE}/rust/build.py", "--cargo", "${CARGO}", "--target-dir", "${CARGO_TARGET_DIR}", "--output", directory + "/cargo", "--canonical-archives"]
+        command = ["python", "${CARGO_WORKSPACE}/rust/build.py", "--cargo", "${CARGO}", "--target-dir", "${CARGO_TARGET_DIR}", "--output", directory + "/cargo"]
     elif platform.os == "emscripten":
         command = '''wasm="$CARGO_TARGET_DIR/wasm"
-python "$CARGO_WORKSPACE/tools/wasm/prepare-rust-sysroot.py" "$("$RUSTC" --print sysroot)" "$wasm/sysroot"
-python "$CARGO_WORKSPACE/tools/wasm/prepare-rust-workspace.py" "$wasm"
+python "$CARGO_WORKSPACE/tools/wasm/prepare-rust.py" "$("$RUSTC" --print sysroot)" "$wasm"
 export RUSTFLAGS="--sysroot=$wasm/sysroot -Ctarget-feature=+atomics,+bulk-memory,+mutable-globals -Cpanic=abort"
 export CXXFLAGS_wasm32_unknown_emscripten="-pthread -fexceptions"
-python "$wasm/workspace/build.py" --cargo "$CARGO" --target wasm32-unknown-emscripten --target-dir "$CARGO_TARGET_DIR" --output "%s/cargo" --canonical-archives -- --no-default-features --features sql-nio/memory-transport -Zbuild-std=std,panic_abort
+python "$wasm/workspace/build.py" --cargo "$CARGO" --target wasm32-unknown-emscripten --target-dir "$CARGO_TARGET_DIR" --output "%s/cargo" -- --no-default-features --features sql-nio/memory-transport -Zbuild-std=std,panic_abort
 ''' % directory
     cargo_action(
         ctx,

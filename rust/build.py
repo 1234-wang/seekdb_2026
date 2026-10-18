@@ -28,8 +28,6 @@ def main():
     parser.add_argument("--target")
     parser.add_argument("--target-dir", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--canonical-archives", action="store_true",
-                        help="export each Cargo static library once using its Cargo name")
     parser.add_argument("cargo_args", nargs="*",
                         help="extra arguments for cargo build, given after --")
     args = parser.parse_args()
@@ -65,18 +63,14 @@ def main():
     for name, export in exports.items():
         archive = libraries[export.get("library", name)]
         package = packages[export["crate"].replace("-", "_")]
-        library_name = archive.name if args.canonical_archives else (
-            name + ".lib" if archive.suffix == ".lib" else "lib" + name + ".a")
+        library_name = archive.name
         if library_name not in copied:
             shutil.copyfile(archive, output / library_name)
             copied.add(library_name)
         for header, source in export["headers"].items():
             destination = output / "include" / header
             destination.parent.mkdir(parents=True, exist_ok=True)
-            contents = (build_dirs[package] / source).read_bytes()
-            # Preserve header mtimes when only Rust implementation changed.
-            if not destination.exists() or destination.read_bytes() != contents:
-                destination.write_bytes(contents)
+            shutil.copyfile(build_dirs[package] / source, destination)
 
 
 if __name__ == "__main__":
