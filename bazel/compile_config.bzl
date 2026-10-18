@@ -69,7 +69,7 @@ SEEKDB_RELEASE_LOCAL_DEFINES = SEEKDB_OBLIB_LOCAL_DEFINES + [
 ]
 
 _SANITY_CONFIG = "//bazel:sanity_enabled"
-_SANITY_PASS = "@seekdb_3rd_headers//:sanity_pass"
+_SANITY_PASS = "//bazel/third_party:sanity_pass"
 
 _SANITY_NO_BUILTIN_COPTS = [
     "-fno-builtin-memset",
@@ -98,7 +98,7 @@ def sanity_settings(instrument):
         "cxxopts": ["-fpass-plugin=$(location %s)" % _SANITY_PASS] if instrument else [],
         "additional_compiler_inputs": [_SANITY_PASS] if instrument else [],
         "local_defines": ["ENABLE_SANITY", "OB_HAVE_BUNDLED_JEMALLOC=1"],
-        "implementation_deps": ["@seekdb_3rd_headers//:sanity_headers"],
+        "implementation_deps": ["//bazel/third_party:sanity_headers"],
         # Even targets without instrumentation must reject unsupported target platforms
         # when the build requests the Sanity runtime contract.
         "target_compatible_with": ["@platforms//os:linux"],

@@ -23,7 +23,7 @@ def seekdb_ios_framework():
             "//src/oblib:oblib_io_primitives",
             "//src/oblib:oblib_rpc",
             "//deps/external:jemalloc_headers",
-            "@seekdb_3rd_headers//:curl_headers",
+            "//bazel/third_party:curl_headers",
         ],
         target_compatible_with = ["@platforms//os:ios"],
         tags = ["manual"],
@@ -32,7 +32,7 @@ def seekdb_ios_framework():
         name = "_ios_framework_link",
         direct_object_deps = [":_ios_entry"],
         group_deps = [":observer_embedded_runtime"],
-        sdk_deps = ["//bazel/sdk_sources:source_sdk", "@seekdb_3rd_headers//:base_libraries"],
+        sdk_deps = ["//bazel/sdk_sources:source_sdk", "//bazel/third_party:base_libraries"],
         ordered_link_files = [
             "//rust:sql_nio_archive",
             "//rust:config_archive",
@@ -83,8 +83,8 @@ def seekdb_ios_framework():
             "@seekdb_cargo_native_sources//:vendor.tar",
             "//bazel/sdk_sources:ios_source_metadata",
             "//bazel/sdk_sources:ios_licenses",
-            "@seekdb_3rd_headers//:ios_base_metadata",
-            "@seekdb_3rd_headers//:ios_base_licenses",
+            "//bazel/third_party:ios_base_metadata",
+            "//bazel/third_party:ios_base_licenses",
         ],
         tools = ["//tools/ios:package_framework.py"],
         outs = [
@@ -101,9 +101,9 @@ def seekdb_ios_framework():
               ' --rust-lock "$(location //rust:Cargo.lock)"' +
               ' --cargo-sources "$(location @seekdb_cargo_native_sources//:vendor.tar)"' +
               ' --source-metadata $(locations //bazel/sdk_sources:ios_source_metadata)' +
-              ' $(locations @seekdb_3rd_headers//:ios_base_metadata)' +
+              ' $(locations //bazel/third_party:ios_base_metadata)' +
               ' --licenses $(location //:LICENSE) $(locations //bazel/sdk_sources:ios_licenses)' +
-              ' $(locations @seekdb_3rd_headers//:ios_base_licenses)' +
+              ' $(locations //bazel/third_party:ios_base_licenses)' +
               ' --output "$(@D)/framework/SeekDB.framework" --platform ' + select({
                   "//bazel:ios_simulator": "IOSSIMULATOR",
                   "//conditions:default": "IOS",

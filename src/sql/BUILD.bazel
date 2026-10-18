@@ -102,7 +102,7 @@ _SQL_INTERFACE_NON_SHARE_DEPS = [
     for dep in _SQL_INTERFACE_NATIVE_DEPS
     if not dep.startswith("//src/share:") and
        not dep.startswith("//src/oblib:") and
-       not dep.startswith("@seekdb_3rd_headers//:")
+       not dep.startswith("//bazel/third_party:")
 ]
 
 _SQL_RUNTIME_NON_SHARE_DEPS = [
@@ -110,7 +110,7 @@ _SQL_RUNTIME_NON_SHARE_DEPS = [
     for dep in SQL_RUNTIME_NATIVE_DEPS
     if not dep.startswith("//src/share:") and
        not dep.startswith("//src/oblib:") and
-       not dep.startswith("@seekdb_3rd_headers//:")
+       not dep.startswith("//bazel/third_party:")
 ]
 
 _SQL_SEMANTIC_HEADER_PREFIXES = [
@@ -320,11 +320,11 @@ grouped_unity_cc_library(
         "//src/share:utility_types",
         "//src/share:vector",
         "//src/share:worker_runtime",
-        "@seekdb_3rd_headers//:boost_headers",
-        "@seekdb_3rd_headers//:curl_headers",
-        "@seekdb_3rd_headers//:fast_float_headers",
-        "@seekdb_3rd_headers//:icu_headers",
-        "@seekdb_3rd_headers//:openssl_headers",
+        "//bazel/third_party:boost_headers",
+        "//bazel/third_party:curl_headers",
+        "//bazel/third_party:fast_float_headers",
+        "//bazel/third_party:icu_headers",
+        "//bazel/third_party:openssl_headers",
     ],
     tags = ["manual"],
 )

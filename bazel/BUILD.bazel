@@ -6,14 +6,12 @@ exports_files([
     "parser_codegen.py",
     "cargo.bzl",
     "platforms.bzl",
-    "third_party.BUILD",
     "defs.bzl",
     "cc_library.bzl",
     "compile_config.bzl",
     "build_settings.bzl",
     "final_link.bzl",
     "localized_partial_link.bzl",
-    "third_party_headers_repo.bzl",
 ])
 
 config_setting(
@@ -41,7 +39,7 @@ config_setting(
 )
 
 toolchain_type(name = "cargo_toolchain_type", visibility = ["//visibility:public"])
-exports_files(["cargo_toolchain.bzl", "prepare_cargo.py", "cargo_runner.py", "third_party_targets.bzl"])
+exports_files(["cargo_toolchain.bzl", "prepare_cargo.py", "cargo_runner.py"])
 
 bool_flag(
     name = "package_runtime",

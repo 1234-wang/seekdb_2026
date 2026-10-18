@@ -9,7 +9,7 @@ cc_library(
     alwayslink = True,
     deps = [
         "//src/oblib:oblib_unit_test_internal_headers",
-        "@seekdb_3rd_headers//:gtest",
+        "//bazel/third_party:gtest",
     ],
 )
 
@@ -26,7 +26,7 @@ cc_library(
     alwayslink = True,
     deps = [
         "//src/oblib:oblib_unit_test_internal_headers",
-        "@seekdb_3rd_headers//:gtest",
+        "//bazel/third_party:gtest",
     ],
     target_compatible_with = select({
         "//bazel:sanity_enabled": [],

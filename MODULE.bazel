@@ -16,7 +16,7 @@ host_tools_repository = use_repo_rule("//bazel:parser.bzl", "host_tools_reposito
 host_tools_repository(name = "seekdb_host_tools")
 
 seekdb_third_party_headers_repository = use_repo_rule(
-    "//bazel:third_party_headers_repo.bzl",
+    "//bazel/third_party:repositories.bzl",
     "seekdb_third_party_headers_repository",
 )
 
@@ -25,8 +25,6 @@ seekdb_third_party_headers_repository(name = "seekdb_3rd_android", platform = "a
 seekdb_third_party_headers_repository(name = "seekdb_3rd_ios", platform = "iphoneos")
 seekdb_third_party_headers_repository(name = "seekdb_3rd_ios_simulator", platform = "iphonesimulator")
 seekdb_third_party_headers_repository(name = "seekdb_3rd_wasm", platform = "wasm")
-seekdb_sdk_aliases = use_repo_rule("//bazel:third_party_headers_repo.bzl", "seekdb_sdk_aliases")
-seekdb_sdk_aliases(name = "seekdb_3rd_headers")
 
 seekdb_cc_toolchain_repository = use_repo_rule(
     "//bazel/toolchains/cc:seekdb_cc_toolchain_repo.bzl",

@@ -152,17 +152,17 @@ _OBSERVER_NATIVE_DEPS = [
     "//src/standby:standby",
     "//src/storage:tablet_autoincrement_handler_internal",
     "//src/storage:tablet_autoincrement_service_internal",
-    "@seekdb_3rd_headers//:absl_headers",
-    "@seekdb_3rd_headers//:curl_headers",
-    "@seekdb_3rd_headers//:libaio_headers",
-    "@seekdb_3rd_headers//:libxml2_headers",
-    "@seekdb_3rd_headers//:mariadb_headers",
-    "@seekdb_3rd_headers//:openssl_headers",
-    "@seekdb_3rd_headers//:rapidjson_headers",
-    "@seekdb_3rd_headers//:roaring_headers",
-    "@seekdb_3rd_headers//:s2_headers",
-    "@seekdb_3rd_headers//:vsag_headers",
-    "@seekdb_3rd_headers//:zlib_headers",
+    "//bazel/third_party:absl_headers",
+    "//bazel/third_party:curl_headers",
+    "//bazel/third_party:libaio_headers",
+    "//bazel/third_party:libxml2_headers",
+    "//bazel/third_party:mariadb_headers",
+    "//bazel/third_party:openssl_headers",
+    "//bazel/third_party:rapidjson_headers",
+    "//bazel/third_party:roaring_headers",
+    "//bazel/third_party:s2_headers",
+    "//bazel/third_party:vsag_headers",
+    "//bazel/third_party:zlib_headers",
 ]
 
 _OBSERVER_RUNTIME_ONLY_SHARE_DEPS = [
@@ -343,13 +343,13 @@ cc_library(
 # two positional aliases intentionally preserve that link-line behavior.
 filegroup(
     name = "_roaring_vsag_link",
-    srcs = ["@seekdb_3rd_headers//:lib/libroaring.a"],
+    srcs = ["//bazel/third_party:lib/libroaring.a"],
     tags = ["manual"],
 )
 
 filegroup(
     name = "_roaring_core_link",
-    srcs = ["@seekdb_3rd_headers//:lib/libroaring.a"],
+    srcs = ["//bazel/third_party:lib/libroaring.a"],
     tags = ["manual"],
 )
 
@@ -403,8 +403,8 @@ _SEEKDB_ORDERED_LINK_FILES = [
 
 _SEEKDB_EXTRA_LINK_INPUTS = select({
     "@platforms//os:linux": [
-        "@seekdb_3rd_headers//:lib/libaio.so.1",
-        "@seekdb_3rd_headers//:lib/libaio.so.1.0.1",
+        "//bazel/third_party:lib/libaio.so.1",
+        "//bazel/third_party:lib/libaio.so.1.0.1",
     ],
     "//conditions:default": [],
 })

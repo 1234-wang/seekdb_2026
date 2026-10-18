@@ -47,7 +47,10 @@ def _seekdb_third_party_headers_repository_impl(repository_ctx):
     repository_ctx.symlink(sdk + "/devtools", "devtools")
     repository_ctx.symlink(libraries, "lib")
     repository_ctx.symlink(libraries64, "lib64")
-    repository_ctx.template("BUILD.bazel", repository_ctx.attr.build_file, executable = False)
+    repository_ctx.file("BUILD.bazel", '''load("@seekdb//bazel/third_party:targets.bzl", "sdk_targets")
+package(default_visibility = ["//visibility:public"])
+sdk_targets()
+''', executable = False)
 
 seekdb_third_party_headers_repository = repository_rule(
     attrs = {
@@ -61,19 +64,7 @@ seekdb_third_party_headers_repository = repository_rule(
                 "wasm",
             ],
         ),
-        "build_file": attr.label(
-            allow_single_file = True,
-            default = Label("//bazel:third_party.BUILD"),
-        ),
     },
     local = True,
     implementation = _seekdb_third_party_headers_repository_impl,
 )
-
-def _sdk_aliases_impl(ctx):
-    ctx.file("BUILD.bazel", '''load("@seekdb//bazel:third_party_targets.bzl", "sdk_aliases")
-package(default_visibility = ["//visibility:public"])
-sdk_aliases()
-''')
-
-seekdb_sdk_aliases = repository_rule(implementation = _sdk_aliases_impl)

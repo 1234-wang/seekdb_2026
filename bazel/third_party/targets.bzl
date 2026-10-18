@@ -15,7 +15,6 @@ SDK_HEADERS = {
         "linkopts": select({"@platforms//os:linux": ["-pthread"], "//conditions:default": []}),
     },
     "sanity_headers": {"hdrs": ["devtools/include/sanity/**/*.h"], "includes": ["devtools/include"]},
-    "jemalloc_headers": _headers("jemalloc"),
     "absl_headers": _headers("absl"),
     "boost_headers": _headers("boost"),
     "curl_headers": _headers("curl"),

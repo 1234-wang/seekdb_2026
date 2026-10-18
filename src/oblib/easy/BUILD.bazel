@@ -13,7 +13,7 @@ cc_library(
         "thread/*.h",
         "util/*.h",
     ]),
-    deps = ["@seekdb_3rd_headers//:openssl_headers"],
+    deps = ["//bazel/third_party:openssl_headers"],
     includes = [
         ".",
         "include",

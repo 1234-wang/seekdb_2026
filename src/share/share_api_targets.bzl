@@ -301,7 +301,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":geo_cast_interface",
             ":tenant_runtime",
             "//src/oblib:oblib_foundation",
-            "@seekdb_3rd_headers//:boost_headers",
+            "//bazel/third_party:boost_headers",
         ],
     ),
     "geo_serialization": struct(
@@ -316,7 +316,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":geo_types",
             ":geo_visitors",
             "//src/oblib:oblib_foundation",
-            "@seekdb_3rd_headers//:protobuf_c_headers",
+            "//bazel/third_party:protobuf_c_headers",
         ],
     ),
     "geo_visitors": struct(
@@ -391,7 +391,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":io_device_interface",
             ":local_device_space_interface",
             "//src/oblib:oblib_foundation",
-            "@seekdb_3rd_headers//:libaio_headers",
+            "//bazel/third_party:libaio_headers",
         ],
     ),
     "rpc_dispatch": struct(
@@ -657,7 +657,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         deps = [
             ":core_types",
             "//src/oblib:oblib_foundation",
-            "@seekdb_3rd_headers//:rapidjson_headers",
+            "//bazel/third_party:rapidjson_headers",
         ],
     ),
     "worker_runtime": struct(
