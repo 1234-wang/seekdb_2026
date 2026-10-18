@@ -79,7 +79,9 @@ if target:
     environment["CC_" + target] = str(cc)
     environment["CXX_" + target] = str(cc)
     environment["AR_" + target] = str(ar)
-    environment["CARGO_TARGET_" + target.upper() + "_LINKER"] = str(cc)
+    # MSVC Rust targets use link.exe syntax, not the C compiler's syntax.
+    if not target.endswith("_msvc"):
+        environment["CARGO_TARGET_" + target.upper() + "_LINKER"] = str(cc)
 command = args.command[1:] if args.command[:1] == ["--"] else args.command
 for index, argument in enumerate(command):
     for key in ("CARGO_WORKSPACE", "CARGO_TARGET_DIR", "CARGO"):
