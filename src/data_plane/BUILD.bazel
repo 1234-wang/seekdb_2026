@@ -44,6 +44,14 @@ seekdb_generated_unity_cc_library(
     features = ["layering_check"],
     tags = ["manual"],
     visibility = ["//src:__subpackages__"],
+    implementation_deps = [
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_foundation",
+    ],
 )
 
 # Coarse native seam for the complete Data Plane API.  The mechanical header

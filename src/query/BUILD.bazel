@@ -33,8 +33,8 @@ cc_library(
     hdrs = QUERY_API_INTERFACE_HEADERS,
     deps = [
         ":sql_expression_interface",
-        "//src/oblib:oblib_db_meta_domain",
-        "//src/oblib:oblib_encoding_advanced",
+        "//src/oblib:oblib_db_meta",
+        "//src/oblib:oblib_base",
         "//src/objit:objit_api_interface",
         "//src/share:diagnostics",
         "//src/share:semistruct",
@@ -59,16 +59,16 @@ cc_library(
     srcs = QUERY_MYSQL_PROTOCOL_UTIL_SOURCES,
     hdrs = ["api/query/protocol/ob_mysql_protocol_util.h"],
     deps = [
-        "//src/oblib:oblib_data_formats_model",
-        "//src/oblib:oblib_db_values_model",
-        "//src/oblib:oblib_db_values_runtime",
+        "//src/oblib:oblib_common",
         "//src/oblib:oblib_foundation",
-        "//src/oblib:oblib_memory_base",
-        "//src/oblib:oblib_memory_utilities",
+        "//src/oblib:oblib_base",
     ],
     includes = ["api"],
     features = ["layering_check"],
     visibility = ["//src:__subpackages__"],
+    implementation_deps = [
+        "//src/oblib:oblib_mysql_protocol",
+    ],
 )
 
 cc_library(
@@ -77,7 +77,7 @@ cc_library(
     deps = [
         "//rust:sql_nio_headers",
         "//src/oblib:oblib_foundation",
-        "//src/oblib:oblib_mysql_protocol_model",
+        "//src/oblib:oblib_mysql_protocol",
     ],
     includes = ["api"],
     features = ["layering_check"],
@@ -194,6 +194,17 @@ cc_library(
     features = ["layering_check"],
     tags = ["manual"],
     visibility = ["//src:__subpackages__"],
+    implementation_deps = [
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_db_meta",
+        "//src/oblib:oblib_encoding_primitives",
+        "//src/oblib:oblib_restore",
+    ],
 )
 
 cc_library(
@@ -305,6 +316,10 @@ cc_library(
     features = ["layering_check"],
     tags = ["manual"],
     visibility = ["//src:__subpackages__"],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+    ],
 )
 
 cc_library(

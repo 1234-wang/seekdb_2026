@@ -33,7 +33,6 @@ load(
     "declare_share_semantic_header_targets",
     "validate_share_semantic_header_ownership",
 )
-load(":share_runtime_group_oblib_deps.bzl", "share_runtime_group_oblib_deps")
 
 share_validate_source_inventory(
     SHARE_UNITY_GROUPS,
@@ -64,6 +63,9 @@ seekdb_generated_unity_cc_library(
     visibility = [
         "//src:__subpackages__",
         "//unittest:__subpackages__",
+    ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
     ],
 )
 
@@ -112,7 +114,7 @@ cc_library(
     ],
     deps = [
         ":error_codes",
-        "//src/oblib:oblib_core_utilities",
+        "//src/oblib:oblib_base",
         "//src/oblib:oblib_foundation",
     ],
     features = ["layering_check"],
@@ -164,6 +166,9 @@ seekdb_semantic_unity_cc_library(
         "//src:__subpackages__",
         "//unittest:__subpackages__",
     ],
+    implementation_deps = [
+        "//src/oblib:oblib_common",
+    ],
 )
 
 _TRANSACTION_ID_UNITY_GROUP = share_select_unity_groups(
@@ -182,6 +187,9 @@ seekdb_semantic_unity_cc_library(
     visibility = [
         "//src:__subpackages__",
         "//unittest:__subpackages__",
+    ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
     ],
 )
 
@@ -225,6 +233,9 @@ seekdb_semantic_unity_cc_library(
         "//src:__subpackages__",
         "//unittest:__subpackages__",
     ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+    ],
 )
 
 _TIME_WHEEL_UNITY_GROUP = share_select_unity_sources(
@@ -246,6 +257,12 @@ seekdb_semantic_unity_cc_library(
     features = ["layering_check"],
     tags = ["manual"],
     visibility = ["//src:__subpackages__"],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+    ],
 )
 
 _TABLET_REPLICA_TYPES_UNITY_GROUP = share_select_unity_sources(
@@ -270,6 +287,10 @@ seekdb_semantic_unity_cc_library(
     features = ["layering_check"],
     tags = ["manual"],
     visibility = ["//src:__subpackages__"],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+    ],
 )
 
 cc_library(
@@ -317,6 +338,11 @@ seekdb_semantic_unity_cc_library(
     visibility = [
         "//src:__subpackages__",
         "//unittest:__subpackages__",
+    ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
     ],
 )
 
@@ -387,8 +413,7 @@ cc_library(
 
 cc_library(
     name = "errsim_interface",
-    hdrs = [
-    ],
+    hdrs = [],
     deps = ["//src/oblib:oblib_foundation"],
     features = ["layering_check"],
     tags = ["manual"],
@@ -397,8 +422,7 @@ cc_library(
 
 cc_library(
     name = "unit_config_interface",
-    hdrs = [
-    ],
+    hdrs = [],
     deps = ["//src/oblib:oblib_foundation"],
     features = ["layering_check"],
     tags = ["manual"],
@@ -441,7 +465,7 @@ seekdb_semantic_unity_cc_library(
         ":core_types",
         ":io_bench_controller_interface",
         "//src/oblib:oblib_foundation",
-        "//src/oblib:oblib_restore_advanced",
+        "//src/oblib:oblib_restore",
     ],
     implementation_deps = [
         ":config_parser_interface",
@@ -453,6 +477,10 @@ seekdb_semantic_unity_cc_library(
         ":tenant_runtime",
         ":unit_config_interface",
         "@seekdb_3rd_headers//:libaio_headers",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -478,8 +506,7 @@ cc_library(
 
 cc_library(
     name = "resource_limit_interface",
-    hdrs = [
-    ],
+    hdrs = [],
     deps = [
         ":error_codes",
         "//src/oblib:oblib_foundation",
@@ -534,7 +561,7 @@ seekdb_semantic_unity_cc_library(
         ":tenant_runtime",
         "//src/oblib:oblib_compression",
         "//src/oblib:oblib_foundation",
-        "//src/oblib:oblib_mysql_client_domain",
+        "//src/oblib:oblib_common",
         "//rust:config_headers",
     ],
     implementation_deps = [
@@ -547,7 +574,11 @@ seekdb_semantic_unity_cc_library(
         ":task_control",
         ":ttl_schedule_interface",
         ":unit_config_interface",
-        "//src/oblib:oblib_db_values_runtime",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_diagnostics_primitives",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -578,6 +609,9 @@ seekdb_semantic_unity_cc_library(
         "//src:__subpackages__",
         "//unittest:__subpackages__",
     ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+    ],
 )
 
 _LOCATION_UNITY_GROUP = share_select_unity_sources(
@@ -599,7 +633,10 @@ seekdb_semantic_unity_cc_library(
         ":ls_restore_status",
         "//src/oblib:oblib_foundation",
     ],
-    implementation_deps = [":task_control"],
+    implementation_deps = [
+        ":task_control",
+        "//src/oblib:oblib_base",
+    ],
     features = ["layering_check"],
     tags = ["manual"],
     visibility = [
@@ -632,6 +669,9 @@ seekdb_semantic_unity_cc_library(
     visibility = [
         "//src:__subpackages__",
         "//unittest:__subpackages__",
+    ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
     ],
 )
 
@@ -683,6 +723,11 @@ seekdb_semantic_unity_cc_library(
     visibility = [
         "//src:__subpackages__",
         "//unittest:__subpackages__",
+    ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
     ],
 )
 
@@ -738,6 +783,10 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         ":schema_model_interface",
         "//src/oblib:oblib_foundation",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -776,6 +825,12 @@ seekdb_semantic_unity_cc_library(
     visibility = [
         "//src:__subpackages__",
         "//unittest:__subpackages__",
+    ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
     ],
 )
 
@@ -847,6 +902,8 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         ":error_codes",
         ":object_cast",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -893,13 +950,18 @@ seekdb_generated_unity_cc_library(
     features = ["layering_check"],
     tags = ["manual"],
     visibility = ["//src:__subpackages__"],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+    ],
 )
 
 cc_library(
     name = "cluster_version_interface",
     hdrs = ["ob_version_parser.h"],
     deps = [
-        "//src/oblib:oblib_db_values_runtime",
+        "//src/oblib:oblib_common",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -934,6 +996,9 @@ seekdb_semantic_unity_cc_library(
         "//src:__subpackages__",
         "//unittest:__subpackages__",
     ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+    ],
 )
 
 # PalfOptions is a complete value member, so this initialization vocabulary is
@@ -967,6 +1032,9 @@ cc_library(
         "//src:__subpackages__",
         "//unittest:__subpackages__",
     ],
+    implementation_deps = [
+        "//src/oblib:oblib_base",
+    ],
 )
 
 _ROARING_BITMAP_UNITY_GROUP = share_select_unity_sources(
@@ -985,7 +1053,10 @@ seekdb_semantic_unity_cc_library(
         "//src/oblib:oblib_foundation",
         "@seekdb_3rd_headers//:roaring_headers",
     ],
-    implementation_deps = [":tenant_runtime"],
+    implementation_deps = [
+        ":tenant_runtime",
+        "//src/oblib:oblib_base",
+    ],
     features = ["layering_check"],
     tags = ["manual"],
     visibility = [
@@ -1033,12 +1104,16 @@ seekdb_semantic_unity_cc_library(
         ":core_types",
         ":delegate_interface",
         "//src/oblib/easy:easy",
-        "//src/oblib:oblib_db_meta_runtime",
+        "//src/oblib:oblib_db_meta",
         "//src/oblib:oblib_foundation",
     ],
     implementation_deps = [
         ":debug_sync_interface",
         ":task_control",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -1134,6 +1209,8 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         ":cluster_version_interface",
         ":tenant_runtime",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -1193,6 +1270,8 @@ seekdb_semantic_unity_cc_library(
         ":roaringbitmap",
         ":srs_provider_interface",
         "@seekdb_3rd_headers//:fast_float_headers",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -1222,7 +1301,11 @@ seekdb_semantic_unity_cc_library(
     deps = [
         "//src/oblib:oblib_foundation",
     ],
-    implementation_deps = [":tenant_runtime"],
+    implementation_deps = [
+        ":tenant_runtime",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+    ],
     features = ["layering_check"],
     tags = ["manual"],
     visibility = [
@@ -1245,7 +1328,11 @@ seekdb_semantic_unity_cc_library(
     deps = [
         "//src/oblib:oblib_foundation",
     ],
-    implementation_deps = [":tenant_runtime"],
+    implementation_deps = [
+        ":tenant_runtime",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+    ],
     features = ["layering_check"],
     tags = ["manual"],
     visibility = [
@@ -1315,6 +1402,8 @@ seekdb_semantic_unity_cc_library(
         ":lob_read_context",
         ":lob_read_service",
         ":tenant_runtime",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -1346,6 +1435,9 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         ":_share_implementation_headers",
         ":lob_runtime",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_foundation",
     ],
     sanity_instrumentation = False,
     features = ["layering_check"],
@@ -1372,6 +1464,9 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         ":_datum_without_pass",
         ":lob_runtime",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_foundation",
     ],
     features = ["layering_check"],
     tags = ["manual"],
@@ -1751,13 +1846,22 @@ seekdb_semantic_unity_cc_library(
     source_replacements = inner_table_schema_source_replacements(
         SHARE_UNITY_GROUPS,
     ),
-    group_implementation_deps = share_runtime_group_oblib_deps(
-        _SHARE_RUNTIME_UNITY_GROUPS,
-    ),
+    split_unity_groups = True,
     implementation_deps = [
         ":_share_implementation_headers",
         "//rust:config_headers",
-    ] + _SHARE_RUNTIME_COMPILE_DEPS,
+    ] + _SHARE_RUNTIME_COMPILE_DEPS + [
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_diagnostics_primitives",
+        "//src/oblib:oblib_foundation",
+        "//src/oblib:oblib_io_primitives",
+        "//src/oblib:oblib_restore",
+    ],
     features = ["layering_check"],
     tags = ["manual"],
     visibility = ["//src/share:__pkg__"],

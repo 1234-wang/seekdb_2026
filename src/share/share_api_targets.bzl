@@ -160,8 +160,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         ],
     ),
     "catalog_access": struct(
-        hdrs = [
-        ],
+        hdrs = [],
         deps = [
             ":schema_access",
             ":schema_entities",
@@ -325,8 +324,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         ],
     ),
     "external_storage": struct(
-        hdrs = [
-        ],
+        hdrs = [],
         deps = [
             ":core_types",
             ":io",
@@ -434,8 +432,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         ],
     ),
     "module_data_protocol": struct(
-        hdrs = [
-        ],
+        hdrs = [],
         deps = [
             "//src/oblib:oblib_foundation",
         ],
@@ -517,10 +514,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
             ":transaction_id",
             ":unit_topology",
             ":utility_types",
-            "//src/oblib:oblib_db_values_base",
-            "//src/oblib:oblib_db_values_primitives",
-            "//src/oblib:oblib_db_values_runtime",
-            "//src/oblib:oblib_db_values_services",
+            "//src/oblib:oblib_common",
         ],
     ),
     "runtime_context": struct(
@@ -643,12 +637,11 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         ],
         deps = [
             "//src/oblib:oblib_foundation",
-            "//src/oblib:oblib_mysql_client_services",
+            "//src/oblib:oblib_common",
         ],
     ),
     "sequence_runtime": struct(
-        hdrs = [
-        ],
+        hdrs = [],
         deps = [
             ":sequence_option",
             "//src/oblib:oblib_foundation",
@@ -724,8 +717,7 @@ _SHARE_SEMANTIC_HEADER_TARGETS = {
         ],
     ),
     "unit_topology": struct(
-        hdrs = [
-        ],
+        hdrs = [],
         deps = [
             ":core_types",
             ":tenant_runtime",

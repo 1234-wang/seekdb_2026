@@ -29,18 +29,6 @@ load(
     "observer_validate_header_inventory",
     "observer_validate_source_inventory",
 )
-load(
-    ":observer_main_group_oblib_deps.bzl",
-    "observer_main_group_oblib_deps",
-)
-load(
-    ":observer_retrieval_composition_group_oblib_deps.bzl",
-    "observer_retrieval_composition_group_oblib_deps",
-)
-load(
-    ":observer_runtime_group_oblib_deps.bzl",
-    "observer_runtime_group_oblib_deps",
-)
 
 package(default_visibility = ["//visibility:private"])
 
@@ -283,10 +271,25 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         ":observer_internal_interface",
         "//rust:config_headers",
-    ] + _OBSERVER_NON_OBLIB_NATIVE_DEPS,
-    group_implementation_deps = observer_runtime_group_oblib_deps(
-        _OBSERVER_RUNTIME_UNITY_GROUPS,
-    ),
+    ] + _OBSERVER_NON_OBLIB_NATIVE_DEPS + [
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_db_log",
+        "//src/oblib:oblib_db_meta",
+        "//src/oblib:oblib_encoding_primitives",
+        "//src/oblib:oblib_foundation",
+        "//src/oblib:oblib_io_primitives",
+        "//src/oblib:oblib_memory_primitives",
+        "//src/oblib:oblib_mysql_protocol",
+        "//src/oblib:oblib_restore",
+        "//src/oblib:oblib_rpc",
+        "//src/oblib:oblib_vector",
+    ],
+    split_unity_groups = True,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -303,13 +306,23 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         ":observer_internal_interface",
         "//src/sql:sql_retrieval_composition_headers",
-    ] + _OBSERVER_NON_OBLIB_NATIVE_DEPS,
-    group_implementation_deps = observer_retrieval_composition_group_oblib_deps(
-        observer_singleton_unity_groups(
-            OBSERVER_RETRIEVAL_COMPOSITION_SOURCES,
-            "ob_retrieval_composition",
-        ),
-    ),
+    ] + _OBSERVER_NON_OBLIB_NATIVE_DEPS + [
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_db_log",
+        "//src/oblib:oblib_db_meta",
+        "//src/oblib:oblib_foundation",
+        "//src/oblib:oblib_io_primitives",
+        "//src/oblib:oblib_memory_primitives",
+        "//src/oblib:oblib_mysql_protocol",
+        "//src/oblib:oblib_restore",
+        "//src/oblib:oblib_rpc",
+    ],
+    split_unity_groups = True,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -323,13 +336,24 @@ seekdb_semantic_unity_cc_library(
     ),
     implementation_deps = [
         ":observer_internal_interface",
-    ] + _OBSERVER_NON_OBLIB_NATIVE_DEPS,
-    group_implementation_deps = observer_main_group_oblib_deps(
-        observer_singleton_unity_groups(
-            OBSERVER_MAIN_SOURCES,
-            "ob_main",
-        ),
-    ),
+    ] + _OBSERVER_NON_OBLIB_NATIVE_DEPS + [
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_db_log",
+        "//src/oblib:oblib_db_meta",
+        "//src/oblib:oblib_diagnostics_primitives",
+        "//src/oblib:oblib_foundation",
+        "//src/oblib:oblib_io_primitives",
+        "//src/oblib:oblib_memory_primitives",
+        "//src/oblib:oblib_mysql_protocol",
+        "//src/oblib:oblib_restore",
+        "//src/oblib:oblib_rpc",
+    ],
+    split_unity_groups = True,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -358,7 +382,7 @@ cc_library(
     name = "observer_version",
     srcs = [":_generate_ob_version"],
     deps = [
-        "//src/oblib:oblib_core_utilities",
+        "//src/oblib:oblib_base",
         "//src/oblib:oblib_foundation",
         "//src/share:utility_types",
     ],
@@ -474,7 +498,6 @@ _SEEKDB_EXECUTABLE_LINKOPTS = select({
         "-Wl,-z,now",
     ],
 })
-
 
 
 _SEEKDB_SHARED_LINKOPTS = select({

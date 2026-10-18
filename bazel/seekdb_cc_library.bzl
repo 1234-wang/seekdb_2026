@@ -12,7 +12,6 @@ load(
     "seekdb_sanity_settings",
     "seekdb_logging_defines",
 )
-load("//bazel:oblib_compile_deps.bzl", "oblib_compile_deps")
 load(
     "//bazel:platforms.bzl",
     "seekdb_arch_copts",
@@ -35,11 +34,6 @@ def _seekdb_cc_library_impl(
         name, visibility, copts, local_defines, sanity_instrumentation,
         additional_compiler_inputs, cxxopts, implementation_deps,
         target_compatible_with, **kwargs):
-    implementation_deps = implementation_deps + [
-        Label(dependency)
-        for dependency in oblib_compile_deps(name)
-        if Label(dependency) not in implementation_deps
-    ]
     sanity = seekdb_sanity_settings(sanity_instrumentation)
     _rules_cc_library(
         name = name,
@@ -64,9 +58,7 @@ seekdb_cc_library = macro(
         "hdrs": attr.label_list(allow_files = True),
         "textual_hdrs": attr.label_list(allow_files = True),
         "deps": attr.label_list(),
-        # The generated ownership map is merged into these direct compile
-        # dependencies; deduplication needs a concrete list at loading time.
-        "implementation_deps": attr.label_list(configurable = False),
+        "implementation_deps": attr.label_list(),
         "additional_compiler_inputs": attr.label_list(allow_files = True),
         "additional_linker_inputs": attr.label_list(allow_files = True),
         "copts": attr.string_list(default = SEEKDB_MODULE_CXX_COPTS),
@@ -338,7 +330,7 @@ def seekdb_semantic_unity_cc_library(
         unity_groups,
         language = "c++",
         expected_group_names = [],
-        group_implementation_deps = {},
+        split_unity_groups = False,
         source_replacements = {},
         public_hdrs = [],
         private_hdrs = [],
@@ -353,11 +345,8 @@ def seekdb_semantic_unity_cc_library(
     """Defines one native semantic library from same-language Unity groups.
 
     By default all generated Unity sources are compiled by one cc_library and
-    therefore share one dependency closure.  When group_implementation_deps is
-    present, each semantic Unity group is compiled by its own private
-    cc_library with the common implementation_deps plus the dependencies
-    declared for that group.  The public target remains one linkable module
-    whose linking context contains every private group archive.
+    therefore share one dependency closure. split_unity_groups preserves
+    separate archives when the final link needs individual group objects.
 
     expected_group_names checks raw inventories; omit it after an exact group selection.
     """
@@ -419,24 +408,7 @@ def seekdb_semantic_unity_cc_library(
     if unused_replacements:
         fail("%s has unused source replacements: %s" % (name, unused_replacements))
 
-    if group_implementation_deps:
-        unknown_groups = sorted([
-            group_name
-            for group_name in group_implementation_deps
-            if group_name not in seen_group_names
-        ])
-        missing_groups = sorted([
-            group_name
-            for group_name in seen_group_names
-            if group_name not in group_implementation_deps
-        ])
-        if unknown_groups or missing_groups:
-            fail(
-                (
-                    "%s group dependency map differs from its Unity groups: " +
-                    "unknown=%s missing=%s"
-                ) % (name, unknown_groups, missing_groups),
-            )
+    if split_unity_groups:
         if public_hdrs or private_hdrs:
             fail(
                 "%s partitioned Unity compilation requires headers to have " +
@@ -451,10 +423,7 @@ def seekdb_semantic_unity_cc_library(
                 unity_srcs = [definition.unity_src],
                 unity_members = definition.members,
                 deps = deps,
-                implementation_deps = (
-                    implementation_deps +
-                    group_implementation_deps[definition.group_name]
-                ),
+                implementation_deps = implementation_deps,
                 copts = copts,
                 local_defines = local_defines,
                 sanity_instrumentation = sanity_instrumentation,

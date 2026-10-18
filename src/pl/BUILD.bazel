@@ -22,11 +22,6 @@ load(
     "pl_singleton_unity_groups",
     "pl_validate_source_inventory",
 )
-load(
-    ":pl_parser_c_group_oblib_deps.bzl",
-    "pl_parser_c_group_oblib_deps",
-)
-load(":pl_runtime_group_oblib_deps.bzl", "pl_runtime_group_oblib_deps")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -221,7 +216,6 @@ _PL_RUNTIME_UNITY_GROUPS = PL_UNITY_GROUPS + pl_singleton_unity_groups(
     "c++",
 )
 
-# Five C++ Unity actions, one archive: the four release groups plus the parser.
 seekdb_semantic_unity_cc_library(
     name = "pl_runtime",
     owner_package = "src/pl",
@@ -233,16 +227,25 @@ seekdb_semantic_unity_cc_library(
         "pl_recompile",
         "pl_sys_package",
     ],
-    implementation_deps = _PL_RUNTIME_NON_OBLIB_DEPS + ["//rust:config_headers"],
-    group_implementation_deps = pl_runtime_group_oblib_deps(
-        _PL_RUNTIME_UNITY_GROUPS,
-    ),
+    implementation_deps = _PL_RUNTIME_NON_OBLIB_DEPS + ["//rust:config_headers"] + [
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_collections_primitives",
+        "//src/oblib:oblib_common",
+        "//src/oblib:oblib_compression",
+        "//src/oblib:oblib_concurrency_primitives",
+        "//src/oblib:oblib_db_meta",
+        "//src/oblib:oblib_foundation",
+        "//src/oblib:oblib_memory_primitives",
+        "//src/oblib:oblib_mysql_protocol",
+        "//src/oblib:oblib_restore",
+        "//src/oblib:oblib_rpc",
+    ],
+    split_unity_groups = True,
     features = ["layering_check"],
     tags = ["manual"],
 )
 
-# Flex/Bison C sources remain separate Unity actions to avoid generated-symbol
-# collisions, but belong to one semantic parser archive.
 seekdb_semantic_unity_cc_library(
     name = "pl_parser_c",
     owner_package = "src/pl",
@@ -267,14 +270,11 @@ seekdb_semantic_unity_cc_library(
         ":pl_internal_headers",
         "//src/query:query_api_interface",
         "//src/sql:sql_runtime_interface",
+        "//src/oblib:common_sql_mode",
+        "//src/oblib:oblib_base",
+        "//src/oblib:oblib_foundation",
     ],
-    group_implementation_deps = pl_parser_c_group_oblib_deps(
-        pl_singleton_unity_groups(
-            PL_STANDALONE_SOURCES,
-            "pl_parser_c",
-            "c",
-        ),
-    ),
+    split_unity_groups = True,
     copts = SEEKDB_MIGRATION_C_COPTS,
     tags = ["manual"],
 )
