@@ -1,5 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@seekdb//bazel/sdk_sources/openmp:configure.bzl", "openmp_headers")
+load("@seekdb//bazel/sdk_sources:openmp/configure.bzl", "openmp_headers")
 
 package(default_visibility = ["//visibility:public"])
 

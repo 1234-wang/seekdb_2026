@@ -23,7 +23,7 @@ openmp_headers = rule(
         "omp_template": attr.label(allow_single_file = True),
         "ompx_template": attr.label(allow_single_file = True),
         "config_template": attr.label(
-            default = Label("//bazel/sdk_sources/openmp:kmp_config.h"),
+            default = Label("//bazel/sdk_sources:openmp/kmp_config.h"),
             allow_single_file = True,
         ),
     },

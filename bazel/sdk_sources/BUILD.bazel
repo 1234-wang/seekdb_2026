@@ -1,11 +1,22 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(":archives.bzl", "sdk_archives")
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files([
+exports_files(glob(["*.BUILD"]) + [
     "dependencies.json",
     "prepare.py",
+    "icu/embed_data.py",
+    "openblas/blas_abi.h",
+    "openmp/kmp_config.h",
 ])
+
+cc_library(
+    name = "ios_cblas",
+    hdrs = ["vsag/ios/cblas.h"],
+    includes = ["vsag/ios"],
+    target_compatible_with = ["@platforms//os:ios"],
+)
 
 alias(
     name = "base_crypto",
@@ -41,44 +52,31 @@ sdk_archives(
     }),
 )
 
+_IOS_SOURCE_REPOSITORIES = [
+    "@seekdb_sdk_abseil",
+    "@seekdb_sdk_antlr4",
+    "@seekdb_sdk_boost",
+    "@seekdb_sdk_cpuinfo",
+    "@seekdb_sdk_fmt",
+    "@seekdb_sdk_lapack",
+    "@seekdb_sdk_nlohmann_json",
+    "@seekdb_sdk_openmp",
+    "@seekdb_sdk_roaring",
+    "@seekdb_sdk_robin_map",
+    "@seekdb_sdk_s2_ios",
+    "@seekdb_sdk_spdlog",
+    "@seekdb_sdk_thread_pool",
+    "@seekdb_sdk_vsag_ios",
+]
+
 filegroup(
     name = "ios_source_metadata",
-    srcs = [
-        "@seekdb_sdk_abseil//:source_metadata",
-        "@seekdb_sdk_antlr4//:source_metadata",
-        "@seekdb_sdk_boost//:source_metadata",
-        "@seekdb_sdk_cpuinfo//:source_metadata",
-        "@seekdb_sdk_fmt//:source_metadata",
-        "@seekdb_sdk_lapack//:source_metadata",
-        "@seekdb_sdk_nlohmann_json//:source_metadata",
-        "@seekdb_sdk_openmp//:source_metadata",
-        "@seekdb_sdk_roaring//:source_metadata",
-        "@seekdb_sdk_robin_map//:source_metadata",
-        "@seekdb_sdk_s2_ios//:source_metadata",
-        "@seekdb_sdk_spdlog//:source_metadata",
-        "@seekdb_sdk_thread_pool//:source_metadata",
-        "@seekdb_sdk_vsag_ios//:source_metadata",
-    ],
+    srcs = [repo + "//:source_metadata" for repo in _IOS_SOURCE_REPOSITORIES],
     target_compatible_with = ["@platforms//os:ios"],
 )
 
 filegroup(
     name = "ios_licenses",
-    srcs = [
-        "@seekdb_sdk_abseil//:licenses",
-        "@seekdb_sdk_antlr4//:licenses",
-        "@seekdb_sdk_boost//:licenses",
-        "@seekdb_sdk_cpuinfo//:licenses",
-        "@seekdb_sdk_fmt//:licenses",
-        "@seekdb_sdk_lapack//:licenses",
-        "@seekdb_sdk_nlohmann_json//:licenses",
-        "@seekdb_sdk_openmp//:licenses",
-        "@seekdb_sdk_roaring//:licenses",
-        "@seekdb_sdk_robin_map//:licenses",
-        "@seekdb_sdk_s2_ios//:licenses",
-        "@seekdb_sdk_spdlog//:licenses",
-        "@seekdb_sdk_thread_pool//:licenses",
-        "@seekdb_sdk_vsag_ios//:licenses",
-    ],
+    srcs = [repo + "//:licenses" for repo in _IOS_SOURCE_REPOSITORIES],
     target_compatible_with = ["@platforms//os:ios"],
 )

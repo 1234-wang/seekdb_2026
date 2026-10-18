@@ -37,11 +37,11 @@ cc_library(
         ],
         allow_empty = True,
     ),
-    additional_compiler_inputs = ["@seekdb//bazel/sdk_sources/openblas:blas_abi.h"],
+    additional_compiler_inputs = ["@seekdb//bazel/sdk_sources:openblas/blas_abi.h"],
     copts = [
         "-pthread",
         "-include",
-        "$(location @seekdb//bazel/sdk_sources/openblas:blas_abi.h)",
+        "$(location @seekdb//bazel/sdk_sources:openblas/blas_abi.h)",
     ],
     includes = [
         "lapack-netlib/CBLAS/include",
@@ -50,14 +50,4 @@ cc_library(
     linkstatic = True,
     local_defines = ["NO_BLAS_WRAP"],
     deps = ["@seekdb_sdk_clapack//:library"],
-)
-
-filegroup(
-    name = "licenses",
-    srcs = ["LICENSE"],
-)
-
-filegroup(
-    name = "source_metadata",
-    srcs = ["source.json"],
 )

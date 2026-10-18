@@ -1,7 +1,0 @@
-exports_files(
-    [
-        "BUILD.sdk",
-        "embed_data.py",
-    ],
-    visibility = ["//visibility:public"],
-)

@@ -491,8 +491,8 @@ genrule(
         "@seekdb//bazel/sdk_sources:dependencies.json",
     ],
     outs = ["icudt69l.c"],
-    cmd = "python3 $(location @seekdb//bazel/sdk_sources/icu:embed_data.py) $(location source/data/in/icudt69l.dat) $(location @seekdb//bazel/sdk_sources:dependencies.json) $@",
-    tools = ["@seekdb//bazel/sdk_sources/icu:embed_data.py"],
+    cmd = "python3 $(location @seekdb//bazel/sdk_sources:icu/embed_data.py) $(location source/data/in/icudt69l.dat) $(location @seekdb//bazel/sdk_sources:dependencies.json) $@",
+    tools = ["@seekdb//bazel/sdk_sources:icu/embed_data.py"],
 )
 
 cc_library(
@@ -505,14 +505,4 @@ cc_library(
     name = "library",
     linkstatic = True,
     deps = [":i18n"],
-)
-
-filegroup(
-    name = "licenses",
-    srcs = ["LICENSE"],
-)
-
-filegroup(
-    name = "source_metadata",
-    srcs = ["source.json"],
 )

@@ -274,7 +274,7 @@ cc_library(
     ] + select({
         "@platforms//os:emscripten": ["@seekdb_sdk_openblas//:library"],
         "//conditions:default": [
-            "@seekdb//bazel/sdk_sources/vsag:ios_cblas",
+            "@seekdb//bazel/sdk_sources:ios_cblas",
             "@seekdb_sdk_boost//:library",
             "@seekdb_sdk_lapack//:library",
             "@seekdb_sdk_openmp//:library",

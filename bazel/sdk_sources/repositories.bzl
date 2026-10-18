@@ -38,7 +38,7 @@ def _sdk_sources_impl(ctx):
         for profile in profiles:
             _source(
                 name = "seekdb_sdk_" + name + ("_" + profile if profile else ""),
-                build_file = Label("//bazel/sdk_sources/%s:BUILD.sdk" % name),
+                build_file = Label("//bazel/sdk_sources:%s.BUILD" % name),
                 package = name,
                 profile = profile,
             )

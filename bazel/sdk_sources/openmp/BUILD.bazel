@@ -1,5 +1,0 @@
-exports_files([
-    "BUILD.sdk",
-    "configure.bzl",
-    "kmp_config.h",
-])
