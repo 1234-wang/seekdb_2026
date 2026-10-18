@@ -68,13 +68,7 @@ cc_library = macro(
 )
 
 def _dedupe(values):
-    seen = {}
-    result = []
-    for value in values:
-        if value not in seen:
-            seen[value] = True
-            result.append(value)
-    return result
+    return {value: None for value in values}.keys()
 
 def _package_relative_source(owner_package, source):
     prefix = owner_package + "/"
@@ -157,23 +151,11 @@ def _unity_cc_library(
         unity_members,
         public_hdrs = [],
         private_hdrs = [],
-        deps = [],
         implementation_deps = [],
-        copts = None,
-        local_defines = None,
         sanity_instrumentation = True,
-        features = [],
         tags = [],
-        visibility = None):
-    """Defines one C++ library containing multiple Unity translation units.
-
-    Unity members live in a private textual dependency: the Unity source may
-    include them, but they are not propagated as part of the module interface.
-    """
-
-    if not unity_srcs:
-        fail("%s must contain at least one Unity source" % name)
-
+        **kwargs):
+    """Keep Unity members in a private textual dependency, outside the interface."""
     unity_members_target = "_" + name + "_unity_members"
     cc_library(
         name = unity_members_target,
@@ -182,68 +164,37 @@ def _unity_cc_library(
         tags = tags,
         visibility = ["//visibility:private"],
     )
-
     cc_library(
         name = name,
         srcs = _dedupe(unity_srcs + private_hdrs),
         hdrs = public_hdrs,
-        deps = deps,
-        implementation_deps = _dedupe(
-            [":" + unity_members_target] +
-            implementation_deps,
-        ),
-        copts = copts,
-        local_defines = local_defines,
+        implementation_deps = _dedupe([":" + unity_members_target] + implementation_deps),
         sanity_instrumentation = sanity_instrumentation,
-        features = features,
         tags = tags,
-        visibility = visibility,
+        **kwargs
     )
 
 def unity_cc_library(
         name,
         unity_members,
-        public_hdrs = [],
-        private_hdrs = [],
-        deps = [],
-        implementation_deps = [],
-        copts = None,
-        local_defines = None,
-        sanity_instrumentation = True,
         language = "c++",
-        features = [],
+        copts = None,
         tags = [],
-        visibility = None):
-    """Compiles one generated Unity source from an ordered list of members.
-
-    The member order is significant and is preserved. Each include is followed
-    by the USING_LOG_PREFIX cleanup required between aggregate members.
-    """
-
-    if language not in ("c", "c++"):
-        fail("language must be 'c' or 'c++', got %s" % language)
-
+        **kwargs):
+    """Compile one ordered Unity source; other attributes go to cc_library."""
     unity_src = unity_source(
         name = name,
         unity_members = unity_members,
         language = language,
         tags = tags,
     )
-
     _unity_cc_library(
         name = name,
         unity_srcs = [unity_src],
         unity_members = unity_members,
-        public_hdrs = public_hdrs,
-        private_hdrs = private_hdrs,
-        deps = deps,
-        implementation_deps = implementation_deps,
         copts = SEEKDB_MODULE_C_COPTS if language == "c" and copts == None else copts,
-        local_defines = local_defines,
-        sanity_instrumentation = sanity_instrumentation,
-        features = features,
         tags = tags,
-        visibility = visibility,
+        **kwargs
     )
 
 def grouped_unity_cc_library(
@@ -257,28 +208,26 @@ def grouped_unity_cc_library(
         deps = [],
         implementation_deps = [],
         copts = None,
-        local_defines = None,
-        sanity_instrumentation = True,
-        features = [],
         tags = [],
-        visibility = None):
-    """Compiles named Unity groups of the same language.
+        **kwargs):
+    """Compile named Unity groups; other attributes go to cc_library.
 
-    By default all generated Unity sources are compiled by one cc_library and
-    therefore share one dependency closure. split_unity_groups preserves
-    separate archives when the final link needs individual group objects.
+    Groups share one library unless split_unity_groups is set for final links
+    that need individual group objects.
     """
-
     if language not in ("c", "c++"):
         fail("language must be 'c' or 'c++', got %s" % language)
-
+    if not unity_groups:
+        fail("%s has no Unity groups" % name)
+    if split_unity_groups and (public_hdrs or private_hdrs):
+        fail("%s partitioned Unity compilation requires headers to have separate semantic owner targets" % name)
     if language == "c" and copts == None:
         copts = SEEKDB_MODULE_C_COPTS
 
     owner_package = native.package_name()
     unity_srcs = []
     unity_members = []
-    unity_definitions = []
+    group_targets = []
     seen_group_names = {}
     used_replacements = {}
     for group in unity_groups:
@@ -297,22 +246,28 @@ def grouped_unity_cc_library(
                 members.append(_package_relative_source(owner_package, source))
         if not members:
             fail("%s contains an empty Unity group: %s" % (name, group.name))
-        unity_members.extend(members)
         unity_src = unity_source(
             name = name + "_" + group.name,
             unity_members = members,
             language = language,
             tags = tags,
         )
-        unity_srcs.append(unity_src)
-        unity_definitions.append(struct(
-            group_name = group.name,
-            members = members,
-            unity_src = unity_src,
-        ))
-
-    if not unity_srcs:
-        fail("%s has no Unity groups" % name)
+        if split_unity_groups:
+            group_target = "_" + name + "_" + group.name + "_objects"
+            _unity_cc_library(
+                name = group_target,
+                unity_srcs = [unity_src],
+                unity_members = members,
+                deps = deps,
+                implementation_deps = implementation_deps,
+                copts = copts,
+                tags = tags,
+                **(kwargs | {"visibility": ["//visibility:private"]})
+            )
+            group_targets.append(":" + group_target)
+        else:
+            unity_srcs.append(unity_src)
+            unity_members.extend(members)
 
     unused_replacements = sorted([
         source
@@ -323,40 +278,13 @@ def grouped_unity_cc_library(
         fail("%s has unused source replacements: %s" % (name, unused_replacements))
 
     if split_unity_groups:
-        if public_hdrs or private_hdrs:
-            fail(
-                "%s partitioned Unity compilation requires headers to have " +
-                "separate semantic owner targets" % name,
-            )
-
-        group_targets = []
-        for definition in unity_definitions:
-            group_target = "_" + name + "_" + definition.group_name + "_objects"
-            _unity_cc_library(
-                name = group_target,
-                unity_srcs = [definition.unity_src],
-                unity_members = definition.members,
-                deps = deps,
-                implementation_deps = implementation_deps,
-                copts = copts,
-                local_defines = local_defines,
-                sanity_instrumentation = sanity_instrumentation,
-                features = features,
-                tags = tags,
-                visibility = ["//visibility:private"],
-            )
-            group_targets.append(":" + group_target)
-
         cc_library(
             name = name,
             deps = deps,
             implementation_deps = group_targets,
             copts = copts,
-            local_defines = local_defines,
-            sanity_instrumentation = sanity_instrumentation,
-            features = features,
             tags = tags,
-            visibility = visibility,
+            **kwargs
         )
     else:
         _unity_cc_library(
@@ -368,9 +296,6 @@ def grouped_unity_cc_library(
             deps = deps,
             implementation_deps = implementation_deps,
             copts = copts,
-            local_defines = local_defines,
-            sanity_instrumentation = sanity_instrumentation,
-            features = features,
             tags = tags,
-            visibility = visibility,
+            **kwargs
         )
