@@ -100,12 +100,7 @@ cargo_digest()
   while IFS= read -r manifest; do
     inputs+=("$manifest")
   done < <(find "$WORKSPACE/rust" -name Cargo.toml -type f | LC_ALL=C sort)
-  # Cargo.lock is currently generated rather than tracked. Only include it in
-  # the key if a future change commits it; otherwise restore and publish would
-  # calculate different keys in the same job.
-  if git -C "$WORKSPACE" ls-files --error-unmatch rust/Cargo.lock >/dev/null 2>&1; then
-    inputs+=("$WORKSPACE/rust/Cargo.lock")
-  fi
+  inputs+=("$WORKSPACE/rust/Cargo.lock")
   hash_inputs "${inputs[@]}"
 }
 

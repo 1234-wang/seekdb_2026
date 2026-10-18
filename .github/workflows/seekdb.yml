@@ -145,27 +145,12 @@ jobs:
         run: bash .github/script/seekdb/cache.sh publish-master rustup
         continue-on-error: true
 
-      - name: Prepare (jobargs, run_jobs)
-        shell: bash
-        run: |
-          chmod +x .github/script/seekdb/prepare.sh
-          export GITHUB_RUN_ID="${{ github.run_id }}"
-          export MYSQLTEST_SLICES="${{ env.MYSQLTEST_SLICES }}"
-          export SEEKDB_TASK_DIR="$GITHUB_WORKSPACE/seekdb_build/${{ github.run_id }}"
-          .github/script/seekdb/prepare.sh
-
       - name: Compile
         id: compile
         shell: bash
         run: |
           chmod +x .github/script/seekdb/compile.sh
           export GITHUB_RUN_ID="${{ github.run_id }}"
-          WS="${{ github.workspace }}"
-          if [[ ! -f "$WS/build.py" ]] && [[ -f "$(pwd)/build.py" ]]; then
-            export GITHUB_WORKSPACE="$(pwd)"
-          else
-            export GITHUB_WORKSPACE="$WS"
-          fi
           export SEEKDB_TASK_DIR="$GITHUB_WORKSPACE/seekdb_build/${{ github.run_id }}"
           export FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
           export PATH="$GITHUB_WORKSPACE/deps/3rd/usr/local/oceanbase/devtools/bin:$PATH"
@@ -224,7 +209,7 @@ jobs:
           cp -a "$CLIENT_ROOT/." "$RUNTIME_DIR/obclient/"
           tar -C "$RUNTIME_DIR" -cf - seekdb obclient | zstd -f -q -T0 -o seekdb-mysqltest-runtime.tar.zst
           echo "runtime size: $(stat -c%s seekdb-mysqltest-runtime.tar.zst 2>/dev/null || stat -f%z seekdb-mysqltest-runtime.tar.zst 2>/dev/null) bytes"
-      # Runtime 与 run_attempt 无关：仅重跑失败 job 时 setup 可能跳过，因此优先使用稳定路径。
+      # Re-running failed jobs can skip setup, so the runtime path excludes run_attempt.
       - name: Persist mysqltest runtime to NFS
         shell: bash
         run: |
@@ -261,28 +246,13 @@ jobs:
         run: |
           set -eo pipefail
           RUN_ROOT="${{ env.SEEKDB_RESULT_NFS_ROOT }}/${{ github.run_id }}"
-          ATT="${{ github.run_attempt }}"
-          RUNTIME_ARCHIVE=""
-          if [[ -f "$RUN_ROOT/setup/seekdb-mysqltest-runtime.tar.zst" ]]; then
-            RUNTIME_ARCHIVE="$RUN_ROOT/setup/seekdb-mysqltest-runtime.tar.zst"
-          elif [[ -f "$RUN_ROOT/attempt-${ATT}/setup/seekdb-mysqltest-runtime.tar.zst" ]]; then
-            RUNTIME_ARCHIVE="$RUN_ROOT/attempt-${ATT}/setup/seekdb-mysqltest-runtime.tar.zst"
-          else
-            shopt -s nullglob
-            _fb=( "$RUN_ROOT"/attempt-*/setup/seekdb-mysqltest-runtime.tar.zst )
-            shopt -u nullglob
-            if (( ${#_fb[@]} > 0 )); then
-              RUNTIME_ARCHIVE=$(printf '%s\n' "${_fb[@]}" | xargs ls -t | head -1)
-            fi
-          fi
-          if [[ -n "$RUNTIME_ARCHIVE" && -f "$RUNTIME_ARCHIVE" ]]; then
-            echo "Using runtime: $RUNTIME_ARCHIVE"
-            mkdir -p .seekdb_runtime
-            zstd -d -q -c "$RUNTIME_ARCHIVE" | tar -xf - -C .seekdb_runtime
-          else
-            echo "mysqltest runtime not found on NFS under $RUN_ROOT"
+          RUNTIME_ARCHIVE="$RUN_ROOT/setup/seekdb-mysqltest-runtime.tar.zst"
+          if [[ ! -f "$RUNTIME_ARCHIVE" ]]; then
+            echo "mysqltest runtime not found: $RUNTIME_ARCHIVE"
             exit 1
           fi
+          mkdir -p .seekdb_runtime
+          zstd -d -q -c "$RUNTIME_ARCHIVE" | tar -xf - -C .seekdb_runtime
           test -x .seekdb_runtime/seekdb
           test -x .seekdb_runtime/obclient/bin/obclient
           test -x .seekdb_runtime/obclient/bin/mysqltest
