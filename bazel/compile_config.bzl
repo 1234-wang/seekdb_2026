@@ -63,8 +63,6 @@ SEEKDB_OBLIB_LOCAL_DEFINES = [
 
 SEEKDB_RELEASE_LOCAL_DEFINES = SEEKDB_OBLIB_LOCAL_DEFINES + [
     'PACKAGE_NAME=\\"OceanBase\\"',
-    # A C string escape avoids whitespace splitting in clang-cl response files.
-    'PACKAGE_STRING=\\"OceanBase\\\\040%s\\"' % SEEKDB_VERSION,
     'PACKAGE_VERSION=\\"%s\\"' % SEEKDB_VERSION,
     'RELEASEID=\\"1\\"',
 ]
