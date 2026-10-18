@@ -39,7 +39,8 @@ def runtime_dependencies(binaries, directories, destination):
             if key in available:
                 if key not in visited:
                     target = destination / available[key].name
-                    package.copy(available[key], target, True)
+                    if available[key].resolve() != target.resolve():
+                        package.copy(available[key], target, True)
                     pending.append(target)
             elif key.startswith(("msvcp", "vcruntime", "concrt", "vcomp")) or not (system / name).is_file():
                 raise ValueError("unresolved dependency %s imported by %s; supply --dll-dir" % (name, binary))
@@ -71,8 +72,8 @@ def main():
     parser.add_argument("--version", required=True)
     parser.add_argument("--release", type=int, required=True)
     parser.add_argument("--artifacts", type=Path, default=ROOT / "build/bin")
-    parser.add_argument("--dependencies", type=Path, default=ROOT / "deps/3rd")
-    parser.add_argument("--dll-dir", type=Path, action="append", default=[])
+    parser.add_argument("--dll-dir", type=Path, action="append", default=[],
+                        help="additional runtime DLL directories for an external configurator")
     parser.add_argument("--configurator", type=Path)
     parser.add_argument("--timezone-file", type=Path)
     parser.add_argument("--output", type=Path, default=Path.cwd())
@@ -84,16 +85,13 @@ def main():
     with tempfile.TemporaryDirectory(prefix="seekdb-msi-") as temporary:
         work = Path(temporary)
         payload = work / "payload"
-        package.stage(payload, options.artifacts.resolve(), options.dependencies.resolve(), "windows",
+        package.stage(payload, options.artifacts.resolve(), None, "windows",
                       options.version, str(options.release), timezone=options.timezone_file)
         configurator = options.configurator
         if configurator:
             package.copy(configurator, payload / "bin/seekdbConfigurator.exe", True)
-        directories = [payload / "bin", options.dependencies / "vcpkg/x64-windows/bin",
-                       options.dependencies / "vsag/bin"] + options.dll_dir
-        if os.environ.get("VCToolsRedistDir"):
-            directories.extend((Path(os.environ["VCToolsRedistDir"]) / "x64").glob("Microsoft.VC*.CRT"))
-        runtime_dependencies((payload / "bin").glob("*.exe"), directories, payload / "bin")
+            runtime_dependencies([payload / "bin/seekdbConfigurator.exe"],
+                                 [payload / "bin"] + options.dll_dir, payload / "bin")
         payload_source(payload, work / "payload.wxs")
         license_text = (ROOT / "LICENSE").read_text().replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
         license_file = work / "LICENSE.rtf"

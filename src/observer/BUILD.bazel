@@ -404,7 +404,7 @@ _SEEKDB_ORDERED_LINK_FILES = [
     "//bazel:sanity_enabled": ["//deps/external:jemalloc_archive"],
     "//conditions:default": [],
 }) + select({
-    "@platforms//os:windows": ["@seekdb_3rd_native//:server_libraries"],
+    "@platforms//os:windows": [],
     "@platforms//os:android": observer_third_party_link_files("android"),
     "@platforms//os:macos": observer_third_party_link_files("macos"),
     "//bazel:linux_arm64": observer_third_party_link_files("linux_arm64"),
@@ -492,7 +492,7 @@ final_link(
         "//bazel:linux_package_runtime": ["-Wl,-rpath,$ORIGIN/../libexec/seekdb/lib"],
         "//conditions:default": [],
     }),
-    out = select({"@platforms//os:windows": "seekdb.exe", "//conditions:default": "seekdb"}),
+    out = select({"@platforms//os:windows": "seekdb/seekdb.exe", "//conditions:default": "seekdb"}),
     tags = ["manual"],
     visibility = ["//visibility:public"],
 )

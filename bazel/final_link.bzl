@@ -53,18 +53,20 @@ def _selected_static_archive(library):
         return library.pic_static_library
     return library.static_library
 
-def _static_link_inputs(target):
+def _link_inputs(target):
     inputs = []
     for linker_input in target[CcInfo].linking_context.linker_inputs.to_list():
         for library in linker_input.libraries:
             archive = _selected_static_archive(library)
+            if archive == None:
+                archive = library.interface_library or library.dynamic_library
             inputs.extend([archive] if archive != None else _library_objects(library))
     return inputs
 
 def _files_from_targets(targets):
     return [file for target in targets for file in target[DefaultInfo].files.to_list()]
 
-def _static_inputs_from_deps(targets):
+def _inputs_from_deps(targets):
     inputs = []
     seen = {}
     for target in targets:
@@ -72,8 +74,33 @@ def _static_inputs_from_deps(targets):
         # transitive CcInfo closures. Keep the first position of each artifact
         # in this section; explicit positional repetition belongs in
         # ordered_link_files instead.
-        _append_unique(inputs, seen, _static_link_inputs(target))
+        _append_unique(inputs, seen, _link_inputs(target))
     return inputs
+
+def _windows_runtime(ctx, targets, executable):
+    files = []
+    for target in targets:
+        files.extend(target[DefaultInfo].default_runfiles.files.to_list())
+        for linker_input in target[CcInfo].linking_context.linker_inputs.to_list():
+            for library in linker_input.libraries:
+                if _selected_static_archive(library) == None and library.dynamic_library:
+                    files.append(library.resolved_symlink_dynamic_library or library.dynamic_library)
+    libraries = {}
+    for file in files:
+        if file.extension.lower() != "dll":
+            continue
+        key = file.basename.lower()
+        if key in libraries and libraries[key] != file:
+            fail("Conflicting runtime DLLs: %s and %s" % (libraries[key].path, file.path))
+        libraries[key] = file
+    outputs = []
+    for key in sorted(libraries):
+        dll = ctx.actions.declare_file(libraries[key].basename, sibling = executable)
+        ctx.actions.symlink(output = dll, target_file = libraries[key])
+        outputs.append(dll)
+    manifest = ctx.actions.declare_file(executable.basename + ".runtime.json", sibling = executable)
+    ctx.actions.write(manifest, json.encode([file.basename for file in outputs]) + "\n")
+    return outputs + [manifest]
 
 def _file_paths(files):
     return [file.path for file in files]
@@ -155,21 +182,20 @@ def _final_link_impl(ctx):
             _direct_objects(dep),
         )
 
-    group_inputs = _static_inputs_from_deps(ctx.attr.group_deps)
-    whole_group_inputs = _static_inputs_from_deps(ctx.attr.whole_group_deps)
-    tail_inputs = _static_inputs_from_deps(ctx.attr.tail_deps)
+    group_inputs = _inputs_from_deps(ctx.attr.group_deps)
+    whole_group_inputs = _inputs_from_deps(ctx.attr.whole_group_deps)
+    tail_inputs = _inputs_from_deps(ctx.attr.tail_deps)
     ordered_link_files = _files_from_targets(
         ctx.attr.ordered_link_files,
     )
-    sdk_inputs = _static_inputs_from_deps(ctx.attr.sdk_deps)
+    sdk_inputs = _inputs_from_deps(ctx.attr.sdk_deps)
     sdk_paths = {file.path: True for file in sdk_inputs}
     group_inputs = [file for file in group_inputs if file.path not in sdk_paths]
     whole_group_inputs = [file for file in whole_group_inputs if file.path not in sdk_paths]
     tail_inputs = [file for file in tail_inputs if file.path not in sdk_paths]
-    dependency_flags, dependency_inputs, alwayslink = _dependency_link_metadata(
-        ctx.attr.direct_object_deps + ctx.attr.group_deps + ctx.attr.whole_group_deps +
-        ctx.attr.tail_deps + ctx.attr.sdk_deps,
-    )
+    dependencies = (ctx.attr.direct_object_deps + ctx.attr.group_deps + ctx.attr.whole_group_deps +
+                    ctx.attr.tail_deps + ctx.attr.sdk_deps)
+    dependency_flags, dependency_inputs, alwayslink = _dependency_link_metadata(dependencies)
     extra_inputs = _files_from_targets(ctx.attr.extra_inputs) + dependency_inputs
 
     link_inputs = (
@@ -253,11 +279,15 @@ def _final_link_impl(ctx):
         use_default_shell_env = True,
     )
 
+    outputs = [output] + ctx.outputs.side_outputs
+    if platform.os == "windows" and not ctx.attr.shared:
+        outputs += _windows_runtime(ctx, dependencies, output)
     return [
         OutputGroupInfo(link_inputs = depset(link_inputs)),
         DefaultInfo(
             executable = output,
-            files = depset([output] + ctx.outputs.side_outputs),
+            files = depset(outputs),
+            runfiles = ctx.runfiles(files = outputs),
         ),
     ]
 

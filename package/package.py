@@ -48,7 +48,12 @@ def stage(destination, artifacts, dependencies, layout, version, release, compon
     sql = sorted((artifacts / SYSPACK).glob("*.sql"))
     if not sql:
         raise ValueError("missing generated SQL in %s; build //src/share/inner_table/sys_package:syspack_release" % (artifacts / SYSPACK))
-    copy(artifacts / "src/observer" / executable, binary / executable, True)
+    output = artifacts / "src/observer"
+    if layout == "windows":
+        output /= "seekdb"
+        for name in json.loads((output / "seekdb.exe.runtime.json").read_text()):
+            copy(output / name, binary / name, True)
+    copy(output / executable, binary / executable, True)
     for source in sql:
         copy(source, share / "admin" / source.name)
     copy(timezone, share / "timezone/timezone_V1.log")

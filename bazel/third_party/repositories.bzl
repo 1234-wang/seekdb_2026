@@ -10,13 +10,22 @@ def _windows_sdk(repository_ctx):
         repository_ctx.symlink(path, "include/" + name)
     for source, destination in {
         "vcpkg/x64-windows/lib": "lib",
+        "vcpkg/x64-windows/bin": "bin",
         "vcpkg/x64-windows/tools/protobuf": "protoc",
         "vcpkg/x64-windows/tools/grpc": "grpc_tools",
         "openssl/lib/VC/x64/MD": "openssl",
+        "openssl/bin": "openssl_bin",
         "vsag/lib": "vsag",
+        "vsag/bin": "vsag_bin",
         "tools/llvm18": "devtools",
     }.items():
         repository_ctx.symlink(sdk + "/" + source, destination)
+    redist = repository_ctx.getenv("VCToolsRedistDir")
+    if not redist:
+        fail("Run the Windows build from a Visual Studio Developer Command Prompt (VCToolsRedistDir is required)")
+    for directory in repository_ctx.path(redist).get_child("x64").readdir():
+        if directory.basename.startswith("Microsoft.VC") and directory.basename.endswith(".CRT"):
+            repository_ctx.symlink(directory, "msvc_runtime")
     repository_ctx.file("BUILD.bazel", '''load("@seekdb//bazel/third_party:targets.bzl", "sdk_targets")
 package(default_visibility = ["//visibility:public"])
 sdk_targets(windows = True)
