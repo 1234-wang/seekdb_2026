@@ -100,17 +100,16 @@ brew install zstd lz4 utf8proc thrift re2 brotli
 
 ## Windows 宿主机依赖
 
-安装 Python 3、Visual Studio 2022 Build Tools（选择 **使用 C++ 的桌面开发** 工作负载）和 [LLVM 19.1.7](https://github.com/llvm/llvm-project/releases/tag/llvmorg-19.1.7)。MSVC 14.44 要求 Clang 19 或更新版本，SDK 内附的 LLVM 18 不兼容这个 MSVC 版本。
+安装 Python 3、Visual Studio 2022 Build Tools（选择 **使用 C++ 的桌面开发** 工作负载）。LLVM 18.1.8 随项目依赖 SDK 安装，无需单独安装 LLVM。
 
-打开 **x64 Native Tools Command Prompt for VS 2022**，将 `BAZEL_LLVM` 指向 LLVM 安装目录，再初始化解析器工具和依赖 SDK：
+在仓库根目录打开 **x64 Native Tools Command Prompt for VS 2022**，初始化解析器工具和依赖 SDK：
 
 ```bat
-set "BAZEL_LLVM=C:\Program Files\LLVM"
 python build.py init
 python build.py build //src/observer:seekdb
 ```
 
-Bazel 会选择 clang-cl，产物是 `build_bazel\bin\src\observer\seekdb.exe`。
+`build.py` 固定选择 `deps\3rd\tools\llvm18` 中的 clang-cl，产物是 `build_bazel\bin\src\observer\seekdb.exe`。构建沿用原有的 `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH`，跳过新版 MSVC 标准库的编译器版本检查；该选项同时用于项目 C++ 和 Cargo 的 C++ 桥接代码。
 
 .NET 8 和 WiX v4 是可选依赖，仅配置器和 MSI 打包流程需要。
 

@@ -2,6 +2,9 @@
 
 _OSES = ["linux", "macos", "ios", "android", "emscripten", "windows"]
 
+# Preserve the SDK's LLVM 18 configuration with newer MSVC STL headers.
+WINDOWS_STL_COMPAT_DEFINE = "_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"
+
 PLATFORM_ATTRS = {
     "_os_" + name: attr.label(default = Label("@platforms//os:" + name))
     for name in _OSES
@@ -39,6 +42,7 @@ def arch_copts():
 def platform_local_defines():
     return select({
         "@platforms//os:windows": [
+            WINDOWS_STL_COMPAT_DEFINE,
             "WIN32_LEAN_AND_MEAN", "NOMINMAX", "_ITERATOR_DEBUG_LEVEL=0",
             "_USE_MATH_DEFINES", "YY_NO_UNISTD_H",
             "strncasecmp=_strnicmp", "strcasecmp=_stricmp",

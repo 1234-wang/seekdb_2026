@@ -213,6 +213,10 @@ def main(arguments: List[str]) -> int:
         "build --symlink_prefix=" + _quote(build_directory.as_posix() + "/"),
         "build --workspace_status_command=" + _quote(status_command),
     ]
+    if os.name == "nt":
+        lines.append("build --repo_env=" + _quote(
+            "BAZEL_LLVM=" + (root / "deps/3rd/tools/llvm18").resolve().as_posix()
+        ))
     descriptor, name = tempfile.mkstemp(prefix="runtime.", suffix=".bazelrc", dir=cache)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:

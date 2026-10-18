@@ -61,8 +61,9 @@ environment.update({
     "CARGO": str(cargo), "RUSTC": str(rustc),
     "CARGO_WORKSPACE": str(workspace),
     "CARGO_TARGET_DIR": str(work / "target"),
-    "CXXFLAGS": "-D_GLIBCXX_USE_CXX11_ABI=1",
 })
+if os.name != "nt":
+    environment["CXXFLAGS"] = "-D_GLIBCXX_USE_CXX11_ABI=1"
 # System utilities (shell, make, SDK launchers) belong to the local execution
 # platform. Rust/Python/C++ compilers themselves are declared action inputs.
 environment["PATH"] = os.pathsep.join([

@@ -2,7 +2,7 @@
 
 load("//bazel:defs.bzl", "cc_library")
 load("@apple_support//lib:apple_support.bzl", "apple_support")
-load("//bazel:platforms.bzl", "PLATFORM_ATTRS", "target_platform")
+load("//bazel:platforms.bzl", "PLATFORM_ATTRS", "WINDOWS_STL_COMPAT_DEFINE", "target_platform")
 load("//bazel:cargo_toolchain.bzl", "CARGO_TOOLCHAIN_TYPE")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc:action_names.bzl", "C_COMPILE_ACTION_NAME", "CPP_COMPILE_ACTION_NAME")
@@ -35,6 +35,7 @@ def cargo_action(ctx, command, sources, outputs, work_dir, **kwargs):
     environment = {"DEFAULT_LOG_LEVEL": ctx.attr.default_log_level, "PYTHONHOME": toolchain.python_home}
     run = ctx.actions.run
     if platform.os == "windows":
+        environment["CXXFLAGS"] = "/D" + WINDOWS_STL_COMPAT_DEFINE
         # MSVC needs INCLUDE/LIB/PATH from its configured execution toolchain.
         environment.update(cc_common.get_environment_variables(
             feature_configuration = features,
