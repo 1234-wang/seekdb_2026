@@ -882,7 +882,6 @@ _FOUNDATION_CXX_GROUPS = oblib_select_unity_groups(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_foundation_impl",
-    owner_package = "src/oblib",
     unity_groups = _FOUNDATION_CXX_GROUPS,
     implementation_deps = [
         ":_oblib_implementation_headers",
@@ -898,7 +897,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_foundation_c_impl",
-    owner_package = "src/oblib",
     unity_groups = oblib_select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         _FOUNDATION_C_GROUP_NAMES,
@@ -919,7 +917,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_bitmap_impl",
-    owner_package = "src/oblib",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib_bitmap"],
     implementation_deps = [
         ":_oblib_implementation_headers",
@@ -933,7 +930,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_codec_scalar_impl",
-    owner_package = "src/oblib",
     unity_groups = oblib_select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         ["oblib_lib_codec_0"],
@@ -950,7 +946,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_codec_simd_impl",
-    owner_package = "src/oblib",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib_simd"],
     implementation_deps = [
         ":_oblib_implementation_headers",
@@ -971,7 +966,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_vector_impl",
-    owner_package = "src/oblib",
     unity_groups = oblib_select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         ["oblib_lib_ob_vector_util_0"],
@@ -989,7 +983,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_ob_malloc_impl",
-    owner_package = "src/oblib",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:ob_malloc_object"],
     implementation_deps = [
         ":_oblib_implementation_headers",
@@ -1005,7 +998,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_common_impl",
-    owner_package = "src/oblib",
     unity_groups = oblib_select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/common:oblib_common"],
         _COMMON_GROUP_NAMES,
@@ -1042,7 +1034,6 @@ cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "_oblib_rpc_impl",
-    owner_package = "src/oblib",
     unity_groups = oblib_select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/rpc:oblib_rpc"],
         _RPC_GROUP_NAMES,
@@ -1271,35 +1262,4 @@ cc_library(
     }),
     linkopts = seekdb_sanity_linkopts(),
     visibility = ["//unittest/oblib:__pkg__"],
-)
-
-filegroup(
-    name = "_oblib_compilation_outputs",
-    srcs = [
-        ":_malloc_hook_impl",
-        ":_mock_di_impl",
-        ":_ob_malloc_impl",
-        ":_oblib_bitmap_impl",
-        ":_oblib_codec_scalar_impl",
-        ":_oblib_codec_simd_impl",
-        ":_oblib_common_impl",
-        ":_oblib_common_standalone_impl",
-        ":_oblib_compression_impl",
-        ":_oblib_foundation_c_impl",
-        ":_oblib_foundation_impl",
-        ":_oblib_restore_impl",
-        ":_oblib_rpc_impl",
-        ":_oblib_vector_impl",
-    ],
-    output_group = "compilation_outputs",
-    tags = ["manual"],
-)
-
-filegroup(
-    name = "oblib_objects_build",
-    srcs = [
-        ":_oblib_compilation_outputs",
-        ":_zstd_1_3_8_partial_link_object",
-    ],
-    tags = ["manual"],
 )

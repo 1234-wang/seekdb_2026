@@ -1,32 +1,5 @@
 """Helpers for declaring Share's native semantic source graph."""
 
-load(
-    "//bazel:module_sources.bzl",
-    _singleton_unity_groups = "singleton_unity_groups",
-    _source_owners = "source_owners",
-    _select_unity_groups = "select_unity_groups",
-)
-
-_SHARE_SOURCE_PREFIX = "src/share/"
-
-
-share_select_unity_groups = _select_unity_groups
-
-def share_package_sources(sources, language = "c++"):
-    """Converts checked-in standalone source records to package paths."""
-
-    result = []
-    for source in sources:
-        if source.kind != "source":
-            fail("non-source Share input: %s (%s)" % (source.path, source.kind))
-        if source.language == language:
-            if not source.path.startswith(_SHARE_SOURCE_PREFIX):
-                fail("source outside src/share: %s" % source.path)
-            result.append(source.path[len(_SHARE_SOURCE_PREFIX):])
-    if not result:
-        fail("no %s standalone Share sources" % language)
-    return result
-
 def share_select_unity_sources(groups, name, source_paths, language = "c++"):
     """Builds one semantic Unity group from exact checked-in Unity members."""
 
@@ -66,12 +39,6 @@ def share_unity_group_sources(groups):
             result.append(source)
     return result
 
-def share_singleton_unity_groups(sources, name_prefix, language = "c++"):
-    groups = _singleton_unity_groups(sources, name_prefix, "src/share", language)
-    if not groups:
-        fail("no %s standalone Share sources" % language)
-    return groups
-
 def share_remaining_unity_groups(groups, excluded_sources, language = "c++"):
     """Preserves release Unity action boundaries after native extractions."""
 
@@ -96,6 +63,3 @@ def share_remaining_unity_groups(groups, excluded_sources, language = "c++"):
     if missing:
         fail("unknown excluded Share sources: %s" % missing)
     return result
-
-def share_validate_source_inventory(unity_groups, standalone_sources):
-    _source_owners("src/share", unity_groups, standalone_sources)

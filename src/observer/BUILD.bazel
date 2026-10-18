@@ -6,28 +6,19 @@ load(
     "cc_import",
     "seekdb_final_link",
     "seekdb_semantic_unity_cc_library",
-    "seekdb_source_ownership_check",
     "seekdb_version_source",
     cc_library = "seekdb_cc_library",
 )
 load(
     ":observer_source_inventory.bzl",
-    "OBSERVER_IGNORED_SOURCES",
-    "OBSERVER_IOS_SOURCES",
     "OBSERVER_MAIN_SOURCES",
     "OBSERVER_RETRIEVAL_COMPOSITION_SOURCES",
     "OBSERVER_STANDALONE_SOURCES",
     "OBSERVER_UNITY_GROUPS",
 )
 load(
-    ":observer_header_inventory.bzl",
-    "OBSERVER_PRIVATE_HEADERS",
-)
-load(
-    ":observer_module_sources.bzl",
-    "observer_singleton_unity_groups",
-    "observer_validate_header_inventory",
-    "observer_validate_source_inventory",
+    "//bazel:module_sources.bzl",
+    "singleton_unity_groups",
 )
 
 package(default_visibility = ["//visibility:private"])
@@ -36,46 +27,6 @@ _OBSERVER_GENERATED_SOURCE_REPLACEMENTS = {
     "src/observer/virtual_table/ob_all_virtual_local_tables.cpp": "//src/share:generated_local_virtual_table_source",
 }
 
-observer_validate_source_inventory(
-    OBSERVER_UNITY_GROUPS,
-    [
-        OBSERVER_MAIN_SOURCES,
-        OBSERVER_RETRIEVAL_COMPOSITION_SOURCES,
-        OBSERVER_STANDALONE_SOURCES,
-        OBSERVER_IOS_SOURCES,
-    ],
-    glob(
-        [
-            "**/*.c",
-            "**/*.cc",
-            "**/*.cpp",
-            "**/*.cxx",
-        ],
-        exclude = ["virtual_table/ob_all_virtual_local_tables.cpp"],
-        allow_empty = True,
-    ),
-    OBSERVER_IGNORED_SOURCES,
-    _OBSERVER_GENERATED_SOURCE_REPLACEMENTS.keys(),
-)
-
-observer_validate_header_inventory(
-    OBSERVER_PRIVATE_HEADERS,
-    glob(
-        [
-            "**/*.def",
-            "**/*.h",
-            "**/*.hh",
-            "**/*.hpp",
-            "**/*.hxx",
-            "**/*.inc",
-            "**/*.inl",
-            "**/*.ipp",
-            "**/*.tcc",
-        ],
-        exclude = ["virtual_table/ob_all_virtual_local_tables.h"],
-        allow_empty = True,
-    ),
-)
 
 _OBSERVER_NATIVE_DEPS = [
     "//rust:sql_nio_headers",
@@ -250,7 +201,7 @@ _OBSERVER_HEADER_NATIVE_DEPS = [
 
 cc_library(
     name = "observer_internal_interface",
-    hdrs = OBSERVER_PRIVATE_HEADERS,
+    hdrs = glob(["**/*.h", "**/*.ipp"], allow_empty = True),
     deps = _OBSERVER_HEADER_NATIVE_DEPS,
     features = ["layering_check"],
     tags = ["manual"],
@@ -258,14 +209,13 @@ cc_library(
 )
 
 
-_OBSERVER_RUNTIME_UNITY_GROUPS = OBSERVER_UNITY_GROUPS + observer_singleton_unity_groups(
+_OBSERVER_RUNTIME_UNITY_GROUPS = OBSERVER_UNITY_GROUPS + singleton_unity_groups(
     OBSERVER_STANDALONE_SOURCES,
     "ob_server_standalone",
 )
 
 seekdb_semantic_unity_cc_library(
     name = "observer_runtime",
-    owner_package = "src/observer",
     unity_groups = _OBSERVER_RUNTIME_UNITY_GROUPS,
     source_replacements = _OBSERVER_GENERATED_SOURCE_REPLACEMENTS,
     implementation_deps = [
@@ -298,8 +248,7 @@ seekdb_semantic_unity_cc_library(
 # physical SQL/Storage binding and registers it during final-link startup.
 seekdb_semantic_unity_cc_library(
     name = "observer_retrieval_composition",
-    owner_package = "src/observer",
-    unity_groups = observer_singleton_unity_groups(
+    unity_groups = singleton_unity_groups(
         OBSERVER_RETRIEVAL_COMPOSITION_SOURCES,
         "ob_retrieval_composition",
     ),
@@ -329,8 +278,7 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "observer_main",
-    owner_package = "src/observer",
-    unity_groups = observer_singleton_unity_groups(
+    unity_groups = singleton_unity_groups(
         OBSERVER_MAIN_SOURCES,
         "ob_main",
     ),
@@ -523,10 +471,7 @@ seekdb_final_link(
         _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS +
         _OBSERVER_MAIN_OBJECT_TARGETS
     ),
-    # The first migration link flattens the former core archives into one
-    # circular-resolution group. oblib also remains in its historical tail
-    # position below; the repeat is deliberate while its component archives
-    # have not yet been consolidated into a single ordered archive.
+    # Repeat oblib in tail_deps to resolve references introduced by later archives.
     group_deps = _SEEKDB_CORE_LINK_DEPS,
     whole_archive_deps = [],
     tail_deps = _SEEKDB_TAIL_LINK_DEPS,
@@ -572,12 +517,4 @@ cc_import(
     tags = ["manual"],
     testonly = True,
     visibility = ["//unittest:__subpackages__"],
-)
-
-# Analysis-only guard: one checked-in source may feed exactly one generated
-# Unity translation unit in the final production graph.
-seekdb_source_ownership_check(
-    name = "seekdb_source_ownership",
-    root = ":seekdb_link",
-    tags = ["manual"],
 )

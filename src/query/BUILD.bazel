@@ -5,16 +5,11 @@ load(
 load(
     ":query_build_defs.bzl",
     "QUERY_API_INTERFACE_HEADERS",
-    "QUERY_MYSQL_PROTOCOL_UTIL_SOURCES",
-    "QUERY_SCHEDULER_SOURCES",
-    "QUERY_SQL_EXPRESSION_INTERFACE_HEADERS",
-    "QUERY_SQL_PARSER_TYPE_HEADERS",
-    "QUERY_VECTOR_EMBEDDING_SOURCES",
 )
 
 cc_library(
     name = "sql_expression_interface",
-    hdrs = QUERY_SQL_EXPRESSION_INTERFACE_HEADERS,
+    hdrs = ["api/query/engine/expr/ob_sql_expression.h"],
     deps = [
         "//src/oblib:oblib_foundation",
         "//src/share:object_cast",
@@ -25,9 +20,6 @@ cc_library(
     visibility = ["//src:__subpackages__"],
 )
 
-# Coarse native seam for Query API ownership.  Generated clusters are private
-# migration mechanics; callers see a semantic module interface that can be
-# split by capability in the later interface-narrowing stage.
 cc_library(
     name = "query_api_interface",
     hdrs = QUERY_API_INTERFACE_HEADERS,
@@ -56,7 +48,7 @@ cc_library(
 
 cc_library(
     name = "mysql_protocol_util",
-    srcs = QUERY_MYSQL_PROTOCOL_UTIL_SOURCES,
+    srcs = ["protocol/ob_mysql_protocol_util.cpp"],
     hdrs = ["api/query/protocol/ob_mysql_protocol_util.h"],
     deps = [
         "//src/oblib:oblib_common",
@@ -179,7 +171,7 @@ cc_library(
 
 cc_library(
     name = "vector_embedding_runtime",
-    srcs = QUERY_VECTOR_EMBEDDING_SOURCES,
+    srcs = ["vector/ob_vector_embedding_handler.cpp"],
     hdrs = ["api/query/vector/ob_vector_embedding_handler.h"],
     deps = [
         ":vector_index_interface",
@@ -303,7 +295,7 @@ cc_library(
 
 cc_library(
     name = "scheduler_interface",
-    srcs = QUERY_SCHEDULER_SOURCES,
+    srcs = ["scheduler/ob_scheduler_job.cpp"],
     hdrs = [
         "api/query/scheduler/ob_scheduler_job.h",
         "api/query/scheduler/ob_scheduler_service.h",
@@ -343,7 +335,7 @@ filegroup(
 
 cc_library(
     name = "_sql_parser_types",
-    hdrs = QUERY_SQL_PARSER_TYPE_HEADERS,
+    hdrs = ["api/query/parser/ob_item_type.h", "api/query/parser/parse_node.h"],
     deps = ["//src/oblib:common_sql_mode"],
     includes = ["api"],
     visibility = ["//src/sql/parser:__pkg__"],

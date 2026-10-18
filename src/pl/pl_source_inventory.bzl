@@ -59,9 +59,9 @@ PL_UNITY_GROUPS = [
 ]
 
 PL_STANDALONE_SOURCES = [
-    struct(path = "src/pl/parser/ob_pl_parser.cpp", language = "c++", kind = "source"),
-    struct(path = "src/pl/parser/pl_non_reserved_keywords_mysql_mode.c", language = "c", kind = "source"),
-    struct(path = "src/pl/parser/pl_parser_base.c", language = "c", kind = "source"),
-    struct(path = "src/pl/parser/pl_parser_mysql_mode_lex.c", language = "c", kind = "generated"),
-    struct(path = "src/pl/parser/pl_parser_mysql_mode_tab.c", language = "c", kind = "generated"),
+    struct(path = "src/pl/parser/ob_pl_parser.cpp", language = "c++"),
+    struct(path = "src/pl/parser/pl_non_reserved_keywords_mysql_mode.c", language = "c"),
+    struct(path = "src/pl/parser/pl_parser_base.c", language = "c"),
+    struct(path = "src/pl/parser/pl_parser_mysql_mode_lex.c", language = "c"),
+    struct(path = "src/pl/parser/pl_parser_mysql_mode_tab.c", language = "c"),
 ]

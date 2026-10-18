@@ -358,29 +358,15 @@ OBSERVER_UNITY_GROUPS = [
 ]
 
 OBSERVER_MAIN_SOURCES = [
-    struct(path = "src/observer/main.cpp", language = "c++", kind = "source"),
-    struct(path = "src/observer/ob_command_line_parser.cpp", language = "c++", kind = "source"),
+    struct(path = "src/observer/main.cpp", language = "c++"),
+    struct(path = "src/observer/ob_command_line_parser.cpp", language = "c++"),
 ]
 
 OBSERVER_RETRIEVAL_COMPOSITION_SOURCES = [
-    struct(path = "src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp", language = "c++", kind = "source"),
+    struct(path = "src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp", language = "c++"),
 ]
 
 OBSERVER_STANDALONE_SOURCES = [
-    struct(path = "src/observer/ob_server.cpp", language = "c++", kind = "source"),
-    struct(path = "src/observer/ob_service.cpp", language = "c++", kind = "source"),
-]
-
-OBSERVER_IOS_SOURCES = [
-    struct(path = "src/observer/ios/seekdb_ios.cpp", language = "c++", kind = "source"),
-    struct(path = "src/observer/ios/driver/seekdb_lifecycle.cpp", language = "c++", kind = "source"),
-]
-
-OBSERVER_IGNORED_SOURCES = [
-    "report/ob_tablet_meta_checker.cpp",
-    "vector_index/ob_vector_index_async_task_scheduler.cpp",
-    "virtual_table/ob_all_virtual_all_tables.cpp",
-    "virtual_table/ob_all_virtual_concurrent_limit_sql.cpp",
-    "virtual_table/ob_all_virtual_outline.cpp",
-    "ob_win_service.cpp",
+    struct(path = "src/observer/ob_server.cpp", language = "c++"),
+    struct(path = "src/observer/ob_service.cpp", language = "c++"),
 ]

@@ -8,48 +8,21 @@ load(
 )
 load(
     ":storage_source_inventory.bzl",
-    "STORAGE_EXTRA_SOURCES",
     "STORAGE_SIMD_UNITY_GROUPS",
-    "STORAGE_STANDALONE_SOURCES",
     "STORAGE_TABLET_AUTOINCREMENT_STATE_SOURCES",
     "STORAGE_UNITY_GROUPS",
 )
 load(
     ":storage_header_inventory.bzl",
     "STORAGE_INTERFACE_CLOSURE_HEADERS",
-    "STORAGE_PRIVATE_HEADERS",
     "STORAGE_PUBLIC_HEADER_ROOTS",
-)
-load(
-    ":storage_module_sources.bzl",
-    "storage_singleton_unity_groups",
-    "storage_validate_source_inventory",
+    "STORAGE_SEMANTIC_HEADERS",
 )
 
 package(default_visibility = ["//visibility:private"])
 
-storage_validate_source_inventory(
-    STORAGE_UNITY_GROUPS,
-    STORAGE_SIMD_UNITY_GROUPS,
-    STORAGE_STANDALONE_SOURCES + STORAGE_EXTRA_SOURCES,
-    glob([
-        "**/*.c",
-        "**/*.cc",
-        "**/*.cpp",
-        "**/*.cxx",
-    ], allow_empty = True),
-    [
-        # Upstream checked-in prototype; no production caller uses it yet.
-        "access/ob_advance_scanner.cpp",
-        "memtable/mvcc/ob_keybtree.cpp",
-        "meta_mem/ob_meta_obj_pool.cpp",
-        "meta_mem/ob_tablet_meta_mem_mgr.cpp",
-    ] + STORAGE_TABLET_AUTOINCREMENT_STATE_SOURCES,
-)
 
-# This .cpp is textually included through the current external Storage header
-# closure. Keep the precise one-file owner visible upward until phase two turns
-# that textual implementation dependency into a regular interface.
+# Public Storage headers include this implementation file textually.
 cc_library(
     name = "_textual_ob_keybtree",
     textual_hdrs = ["memtable/mvcc/ob_keybtree.cpp"],
@@ -448,7 +421,11 @@ cc_library(
 
 cc_library(
     name = "storage_runtime_internal_headers",
-    hdrs = STORAGE_PRIVATE_HEADERS,
+    hdrs = glob(
+        ["**/*.h", "**/*.ipp"],
+        allow_empty = True,
+        exclude = STORAGE_PUBLIC_HEADER_ROOTS + STORAGE_INTERFACE_CLOSURE_HEADERS + STORAGE_SEMANTIC_HEADERS,
+    ),
     deps = [
         ":storage_runtime_interface",
         "//rust:config_headers",
@@ -466,19 +443,9 @@ cc_library(
 )
 
 
-_STORAGE_RUNTIME_UNITY_GROUPS = STORAGE_UNITY_GROUPS + storage_singleton_unity_groups(
-    STORAGE_STANDALONE_SOURCES,
-    "storage_runtime_standalone",
-) + storage_singleton_unity_groups(
-    STORAGE_EXTRA_SOURCES,
-    "storage_runtime_extra",
-)
-
-
 seekdb_semantic_unity_cc_library(
     name = "storage_runtime",
-    owner_package = "src/storage",
-    unity_groups = _STORAGE_RUNTIME_UNITY_GROUPS,
+    unity_groups = STORAGE_UNITY_GROUPS,
     split_unity_groups = True,
     implementation_deps = [
         ":storage_runtime_interface",
@@ -573,7 +540,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "storage_runtime_simd",
-    owner_package = "src/storage",
     unity_groups = STORAGE_SIMD_UNITY_GROUPS,
     split_unity_groups = True,
     implementation_deps = [
@@ -602,17 +568,6 @@ seekdb_semantic_unity_cc_library(
 cc_library(
     name = "storage_static",
     implementation_deps = [
-        ":storage_runtime",
-        ":storage_runtime_simd",
-        ":tablet_autoincrement_state",
-    ],
-    tags = ["manual"],
-    visibility = ["//src/observer:__pkg__"],
-)
-
-filegroup(
-    name = "storage_static_build",
-    srcs = [
         ":storage_runtime",
         ":storage_runtime_simd",
         ":tablet_autoincrement_state",

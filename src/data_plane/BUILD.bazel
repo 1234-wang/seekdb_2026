@@ -6,9 +6,6 @@ load(
 load(
     ":data_plane_build_defs.bzl",
     "DATA_PLANE_API_INTERFACE_HEADERS",
-    "DATA_PLANE_PARALLEL_RANGE_TASK_PLANNER_SOURCES",
-    "DATA_PLANE_TABLET_SCAN_SOURCES",
-    "DATA_PLANE_TABLET_SCAN_INTERFACE_HEADERS",
 )
 
 cc_library(
@@ -23,7 +20,7 @@ cc_library(
 # consumers see only the semantic tablet_scan_interface target below.
 cc_library(
     name = "_tablet_scan_headers",
-    hdrs = DATA_PLANE_TABLET_SCAN_INTERFACE_HEADERS,
+    hdrs = ["api/data_plane/access/ob_tablet_scan.h"],
     deps = [
         "//src/oblib:common_sql_mode",
         "//src/oblib:oblib_foundation",
@@ -39,7 +36,7 @@ cc_library(
 
 seekdb_generated_unity_cc_library(
     name = "tablet_scan_interface",
-    unity_members = DATA_PLANE_TABLET_SCAN_SOURCES,
+    unity_members = ["ob_tablet_scan.cpp"],
     deps = [":_tablet_scan_headers"],
     features = ["layering_check"],
     tags = ["manual"],
@@ -54,10 +51,6 @@ seekdb_generated_unity_cc_library(
     ],
 )
 
-# Coarse native seam for the complete Data Plane API.  The mechanical header
-# clusters remain an implementation detail of this package while downstream
-# modules depend on one semantic interface target.  Later interface narrowing
-# can split this target without reopening Storage implementation visibility.
 cc_library(
     name = "data_plane_api_interface",
     hdrs = DATA_PLANE_API_INTERFACE_HEADERS,
@@ -366,7 +359,7 @@ cc_library(
 
 cc_library(
     name = "parallel_range_task_planner",
-    srcs = DATA_PLANE_PARALLEL_RANGE_TASK_PLANNER_SOURCES,
+    srcs = ["ob_parallel_range_task_planner.cpp"],
     hdrs = ["api/data_plane/access/ob_parallel_range_task_planner.h"],
     implementation_deps = ["//src/oblib:oblib_foundation"],
     includes = ["api"],

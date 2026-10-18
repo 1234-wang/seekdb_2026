@@ -3,11 +3,6 @@ load(
     "seekdb_generated_unity_cc_library",
     cc_library = "seekdb_cc_library",
 )
-load(
-    "//src/sql:sql_build_defs.bzl",
-    "SQL_PRIVATE_HEADERS",
-    "sql_headers_under",
-)
 
 package(default_visibility = ["//visibility:private"])
 
@@ -27,14 +22,7 @@ cc_library(
 
 cc_library(
     name = "engine_prepare_internal_headers",
-    hdrs = [
-        header
-        for header in sql_headers_under(
-            SQL_PRIVATE_HEADERS,
-            "engine/prepare/",
-        )
-        if header not in _ENGINE_PREPARE_PUBLIC_HEADERS
-    ],
+    hdrs = glob(["*.h"], exclude = _ENGINE_PREPARE_PUBLIC_HEADERS, allow_empty = True),
     tags = ["manual"],
     visibility = ["//src/sql:__subpackages__"],
 )

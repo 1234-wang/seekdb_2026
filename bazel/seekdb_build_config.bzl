@@ -28,7 +28,7 @@ _CXX_WARNINGS = [
     "-Wno-reserved-user-defined-literal",
     "-Wno-unused-parameter",
 ]
-_MIGRATION_INCLUDES = [
+_MODULE_INCLUDES = [
     "-I.",
     "-Isrc",
     "-Isrc/data_plane/api",
@@ -39,9 +39,9 @@ _MIGRATION_INCLUDES = [
     "-Isrc/oblib",
     "-Isrc/oblib/common",
 ]
-SEEKDB_MIGRATION_CXX_COPTS = ["-std=gnu++20"] + _MIGRATION_INCLUDES + _COMMON_COPTS + _CXX_WARNINGS
-SEEKDB_MIGRATION_C_COPTS = ["-std=gnu11"] + _MIGRATION_INCLUDES + _COMMON_COPTS
-SEEKDB_MODULE_CXX_COPTS = SEEKDB_MIGRATION_CXX_COPTS + ["-Werror=private-header"]
+SEEKDB_CXX_COPTS = ["-std=gnu++20"] + _MODULE_INCLUDES + _COMMON_COPTS + _CXX_WARNINGS
+SEEKDB_C_COPTS = ["-std=gnu11"] + _MODULE_INCLUDES + _COMMON_COPTS
+SEEKDB_MODULE_CXX_COPTS = SEEKDB_CXX_COPTS + ["-Werror=private-header"]
 SEEKDB_MODULE_C_COPTS = ["-std=gnu11"]
 SEEKDB_OBLIB_CXX_COPTS = ["-std=gnu++20"] + _COMMON_COPTS + _CXX_WARNINGS
 SEEKDB_OBLIB_C_COPTS = ["-std=gnu11"] + _COMMON_COPTS

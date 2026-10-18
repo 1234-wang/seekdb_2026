@@ -1,19 +1,23 @@
 load("//bazel:parser.bzl", "seekdb_parser", "seekdb_parser_type_names")
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_MIGRATION_C_COPTS",
-    "SEEKDB_MIGRATION_CXX_COPTS",
+    "SEEKDB_C_COPTS",
+    "SEEKDB_CXX_COPTS",
     "seekdb_generated_unity_source",
     cc_library = "seekdb_cc_library",
 )
 load(
-    "//src/sql:sql_build_defs.bzl",
+    "//src/sql:sql_header_inventory.bzl",
     "SQL_COMPOSITION_HEADERS",
     "SQL_INTERFACE_CLOSURE_HEADERS",
-    "SQL_PARSER_SOURCES",
-    "SQL_PRIVATE_HEADERS",
     "SQL_PUBLIC_HEADER_ROOTS",
-    "sql_headers_under",
+)
+load(
+    "//src/sql:sql_source_inventory.bzl",
+    "SQL_PARSER_SOURCES",
+)
+load(
+    "//src/sql:sql_module_sources.bzl",
     "sql_paths_under",
 )
 
@@ -86,21 +90,23 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
-_PARSER_PUBLIC_ROOTS = sql_headers_under(
+_PARSER_PUBLIC_ROOTS = sql_paths_under(
     SQL_PUBLIC_HEADER_ROOTS,
     "parser/",
 )
-_PARSER_INTERFACE_CLOSURE = sql_headers_under(
+_PARSER_INTERFACE_CLOSURE = sql_paths_under(
     SQL_INTERFACE_CLOSURE_HEADERS,
     "parser/",
 )
-_PARSER_PRIVATE_HEADERS = sql_headers_under(
-    SQL_PRIVATE_HEADERS,
-    "parser/",
-)
-_PARSER_COMPOSITION_HEADERS = sql_headers_under(
+_PARSER_COMPOSITION_HEADERS = sql_paths_under(
     SQL_COMPOSITION_HEADERS,
     "parser/",
+)
+
+_PARSER_PRIVATE_HEADERS = glob(
+    ["**/*.h", "**/*.ipp", "**/*.def"],
+    allow_empty = True,
+    exclude = _PARSER_PUBLIC_ROOTS + _PARSER_INTERFACE_CLOSURE + _PARSER_COMPOSITION_HEADERS,
 )
 
 cc_library(
@@ -165,7 +171,7 @@ cc_library(
         "//src/oblib:oblib_base",
         "//src/oblib:oblib_foundation",
     ],
-    copts = SEEKDB_MIGRATION_C_COPTS,
+    copts = SEEKDB_C_COPTS,
     tags = ["manual"],
 )
 
@@ -200,7 +206,7 @@ cc_library(
         "//src/oblib:oblib_foundation",
         "//src/oblib:oblib_memory_primitives",
     ],
-    copts = SEEKDB_MIGRATION_CXX_COPTS,
+    copts = SEEKDB_CXX_COPTS,
     tags = ["manual"],
 )
 
@@ -229,14 +235,4 @@ cc_library(
         "//src/observer:__pkg__",
         "//src/sql:__pkg__",
     ],
-)
-
-filegroup(
-    name = "sql_server_parser_build",
-    srcs = [
-        ":_server_parser_c",
-        ":_server_parser_cxx",
-    ],
-    tags = ["manual"],
-    visibility = ["//src/sql:__pkg__"],
 )

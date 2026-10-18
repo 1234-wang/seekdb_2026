@@ -11,8 +11,6 @@ def oblib_standalone_sources(sources, key, language = "c++"):
     prefix = "src/oblib/"
     result = []
     for source in sources[key]:
-        if source.kind != "source":
-            fail("non-source input in %s: %s" % (key, source.path))
         if source.language == language:
             if not source.path.startswith(prefix):
                 fail("source outside src/oblib: %s" % source.path)

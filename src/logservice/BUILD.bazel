@@ -20,17 +20,6 @@ cc_library(
     visibility = ["//src:__subpackages__"],
 )
 
-_LOGSERVICE_GROUP_NAMES = [
-    "ob_logservice_common_0",
-    "ob_logservice_common_mixed_0",
-    "ob_logservice_common_util_0",
-    "ob_logservice_palf_0",
-    "ob_logservice_palf_1",
-]
-
-# Current public surface: headers included outside src/logservice plus their
-# complete in-module textual closure. It is intentionally honest and broad;
-# shrinking it is the next, source-refactoring phase.
 _PUBLIC_HDRS = [
     "applyservice/ob_log_apply_service.h",
     "ob_i_log_storage.h",
@@ -103,9 +92,7 @@ _PRIVATE_HDRS = glob(
 # actions for parallelism and incremental rebuild granularity.
 seekdb_semantic_unity_cc_library(
     name = "logservice",
-    owner_package = "src/logservice",
     unity_groups = LOGSERVICE_UNITY_GROUPS,
-    expected_group_names = _LOGSERVICE_GROUP_NAMES,
     public_hdrs = _PUBLIC_HDRS,
     private_hdrs = _PRIVATE_HDRS,
     deps = [
@@ -162,12 +149,4 @@ seekdb_semantic_unity_cc_library(
     implementation_deps = [
         "//src/oblib:oblib_collections_primitives",
     ],
-)
-
-
-filegroup(
-    name = "logservice_build",
-    srcs = [":logservice"],
-    tags = ["manual"],
-    visibility = ["//src/observer:__pkg__"],
 )

@@ -1,15 +1,13 @@
 load("//bazel:parser.bzl", "seekdb_parser")
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_MIGRATION_C_COPTS",
+    "SEEKDB_C_COPTS",
     "seekdb_semantic_unity_cc_library",
     cc_library = "seekdb_cc_library",
 )
 load(
     ":pl_header_inventory.bzl",
-    "PL_PRIVATE_HEADERS",
     "PL_PUBLIC_HEADER_ROOTS",
-    "pl_validate_header_inventory",
 )
 load(
     ":pl_source_inventory.bzl",
@@ -17,25 +15,12 @@ load(
     "PL_UNITY_GROUPS",
 )
 load(
-    ":pl_module_sources.bzl",
-    "pl_singleton_unity_groups",
-    "pl_validate_source_inventory",
+    "//bazel:module_sources.bzl",
+    "singleton_unity_groups",
 )
 
 package(default_visibility = ["//visibility:private"])
 
-pl_validate_source_inventory(
-    PL_UNITY_GROUPS,
-    PL_STANDALONE_SOURCES,
-    glob([
-        "**/*.c",
-        "**/*.cc",
-        "**/*.cpp",
-        "**/*.cxx",
-    ], allow_empty = True),
-)
-
-pl_validate_header_inventory(glob(["**/*.h"]))
 
 seekdb_parser(
     name = "generate_pl_parser",
@@ -80,7 +65,7 @@ cc_library(
 
 cc_library(
     name = "pl_internal_headers",
-    hdrs = PL_PRIVATE_HEADERS,
+    hdrs = glob(["**/*.h"], exclude = PL_PUBLIC_HEADER_ROOTS),
     deps = [
         ":pl_interface",
         "//rust:config_headers",
@@ -187,7 +172,7 @@ _PL_RUNTIME_NON_OBLIB_DEPS = [
     if not dep.startswith("//src/oblib:")
 ]
 
-_PL_RUNTIME_UNITY_GROUPS = PL_UNITY_GROUPS + pl_singleton_unity_groups(
+_PL_RUNTIME_UNITY_GROUPS = PL_UNITY_GROUPS + singleton_unity_groups(
     PL_STANDALONE_SOURCES,
     "pl_parser_cxx",
     "c++",
@@ -195,15 +180,7 @@ _PL_RUNTIME_UNITY_GROUPS = PL_UNITY_GROUPS + pl_singleton_unity_groups(
 
 seekdb_semantic_unity_cc_library(
     name = "pl_runtime",
-    owner_package = "src/pl",
     unity_groups = _PL_RUNTIME_UNITY_GROUPS,
-    expected_group_names = [
-        "pl_cache",
-        "pl_common",
-        "pl_parser_cxx_0",
-        "pl_recompile",
-        "pl_sys_package",
-    ],
     implementation_deps = _PL_RUNTIME_NON_OBLIB_DEPS + ["//rust:config_headers"] + [
         "//src/oblib:common_sql_mode",
         "//src/oblib:oblib_base",
@@ -225,19 +202,12 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "pl_parser_c",
-    owner_package = "src/pl",
-    unity_groups = pl_singleton_unity_groups(
+    unity_groups = singleton_unity_groups(
         PL_STANDALONE_SOURCES,
         "pl_parser_c",
         "c",
     ),
     language = "c",
-    expected_group_names = [
-        "pl_parser_c_0",
-        "pl_parser_c_1",
-        "pl_parser_c_2",
-        "pl_parser_c_3",
-    ],
     source_replacements = {
         "src/pl/parser/pl_parser_mysql_mode_lex.c": "parser/bazel_generated/pl_parser_mysql_mode_lex.c",
         "src/pl/parser/pl_parser_mysql_mode_tab.c": "parser/bazel_generated/pl_parser_mysql_mode_tab.c",
@@ -252,7 +222,7 @@ seekdb_semantic_unity_cc_library(
         "//src/oblib:oblib_foundation",
     ],
     split_unity_groups = True,
-    copts = SEEKDB_MIGRATION_C_COPTS,
+    copts = SEEKDB_C_COPTS,
     tags = ["manual"],
 )
 
@@ -271,22 +241,4 @@ cc_library(
     ],
     tags = ["manual"],
     visibility = ["//src/observer:__pkg__"],
-)
-
-filegroup(
-    name = "pl_static_build",
-    srcs = [
-        ":pl_parser_c",
-        ":pl_runtime",
-        ":syspack_source",
-    ],
-    tags = ["manual"],
-    visibility = ["//src/observer:__pkg__"],
-)
-
-alias(
-    name = "syspack_release",
-    actual = "//src/share/inner_table/sys_package:syspack_release",
-    tags = ["manual"],
-    visibility = ["//visibility:public"],
 )

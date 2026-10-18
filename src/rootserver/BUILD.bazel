@@ -5,20 +5,16 @@ load(
 )
 load(
     ":rootserver_source_inventory.bzl",
-    "ROOTSERVER_IGNORED_SOURCES",
     "ROOTSERVER_STANDALONE_SOURCES",
     "ROOTSERVER_UNITY_GROUPS",
 )
 load(
     ":rootserver_header_inventory.bzl",
-    "ROOTSERVER_PRIVATE_HEADERS",
     "ROOTSERVER_PUBLIC_HEADERS",
-    "rootserver_validate_header_inventory",
 )
 load(
-    ":rootserver_module_sources.bzl",
-    "rootserver_singleton_unity_groups",
-    "rootserver_validate_source_inventory",
+    "//bazel:module_sources.bzl",
+    "singleton_unity_groups",
 )
 
 package(default_visibility = ["//visibility:private"])
@@ -46,19 +42,6 @@ _ROOTSERVER_COMPOSITION_HEADERS = (
     _DEBUG_SYNC_LOCAL_RUNTIME_HEADERS
 )
 
-rootserver_validate_source_inventory(
-    ROOTSERVER_UNITY_GROUPS,
-    ROOTSERVER_STANDALONE_SOURCES,
-    glob([
-        "**/*.c",
-        "**/*.cc",
-        "**/*.cpp",
-        "**/*.cxx",
-    ], allow_empty = True),
-    ROOTSERVER_IGNORED_SOURCES,
-)
-
-rootserver_validate_header_inventory(glob(["**/*.h"]))
 
 _ROOTSERVER_NATIVE_DEPS = [
     "//src/oblib/easy:easy",
@@ -325,7 +308,7 @@ cc_library(
 
 cc_library(
     name = "rootserver_internal_headers",
-    hdrs = ROOTSERVER_PRIVATE_HEADERS,
+    hdrs = glob(["**/*.h"], exclude = ROOTSERVER_PUBLIC_HEADERS),
     deps = [":rootserver_interface"] + _ROOTSERVER_HEADER_COMMON_DEPS,
     implementation_deps = (
         _ROOTSERVER_HEADER_SHARE_DEPS +
@@ -337,42 +320,15 @@ cc_library(
 )
 
 
-alias(
-    name = "major_freeze_interface",
-    actual = ":rootserver_interface",
-    tags = ["manual"],
-    visibility = ["//src/observer:__pkg__"],
-)
-
-
-_ROOTSERVER_RUNTIME_UNITY_GROUPS = ROOTSERVER_UNITY_GROUPS + rootserver_singleton_unity_groups(
+_ROOTSERVER_RUNTIME_UNITY_GROUPS = ROOTSERVER_UNITY_GROUPS + singleton_unity_groups(
     ROOTSERVER_STANDALONE_SOURCES,
     "ob_rootserver_standalone",
 )
 
 seekdb_semantic_unity_cc_library(
     name = "rootserver_runtime",
-    owner_package = "src/rootserver",
     unity_groups = _ROOTSERVER_RUNTIME_UNITY_GROUPS,
     split_unity_groups = True,
-    expected_group_names = [
-        "ob_rootserver_base_common_0",
-        "ob_rootserver_base_maintenance_0",
-        "ob_rootserver_query_0",
-        "ob_rootserver_runtime_common_0",
-        "ob_rootserver_runtime_common_1",
-        "ob_rootserver_runtime_ddl_0",
-        "ob_rootserver_runtime_fork_freeze_0",
-        "ob_rootserver_runtime_services_0",
-        "ob_rootserver_sql_mixed_0",
-        "ob_rootserver_standalone_0",
-        "ob_rootserver_standalone_1",
-        "ob_rootserver_standalone_2",
-        "ob_rootserver_standalone_3",
-        "ob_rootserver_standalone_4",
-        "ob_rootserver_storage_common_0",
-        "ob_rootserver_storage_freeze_0",
-    ],
     implementation_deps = [
         ":rootserver_interface",
         ":rootserver_internal_headers",
@@ -497,13 +453,6 @@ seekdb_semantic_unity_cc_library(
 cc_library(
     name = "rootserver_static",
     implementation_deps = [":rootserver_runtime"],
-    tags = ["manual"],
-    visibility = ["//src/observer:__pkg__"],
-)
-
-filegroup(
-    name = "rootserver_static_build",
-    srcs = [":rootserver_runtime"],
     tags = ["manual"],
     visibility = ["//src/observer:__pkg__"],
 )

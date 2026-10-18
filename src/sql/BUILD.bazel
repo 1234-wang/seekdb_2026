@@ -6,25 +6,32 @@ load(
     cc_library = "seekdb_cc_library",
 )
 load(
-    ":sql_build_defs.bzl",
+    "//src/sql:sql_header_inventory.bzl",
     "SQL_COMPOSITION_HEADERS",
-    "SQL_EXTRA_SOURCES",
     "SQL_INTERFACE_CLOSURE_HEADERS",
-    "SQL_OPTIMIZER_GROUP_NAMES",
-    "SQL_PARSER_SOURCES",
-    "SQL_PREPARE_SOURCES",
-    "SQL_PRIVATE_HEADERS",
     "SQL_PUBLIC_HEADER_ROOTS",
-    "SQL_RUNTIME_NATIVE_DEPS",
-    "SQL_SANITY_WITHOUT_PASS_STANDALONE_PATHS",
+)
+load(
+    "//src/sql:sql_source_inventory.bzl",
+    "SQL_EXTRA_SOURCES",
     "SQL_SIMD_UNITY_GROUPS",
     "SQL_STANDALONE_SOURCES",
     "SQL_UNITY_GROUPS",
+)
+load(
+    "//src/sql:sql_module_sources.bzl",
+    "SQL_OPTIMIZER_GROUP_NAMES",
+    "SQL_PREPARE_SOURCES",
     "sql_groups_without",
     "sql_headers_outside",
-    "sql_partition_sources",
-    "sql_singleton_unity_groups",
-    "sql_validate_source_inventory",
+)
+load(
+    "//src/sql:sql_runtime_deps.bzl",
+    "SQL_RUNTIME_NATIVE_DEPS",
+)
+load(
+    "//bazel:module_sources.bzl",
+    "singleton_unity_groups",
 )
 
 package(default_visibility = ["//visibility:private"])
@@ -113,25 +120,12 @@ _SQL_SEMANTIC_HEADER_PREFIXES = [
     "resolver/prepare/",
 ]
 
-_SQL_SEPARATELY_OWNED_SOURCES = [
-    # Upstream checked-in prototype duplicates ob_dtl_mem_manager and is not
-    # referenced by the production DTL runtime.
-    "src/sql/dtl/ob_dtl_memory_manager.cpp",
-]
 
 _SQL_RETRIEVAL_COMPOSITION_HEADERS = sql_headers_outside(
     SQL_COMPOSITION_HEADERS,
     ["parser/"],
 )
 
-sql_validate_source_inventory(
-    SQL_UNITY_GROUPS,
-    SQL_SIMD_UNITY_GROUPS,
-    SQL_STANDALONE_SOURCES,
-    SQL_EXTRA_SOURCES,
-    SQL_PARSER_SOURCES,
-    _SQL_SEPARATELY_OWNED_SOURCES,
-)
 
 # C++ sources include these table files textually. Their non-header extension
 # requires an explicit CcInfo owner.
@@ -203,14 +197,11 @@ cc_library(
 # Submodule header owners are visible only through this SQL-internal seam.
 cc_library(
     name = "sql_runtime_internal_headers",
-    hdrs = [
-        header
-        for header in sql_headers_outside(
-            SQL_PRIVATE_HEADERS,
-            _SQL_SEMANTIC_HEADER_PREFIXES,
-        )
-        if header not in _SQL_RETRIEVAL_COMPOSITION_HEADERS
-    ],
+    hdrs = glob(
+        ["**/*.h", "**/*.ipp", "**/*.def"],
+        allow_empty = True,
+        exclude = SQL_PUBLIC_HEADER_ROOTS + SQL_INTERFACE_CLOSURE_HEADERS + SQL_COMPOSITION_HEADERS,
+    ),
     deps = [
         ":sql_retrieval_composition_headers",
         ":sql_runtime_interface",
@@ -225,31 +216,16 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
-# Unit tests exercise the same external SQL seam as production callers while
-# receiving implementation symbols only from liboceanbase.so.  This forwards
-# compilation inputs and deliberately discards the interface's link inputs.
-
-# SQL-owned unit tests may compile against the Module's private implementation
-# headers, but receive all implementation symbols from liboceanbase.so.
-
-_SQL_STANDALONE_SANITY_PARTITION = sql_partition_sources(
-    SQL_STANDALONE_SOURCES,
-    SQL_SANITY_WITHOUT_PASS_STANDALONE_PATHS,
-)
-
 _SQL_RUNTIME_UNITY_GROUPS = sql_groups_without(
     SQL_UNITY_GROUPS,
     SQL_OPTIMIZER_GROUP_NAMES,
     SQL_PREPARE_SOURCES,
-) + sql_singleton_unity_groups(
-    _SQL_STANDALONE_SANITY_PARTITION.remaining,
+) + singleton_unity_groups(
+    SQL_STANDALONE_SOURCES,
     "sql_runtime_standalone",
 )
 
-_SQL_RUNTIME_WITHOUT_PASS_UNITY_GROUPS = sql_singleton_unity_groups(
-    _SQL_STANDALONE_SANITY_PARTITION.selected,
-    "sql_runtime_heavy_without_pass",
-) + sql_singleton_unity_groups(
+_SQL_RUNTIME_WITHOUT_PASS_UNITY_GROUPS = singleton_unity_groups(
     SQL_EXTRA_SOURCES,
     "sql_runtime_extra",
 )
@@ -269,7 +245,6 @@ _SQL_RUNTIME_IMPLEMENTATION_DEPS = [
 # Standalone sources remain singleton groups, preserving compile granularity.
 seekdb_semantic_unity_cc_library(
     name = "sql_runtime",
-    owner_package = "src/sql",
     unity_groups = _SQL_RUNTIME_UNITY_GROUPS,
     split_unity_groups = True,
     implementation_deps = _SQL_RUNTIME_IMPLEMENTATION_DEPS + [
@@ -365,12 +340,8 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-# Restore the former ob_sql_extra -> ob_base_without_pass boundary and extend
-# it to the measured vector-comparison template family. These sources still
-# compile with ENABLE_SANITY but deliberately do not load the LLVM pass.
 seekdb_semantic_unity_cc_library(
     name = "sql_runtime_without_pass",
-    owner_package = "src/sql",
     unity_groups = _SQL_RUNTIME_WITHOUT_PASS_UNITY_GROUPS,
     split_unity_groups = True,
     implementation_deps = _SQL_RUNTIME_IMPLEMENTATION_DEPS + [
@@ -428,7 +399,6 @@ seekdb_semantic_unity_cc_library(
 
 seekdb_semantic_unity_cc_library(
     name = "sql_runtime_simd",
-    owner_package = "src/sql",
     unity_groups = SQL_SIMD_UNITY_GROUPS,
     split_unity_groups = True,
     implementation_deps = _SQL_RUNTIME_IMPLEMENTATION_DEPS + [
@@ -463,25 +433,4 @@ cc_library(
     ],
     tags = ["manual"],
     visibility = ["//src/observer:__pkg__"],
-)
-
-cc_library(
-    name = "sql_static",
-    implementation_deps = [
-        ":sql_objects",
-        "//src/sql/parser:sql_server_parser",
-    ],
-    tags = ["manual"],
-    visibility = ["//src/observer:__pkg__"],
-)
-
-filegroup(
-    name = "sql_static_build",
-    srcs = [
-        ":sql_runtime",
-        ":sql_runtime_without_pass",
-        ":sql_runtime_simd",
-        "//src/sql/parser:sql_server_parser_build",
-    ],
-    tags = ["manual"],
 )

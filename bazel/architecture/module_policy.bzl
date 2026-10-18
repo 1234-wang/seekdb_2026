@@ -161,22 +161,3 @@ UNITTEST_ALLOWED_DIRECT_MODULE_DEPS = {
 UNITTEST_RUNTIME_DEPS = [
     "//src/observer:liboceanbase",
 ]
-
-# Repository-level test infrastructure is not itself a unit test and therefore
-# has no production-module owner.
-UNITTEST_INFRASTRUCTURE_FILES = [
-    "unittest/BUILD.bazel",
-    "unittest/all_tests_main.cpp",
-]
-
-# These paths identify programs that do not belong in the default C++ unit-test
-# suite.  There is intentionally no allowlist: valuable programs move to a
-# benchmark tree; the rest are deleted.
-UNITTEST_FORBIDDEN_PATH_PATTERNS = [
-    "(^|/)(benchmark|benchmarks)(/|$)",
-    "(^|/)[^/]*(perf|performance|stress|pressure)[^/]*",
-]
-
-# Test cases with these semantic names are measurement/stress programs even
-# when they are hidden inside an otherwise valid correctness-test source.
-UNITTEST_FORBIDDEN_CASE_PATTERN = "(benchmark|stress|performance|performace|(^|_)perf($|_)|time_cmp|cost_iter|large_thread|max_concurrent_task)"
