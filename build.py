@@ -123,7 +123,7 @@ def main(arguments: List[str]) -> int:
         allow_abbrev=False,
     )
     parser.add_argument("--build-dir", type=Path, default=Path("build"),
-                        help="directory for output links; Bazel manages the actual build directory")
+                        help="directory for build state and output links (default: build)")
     parser.add_argument("--launcher-cache-dir", type=Path, default=_cache_directory())
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     options, startup_options = parser.parse_known_args(arguments)
@@ -160,7 +160,8 @@ def main(arguments: List[str]) -> int:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write("\n".join(lines) + "\n")
         return subprocess.run([
-            str(bazel), "--bazelrc=" + name,
+            str(bazel), "--output_base=" + str(build_directory / "output-base"),
+            "--bazelrc=" + name,
         ] + startup_options + options.arguments, cwd=root).returncode
     finally:
         Path(name).unlink()
