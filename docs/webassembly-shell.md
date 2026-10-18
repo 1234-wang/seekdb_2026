@@ -160,9 +160,9 @@ the engine or reading live source files:
 
 ```sh
 ./build.py build --config=wasm --jobs=3 seekdb
-python3 tools/wasm/release-shell.py package build_wasm_release \
+python3 package/wasm/release-shell.py package build_wasm_release \
   --build-dir build/bin/src/wasm/dist
-python3 tools/wasm/release-shell.py serve build_wasm_release --port 0
+python3 package/wasm/release-shell.py serve build_wasm_release --port 0
 ```
 
 Open the printed loopback URL. This preview serves the packaged snapshot and uses

@@ -1,8 +1,0 @@
-filegroup(
-    name = "rust_build_tools",
-    srcs = [
-        "prepare-rust.py",
-        "//deps/init/wasm:dependencies.json",
-    ],
-    visibility = ["//rust:__pkg__"],
-)

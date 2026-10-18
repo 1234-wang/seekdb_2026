@@ -27,7 +27,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 
-DEVELOPMENT = runpy.run_path(str(Path(__file__).with_name("serve-shell.py")))
+DEVELOPMENT = runpy.run_path(str(Path(__file__).resolve().parents[2] / "tools/wasm/serve-shell.py"))
 ASSETS = DEVELOPMENT["SOURCE_ASSETS"] + DEVELOPMENT["GENERATED_ASSETS"]
 CONTENT_TYPES = DEVELOPMENT["ShellHandler"].extensions_map
 IMMUTABLE = "public, max-age=31536000, immutable"

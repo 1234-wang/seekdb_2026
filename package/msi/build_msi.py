@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("seekdb_package", ROOT / "package/package.py")
 package = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(package)
@@ -99,8 +99,8 @@ def main():
         subprocess.run(["wix", "build", "-arch", "x64", "-ext", "WixToolset.UI.wixext",
                         "-d", "Version=" + options.version, "-d", "License=" + str(license_file),
                         "-d", "Configurator=" + ("1" if configurator else "0"),
-                        str(ROOT / "tools/windows/installer/seekdb.wxs"),
-                        str(ROOT / "tools/windows/installer/wix_launch_configurator.wxs"), str(work / "payload.wxs"),
+                        str(ROOT / "package/msi/seekdb.wxs"),
+                        str(ROOT / "package/msi/wix_launch_configurator.wxs"), str(work / "payload.wxs"),
                         "-o", str(output / ("seekdb-%s-%s-x64.msi" % (options.version, options.release)))], check=True)
 
 

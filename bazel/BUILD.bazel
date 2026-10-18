@@ -65,3 +65,9 @@ config_setting(
     flag_values = {":rpm_logging": "true"},
     visibility = ["//visibility:public"],
 )
+
+filegroup(
+    name = "wasm_rust_build_tools",
+    srcs = ["prepare_wasm_rust.py", "//deps/init/wasm:dependencies.json"],
+    visibility = ["//rust:__pkg__"],
+)

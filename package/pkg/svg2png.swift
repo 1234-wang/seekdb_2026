@@ -1,6 +1,6 @@
 // Build-time helper: rasterize an SVG to PNG at a requested pixel size.
 // Used by seekdb-pkg-build.sh to produce AppIcon.iconset entries from
-// tools/macpkg/assets/original.svg.
+// package/pkg/assets/original.svg.
 
 import AppKit
 import Foundation

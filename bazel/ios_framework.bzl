@@ -86,7 +86,7 @@ def seekdb_ios_framework():
             "//bazel/third_party:ios_base_metadata",
             "//bazel/third_party:ios_base_licenses",
         ],
-        tools = ["//tools/ios:package_framework.py"],
+        tools = ["//package/ios:package_framework.py"],
         outs = [
             "framework/SeekDB.framework/Headers/seekdb.h",
             "framework/SeekDB.framework/Info.plist",
@@ -94,7 +94,7 @@ def seekdb_ios_framework():
             "framework/SeekDB.framework/rust-Cargo.lock",
             "framework/SeekDB.framework/Licenses.tar",
         ],
-        cmd = 'python3 "$(location //tools/ios:package_framework.py)"' +
+        cmd = 'python3 "$(location //package/ios:package_framework.py)"' +
               ' --binary "$(location :_ios_framework_link)" --config "$(location :_ios_build_config)"' +
               ' --header "$(location ios/driver/seekdb.h)" --exports "$(location ios/driver/exports.txt)"' +
               ' --link-inputs "$(location :_ios_framework_link_manifest)"' +

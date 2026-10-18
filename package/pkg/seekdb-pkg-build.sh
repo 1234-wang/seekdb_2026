@@ -19,7 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOPDIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-MACPKG_DIR="$TOPDIR/tools/macpkg"
+MACPKG_DIR="$TOPDIR/package/pkg"
 
 SEEKDB_BUILD="${SEEKDB_BUILD:-$TOPDIR/build/bin}"
 

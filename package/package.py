@@ -68,11 +68,11 @@ def stage(destination, artifacts, dependencies, layout, version, release, compon
     config.mkdir(parents=True, exist_ok=True)
     (config / "ob_system_variable_init.json").write_text(json.dumps(clear_links(variables), indent=2) + "\n")
     if layout == "windows":
-        copy(ROOT / "tools/windows/installer/seekdb.cnf", config / "seekdb.cnf")
+        copy(ROOT / "package/msi/seekdb.cnf", config / "seekdb.cnf")
         return
     for script in ("import_time_zone_info.py", "import_srs_data.py"):
         copy(ROOT / "tools" / script, helpers / script, True)
-    profile = ROOT / ("package/linux/profile" if layout == "linux" else "tools/macpkg/launchd/profile")
+    profile = ROOT / ("package/linux/profile" if layout == "linux" else "package/pkg/launchd/profile")
     copy(profile / "seekdb.cnf", config / "seekdb.cnf")
     if layout == "linux":
         copy(dependencies / "home/admin/oceanbase/bin/obshell", binary / "obshell", True)
