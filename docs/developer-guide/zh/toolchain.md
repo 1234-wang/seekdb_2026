@@ -100,11 +100,17 @@ brew install zstd lz4 utf8proc thrift re2 brotli
 
 ## Windows 宿主机依赖
 
-安装 Python 3 和 Visual Studio 2022 Build Tools，并选择 **使用 C++ 的桌面开发** 工作负载。随后初始化仓库管理的 LLVM、win_flex_bison、OpenSSL 和第三方库：
+安装 Python 3、Visual Studio 2022 Build Tools（选择 **使用 C++ 的桌面开发** 工作负载）和 [LLVM 19.1.7](https://github.com/llvm/llvm-project/releases/tag/llvmorg-19.1.7)。MSVC 14.44 要求 Clang 19 或更新版本，SDK 内附的 LLVM 18 不兼容这个 MSVC 版本。
 
-```powershell
-python .\build.py init
+打开 **x64 Native Tools Command Prompt for VS 2022**，将 `BAZEL_LLVM` 指向 LLVM 安装目录，再初始化解析器工具和依赖 SDK：
+
+```bat
+set "BAZEL_LLVM=C:\Program Files\LLVM"
+python build.py init
+python build.py build //src/observer:seekdb
 ```
+
+Bazel 会选择 clang-cl，产物是 `build_bazel\bin\src\observer\seekdb.exe`。
 
 .NET 8 和 WiX v4 是可选依赖，仅配置器和 MSI 打包流程需要。
 

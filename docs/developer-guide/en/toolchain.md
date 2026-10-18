@@ -78,11 +78,17 @@ See [Homebrew optimization](homebrew.md) if a mirror is required.
 
 ## Windows host packages
 
-Install Python 3 and Visual Studio 2022 Build Tools with the **Desktop development with C++** workload. Then initialize the repository-managed LLVM, win_flex_bison, OpenSSL, and third-party libraries:
+Install Python 3, Visual Studio 2022 Build Tools with the **Desktop development with C++** workload, and [LLVM 19.1.7](https://github.com/llvm/llvm-project/releases/tag/llvmorg-19.1.7). MSVC 14.44 requires Clang 19 or newer; the SDK's bundled LLVM 18 does not support that MSVC version.
 
-```powershell
-python .\build.py init
+Open **x64 Native Tools Command Prompt for VS 2022**, point `BAZEL_LLVM` to the LLVM installation, and initialize the parser tools and dependency SDK:
+
+```bat
+set "BAZEL_LLVM=C:\Program Files\LLVM"
+python build.py init
+python build.py build //src/observer:seekdb
 ```
+
+Bazel selects clang-cl automatically. The executable is `build_bazel\bin\src\observer\seekdb.exe`.
 
 .NET 8 and WiX v4 are optional and are required only for the configurator and MSI packaging path.
 

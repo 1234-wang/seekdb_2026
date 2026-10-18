@@ -38,6 +38,11 @@ def arch_copts():
 
 def platform_local_defines():
     return select({
+        "@platforms//os:windows": [
+            "WIN32_LEAN_AND_MEAN", "NOMINMAX", "_ITERATOR_DEBUG_LEVEL=0",
+            "_USE_MATH_DEFINES", "YY_NO_UNISTD_H",
+            "strncasecmp=_strnicmp", "strcasecmp=_stricmp",
+        ],
         "@platforms//os:emscripten": [
             "_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION",
             "_XOPEN_SOURCE=700",

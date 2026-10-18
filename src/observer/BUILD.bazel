@@ -316,7 +316,16 @@ _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS = [
 _OBSERVER_MAIN_OBJECT_TARGETS = [
     ":_observer_main_ob_main_0_objects",
     ":_observer_main_ob_main_1_objects",
-]
+] + select({
+    "@platforms//os:windows": [":windows_service"],
+    "//conditions:default": [],
+})
+
+cc_library(
+    name = "windows_service",
+    srcs = ["ob_win_service.cpp", "ob_win_service.h"],
+    target_compatible_with = ["@platforms//os:windows"],
+)
 
 version_source(
     name = "_generate_ob_version",
@@ -395,6 +404,7 @@ _SEEKDB_ORDERED_LINK_FILES = [
     "//bazel:sanity_enabled": ["//deps/external:jemalloc_archive"],
     "//conditions:default": [],
 }) + select({
+    "@platforms//os:windows": ["@seekdb_3rd_native//:server_libraries"],
     "@platforms//os:android": observer_third_party_link_files("android"),
     "@platforms//os:macos": observer_third_party_link_files("macos"),
     "//bazel:linux_arm64": observer_third_party_link_files("linux_arm64"),
@@ -410,6 +420,7 @@ _SEEKDB_EXTRA_LINK_INPUTS = select({
 })
 
 _SEEKDB_SYSTEM_LINKOPTS = select({
+    "@platforms//os:windows": ["ws2_32.lib", "crypt32.lib", "bcrypt.lib", "userenv.lib", "wldap32.lib", "advapi32.lib", "synchronization.lib", "ntdll.lib"],
     "@platforms//os:android": ["-ldl", "-lm", "-llog", "-landroid", "-latomic"],
     "@platforms//os:macos": [
         "-lpthread",
@@ -426,6 +437,7 @@ _SEEKDB_SYSTEM_LINKOPTS = select({
 })
 
 _SEEKDB_EXECUTABLE_LINKOPTS = select({
+    "@platforms//os:windows": ["/INCREMENTAL:NO", "/OPT:REF", "/OPT:ICF"],
     "@platforms//os:android": ["-pie", "-fopenmp", "-static-openmp", "-Wl,--gc-sections", "-Wl,--build-id=sha1"],
     "@platforms//os:macos": [
         "-Wl,-dead_strip",
@@ -480,8 +492,14 @@ final_link(
         "//bazel:linux_package_runtime": ["-Wl,-rpath,$ORIGIN/../libexec/seekdb/lib"],
         "//conditions:default": [],
     }),
-    out = "seekdb",
+    out = select({"@platforms//os:windows": "seekdb.exe", "//conditions:default": "seekdb"}),
     tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "seekdb",
+    actual = ":seekdb_link",
     visibility = ["//visibility:public"],
 )
 

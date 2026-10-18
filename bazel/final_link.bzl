@@ -78,11 +78,13 @@ def _static_inputs_from_deps(targets):
 def _file_paths(files):
     return [file.path for file in files]
 
-def _archive_args(files, apple, alwayslink):
+def _archive_args(files, platform, alwayslink):
     args = []
     for file in files:
-        if file.path in alwayslink:
-            args.extend(["-Wl,-force_load," + file.path] if apple else [
+        if platform.os == "windows":
+            args.append("/WHOLEARCHIVE:" + file.path if file.path in alwayslink else file.path)
+        elif file.path in alwayslink:
+            args.extend(["-Wl,-force_load," + file.path] if platform.apple else [
                 "-Wl,--whole-archive", file.path, "-Wl,--no-whole-archive",
             ])
         else:
@@ -108,22 +110,23 @@ def _dependency_link_metadata(targets):
                 alwayslink[archive.path] = True
     return flags, inputs, alwayslink
 
-def _archive_group(files, apple, whole = False, alwayslink = {}):
+def _archive_group(files, platform, whole = False, alwayslink = {}):
     if not files:
         return []
     paths = _file_paths(files)
-    if apple:
+    if platform.os == "windows":
+        return ["/WHOLEARCHIVE:" + path for path in paths] if whole else _archive_args(files, platform, alwayslink)
+    if platform.apple:
         # ld64 searches archives repeatedly; force_load retains every object.
-        return ["-Wl,-force_load," + path for path in paths] if whole else _archive_args(files, apple, alwayslink)
+        return ["-Wl,-force_load," + path for path in paths] if whole else _archive_args(files, platform, alwayslink)
     start, end = ("--whole-archive", "--no-whole-archive") if whole else ("--start-group", "--end-group")
-    return ["-Wl," + start] + (paths if whole else _archive_args(files, apple, alwayslink)) + ["-Wl," + end]
+    return ["-Wl," + start] + (paths if whole else _archive_args(files, platform, alwayslink)) + ["-Wl," + end]
 
 def _final_link_impl(ctx):
     cc_toolchain = find_cpp_toolchain(ctx)
     platform = target_platform(ctx)
-    is_apple = platform.apple
     is_wasm = platform.os == "emscripten"
-    needs_static_cpp_runtime = not is_apple and not is_wasm
+    needs_static_cpp_runtime = platform.os in ["linux", "android"]
     requested_features = ctx.features
     if needs_static_cpp_runtime and "static_link_cpp_runtimes" not in requested_features:
         requested_features = requested_features + ["static_link_cpp_runtimes"]
@@ -182,11 +185,11 @@ def _final_link_impl(ctx):
         fail("%s has no object or archive inputs" % ctx.label)
 
     ordered_link_args = _file_paths(direct_objects)
-    ordered_link_args.extend(_archive_group(group_inputs, is_apple, alwayslink = alwayslink))
-    ordered_link_args.extend(_archive_group(whole_group_inputs, is_apple, whole = True))
-    ordered_link_args.extend(_archive_args(tail_inputs, is_apple, alwayslink))
+    ordered_link_args.extend(_archive_group(group_inputs, platform, alwayslink = alwayslink))
+    ordered_link_args.extend(_archive_group(whole_group_inputs, platform, whole = True))
+    ordered_link_args.extend(_archive_args(tail_inputs, platform, alwayslink))
     ordered_link_args.extend(_file_paths(ordered_link_files))
-    ordered_link_args.extend(_archive_group(sdk_inputs, is_apple, alwayslink = alwayslink))
+    ordered_link_args.extend(_archive_group(sdk_inputs, platform, alwayslink = alwayslink))
     ordered_link_args.extend(_file_paths(static_cpp_runtime_inputs))
     ordered_link_args.extend(dependency_flags)
     ordered_link_args.extend([
@@ -194,7 +197,7 @@ def _final_link_impl(ctx):
         for option in ctx.attr.linkopts
     ])
 
-    output = ctx.outputs.out
+    output = ctx.actions.declare_file(ctx.attr.out)
     action_name = (
         CPP_LINK_DYNAMIC_LIBRARY_ACTION_NAME
         if ctx.attr.shared
@@ -229,6 +232,9 @@ def _final_link_impl(ctx):
 
     args = ctx.actions.args()
     args.add_all(command_line)
+    if platform.os == "windows":
+        args.use_param_file("@%s", use_always = True)
+        args.set_param_file_format("multiline")
     ctx.actions.run(
         executable = tool,
         arguments = [args],
@@ -266,7 +272,7 @@ final_link = rule(
         "ordered_link_files": attr.label_list(allow_files = True),
         "extra_inputs": attr.label_list(allow_files = True),
         "linkopts": attr.string_list(),
-        "out": attr.output(mandatory = True),
+        "out": attr.string(mandatory = True),
         "side_outputs": attr.output_list(),
         "shared": attr.bool(default = False),
     } | CC_TOOLCHAIN_ATTRS | PLATFORM_ATTRS,

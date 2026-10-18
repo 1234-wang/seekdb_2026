@@ -568,7 +568,10 @@ cc_library(
         "lib/file/ob_string_util.h",
         "lib/file/wasm_file.h",
     ],
-    deps = [],
+    deps = select({
+        "@platforms//os:windows": [":oblib_foundation"],
+        "//conditions:default": [],
+    }),
     includes = ["."],
     features = ["layering_check"],
     tags = ["manual"],
@@ -1105,9 +1108,17 @@ localized_partial_link(
 )
 
 cc_import(
-    name = "_zstd_1_3_8_objects",
+    name = "_zstd_1_3_8_unix_objects",
     objects = [":_zstd_1_3_8_partial_link_object"],
     pic_objects = [":_zstd_1_3_8_partial_link_object"],
+)
+
+cc_library(
+    name = "_zstd_1_3_8_objects",
+    deps = select({
+        "@platforms//os:windows": [":_zstd_1_3_8_c_impl", ":_zstd_1_3_8_cxx_impl"],
+        "//conditions:default": [":_zstd_1_3_8_unix_objects"],
+    }),
 )
 
 cc_library(

@@ -31,8 +31,14 @@ def _cc_library_impl(
         visibility = visibility,
         additional_compiler_inputs = additional_compiler_inputs + platform_compiler_inputs() + sanity.additional_compiler_inputs,
         copts = copts + arch_copts() + platform_copts() + sanity.copts,
-        cxxopts = cxxopts + sanity.cxxopts,
-        implementation_deps = implementation_deps + sanity.implementation_deps,
+        cxxopts = cxxopts + sanity.cxxopts + select({
+            "@platforms//os:windows": ["/std:c++20"],
+            "//conditions:default": [],
+        }),
+        implementation_deps = implementation_deps + sanity.implementation_deps + select({
+            "@platforms//os:windows": ["//bazel/third_party:windows_headers"],
+            "//conditions:default": [],
+        }),
         linkstatic = True,
         local_defines = local_defines + logging_defines() + platform_local_defines() + sanity.local_defines,
         target_compatible_with = target_compatible_with + sanity.target_compatible_with,

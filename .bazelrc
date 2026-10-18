@@ -6,16 +6,23 @@ build --aspects=//bazel/architecture:module_dependency_aspect.bzl%module_depende
 build --experimental_disk_cache_gc_max_size=50G
 build --experimental_disk_cache_gc_max_age=14d
 build --experimental_disk_cache_gc_idle_delay=1m
+build --force_pic
 build --enable_platform_specific_config
 # Release-compatible O2 is the default. O1 uses fastbuild only as its output
 # configuration; the explicit copt also makes O1 portable to the native macOS
 # toolchain, whose fastbuild flags are not repository-owned.
 build --compilation_mode=opt
-build --force_pic
 # Allow developers to modify build outputs in place.
 build --experimental_writable_outputs
 # Windows generators use the installed SDK/Python utility paths.
 build:windows --action_env=PATH
+build:windows --repo_env=BAZEL_WIN32_WINNT=/D_WIN32_WINNT=0x0A00
+build:windows --platforms=//bazel/platforms:windows_x86_64
+build:windows --host_platform=//bazel/platforms:windows_x86_64
+build:windows --extra_toolchains=@local_config_cc//:cc-toolchain-x64_windows-clang-cl
+build:windows --noforce_pic
+build:windows --features=compiler_param_file
+build:windows --features=-static_link_msvcrt
 build:O1 --compilation_mode=fastbuild
 build:O1 --copt=-O1
 build:O2 --compilation_mode=opt

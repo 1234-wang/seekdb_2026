@@ -27,12 +27,16 @@ SDK_HEADERS = {
     "openssl_headers": _headers("openssl"),
     "protobuf_c_headers": _headers("protobuf-c"),
     "protobuf_cpp_headers": _headers("google/protobuf"),
-    "grpc_headers": {"hdrs": ["include/grpc/**/*.h", "include/grpc++/**/*.h", "include/grpcpp/**/*.h"], "includes": ["include"]},
+    "grpc_headers": {
+        "hdrs": ["include/" + directory + "/**/*." + extension for directory in ["grpc", "grpc++", "grpcpp"] for extension in _HEADER_EXTENSIONS],
+        "includes": ["include"],
+    },
     "rapidjson_headers": _headers("rapidjson"),
     "roaring_headers": _headers("roaring"),
     "s2_headers": _headers("s2"),
     "vsag_headers": _headers("vsag"),
     "zlib_headers": {"hdrs": ["include/zconf.h", "include/zlib.h"], "includes": ["include"]},
+    "windows_headers": {"hdrs": ["include/pthread*.h", "include/_ptw32.h", "include/sched.h", "include/semaphore.h", "include/dirent.h"], "includes": ["include"]},
 }
 SDK_IMPORTS = {
     "gtest_archive": {"static_library": "lib/libgtest.a"},
@@ -81,14 +85,52 @@ NATIVE_LINK_FILES = [
     "lib/libaio.so.1.0.1",
 ]
 
-def sdk_targets():
+_WINDOWS_LIBRARIES = {
+    "libcrypto": "openssl/libcrypto.lib",
+    "libssl": "openssl/libssl.lib",
+    "zlib": "lib/zlib.lib",
+    "libxml2": "lib/libxml2.lib",
+    "protobuf_c": "lib/protobuf-c.lib",
+    "curl": "lib/libcurl.lib",
+    "icu_common": "lib/icuuc.lib",
+    "icu_i18n": "lib/icuin.lib",
+    "icu_data": "lib/icudt.lib",
+}
+
+def sdk_targets(windows = False):
     native.exports_files(HOST_FILES + native.glob(["lib/**/*.a", "lib/**/*.so", "lib/**/*.so.*", "lib64/**/*.a", "lib64/**/*.so", "lib64/**/*.so.*"], allow_empty = True))
     for name, attributes in SDK_HEADERS.items():
+        if windows and name in ["absl_headers", "protobuf_cpp_headers"]:
+            attributes = attributes | {"defines": ["ABSL_CONSUME_DLL" if name == "absl_headers" else "PROTOBUF_USE_DLLS"]}
+        if windows and name == "protobuf_cpp_headers":
+            attributes = attributes | {"hdrs": attributes["hdrs"] + ["include/utf8_range.h", "include/utf8_validity.h"]}
         cc_library(name = name, **(attributes | {"hdrs": native.glob(attributes["hdrs"], allow_empty = True)}))
     for name, attributes in SDK_IMPORTS.items():
+        if windows:
+            if name not in _WINDOWS_LIBRARIES:
+                continue
+            attributes = attributes | {"static_library": _WINDOWS_LIBRARIES[name]}
         cc_import(name = name, **(attributes | ({"hdrs": native.glob(attributes["hdrs"], allow_empty = True)} if "hdrs" in attributes else {})))
     for name, attributes in SDK_FILEGROUPS.items():
         native.filegroup(name = name, **(attributes | {"srcs": native.glob(attributes["srcs"], allow_empty = True)}))
+    if windows:
+        native.exports_files(["protoc/protoc.exe", "grpc_tools/grpc_cpp_plugin.exe"])
+        native.filegroup(name = "protoc_runtime", srcs = native.glob(["protoc/*.dll", "grpc_tools/*.dll"]))
+        native.filegroup(
+            name = "server_libraries",
+            srcs = list(_WINDOWS_LIBRARIES.values()) + [
+                "lib/s2.lib", "lib/abseil_dll.lib", "lib/roaring.lib", "lib/pthreadVC3.lib",
+                "lib/grpc++.lib", "lib/grpc.lib", "lib/gpr.lib", "lib/libprotobuf.lib",
+                "lib/cares.lib", "lib/re2.lib", "lib/address_sorting.lib",
+                "lib/libupb.lib", "lib/utf8_range.lib", "lib/utf8_validity.lib",
+            ] + native.glob([
+                "lib/absl_*.lib", "lib/upb_*.lib",
+                "devtools/lib/clang/*/lib/windows/clang_rt.builtins-x86_64.lib",
+            ]) + ["vsag/" + name + ".lib" for name in [
+                "cpuinfo", "simd", "vsag_static", "diskann", "openblas", "libomp",
+                "antlr4-runtime-static", "antlr4-autogen", "fmt",
+            ]],
+        )
 
 _SOURCE_HEADERS = {
     "absl_headers": ("abseil", "abseil"),
@@ -102,6 +144,7 @@ def sdk_aliases():
         name = "base_libraries",
         deps = [":libcrypto", ":libssl", ":libxml2", ":protobuf_c"] + select({
             "@platforms//os:emscripten": [],
+            "@platforms//os:windows": [":curl", ":icu_common", ":icu_data", ":icu_i18n", ":zlib"],
             "//conditions:default": [":curl", ":icu_common", ":icu_data", ":icu_i18n", ":lzma", ":zlib"],
         }),
     )

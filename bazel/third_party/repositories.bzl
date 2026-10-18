@@ -1,6 +1,31 @@
 """Expose seekdb's bootstrapped third-party SDK as a Bazel repository."""
 
+def _windows_sdk(repository_ctx):
+    sdk = str(repository_ctx.workspace_root) + "/deps/3rd"
+    headers = {}
+    for directory in ["vcpkg/x64-windows/include", "openssl/include", "vsag/include"]:
+        for child in repository_ctx.path(sdk + "/" + directory).readdir():
+            headers[child.basename] = child
+    for name, path in headers.items():
+        repository_ctx.symlink(path, "include/" + name)
+    for source, destination in {
+        "vcpkg/x64-windows/lib": "lib",
+        "vcpkg/x64-windows/tools/protobuf": "protoc",
+        "vcpkg/x64-windows/tools/grpc": "grpc_tools",
+        "openssl/lib/VC/x64/MD": "openssl",
+        "vsag/lib": "vsag",
+        "tools/llvm18": "devtools",
+    }.items():
+        repository_ctx.symlink(sdk + "/" + source, destination)
+    repository_ctx.file("BUILD.bazel", '''load("@seekdb//bazel/third_party:targets.bzl", "sdk_targets")
+package(default_visibility = ["//visibility:public"])
+sdk_targets(windows = True)
+''', executable = False)
+
 def _seekdb_third_party_headers_repository_impl(repository_ctx):
+    if repository_ctx.attr.platform == "native" and repository_ctx.os.name.startswith("windows"):
+        _windows_sdk(repository_ctx)
+        return
     sdk = str(repository_ctx.workspace_root) + "/deps/3rd/usr/local/oceanbase"
     headers = sdk + "/deps/devel/include"
     libraries = sdk + "/deps/devel/lib"
