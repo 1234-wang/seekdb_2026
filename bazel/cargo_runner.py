@@ -40,7 +40,8 @@ with tarfile.open(args.vendor) as archive:
         destination.parent.mkdir(parents=True, exist_ok=True)
         with archive.extractfile(member) as source, destination.open("wb") as output:
             shutil.copyfileobj(source, output)
-        destination.chmod(member.mode)
+        # Windows cannot remove read-only files when Bazel retries the action.
+        destination.chmod(member.mode | 0o200)
 cargo_home = work / "cargo-home"
 cargo_home.mkdir()
 (cargo_home / "config.toml").write_text(
