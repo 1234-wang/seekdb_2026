@@ -16,7 +16,7 @@ Set the installed NDK path, initialize Android dependencies, then build with Baz
 ```bash
 export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.3.13750724"
 python3 build.py init --android
-python3 build.py build --config=android //src/observer:seekdb
+python3 build.py build --config=android seekdb
 ```
 
 `init --android` prepares host tools in `deps/3rd` and Android dependencies in

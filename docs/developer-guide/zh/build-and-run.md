@@ -17,7 +17,7 @@ cd seekdb
 
 ```bash
 ./build.py init
-./build.py build //src/observer:seekdb
+./build.py build seekdb
 ```
 
 `init` 准备平台依赖，首次编译或依赖定义变化后执行。后续增量编译只需重复 `build` 命令。产物位于 `build/bin/src/observer/seekdb`。
@@ -29,7 +29,7 @@ Windows 使用 `python build.py`，命令参数相同。C++ 测试目标参见[�
 Bazel 默认按本机 CPU 数量设置并发。Bazel 参数放在命令之后：
 
 ```bash
-./build.py build --jobs=16 //src/observer:seekdb
+./build.py build --jobs=16 seekdb
 ```
 
 ## 使用远程 C++ 编译
@@ -37,7 +37,7 @@ Bazel 默认按本机 CPU 数量设置并发。Bazel 参数放在命令之后：
 指定 REAPI 服务地址和并发数：
 
 ```bash
-./build.py build --config=remote --remote_executor=grpc://HOST:PORT --jobs=100 //src/observer:seekdb
+./build.py build --config=remote --remote_executor=grpc://HOST:PORT --jobs=100 seekdb
 ```
 
 C++ 编译在远端执行。Cargo、生成器和链接仍在本机运行。如果服务需要 SSH 隧道，先单独建立隧道。
@@ -47,7 +47,7 @@ C++ 编译在远端执行。Cargo、生成器和链接仍在本机运行。如�
 Linux 上通过以下命令启用 Sanity 插桩：
 
 ```bash
-./build.py build --sanity=true //src/observer:seekdb
+./build.py build --sanity=true seekdb
 ```
 
 产物路径与普通构建相同。如需保留独立的 Sanity 构建目录，在 `build` 前加 `--build-dir build_sanity`，产物将位于 `build_sanity/bin/src/observer/seekdb`。
@@ -59,14 +59,14 @@ Bazel 二进制和默认的构建结果缓存可供不同代码目录共用。�
 指定 Bazel 二进制缓存目录时，将 `--launcher-cache-dir PATH` 放在命令前。指定构建结果或依赖下载缓存目录时，将 `--disk_cache=PATH` 或 `--repository_cache=PATH` 放在命令后。例如：
 
 ```bash
-./build.py --launcher-cache-dir /data/bazel build --disk_cache=/data/bazel-actions //src/observer:seekdb
+./build.py --launcher-cache-dir /data/bazel build --disk_cache=/data/bazel-actions seekdb
 ```
 
 如需更改依赖下载设置，在命令后使用 Bazel 的 `--registry=URL` 或 `--downloader_config=PATH`。
 
 ## 为其他平台编译
 
-按 [Android](android.md)、[iOS](ios.md) 或 [WebAssembly](webassembly.md) 指南准备依赖并选择目标。Android 使用上面的服务端目标，iOS 生成 framework，WebAssembly 生成引擎和 SQL shell。
+各平台统一使用 `seekdb` 目标，通过 `--config=android`、`--config=ios`、`--config=ios-simulator` 或 `--config=wasm` 选择平台。不指定时构建本机程序。依赖准备方式见 [Android](android.md)、[iOS](ios.md) 和 [WebAssembly](webassembly.md) 指南。Android 生成服务端程序，iOS 生成 framework，WebAssembly 生成引擎和 SQL shell；别名不改变各平台的产物路径。
 
 ## 维护构建声明
 

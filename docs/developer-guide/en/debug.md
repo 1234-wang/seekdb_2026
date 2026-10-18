@@ -10,7 +10,7 @@ The default Bazel build retains debug information while compiling with `-O2` pro
 
 ```bash
 ./build.py init
-./build.py build //src/observer:seekdb
+./build.py build seekdb
 ```
 
 The binary is `build/bin/src/observer/seekdb`. Record `seekdb -V` with any core dump or debug report so the binary revision and build flags can be matched. Optimized code may inline functions or report variables as optimized out; use logs or a narrower unit test when stepping through optimized code is impractical.

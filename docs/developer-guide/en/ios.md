@@ -16,7 +16,7 @@ Initialize the dependencies, then build the arm64 device framework with Bazel:
 ```bash
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ./build.py init --ios
-./build.py build --config=ios //src/observer:seekdb_ios_framework
+./build.py build --config=ios seekdb
 ```
 
 `init --ios` prepares the host tools and Rust iOS target, and builds the base libraries into `deps/ios/iphoneos/devel`. Bazel builds the remaining pinned source dependencies through `//bazel/sdk_sources:source_sdk`. Use `build` directly for subsequent builds; initialization reuses dependencies that are still current. The project's `.bazelversion` pins Bazel, which `build.py` downloads on first use.
@@ -25,7 +25,7 @@ The arm64 simulator uses a separate dependency directory and configuration:
 
 ```bash
 ./build.py init --ios --simulator
-./build.py build --config=ios-simulator //src/observer:seekdb_ios_framework
+./build.py build --config=ios-simulator seekdb
 ```
 
 The minimum deployment version is iOS 18.0. Both configurations compile the engine directly with the Apple C++ toolchain and disable physical standby support.

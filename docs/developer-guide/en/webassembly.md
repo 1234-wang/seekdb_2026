@@ -28,7 +28,7 @@ python3 tools/wasm/build-deps.py "$SEEKDB_WASM_DEPS"
 python3 tools/wasm/prepare-headers.py \
   --source deps/3rd/usr/local/oceanbase/deps/devel/include \
   --include "$SEEKDB_WASM_DEPS/include" --target-prefix "$SEEKDB_WASM_DEPS"
-python3 build.py build --config=wasm //src/wasm:database
+python3 build.py build --config=wasm seekdb
 ```
 
 `init` prepares host tools and headers; `build-deps.py` builds Wasm third-party libraries from pinned sources. Once dependencies are ready, repeat only the final Bazel command with these environment variables set. Bazel builds the Rust libraries; Wasm-specific patches apply only to private dependency copies in the build directory. SDK selection follows the Bazel target platform; `SEEKDB_WASM_DEPS` only locates the Wasm SDK and does not affect native or Android builds.

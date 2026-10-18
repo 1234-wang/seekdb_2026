@@ -17,7 +17,7 @@ The repository's `build.py` downloads the Bazel version pinned in `.bazelversion
 
 ```bash
 ./build.py init
-./build.py build //src/observer:seekdb
+./build.py build seekdb
 ```
 
 `init` prepares platform dependencies; run it on the first build or after dependency metadata changes. For incremental builds, repeat only the `build` command. The resulting binary is `build/bin/src/observer/seekdb`.
@@ -29,7 +29,7 @@ On Windows, use `python build.py` with the same commands. For C++ test targets, 
 Bazel defaults to the host's CPU count. Put Bazel options after the command:
 
 ```bash
-./build.py build --jobs=16 //src/observer:seekdb
+./build.py build --jobs=16 seekdb
 ```
 
 ## Use remote C++ compilation
@@ -37,7 +37,7 @@ Bazel defaults to the host's CPU count. Put Bazel options after the command:
 Specify your REAPI service address and concurrency:
 
 ```bash
-./build.py build --config=remote --remote_executor=grpc://HOST:PORT --jobs=100 //src/observer:seekdb
+./build.py build --config=remote --remote_executor=grpc://HOST:PORT --jobs=100 seekdb
 ```
 
 C++ compilation runs remotely. Cargo, generators, and linking run locally. If the service requires an SSH tunnel, establish the tunnel separately.
@@ -47,7 +47,7 @@ C++ compilation runs remotely. Cargo, generators, and linking run locally. If th
 On Linux, enable Sanity instrumentation with:
 
 ```bash
-./build.py build --sanity=true //src/observer:seekdb
+./build.py build --sanity=true seekdb
 ```
 
 The binary is written to the same output path. To keep a separate Sanity build directory, place `--build-dir build_sanity` before `build`; its binary will be `build_sanity/bin/src/observer/seekdb`.
@@ -59,14 +59,14 @@ Bazel binaries and the default action cache are shared between checkouts. Their 
 To choose cache locations, put `--launcher-cache-dir PATH` before the command for the Bazel binary cache. Put `--disk_cache=PATH` or `--repository_cache=PATH` after the command for build actions or downloaded dependencies. For example:
 
 ```bash
-./build.py --launcher-cache-dir /data/bazel build --disk_cache=/data/bazel-actions //src/observer:seekdb
+./build.py --launcher-cache-dir /data/bazel build --disk_cache=/data/bazel-actions seekdb
 ```
 
 To change dependency download settings, use Bazel's `--registry=URL` or `--downloader_config=PATH` after the command.
 
 ## Build for another platform
 
-Follow the [Android](android.md), [iOS](ios.md), or [WebAssembly](webassembly.md) guide for dependency setup and target names. Android uses the server target above. iOS builds a framework, and WebAssembly builds an engine and SQL shell.
+Use the `seekdb` target on every platform. Select a platform with `--config=android`, `--config=ios`, `--config=ios-simulator`, or `--config=wasm`; without a platform configuration, the target builds the native program. Follow the [Android](android.md), [iOS](ios.md), or [WebAssembly](webassembly.md) guide to prepare dependencies. Android builds a server program, iOS builds a framework, and WebAssembly builds an engine and SQL shell. The alias preserves each platform's output paths.
 
 ## Maintain build declarations
 

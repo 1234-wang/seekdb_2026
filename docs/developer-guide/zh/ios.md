@@ -16,7 +16,7 @@
 ```bash
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 ./build.py init --ios
-./build.py build --config=ios //src/observer:seekdb_ios_framework
+./build.py build --config=ios seekdb
 ```
 
 `init --ios` 准备宿主工具、Rust iOS target，并编译基础依赖库，安装到 `deps/ios/iphoneos/devel`。其余固定版本源码依赖由 Bazel 的 `//bazel/sdk_sources:source_sdk` 构建。后续编译直接运行 `build`；再次初始化时会复用仍然有效的依赖库。Bazel 版本由项目的 `.bazelversion` 固定，首次使用时由 `build.py` 下载。
@@ -25,7 +25,7 @@ arm64 模拟器使用独立的依赖目录和配置：
 
 ```bash
 ./build.py init --ios --simulator
-./build.py build --config=ios-simulator //src/observer:seekdb_ios_framework
+./build.py build --config=ios-simulator seekdb
 ```
 
 最低部署版本为 iOS 18.0。两种配置均通过 Apple C++ 工具链直接编译引擎，并关闭物理备库功能。

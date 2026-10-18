@@ -69,7 +69,7 @@ def stage_assets(build_dir):
     for name in GENERATED_ASSETS:
         if not (build_dir / name).is_file():
             raise FileNotFoundError(
-                f"Missing {build_dir / name}. Build //src/wasm:database with Bazel, "
+                f"Missing {build_dir / name}. Run ./build.py build --config=wasm seekdb, "
                 "or pass --build-dir with a compatible existing build."
             )
     for name in SOURCE_ASSETS:

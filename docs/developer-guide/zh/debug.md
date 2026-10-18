@@ -10,7 +10,7 @@ title: 调试
 
 ```bash
 ./build.py init
-./build.py build //src/observer:seekdb
+./build.py build seekdb
 ```
 
 二进制文件位于 `build/bin/src/observer/seekdb`。分析 core dump 或提交调试信息时，应同时记录 `seekdb -V`，以便匹配二进制的 revision 和构建参数。优化构建可能内联函数或将变量显示为 optimized out；遇到这类情况时，日志或范围更小的单元测试通常更有效。

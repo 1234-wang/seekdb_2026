@@ -30,7 +30,7 @@ Install the supported toolchain first, then build the Release target:
 
 ```bash
 ./build.py init
-./build.py build //src/observer:seekdb
+./build.py build seekdb
 ```
 
 The seekdb binary is generated at `build/bin/src/observer/seekdb`.

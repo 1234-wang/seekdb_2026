@@ -134,12 +134,12 @@ without OPFS or Web Locks can use Memory only.
 
 ## Build from source
 
-Follow [Build seekdb for WebAssembly](developer-guide/en/webassembly.md) to install the pinned SDK, prepare dependencies and build `//src/wasm:database` with `./build.py`.
+Follow [Build seekdb for WebAssembly](developer-guide/en/webassembly.md) to install the pinned SDK, prepare dependencies and build `seekdb` with `./build.py`.
 
 After changing engine sources, rebuild and serve the generated assets:
 
 ```sh
-./build.py build --config=wasm //src/wasm:database
+./build.py build --config=wasm seekdb
 python3 tools/wasm/serve-shell.py --build-dir build/bin/src/wasm/dist
 ```
 
@@ -159,7 +159,7 @@ generated engine and all shell/API assets from that directory, without rebuildin
 the engine or reading live source files:
 
 ```sh
-./build.py build --config=wasm --jobs=3 //src/wasm:database
+./build.py build --config=wasm --jobs=3 seekdb
 python3 tools/wasm/release-shell.py package build_wasm_release \
   --build-dir build/bin/src/wasm/dist
 python3 tools/wasm/release-shell.py serve build_wasm_release --port 0

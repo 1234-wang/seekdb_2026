@@ -84,7 +84,7 @@ Open **x64 Native Tools Command Prompt for VS 2022** in the repository root and 
 
 ```bat
 python build.py init
-python build.py build //src/observer:seekdb
+python build.py build seekdb
 ```
 
 `build.py` selects clang-cl from `deps\3rd\tools\llvm18`. The executable is `build\bin\src\observer\seekdb.exe`. The build retains `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH` to bypass the compiler version check in newer MSVC standard library headers, for both project C++ and Cargo's C++ bridges.
