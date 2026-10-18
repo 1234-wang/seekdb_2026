@@ -26,11 +26,15 @@ On Windows, use `python build.py` with the same commands. For C++ test targets, 
 
 ## Set build concurrency
 
-Bazel defaults to the host's CPU count. Put Bazel options after the command:
+Bazel defaults to the available host CPU count. When you explicitly set local build concurrency, `build.py` sets both the job limit and the local CPU scheduling budget:
 
 ```bash
-./build.py build --jobs=16 seekdb
+./build.py build -j32 seekdb
 ```
+
+`-j32`, `-j 32`, and `--jobs=32` are equivalent. Only explicit numeric command-line values are synchronized; omitting the option preserves Bazel's automatic defaults. An explicit `--local_resources=cpu=N` overrides this budget. Memory settings are unaffected.
+
+To pass a job option to another tool, use an equals sign, such as `--test_arg=-j32`. Program arguments after `run --` are forwarded unchanged.
 
 ## Use remote C++ compilation
 
@@ -41,6 +45,8 @@ Specify your REAPI service address and concurrency:
 ```
 
 C++ compilation runs remotely. Cargo, generators, and linking run locally. If the service requires an SSH tunnel, establish the tunnel separately.
+
+With `--config=remote` or a nonempty `--remote_executor` on the command line, `--jobs` only controls total concurrency. Bazel still detects the local CPU budget automatically unless you set it separately with `--local_resources=cpu=N`.
 
 ## Build a Sanity binary
 

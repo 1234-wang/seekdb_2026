@@ -14,7 +14,7 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
-from typing import List
+from typing import List, Tuple
 
 
 class BuildError(RuntimeError):
@@ -107,6 +107,30 @@ def _quote(value: str) -> str:
     return '"' + value.replace('"', '\\"') + '"'
 
 
+def _concurrency_options(arguments: List[str]) -> Tuple[List[str], List[str]]:
+    """Normalize -jN and match the CPU budget to an explicit local job count."""
+    if not arguments or arguments[0] not in ("build", "test", "run", "coverage"):
+        return arguments, []
+    separator = arguments.index("--") if "--" in arguments else len(arguments)
+    command_options = [
+        re.sub(r"^-j([0-9]+)$", r"--jobs=\1", argument)
+        for argument in arguments[1:separator]
+    ]
+    arguments = [arguments[0], *command_options, *arguments[separator:]]
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("-j", "--jobs")
+    parser.add_argument("--remote_executor")
+    parser.add_argument("--config", action="append", default=[])
+    options, _ = parser.parse_known_args(command_options)
+    if (
+        options.remote_executor
+        or "remote" in options.config
+        or not re.fullmatch(r"[0-9]+", options.jobs or "")
+    ):
+        return arguments, []
+    return arguments, ["build --local_resources=cpu=" + options.jobs]
+
+
 def main(arguments: List[str]) -> int:
     root = Path(__file__).resolve().parent
     if arguments and arguments[0] == "init":
@@ -114,8 +138,7 @@ def main(arguments: List[str]) -> int:
             sys.executable, str(root / "deps/init/prepare.py"), *arguments[1:],
         ], cwd=root).returncode
 
-    # Parse launcher options only before the Bazel command. Everything after
-    # the command (including `run -- ...`) belongs to Bazel or the program.
+    # Parse launcher options before the command, then handle build concurrency.
     parser = argparse.ArgumentParser(
         description=__doc__,
         usage="%(prog)s [--build-dir PATH] [--launcher-cache-dir PATH] <bazel command> [args]",
@@ -127,6 +150,7 @@ def main(arguments: List[str]) -> int:
     parser.add_argument("--launcher-cache-dir", type=Path, default=_cache_directory())
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     options, startup_options = parser.parse_known_args(arguments)
+    bazel_arguments, concurrency_defaults = _concurrency_options(options.arguments)
     build_directory = (root / options.build_dir.expanduser()).resolve()
     if build_directory == root:
         raise BuildError("--build-dir must not name the workspace root")
@@ -135,8 +159,8 @@ def main(arguments: List[str]) -> int:
     bazel = _ensure_bazel(root, cache, version)
     build_directory.mkdir(parents=True, exist_ok=True)
 
-    # Only machine-specific paths belong here. Build policy lives in .bazelrc;
-    # ordinary Bazel flags on the command line override these defaults.
+    # Build policy lives in .bazelrc; paths and explicit local concurrency go
+    # here. Bazel flags on the command line override these defaults.
     status_command = (
         "python bazel/build_metadata.py status"
         if os.name == "nt" else shlex.join([
@@ -151,6 +175,7 @@ def main(arguments: List[str]) -> int:
         "build --symlink_prefix=" + _quote(build_directory.as_posix() + "/"),
         "build --workspace_status_command=" + _quote(status_command),
     ]
+    lines.extend(concurrency_defaults)
     if os.name == "nt":
         lines.append("build --repo_env=" + _quote(
             "BAZEL_LLVM=" + (root / "deps/3rd/tools/llvm18").resolve().as_posix()
@@ -162,7 +187,7 @@ def main(arguments: List[str]) -> int:
         return subprocess.run([
             str(bazel), "--output_base=" + str(build_directory / "output-base"),
             "--bazelrc=" + name,
-        ] + startup_options + options.arguments, cwd=root).returncode
+        ] + startup_options + bazel_arguments, cwd=root).returncode
     finally:
         Path(name).unlink()
 

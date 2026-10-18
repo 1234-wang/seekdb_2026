@@ -26,11 +26,15 @@ Windows 使用 `python build.py`，命令参数相同。C++ 测试目标参见[�
 
 ## 设置编译并发
 
-Bazel 默认按本机 CPU 数量设置并发。Bazel 参数放在命令之后：
+Bazel 默认按本机可用 CPU 数量设置并发。显式指定本地编译并发时，`build.py` 同时设置任务数量上限和本地 CPU 调度额度：
 
 ```bash
-./build.py build --jobs=16 seekdb
+./build.py build -j32 seekdb
 ```
+
+`-j32`、`-j 32` 与 `--jobs=32` 等价。只同步命令行中显式指定的数字；不指定时保留 Bazel 自动值。显式 `--local_resources=cpu=N` 可覆盖该额度，内存配置不受影响。
+
+向其他工具传递同名参数时，使用 `--test_arg=-j32` 等带等号的形式。`run --` 后的程序参数原样转发。
 
 ## 使用远程 C++ 编译
 
@@ -41,6 +45,8 @@ Bazel 默认按本机 CPU 数量设置并发。Bazel 参数放在命令之后：
 ```
 
 C++ 编译在远端执行。Cargo、生成器和链接仍在本机运行。如果服务需要 SSH 隧道，先单独建立隧道。
+
+命令行指定 `--config=remote` 或非空 `--remote_executor` 时，`--jobs` 只控制总并发，本地 CPU 额度仍由 Bazel 自动识别或通过 `--local_resources=cpu=N` 单独设置。
 
 ## 编译 Sanity 二进制
 
