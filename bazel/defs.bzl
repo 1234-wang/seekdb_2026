@@ -8,13 +8,13 @@ load("@rules_cc//cc:cc_import.bzl", _cc_import = "cc_import")
 load("//bazel:platforms.bzl", _openmp_copts = "openmp_copts")
 load(
     "//bazel:compile_config.bzl",
-    _SEEKDB_C_COPTS = "SEEKDB_C_COPTS",
-    _SEEKDB_CXX_COPTS = "SEEKDB_CXX_COPTS",
-    _SEEKDB_OBLIB_CXX_COPTS = "SEEKDB_OBLIB_CXX_COPTS",
-    _SEEKDB_OBLIB_C_COPTS = "SEEKDB_OBLIB_C_COPTS",
-    _SEEKDB_OBLIB_LOCAL_DEFINES = "SEEKDB_OBLIB_LOCAL_DEFINES",
-    _SEEKDB_MODULE_CXX_COPTS = "SEEKDB_MODULE_CXX_COPTS",
-    _SEEKDB_X86_SIMD_COPTS = "SEEKDB_X86_SIMD_COPTS",
+    _C_COPTS = "C_COPTS",
+    _CXX_COPTS = "CXX_COPTS",
+    _OBLIB_CXX_COPTS = "OBLIB_CXX_COPTS",
+    _OBLIB_C_COPTS = "OBLIB_C_COPTS",
+    _OBLIB_LOCAL_DEFINES = "OBLIB_LOCAL_DEFINES",
+    _MODULE_CXX_COPTS = "MODULE_CXX_COPTS",
+    _X86_SIMD_COPTS = "X86_SIMD_COPTS",
 )
 load(
     "//bazel:cc_library.bzl",
@@ -27,13 +27,13 @@ load("//bazel:final_link.bzl", _final_link = "final_link")
 load("//bazel:localized_partial_link.bzl", _localized_partial_link = "localized_partial_link")
 load("//bazel:version.bzl", _version_source = "version_source")
 
-SEEKDB_C_COPTS = _SEEKDB_C_COPTS
-SEEKDB_CXX_COPTS = _SEEKDB_CXX_COPTS
-SEEKDB_OBLIB_CXX_COPTS = _SEEKDB_OBLIB_CXX_COPTS
-SEEKDB_OBLIB_C_COPTS = _SEEKDB_OBLIB_C_COPTS
-SEEKDB_OBLIB_LOCAL_DEFINES = _SEEKDB_OBLIB_LOCAL_DEFINES
-SEEKDB_MODULE_CXX_COPTS = _SEEKDB_MODULE_CXX_COPTS
-SEEKDB_X86_SIMD_COPTS = _SEEKDB_X86_SIMD_COPTS
+C_COPTS = _C_COPTS
+CXX_COPTS = _CXX_COPTS
+OBLIB_CXX_COPTS = _OBLIB_CXX_COPTS
+OBLIB_C_COPTS = _OBLIB_C_COPTS
+OBLIB_LOCAL_DEFINES = _OBLIB_LOCAL_DEFINES
+MODULE_CXX_COPTS = _MODULE_CXX_COPTS
+X86_SIMD_COPTS = _X86_SIMD_COPTS
 openmp_copts = _openmp_copts
 
 cc_import = _cc_import

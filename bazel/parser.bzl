@@ -89,11 +89,11 @@ def _parser_impl(ctx):
 parser = rule(
     implementation = _parser_impl,
     attrs = {
-        "_bison": attr.label(default = "@seekdb_host_tools//:bison_tool", allow_single_file = True, cfg = "exec"),
-        "_flex": attr.label(default = "@seekdb_host_tools//:flex_tool", allow_single_file = True, cfg = "exec"),
-        "_python": attr.label(default = "@seekdb_host_tools//:python", allow_single_file = True, cfg = "exec"),
-        "_m4": attr.label(default = "@seekdb_host_tools//:m4_tool", cfg = "exec"),
-        "_runtime": attr.label(default = "@seekdb_host_tools//:runtime", cfg = "exec"),
+        "_bison": attr.label(default = "@host_tools//:bison_tool", allow_single_file = True, cfg = "exec"),
+        "_flex": attr.label(default = "@host_tools//:flex_tool", allow_single_file = True, cfg = "exec"),
+        "_python": attr.label(default = "@host_tools//:python", allow_single_file = True, cfg = "exec"),
+        "_m4": attr.label(default = "@host_tools//:m4_tool", cfg = "exec"),
+        "_runtime": attr.label(default = "@host_tools//:runtime", cfg = "exec"),
         "_codegen": attr.label(default = "//bazel:parser_codegen.py", allow_single_file = True, cfg = "exec"),
         "grammar": attr.label(allow_single_file = [".y"], mandatory = True),
         "lexer_source": attr.label(allow_single_file = [".l"], mandatory = True),
@@ -120,7 +120,7 @@ parser_type_names = rule(
     attrs = {
         "src": attr.label(allow_single_file = True, mandatory = True),
         "out": attr.output(mandatory = True),
-        "_python": attr.label(default = "@seekdb_host_tools//:python", allow_single_file = True, cfg = "exec"),
+        "_python": attr.label(default = "@host_tools//:python", allow_single_file = True, cfg = "exec"),
         "_codegen": attr.label(default = "//bazel:parser_codegen.py", allow_single_file = True, cfg = "exec"),
     },
 )

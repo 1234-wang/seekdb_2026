@@ -1495,7 +1495,7 @@ _EXPECTED_GENERATED_OUTPUT_ARGS = " ".join([
 ])
 
 _INNER_TABLE_COMMAND = (
-    '"$(location @seekdb_host_tools//:python)" -B $(location inner_table/generate_inner_table_schema.py)' +
+    '"$(location @host_tools//:python)" -B $(location inner_table/generate_inner_table_schema.py)' +
     ' --def-file $(location inner_table/ob_inner_table_schema_def.py)' +
     ' --share-output-dir $(RULEDIR)/' + _INNER_TABLE_GENERATED_DIR +
     ' --observer-output-dir $(RULEDIR)/' + _OBSERVER_GENERATED_DIR +
@@ -1515,7 +1515,7 @@ genrule(
         _INNER_TABLE_SCHEMA_DATA_OUTS +
         _LOCAL_VIRTUAL_TABLE_OUTS
     ),
-    tools = ["@seekdb_host_tools//:python"],
+    tools = ["@host_tools//:python"],
     cmd = _INNER_TABLE_COMMAND,
     cmd_bat = "call " + _INNER_TABLE_COMMAND,
 )
@@ -1660,7 +1660,7 @@ _SHARE_RUNTIME_DEPS = _SHARE_RUNTIME_GENERATED_DEPS + [
     ":schema_partition_model",
     ":schema_storage_cache_policy_persistence_interface",
     ":scn_interface",
-    ":seekdb_runtime_foundation",
+    ":runtime_foundation",
     ":semistruct",
     ":sequence_option",
     ":local_storage_interface",
@@ -1766,7 +1766,7 @@ _SHARE_UNIT_TEST_DEPS = [
     ":schema_publish_signal",
     ":schema_registry",
     ":scn_interface",
-    ":seekdb_runtime_foundation",
+    ":runtime_foundation",
     ":sql_persistence_support",
     ":tenant_runtime",
     ":text_analysis",

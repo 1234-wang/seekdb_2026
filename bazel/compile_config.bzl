@@ -1,8 +1,8 @@
 """Shared settings for the seekdb Bazel build."""
 
-SEEKDB_VERSION = "1.4.0.0"
+VERSION = "1.4.0.0"
 
-SEEKDB_X86_SIMD_COPTS = [
+X86_SIMD_COPTS = [
     "-mtune=core-avx2",
     "-mavx2",
     "-mfma",
@@ -39,14 +39,14 @@ _MODULE_INCLUDES = [
     "-Isrc/oblib",
     "-Isrc/oblib/common",
 ]
-SEEKDB_CXX_COPTS = ["-std=gnu++20"] + _MODULE_INCLUDES + _COMMON_COPTS + _CXX_WARNINGS
-SEEKDB_C_COPTS = ["-std=gnu11"] + _MODULE_INCLUDES + _COMMON_COPTS
-SEEKDB_MODULE_CXX_COPTS = SEEKDB_CXX_COPTS + ["-Werror=private-header"]
-SEEKDB_MODULE_C_COPTS = ["-std=gnu11"]
-SEEKDB_OBLIB_CXX_COPTS = ["-std=gnu++20"] + _COMMON_COPTS + _CXX_WARNINGS
-SEEKDB_OBLIB_C_COPTS = ["-std=gnu11"] + _COMMON_COPTS
+CXX_COPTS = ["-std=gnu++20"] + _MODULE_INCLUDES + _COMMON_COPTS + _CXX_WARNINGS
+C_COPTS = ["-std=gnu11"] + _MODULE_INCLUDES + _COMMON_COPTS
+MODULE_CXX_COPTS = CXX_COPTS + ["-Werror=private-header"]
+MODULE_C_COPTS = ["-std=gnu11"]
+OBLIB_CXX_COPTS = ["-std=gnu++20"] + _COMMON_COPTS + _CXX_WARNINGS
+OBLIB_C_COPTS = ["-std=gnu11"] + _COMMON_COPTS
 
-SEEKDB_OBLIB_LOCAL_DEFINES = [
+OBLIB_LOCAL_DEFINES = [
     'ENABLE_500_MEMORY_LIMIT',
     'ENABLE_INITIAL_EXEC_TLS_MODEL',
     'FATAL_ERROR_HANG',
@@ -61,9 +61,9 @@ SEEKDB_OBLIB_LOCAL_DEFINES = [
     '__STDC_LIMIT_MACROS',
 ]
 
-SEEKDB_RELEASE_LOCAL_DEFINES = SEEKDB_OBLIB_LOCAL_DEFINES + [
+RELEASE_LOCAL_DEFINES = OBLIB_LOCAL_DEFINES + [
     'PACKAGE_NAME=\\"OceanBase\\"',
-    'PACKAGE_VERSION=\\"%s\\"' % SEEKDB_VERSION,
+    'PACKAGE_VERSION=\\"%s\\"' % VERSION,
     'RELEASEID=\\"1\\"',
 ]
 

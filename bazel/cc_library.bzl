@@ -6,9 +6,9 @@ load(
 )
 load(
     "//bazel:compile_config.bzl",
-    "SEEKDB_MODULE_C_COPTS",
-    "SEEKDB_RELEASE_LOCAL_DEFINES",
-    "SEEKDB_MODULE_CXX_COPTS",
+    "MODULE_C_COPTS",
+    "RELEASE_LOCAL_DEFINES",
+    "MODULE_CXX_COPTS",
     "sanity_settings",
     "logging_defines",
 )
@@ -58,10 +58,10 @@ cc_library = macro(
         "implementation_deps": attr.label_list(),
         "additional_compiler_inputs": attr.label_list(allow_files = True),
         "additional_linker_inputs": attr.label_list(allow_files = True),
-        "copts": attr.string_list(default = SEEKDB_MODULE_CXX_COPTS),
+        "copts": attr.string_list(default = MODULE_CXX_COPTS),
         "cxxopts": attr.string_list(),
         "conlyopts": attr.string_list(),
-        "local_defines": attr.string_list(default = SEEKDB_RELEASE_LOCAL_DEFINES),
+        "local_defines": attr.string_list(default = RELEASE_LOCAL_DEFINES),
         "defines": attr.string_list(),
         "includes": attr.string_list(),
         "include_prefix": attr.string(),
@@ -198,7 +198,7 @@ def unity_cc_library(
         name = name,
         unity_srcs = [unity_src],
         unity_members = unity_members,
-        copts = SEEKDB_MODULE_C_COPTS if language == "c" and copts == None else copts,
+        copts = MODULE_C_COPTS if language == "c" and copts == None else copts,
         tags = tags,
         **kwargs
     )
@@ -228,7 +228,7 @@ def grouped_unity_cc_library(
     if split_unity_groups and (public_hdrs or private_hdrs):
         fail("%s partitioned Unity compilation requires headers to have separate semantic owner targets" % name)
     if language == "c" and copts == None:
-        copts = SEEKDB_MODULE_C_COPTS
+        copts = MODULE_C_COPTS
 
     owner_package = native.package_name()
     unity_srcs = []

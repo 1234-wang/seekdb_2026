@@ -36,7 +36,7 @@ _STANDBY_DEPS = [
     "//src/share:log_protocol",
     "//src/share:max_id_allocation",
     "//src/share:runtime_context",
-    "//src/share:seekdb_runtime_foundation",
+    "//src/share:runtime_foundation",
     "//src/share:scn_interface",
     "//src/share:schema_access",
     "//src/share:tenant_role_transition_interface",
@@ -54,7 +54,7 @@ cc_library(
     ],
     deps = [
         "//src/oblib:oblib_base",
-        "//src/share:seekdb_runtime_foundation",
+        "//src/share:runtime_foundation",
     ],
     features = ["layering_check"],
 )
@@ -69,7 +69,7 @@ cc_library(
         "//src/oblib:oblib_base",
         "//src/oblib:oblib_common",
         "//src/share:config",
-        "//src/share:seekdb_runtime_foundation",
+        "//src/share:runtime_foundation",
         "//src/share:tenant_runtime",
     ],
     features = ["layering_check"],

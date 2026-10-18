@@ -21,9 +21,9 @@ cc_library(
 alias(
     name = "base_crypto",
     actual = select({
-        "@platforms//os:emscripten": "@seekdb_3rd_wasm//:libcrypto",
-        "//bazel:ios_simulator": "@seekdb_3rd_ios_simulator//:libcrypto",
-        "//conditions:default": "@seekdb_3rd_ios//:libcrypto",
+        "@platforms//os:emscripten": "@third_party_wasm//:libcrypto",
+        "//bazel:ios_simulator": "@third_party_ios_simulator//:libcrypto",
+        "//conditions:default": "@third_party_ios//:libcrypto",
     }),
     target_compatible_with = select({
         "@platforms//os:ios": [],
@@ -39,34 +39,34 @@ sdk_archives(
         "@platforms//os:emscripten": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
-    deps = ["@seekdb_sdk_roaring//:library"] + select({
+    deps = ["@sdk_roaring//:library"] + select({
         "@platforms//os:emscripten": [
-            "@seekdb_sdk_icu//:library",
-            "@seekdb_sdk_s2_wasm//:library",
-            "@seekdb_sdk_vsag_wasm//:library",
+            "@sdk_icu//:library",
+            "@sdk_s2_wasm//:library",
+            "@sdk_vsag_wasm//:library",
         ],
         "//conditions:default": [
-            "@seekdb_sdk_s2_ios//:library",
-            "@seekdb_sdk_vsag_ios//:library",
+            "@sdk_s2_ios//:library",
+            "@sdk_vsag_ios//:library",
         ],
     }),
 )
 
 _IOS_SOURCE_REPOSITORIES = [
-    "@seekdb_sdk_abseil",
-    "@seekdb_sdk_antlr4",
-    "@seekdb_sdk_boost",
-    "@seekdb_sdk_cpuinfo",
-    "@seekdb_sdk_fmt",
-    "@seekdb_sdk_lapack",
-    "@seekdb_sdk_nlohmann_json",
-    "@seekdb_sdk_openmp",
-    "@seekdb_sdk_roaring",
-    "@seekdb_sdk_robin_map",
-    "@seekdb_sdk_s2_ios",
-    "@seekdb_sdk_spdlog",
-    "@seekdb_sdk_thread_pool",
-    "@seekdb_sdk_vsag_ios",
+    "@sdk_abseil",
+    "@sdk_antlr4",
+    "@sdk_boost",
+    "@sdk_cpuinfo",
+    "@sdk_fmt",
+    "@sdk_lapack",
+    "@sdk_nlohmann_json",
+    "@sdk_openmp",
+    "@sdk_roaring",
+    "@sdk_robin_map",
+    "@sdk_s2_ios",
+    "@sdk_spdlog",
+    "@sdk_thread_pool",
+    "@sdk_vsag_ios",
 ]
 
 filegroup(

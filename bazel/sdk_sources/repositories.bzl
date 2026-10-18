@@ -38,7 +38,7 @@ def _sdk_sources_impl(ctx):
         profiles = ["ios", "wasm"] if name in ["s2", "vsag"] else [""]
         for profile in profiles:
             _source(
-                name = "seekdb_sdk_" + name + ("_" + profile if profile else ""),
+                name = "sdk_" + name + ("_" + profile if profile else ""),
                 build_file = Label("//bazel/sdk_sources:%s.BUILD" % name),
                 package = name,
                 profile = profile,

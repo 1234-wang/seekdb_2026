@@ -1,6 +1,6 @@
 """Ordered third-party archives for the server's supported SDK layouts."""
 
-_SEEKDB_ABSL_ARCHIVE_NAMES = [
+_ABSL_ARCHIVE_NAMES = [
     "libabsl_base.a",
     "libabsl_city.a",
     "libabsl_debugging_internal.a",
@@ -23,7 +23,7 @@ _SEEKDB_ABSL_ARCHIVE_NAMES = [
     "libabsl_time_zone.a",
 ]
 
-_SEEKDB_GRPC_CORE_ARCHIVE_NAMES = [
+_GRPC_CORE_ARCHIVE_NAMES = [
     "libgrpc++.a",
     "libgrpc.a",
     "libgrpc_unsecure.a",
@@ -37,7 +37,7 @@ _SEEKDB_GRPC_CORE_ARCHIVE_NAMES = [
     "libupb.a",
 ]
 
-_SEEKDB_GRPC_ABSL_ARCHIVE_NAMES = [
+_GRPC_ABSL_ARCHIVE_NAMES = [
     "libabsl_base.a",
     "libabsl_int128.a",
     "libabsl_throw_delegate.a",
@@ -108,7 +108,7 @@ _SEEKDB_GRPC_ABSL_ARCHIVE_NAMES = [
 
 def observer_third_party_link_files(platform):
     android = platform == "android"
-    repository = "@seekdb_3rd_android" if android else "@seekdb_3rd_native"
+    repository = "@third_party_android" if android else "@third_party_native"
     macos = platform == "macos"
     lib64 = "lib" if android or macos else "lib64"
     vsag = "lib" if android else "lib/vsag_lib"
@@ -139,11 +139,11 @@ def observer_third_party_link_files(platform):
     files += ["lib/libcurl.a", "lib/libssl.a", "lib/libcrypto.a"]
     # The native macOS SDK retains S2 in lib64.
     files += [("lib" if android else "lib64") + "/libs2.a"]
-    files += ["lib/grpc/" + name for name in _SEEKDB_GRPC_CORE_ARCHIVE_NAMES]
-    files += [grpc + "/" + name for name in _SEEKDB_GRPC_ABSL_ARCHIVE_NAMES + [
+    files += ["lib/grpc/" + name for name in _GRPC_CORE_ARCHIVE_NAMES]
+    files += [grpc + "/" + name for name in _GRPC_ABSL_ARCHIVE_NAMES + [
         "libcares.a", "libprotobuf.a",
     ]]
-    files += [lib64 + "/" + name for name in _SEEKDB_ABSL_ARCHIVE_NAMES]
+    files += [lib64 + "/" + name for name in _ABSL_ARCHIVE_NAMES]
     labels += [repository + "//:" + file for file in files]
     labels += [":_roaring_core_link"]
     files = ["lib/libunwind.a"] if platform == "linux_x86_64" else []

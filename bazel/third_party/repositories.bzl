@@ -31,7 +31,7 @@ package(default_visibility = ["//visibility:public"])
 sdk_targets(windows = True)
 ''', executable = False)
 
-def _seekdb_third_party_headers_repository_impl(repository_ctx):
+def _third_party_headers_repository_impl(repository_ctx):
     if repository_ctx.attr.platform == "native" and repository_ctx.os.name.startswith("windows"):
         _windows_sdk(repository_ctx)
         return
@@ -86,7 +86,7 @@ package(default_visibility = ["//visibility:public"])
 sdk_targets()
 ''', executable = False)
 
-seekdb_third_party_headers_repository = repository_rule(
+third_party_headers_repository = repository_rule(
     attrs = {
         "platform": attr.string(
             default = "native",
@@ -100,5 +100,5 @@ seekdb_third_party_headers_repository = repository_rule(
         ),
     },
     local = True,
-    implementation = _seekdb_third_party_headers_repository_impl,
+    implementation = _third_party_headers_repository_impl,
 )

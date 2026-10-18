@@ -7,13 +7,13 @@ genrule(
     srcs = ["standbyservice.proto"],
     outs = ["windows/standbyservice" + suffix for suffix in [".pb.cc", ".pb.h", ".grpc.pb.cc", ".grpc.pb.h"]],
     tools = [
-        "@seekdb_3rd_native//:protoc/protoc.exe",
-        "@seekdb_3rd_native//:grpc_tools/grpc_cpp_plugin.exe",
-        "@seekdb_3rd_native//:protoc_runtime",
+        "@third_party_native//:protoc/protoc.exe",
+        "@third_party_native//:grpc_tools/grpc_cpp_plugin.exe",
+        "@third_party_native//:protoc_runtime",
     ],
-    cmd_bat = 'call "$(location @seekdb_3rd_native//:protoc/protoc.exe)"' +
+    cmd_bat = 'call "$(location @third_party_native//:protoc/protoc.exe)"' +
               ' --proto_path=src/oblib/grpc --cpp_out=$(RULEDIR)/windows --grpc_out=$(RULEDIR)/windows' +
-              ' --plugin=protoc-gen-grpc="$(location @seekdb_3rd_native//:grpc_tools/grpc_cpp_plugin.exe)"' +
+              ' --plugin=protoc-gen-grpc="$(location @third_party_native//:grpc_tools/grpc_cpp_plugin.exe)"' +
               ' $(location standbyservice.proto)',
     target_compatible_with = ["@platforms//os:windows"],
 )

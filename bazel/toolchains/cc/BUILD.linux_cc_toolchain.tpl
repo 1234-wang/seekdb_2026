@@ -79,7 +79,7 @@ filegroup(
 
 cc_feature(
     name = "static_cpp_runtime_feature",
-    feature_name = "seekdb_static_cpp_runtime",
+    feature_name = "static_cpp_runtime",
     implies = ["@rules_cc//cc/toolchains/features:static_link_cpp_runtimes"],
 )
 

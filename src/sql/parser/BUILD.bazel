@@ -1,8 +1,8 @@
 load("//bazel:parser.bzl", "parser", "parser_type_names")
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_C_COPTS",
-    "SEEKDB_CXX_COPTS",
+    "C_COPTS",
+    "CXX_COPTS",
     "unity_source",
     "cc_library",
 )
@@ -171,7 +171,7 @@ cc_library(
         "//src/oblib:oblib_base",
         "//src/oblib:oblib_foundation",
     ],
-    copts = SEEKDB_C_COPTS,
+    copts = C_COPTS,
     tags = ["manual"],
 )
 
@@ -206,7 +206,7 @@ cc_library(
         "//src/oblib:oblib_foundation",
         "//src/oblib:oblib_memory_primitives",
     ],
-    copts = SEEKDB_CXX_COPTS,
+    copts = CXX_COPTS,
     tags = ["manual"],
 )
 

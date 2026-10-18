@@ -4,6 +4,6 @@ exports_files([
     "BUILD.emscripten_cc_toolchain.tpl",
     "android_cc_toolchain_repo.bzl",
     "BUILD.android_cc_toolchain.tpl",
-    "BUILD.seekdb_cc_toolchain.tpl",
-    "seekdb_cc_toolchain_repo.bzl",
+    "BUILD.linux_cc_toolchain.tpl",
+    "linux_cc_toolchain_repo.bzl",
 ])

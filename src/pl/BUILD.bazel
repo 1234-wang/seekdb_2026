@@ -1,7 +1,7 @@
 load("//bazel:parser.bzl", "parser")
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_C_COPTS",
+    "C_COPTS",
     "grouped_unity_cc_library",
     "cc_library",
 )
@@ -223,7 +223,7 @@ grouped_unity_cc_library(
         "//src/oblib:oblib_foundation",
     ],
     split_unity_groups = True,
-    copts = SEEKDB_C_COPTS,
+    copts = C_COPTS,
     tags = ["manual"],
 )
 

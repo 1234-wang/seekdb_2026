@@ -49,5 +49,5 @@ cc_library(
     ],
     linkstatic = True,
     local_defines = ["NO_BLAS_WRAP"],
-    deps = ["@seekdb_sdk_clapack//:library"],
+    deps = ["@sdk_clapack//:library"],
 )

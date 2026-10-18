@@ -122,7 +122,7 @@ cc_library(
     linkstatic = True,
     deps = [
         "@seekdb//bazel/sdk_sources:base_crypto",
-        "@seekdb_sdk_abseil//:library",
+        "@sdk_abseil//:library",
     ],
 )
 

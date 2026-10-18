@@ -201,25 +201,25 @@ def sdk_aliases():
     )
     for name in list(SDK_HEADERS) + list(SDK_IMPORTS) + list(SDK_FILEGROUPS) + HOST_FILES + NATIVE_LINK_FILES:
         if name in HOST_FILES + ["sanity_pass", "sanity_headers"]:
-            actual = "@seekdb_3rd_native//:" + name
+            actual = "@third_party_native//:" + name
         else:
-            ios = "@seekdb_3rd_ios//:" + name
-            simulator = "@seekdb_3rd_ios_simulator//:" + name
-            wasm = "@seekdb_3rd_wasm//:" + name
+            ios = "@third_party_ios//:" + name
+            simulator = "@third_party_ios_simulator//:" + name
+            wasm = "@third_party_wasm//:" + name
             if name in _SOURCE_HEADERS:
-                ios = "@seekdb_sdk_" + _SOURCE_HEADERS[name][0] + "//:library"
+                ios = "@sdk_" + _SOURCE_HEADERS[name][0] + "//:library"
                 simulator = ios
-                wasm = "@seekdb_sdk_" + _SOURCE_HEADERS[name][1] + "//:library"
+                wasm = "@sdk_" + _SOURCE_HEADERS[name][1] + "//:library"
             elif name == "boost_headers":
-                ios = "@seekdb_sdk_boost//:library"
+                ios = "@sdk_boost//:library"
                 simulator = ios
             elif name == "icu_headers":
-                wasm = "@seekdb_sdk_icu//:library"
+                wasm = "@sdk_icu//:library"
             actual = select({
-                "@platforms//os:android": "@seekdb_3rd_android//:" + name,
+                "@platforms//os:android": "@third_party_android//:" + name,
                 "@platforms//os:emscripten": wasm,
                 "@platforms//os:ios": ios,
                 Label("//bazel:ios_simulator"): simulator,
-                "//conditions:default": "@seekdb_3rd_native//:" + name,
+                "//conditions:default": "@third_party_native//:" + name,
             })
         native.alias(name = name, actual = actual)

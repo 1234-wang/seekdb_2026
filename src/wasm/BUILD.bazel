@@ -1,5 +1,5 @@
 load("//bazel:defs.bzl", "final_link", "cc_library")
-load("//bazel:compile_config.bzl", "SEEKDB_VERSION", "SEEKDB_RELEASE_LOCAL_DEFINES")
+load("//bazel:compile_config.bzl", "VERSION", "RELEASE_LOCAL_DEFINES")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -12,7 +12,7 @@ cc_library(
         "wasmfs_fd_adapter.cpp",
         "chunked_memory_backend.cpp",
     ],
-    local_defines = SEEKDB_RELEASE_LOCAL_DEFINES + ["SEEKDB_WASMFS=1"],
+    local_defines = RELEASE_LOCAL_DEFINES + ["SEEKDB_WASMFS=1"],
     deps = [
         "//src/observer:observer_internal_interface",
         "//src/oblib:oblib_foundation",
@@ -20,7 +20,7 @@ cc_library(
         "//src/oblib:oblib_base",
         "//src/oblib:oblib_mysql_protocol",
         "//src/oblib:oblib_rpc",
-        "@seekdb_emscripten//:wasmfs_headers",
+        "@emscripten//:wasmfs_headers",
     ],
     target_compatible_with = ["@platforms//os:emscripten"],
 )
@@ -110,7 +110,7 @@ genrule(
     name = "engine_version",
     srcs = ["engine-version.mjs.in"],
     outs = ["dist/engine-version.mjs"],
-    cmd = "sed 's/@engine_version@/%s/g' $< > $@" % SEEKDB_VERSION,
+    cmd = "sed 's/@engine_version@/%s/g' $< > $@" % VERSION,
 )
 
 filegroup(

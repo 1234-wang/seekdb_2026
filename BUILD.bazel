@@ -4,7 +4,7 @@ alias(
     name = "seekdb",
     actual = select({
         "@platforms//os:emscripten": "//src/wasm:database",
-        "@platforms//os:ios": "//src/observer:seekdb_ios_framework",
+        "@platforms//os:ios": "//src/observer:ios_framework",
         "//conditions:default": "//src/observer:seekdb",
     }),
     visibility = ["//visibility:public"],

@@ -40,7 +40,7 @@ filegroup(
 )
 
 _SYSPACK_COMMAND = (
-    '"$(location @seekdb_host_tools//:python)" -B $(location syspack_codegen.py)' +
+    '"$(location @host_tools//:python)" -B $(location syspack_codegen.py)' +
     ' --output $(RULEDIR)/bazel_generated/syspack/syspack_source.cpp' +
     ' --release-dir $(RULEDIR)/bazel_generated/syspack_release'
 )
@@ -54,7 +54,7 @@ genrule(
     outs = [
         "bazel_generated/syspack/syspack_source.cpp",
     ] + _SYSPACK_RELEASE_OUTS,
-    tools = ["@seekdb_host_tools//:python"],
+    tools = ["@host_tools//:python"],
     cmd = _SYSPACK_COMMAND,
     cmd_bat = "call " + _SYSPACK_COMMAND,
     tags = ["manual"],

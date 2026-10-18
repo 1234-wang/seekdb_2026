@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_MODULE_CXX_COPTS",
-    "SEEKDB_X86_SIMD_COPTS",
+    "MODULE_CXX_COPTS",
+    "X86_SIMD_COPTS",
     "grouped_unity_cc_library",
     "cc_library",
 )
@@ -89,7 +89,7 @@ _SQL_PUBLIC_CLOSURE_SHARE_DEPS = [
     "//src/share:autoincrement_runtime",
     "//src/share:est_row_count_record",
     "//src/share:interrupt_runtime",
-    "//src/share:seekdb_runtime_foundation",
+    "//src/share:runtime_foundation",
     "//src/share:timezone_runtime",
 ]
 
@@ -300,7 +300,7 @@ grouped_unity_cc_library(
         "//src/share:schema_persistence",
         "//src/share:schema_registry",
         "//src/share:scn_interface",
-        "//src/share:seekdb_runtime_foundation",
+        "//src/share:runtime_foundation",
         "//src/share:sequence_option",
         "//src/share:sequence_runtime",
         "//src/share:sql_persistence_support",
@@ -403,9 +403,9 @@ grouped_unity_cc_library(
         "//src/share:runtime_context",
     ],
     copts = select({
-        "@platforms//cpu:x86_64": SEEKDB_X86_SIMD_COPTS,
+        "@platforms//cpu:x86_64": X86_SIMD_COPTS,
         "//conditions:default": [],
-    }) + SEEKDB_MODULE_CXX_COPTS,
+    }) + MODULE_CXX_COPTS,
     tags = ["manual"],
     # Observer's composition root names this archive directly in the final
     # ordered link; it remains unavailable to every other module.

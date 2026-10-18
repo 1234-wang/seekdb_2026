@@ -1,10 +1,10 @@
 """Native Bazel entry point for the embedded iOS framework."""
 
 load("//bazel:defs.bzl", "final_link", "version_source", "cc_library")
-load("//bazel:compile_config.bzl", "SEEKDB_CXX_COPTS")
+load("//bazel:compile_config.bzl", "CXX_COPTS")
 load("@apple_support//rules:apple_genrule.bzl", "apple_genrule")
 
-def seekdb_ios_framework():
+def ios_framework():
     """Declare device/simulator framework targets inside the Observer package."""
     version_source(
         name = "_ios_build_config",
@@ -14,7 +14,7 @@ def seekdb_ios_framework():
     cc_library(
         name = "_ios_entry",
         srcs = ["ios/seekdb_ios.cpp", "ios/driver/seekdb_lifecycle.cpp"],
-        copts = SEEKDB_CXX_COPTS + ["-include", "$(location :_ios_build_config)"],
+        copts = CXX_COPTS + ["-include", "$(location :_ios_build_config)"],
         additional_compiler_inputs = [":_ios_build_config"],
         deps = [
             ":observer_internal_interface",
@@ -80,7 +80,7 @@ def seekdb_ios_framework():
             "ios/driver/exports.txt",
             "//:LICENSE",
             "//rust:Cargo.lock",
-            "@seekdb_cargo_native_sources//:vendor.tar",
+            "@cargo_native_sources//:vendor.tar",
             "//bazel/sdk_sources:ios_source_metadata",
             "//bazel/sdk_sources:ios_licenses",
             "//bazel/third_party:ios_base_metadata",
@@ -99,7 +99,7 @@ def seekdb_ios_framework():
               ' --header "$(location ios/driver/seekdb.h)" --exports "$(location ios/driver/exports.txt)"' +
               ' --link-inputs "$(location :_ios_framework_link_manifest)"' +
               ' --rust-lock "$(location //rust:Cargo.lock)"' +
-              ' --cargo-sources "$(location @seekdb_cargo_native_sources//:vendor.tar)"' +
+              ' --cargo-sources "$(location @cargo_native_sources//:vendor.tar)"' +
               ' --source-metadata $(locations //bazel/sdk_sources:ios_source_metadata)' +
               ' $(locations //bazel/third_party:ios_base_metadata)' +
               ' --licenses $(location //:LICENSE) $(locations //bazel/sdk_sources:ios_licenses)' +
@@ -112,7 +112,7 @@ def seekdb_ios_framework():
         tags = ["manual"],
     )
     native.filegroup(
-        name = "seekdb_ios_framework",
+        name = "ios_framework",
         srcs = [":_ios_framework_link", ":_ios_framework_metadata"],
         target_compatible_with = ["@platforms//os:ios"],
         tags = ["manual"],

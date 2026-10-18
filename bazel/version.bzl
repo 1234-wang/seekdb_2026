@@ -19,7 +19,7 @@ def _version_source_impl(ctx):
 version_source = rule(
     implementation = _version_source_impl,
     attrs = {
-        "_python": attr.label(default = "@seekdb_host_tools//:python", allow_single_file = True, cfg = "exec"),
+        "_python": attr.label(default = "@host_tools//:python", allow_single_file = True, cfg = "exec"),
         "_codegen": attr.label(default = "//bazel:build_metadata.py", allow_single_file = True, cfg = "exec"),
         "out": attr.output(mandatory = True),
         "template": attr.label(

@@ -11,7 +11,7 @@ _PUBLIC_VISIBILITY = [
 ]
 
 _SHARE_SEMANTIC_HEADER_TARGETS = {
-    "seekdb_runtime_foundation": struct(
+    "runtime_foundation": struct(
         hdrs = [
             "ob_compatibility_control.h",
             "ob_server_info.h",

@@ -19,7 +19,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//bazel:cargo.bzl", "CARGO_ACTION_ATTRS", "CARGO_TOOLCHAINS", "cargo_action")
 load("//bazel:platforms.bzl", "target_platform")
 
-def _seekdb_jemalloc_build_impl(ctx):
+def _jemalloc_build_impl(ctx):
     archive = ctx.actions.declare_file("jemalloc/lib/libjemalloc_pic.a")
     public_header = ctx.actions.declare_file(
         "jemalloc/include/jemalloc/jemalloc.h",
@@ -66,8 +66,8 @@ export JEMALLOC_SYS_CONFIGURE_ARGS='--with-jemalloc-prefix=je_
         ),
     ]
 
-_seekdb_jemalloc_build = rule(
-    implementation = _seekdb_jemalloc_build_impl,
+_jemalloc_build = rule(
+    implementation = _jemalloc_build_impl,
     attrs = {
         "external_src": attr.label(allow_single_file = True, mandatory = True),
         "lockfile": attr.label(allow_single_file = True, mandatory = True),
@@ -77,12 +77,12 @@ _seekdb_jemalloc_build = rule(
     toolchains = CARGO_TOOLCHAINS,
 )
 
-def seekdb_jemalloc(name, external_src, lockfile, manifest):
+def jemalloc(name, external_src, lockfile, manifest):
     """Declares the jemalloc Cargo build and its C++ archive/header targets."""
     build_target = "_%s_build" % name
     public_header_target = "%s_public_header" % name
 
-    _seekdb_jemalloc_build(
+    _jemalloc_build(
         name = build_target,
         external_src = external_src,
         lockfile = lockfile,

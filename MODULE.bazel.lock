@@ -197,13 +197,13 @@
   "moduleExtensions": {
     "//bazel/sdk_sources:repositories.bzl%sdk_sources": {
       "general": {
-        "bzlTransitiveDigest": "MWMDteSg6dvcX9LEVtQqxzwoh5/B+EkcA/6NjsNesPM=",
+        "bzlTransitiveDigest": "grRzR3MqOylPNlcddE5beIC8HKzWu9eL8gHtSDAiIps=",
         "usagesDigest": "C88oWWRSwl985DWTNoqa3RJhrmyPEurpg8bTGjwBxHo=",
         "recordedInputs": [
           "FILE:@@//bazel/sdk_sources/dependencies.json 9450c546a43710f663cb3eb09bebca6e6a2b6221d81e8d36e1d66218863b2d65"
         ],
         "generatedRepoSpecs": {
-          "seekdb_sdk_abseil": {
+          "sdk_abseil": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:abseil.BUILD",
@@ -211,7 +211,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_s2_ios": {
+          "sdk_s2_ios": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:s2.BUILD",
@@ -219,7 +219,7 @@
               "profile": "ios"
             }
           },
-          "seekdb_sdk_s2_wasm": {
+          "sdk_s2_wasm": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:s2.BUILD",
@@ -227,7 +227,7 @@
               "profile": "wasm"
             }
           },
-          "seekdb_sdk_roaring": {
+          "sdk_roaring": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:roaring.BUILD",
@@ -235,7 +235,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_icu": {
+          "sdk_icu": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:icu.BUILD",
@@ -243,7 +243,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_vsag_ios": {
+          "sdk_vsag_ios": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:vsag.BUILD",
@@ -251,7 +251,7 @@
               "profile": "ios"
             }
           },
-          "seekdb_sdk_vsag_wasm": {
+          "sdk_vsag_wasm": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:vsag.BUILD",
@@ -259,7 +259,7 @@
               "profile": "wasm"
             }
           },
-          "seekdb_sdk_cpuinfo": {
+          "sdk_cpuinfo": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:cpuinfo.BUILD",
@@ -267,7 +267,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_fmt": {
+          "sdk_fmt": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:fmt.BUILD",
@@ -275,7 +275,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_spdlog": {
+          "sdk_spdlog": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:spdlog.BUILD",
@@ -283,7 +283,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_nlohmann_json": {
+          "sdk_nlohmann_json": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:nlohmann_json.BUILD",
@@ -291,7 +291,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_robin_map": {
+          "sdk_robin_map": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:robin_map.BUILD",
@@ -299,7 +299,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_thread_pool": {
+          "sdk_thread_pool": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:thread_pool.BUILD",
@@ -307,7 +307,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_clapack": {
+          "sdk_clapack": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:clapack.BUILD",
@@ -315,7 +315,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_openblas": {
+          "sdk_openblas": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:openblas.BUILD",
@@ -323,7 +323,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_antlr4": {
+          "sdk_antlr4": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:antlr4.BUILD",
@@ -331,7 +331,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_lapack": {
+          "sdk_lapack": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:lapack.BUILD",
@@ -339,7 +339,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_openmp": {
+          "sdk_openmp": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:openmp.BUILD",
@@ -347,7 +347,7 @@
               "profile": ""
             }
           },
-          "seekdb_sdk_boost": {
+          "sdk_boost": {
             "repoRuleId": "@@//bazel/sdk_sources:repositories.bzl%_source",
             "attributes": {
               "build_file": "@@//bazel/sdk_sources:boost.BUILD",

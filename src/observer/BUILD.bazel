@@ -1,6 +1,6 @@
 load("//bazel:compile_config.bzl", "sanity_linkopts")
 load(":observer_link_deps.bzl", "observer_third_party_link_files")
-load("//bazel:ios_framework.bzl", "seekdb_ios_framework")
+load("//bazel:ios_framework.bzl", "ios_framework")
 load(
     "//bazel:defs.bzl",
     "cc_import",
@@ -130,7 +130,7 @@ _OBSERVER_NATIVE_DEPS = [
     "//src/share:table_load_protocol",
     "//src/share:table_runtime",
     "//src/share:tablet_metadata",
-    "//src/share:seekdb_runtime_foundation",
+    "//src/share:runtime_foundation",
     "//src/share:tablet_replica_types",
     "//src/share:tenant_module_init",
     "//src/share:tenant_runtime",
@@ -362,7 +362,7 @@ filegroup(
     tags = ["manual"],
 )
 
-_SEEKDB_CORE_LINK_DEPS = [
+_CORE_LINK_DEPS = [
     "//src/oblib:ob_malloc_objects",
     ":observer_version",
     "//src/sql:sql_runtime_simd",
@@ -379,16 +379,16 @@ _SEEKDB_CORE_LINK_DEPS = [
 
 cc_library(
     name = "observer_embedded_runtime",
-    deps = _SEEKDB_CORE_LINK_DEPS + _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS + [
+    deps = _CORE_LINK_DEPS + _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS + [
         "//src/sql/parser:sql_server_parser",
     ],
     tags = ["manual"],
     visibility = ["//src/wasm:__pkg__"],
 )
 
-seekdb_ios_framework()
+ios_framework()
 
-_SEEKDB_TAIL_LINK_DEPS = select({
+_TAIL_LINK_DEPS = select({
     "@platforms//os:linux": ["//src/oblib:malloc_hook_objects"],
     "//conditions:default": [],
 }) + [
@@ -397,7 +397,7 @@ _SEEKDB_TAIL_LINK_DEPS = select({
     "//src/oblib:ob_malloc_objects",
 ]
 
-_SEEKDB_ORDERED_LINK_FILES = [
+_ORDERED_LINK_FILES = [
     "//rust:sql_nio_archive",
     "//rust:config_archive",
 ] + select({
@@ -411,7 +411,7 @@ _SEEKDB_ORDERED_LINK_FILES = [
     "//conditions:default": observer_third_party_link_files("linux_x86_64"),
 })
 
-_SEEKDB_EXTRA_LINK_INPUTS = select({
+_EXTRA_LINK_INPUTS = select({
     "@platforms//os:linux": [
         "//bazel/third_party:lib/libaio.so.1",
         "//bazel/third_party:lib/libaio.so.1.0.1",
@@ -419,7 +419,7 @@ _SEEKDB_EXTRA_LINK_INPUTS = select({
     "//conditions:default": [],
 })
 
-_SEEKDB_SYSTEM_LINKOPTS = select({
+_SYSTEM_LINKOPTS = select({
     "@platforms//os:windows": ["ws2_32.lib", "crypt32.lib", "bcrypt.lib", "userenv.lib", "wldap32.lib", "advapi32.lib", "synchronization.lib", "ntdll.lib"],
     "@platforms//os:android": ["-ldl", "-lm", "-llog", "-landroid", "-latomic"],
     "@platforms//os:macos": [
@@ -436,7 +436,7 @@ _SEEKDB_SYSTEM_LINKOPTS = select({
     ],
 })
 
-_SEEKDB_EXECUTABLE_LINKOPTS = select({
+_EXECUTABLE_LINKOPTS = select({
     "@platforms//os:windows": ["/INCREMENTAL:NO", "/OPT:REF", "/OPT:ICF"],
     "@platforms//os:android": ["-pie", "-fopenmp", "-static-openmp", "-Wl,--gc-sections", "-Wl,--build-id=sha1"],
     "@platforms//os:macos": [
@@ -460,7 +460,7 @@ _SEEKDB_EXECUTABLE_LINKOPTS = select({
 })
 
 
-_SEEKDB_SHARED_LINKOPTS = select({
+_SHARED_LINKOPTS = select({
     "@platforms//os:macos": [
         "-Wl,-framework,Security",
         "-Wl,-framework,CoreFoundation",
@@ -478,17 +478,17 @@ _SEEKDB_SHARED_LINKOPTS = select({
 })
 
 final_link(
-    name = "seekdb_link",
+    name = "_executable_link",
     direct_object_deps = (
         _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS +
         _OBSERVER_MAIN_OBJECT_TARGETS
     ),
     # Repeat oblib in tail_deps to resolve references introduced by later archives.
-    group_deps = _SEEKDB_CORE_LINK_DEPS,
-    tail_deps = _SEEKDB_TAIL_LINK_DEPS,
-    ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
-    extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
-    linkopts = _SEEKDB_SYSTEM_LINKOPTS + _SEEKDB_EXECUTABLE_LINKOPTS + sanity_linkopts() + select({
+    group_deps = _CORE_LINK_DEPS,
+    tail_deps = _TAIL_LINK_DEPS,
+    ordered_link_files = _ORDERED_LINK_FILES,
+    extra_inputs = _EXTRA_LINK_INPUTS,
+    linkopts = _SYSTEM_LINKOPTS + _EXECUTABLE_LINKOPTS + sanity_linkopts() + select({
         "//bazel:linux_package_runtime": ["-Wl,-rpath,$ORIGIN/../libexec/seekdb/lib"],
         "//conditions:default": [],
     }),
@@ -499,7 +499,7 @@ final_link(
 
 alias(
     name = "seekdb",
-    actual = ":seekdb_link",
+    actual = ":_executable_link",
     visibility = ["//visibility:public"],
 )
 
@@ -507,7 +507,7 @@ final_link(
     name = "_liboceanbase_link",
     whole_group_deps = (
         _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS +
-        _SEEKDB_CORE_LINK_DEPS +
+        _CORE_LINK_DEPS +
         select({
             "@platforms//os:macos": [
                 "//src/sql/parser:sql_server_parser",
@@ -518,9 +518,9 @@ final_link(
             ],
         })
     ),
-    ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
-    extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
-    linkopts = _SEEKDB_SYSTEM_LINKOPTS + _SEEKDB_SHARED_LINKOPTS + sanity_linkopts(),
+    ordered_link_files = _ORDERED_LINK_FILES,
+    extra_inputs = _EXTRA_LINK_INPUTS,
+    linkopts = _SYSTEM_LINKOPTS + _SHARED_LINKOPTS + sanity_linkopts(),
     out = "liboceanbase.so",
     shared = True,
     tags = ["manual"],

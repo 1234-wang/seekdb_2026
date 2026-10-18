@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_MODULE_CXX_COPTS",
-    "SEEKDB_X86_SIMD_COPTS",
+    "MODULE_CXX_COPTS",
+    "X86_SIMD_COPTS",
     "unity_cc_library",
     "grouped_unity_cc_library",
     "cc_library",
@@ -512,7 +512,7 @@ grouped_unity_cc_library(
         "//src/share:schema_model_interface",
         "//src/share:schema_registry",
         "//src/share:scn_interface",
-        "//src/share:seekdb_runtime_foundation",
+        "//src/share:runtime_foundation",
         "//src/share:sql_persistence_support",
         "//src/share:statement_type",
         "//src/share:table_access_runtime",
@@ -558,9 +558,9 @@ grouped_unity_cc_library(
         "//src/oblib:oblib_restore",
     ],
     copts = select({
-        "@platforms//cpu:x86_64": SEEKDB_X86_SIMD_COPTS,
+        "@platforms//cpu:x86_64": X86_SIMD_COPTS,
         "//conditions:default": [],
-    }) + SEEKDB_MODULE_CXX_COPTS,
+    }) + MODULE_CXX_COPTS,
     features = ["layering_check"],
     tags = ["manual"],
 )

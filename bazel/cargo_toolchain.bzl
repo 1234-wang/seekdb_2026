@@ -36,7 +36,7 @@ def declare_cargo_toolchains(kinds, executable_suffix, execution_constraints):
             rustc = kind + "/bin/rustc" + executable_suffix,
             python = "python/bin/python" + executable_suffix,
             files = ":" + kind + "_files",
-            vendor = "@seekdb_cargo_%s_sources//:vendor.tar" % kind,
+            vendor = "@cargo_%s_sources//:vendor.tar" % kind,
         )
         targets = ["emscripten"] if kind == "wasm" else ["linux", "macos", "ios", "android", "windows"]
         for target in targets:
@@ -114,7 +114,7 @@ cargo_sources_repository = repository_rule(
     implementation = _cargo_sources_repository_impl,
     attrs = {
         "prepare": attr.label(default = Label("//bazel:prepare_cargo.py")),
-        "toolchain_metadata": attr.label(default = Label("@seekdb_cargo//:toolchains.json")),
+        "toolchain_metadata": attr.label(default = Label("@cargo//:toolchains.json")),
         "manifests": attr.label_list(mandatory = True),
         "locks": attr.label_list(mandatory = True),
         "kind": attr.string(values = ["native", "wasm"], mandatory = True),

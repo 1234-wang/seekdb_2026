@@ -13,9 +13,9 @@ load(
 load("//bazel:module_sources.bzl", "select_unity_groups")
 load(
     "//bazel:defs.bzl",
-    "SEEKDB_OBLIB_CXX_COPTS",
-    "SEEKDB_OBLIB_C_COPTS",
-    "SEEKDB_OBLIB_LOCAL_DEFINES",
+    "OBLIB_CXX_COPTS",
+    "OBLIB_C_COPTS",
+    "OBLIB_LOCAL_DEFINES",
     "localized_partial_link",
     "openmp_copts",
     "grouped_unity_cc_library",
@@ -893,8 +893,8 @@ grouped_unity_cc_library(
         "//rust:logger",
         "//bazel/third_party:fast_float_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + openmp_copts(),
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS + openmp_copts(),
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -913,8 +913,8 @@ grouped_unity_cc_library(
         "//src/oblib/easy:easy",
         "//bazel/third_party:libunwind_headers",
     ],
-    copts = SEEKDB_OBLIB_C_COPTS + openmp_copts(),
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_C_COPTS + openmp_copts(),
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -926,8 +926,8 @@ grouped_unity_cc_library(
         ":_oblib_implementation_headers",
         ":oblib_foundation",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -942,8 +942,8 @@ grouped_unity_cc_library(
         ":_oblib_implementation_headers",
         ":oblib_foundation",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + openmp_copts(),
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS + openmp_copts(),
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -955,7 +955,7 @@ grouped_unity_cc_library(
         ":_oblib_implementation_headers",
         ":oblib_foundation",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + select({
+    copts = OBLIB_CXX_COPTS + select({
         "@platforms//cpu:x86_64": [
             "-mavx2",
             "-mssse3",
@@ -963,7 +963,7 @@ grouped_unity_cc_library(
         "@platforms//cpu:wasm32": ["-msse4.1"],
         "//conditions:default": [],
     }),
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -979,8 +979,8 @@ grouped_unity_cc_library(
         ":oblib_foundation",
         "//bazel/third_party:vsag_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + openmp_copts(),
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS + openmp_copts(),
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -993,8 +993,8 @@ grouped_unity_cc_library(
         ":oblib_foundation",
         ":_jemalloc_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     sanity_instrumentation = False,
     features = ["layering_check"],
     tags = ["manual"],
@@ -1014,8 +1014,8 @@ grouped_unity_cc_library(
         "//bazel/third_party:mariadb_headers",
         "//bazel/third_party:rapidjson_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -1030,8 +1030,8 @@ cc_library(
         ":_oblib_implementation_headers",
         ":oblib_foundation",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -1048,8 +1048,8 @@ grouped_unity_cc_library(
         "//src/oblib/easy:easy",
         "//rust:sql_nio_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -1061,8 +1061,8 @@ cc_library(
         "src/oblib/lib/compress/zstd_1_3_8:zstd_1_3_8_objs",
     ),
     implementation_deps = [":_oblib_implementation_headers"],
-    copts = SEEKDB_OBLIB_C_COPTS + ["-fvisibility=hidden"],
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES + [
+    copts = OBLIB_C_COPTS + ["-fvisibility=hidden"],
+    local_defines = OBLIB_LOCAL_DEFINES + [
         "ZDICTLIB_VISIBILITY=",
         "ZSTDERRORLIB_VISIBILITY=",
         "ZSTDLIB_VISIBILITY=",
@@ -1085,8 +1085,8 @@ cc_library(
     implementation_deps = [
         ":_oblib_implementation_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + ["-fvisibility=hidden"],
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES + [
+    copts = OBLIB_CXX_COPTS + ["-fvisibility=hidden"],
+    local_defines = OBLIB_LOCAL_DEFINES + [
         "ZDICTLIB_VISIBILITY=",
         "ZSTDERRORLIB_VISIBILITY=",
         "ZSTDLIB_VISIBILITY=",
@@ -1133,8 +1133,8 @@ cc_library(
         ":oblib_foundation",
         "//bazel/third_party:zlib_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -1151,8 +1151,8 @@ cc_library(
         "//bazel/third_party:curl_headers",
         "//bazel/third_party:openssl_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -1172,8 +1172,8 @@ cc_library(
         ":_oblib_implementation_headers",
         ":oblib_foundation",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
@@ -1188,8 +1188,8 @@ cc_library(
         ":_oblib_implementation_headers",
         ":oblib_foundation",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS,
-    local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
+    copts = OBLIB_CXX_COPTS,
+    local_defines = OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )

@@ -70,7 +70,7 @@ def _write_builtin_module_map(repository_ctx, builtin_include_directories):
     lines.append("}")
     repository_ctx.file("module.modulemap", "\n".join(lines) + "\n")
 
-def _seekdb_cc_toolchain_repository_impl(repository_ctx):
+def _linux_cc_toolchain_repository_impl(repository_ctx):
     if repository_ctx.os.name != "linux":
         repository_ctx.file("BUILD.bazel", "# The bundled toolchain is Linux-only.\n")
         return
@@ -113,7 +113,7 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
     )
     repository_ctx.template(
         "BUILD.bazel",
-        Label(":BUILD.seekdb_cc_toolchain.tpl"),
+        Label(":BUILD.linux_cc_toolchain.tpl"),
         substitutions = {
             "@CXX_BUILTIN_INCLUDE_DIRECTORIES@": repr(builtin_include_directories),
             "@HOST_CPU@": architecture,
@@ -127,8 +127,8 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
     )
     _write_builtin_module_map(repository_ctx, builtin_include_directories)
 
-seekdb_cc_toolchain_repository = repository_rule(
-    implementation = _seekdb_cc_toolchain_repository_impl,
+linux_cc_toolchain_repository = repository_rule(
+    implementation = _linux_cc_toolchain_repository_impl,
     configure = True,
     local = True,
 )

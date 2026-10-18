@@ -11,7 +11,7 @@ cc_library(
     defines = ["SPDLOG_FMT_EXTERNAL"],
     includes = ["include"],
     linkstatic = True,
-    deps = ["@seekdb_sdk_fmt//:library"],
+    deps = ["@sdk_fmt//:library"],
 )
 
 filegroup(
