@@ -85,7 +85,7 @@ local_cargo_repository = repository_rule(
     attrs = {
         "prepare": attr.label(default = Label("//bazel:prepare_cargo.py")),
         "rust_toolchain": attr.label(default = Label("//rust:rust-toolchain.toml")),
-        "wasm_toolchain": attr.label(default = Label("//tools/wasm:rust-toolchain-version")),
+        "wasm_toolchain": attr.label(default = Label("//deps/init/wasm:rust-toolchain-version")),
     },
     environ = ["PATH", "RUSTUP_HOME", "CARGO_HOME", "HOME"],
     local = True,

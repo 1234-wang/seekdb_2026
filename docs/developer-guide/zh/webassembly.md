@@ -5,7 +5,7 @@
 ## 前置条件
 
 - macOS 或 Linux 主机
-- Emscripten 6.0.12（即 `tools/wasm/emscripten-version` 中的版本），且其 `emcc` 在 `PATH` 中，例如通过 `brew install emscripten` 安装
+- Emscripten 6.0.12（即 `deps/init/wasm/emscripten-version` 中的版本），且其 `emcc` 在 `PATH` 中
 - 已将 `rustup`、Python 3.12 及以上和 `curl` 加入 `PATH`
 - 运行测试需要 Node.js 24 及以上
 - 建议至少 20 GB 可用磁盘空间，用于依赖、SDK 和构建目录
@@ -18,20 +18,12 @@
 # emcc 使用项目固定版本的 Emscripten SDK。
 export EMSCRIPTEN=/path/to/emsdk/upstream/emscripten
 export PATH="$EMSCRIPTEN:$PATH"
-export SEEKDB_WASM_DEPS="$PWD/deps/wasm"
 
-# 已初始化 deps/3rd 时可跳过 init。
-python3 build.py init
-rustup toolchain install "$(cat tools/wasm/rust-toolchain-version)" \
-  --profile minimal --component rust-src --target wasm32-unknown-emscripten
-python3 tools/wasm/build-deps.py "$SEEKDB_WASM_DEPS"
-python3 tools/wasm/prepare-headers.py \
-  --source deps/3rd/usr/local/oceanbase/deps/devel/include \
-  --include "$SEEKDB_WASM_DEPS/include" --target-prefix "$SEEKDB_WASM_DEPS"
+python3 build.py init --wasm
 python3 build.py build --config=wasm seekdb
 ```
 
-`init` 准备宿主工具和头文件；`build-deps.py` 用锁定源码构建 Wasm 第三方库。依赖已准备好后只需执行最后一条 Bazel 命令，并保留这些环境变量。Rust 库由 Bazel 构建，Wasm 专用补丁仅作用于构建目录中的依赖副本。SDK 按 Bazel 目标平台选择；`SEEKDB_WASM_DEPS` 只指定 Wasm SDK 的位置，不影响本机或 Android 构建。
+`init --wasm` 准备本机依赖、固定版本的 Rust 工具链，以及 `deps/wasm` 下的 Wasm 基础库、适配后的头文件和 Emscripten sysroot。后续只需重复最后一条构建命令，其余源码库和 Rust 库由 Bazel 编译、缓存。只有需要更换 SDK 目录时，才为两条命令设置 `SEEKDB_WASM_DEPS`；它不负责选择目标平台。
 
 引擎和配套 JS、HTML、CSS 文件位于 `build/bin/src/wasm/dist/`。`python3 build.py clean` 清理 Bazel 编译产物，保留 `deps/wasm`。
 

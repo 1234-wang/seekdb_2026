@@ -65,6 +65,6 @@ def prepare_workspace(repo, build, spec):
 if __name__ == "__main__":
     repo = Path(__file__).resolve().parents[2]
     original, build = (Path(argument).resolve() for argument in sys.argv[1:])
-    patches = json.loads((repo / "tools/wasm/dependencies.json").read_text())
+    patches = json.loads((repo / "deps/init/wasm/dependencies.json").read_text())
     prepare_sysroot(original, build / "sysroot", patches["rust_std_tls_patch"])
     prepare_workspace(repo, build, patches["spdlog_rs_emscripten"])

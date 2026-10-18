@@ -114,13 +114,14 @@ def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
     target_platform = parser.add_mutually_exclusive_group()
     target_platform.add_argument("--android", action="store_true")
     target_platform.add_argument("--ios", action="store_true")
+    target_platform.add_argument("--wasm", action="store_true")
     parser.add_argument("--simulator", action="store_true")
     options = parser.parse_args(arguments[1:])
     if options.simulator and not options.ios:
         parser.error("--simulator requires --ios")
     if os.name == "nt":
-        if options.android or options.ios:
-            parser.error("Android/iOS dependency initialization requires a Unix host")
+        if options.android or options.ios or options.wasm:
+            parser.error("Android/iOS/Wasm dependency initialization requires a Unix host")
         return subprocess.run(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
              str(root / "deps/init/dep_create.ps1")],
@@ -145,6 +146,10 @@ def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
     ).returncode
     if status:
         return status
+    if options.wasm:
+        return subprocess.run(
+            [sys.executable, str(root / "deps/init/wasm/build.py")], cwd=root, env=environment,
+        ).returncode
     if options.android:
         environment["ANDROID_BUILD"] = "true"
         environment["WORKSPACE_DEPS_3RD"] = str(root / "deps/android")
@@ -159,7 +164,7 @@ def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
     if status or options.android:
         return status
     status = subprocess.run(
-        [sys.executable, str(root / "deps/ios-build/build.py"), "--reuse", "--jobs", str(os.cpu_count() or 1)]
+        [sys.executable, str(root / "deps/init/ios/build.py"), "--reuse", "--jobs", str(os.cpu_count() or 1)]
         + (["--simulator"] if options.simulator else []),
         cwd=str(root), env=environment,
     ).returncode
@@ -182,7 +187,7 @@ def main(arguments: List[str]) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
         usage="%(prog)s [--build-dir PATH] [--launcher-cache-dir PATH] <bazel command> [args]",
-        epilog="Prepare project dependencies with: ./build.py init [--android | --ios [--simulator]]",
+        epilog="Prepare project dependencies with: ./build.py init [--android | --ios [--simulator] | --wasm]",
         allow_abbrev=False,
     )
     parser.add_argument("--build-dir", type=Path, default=Path("build"))

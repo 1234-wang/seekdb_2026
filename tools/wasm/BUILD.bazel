@@ -1,10 +1,8 @@
 filegroup(
     name = "rust_build_tools",
     srcs = [
-        "dependencies.json",
-        "emscripten-version",
         "prepare-rust.py",
-        "rust-toolchain-version",
+        "//deps/init/wasm:dependencies.json",
     ],
     visibility = ["//rust:__pkg__"],
 )

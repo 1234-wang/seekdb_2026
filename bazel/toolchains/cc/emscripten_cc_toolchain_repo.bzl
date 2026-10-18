@@ -27,7 +27,7 @@ def _emscripten_cc_toolchain_repository_impl(ctx):
 export EM_FROZEN_CACHE=1
 export EM_CACHE="$(cd "$(dirname "$0")" && pwd)/cache"
 if [ ! -d "$EM_CACHE/sysroot" ]; then
-  echo "Missing Emscripten sysroot; run python3 tools/wasm/build-deps.py for this Wasm SDK" >&2
+  echo "Missing Emscripten sysroot; run ./build.py init --wasm" >&2
   exit 1
 fi
 exec "$(dirname "$0")/sdk/emscripten/emcc" --sysroot="$(dirname "$0")/cache/sysroot" "$@"

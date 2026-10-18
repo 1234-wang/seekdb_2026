@@ -10,7 +10,7 @@ import shutil
 import shlex
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_PACKAGES = ("zlib", "openssl", "curl", "lzma", "libxml2", "protobuf-c", "icu")
 ICU_SOURCE = json.loads((ROOT / "bazel/sdk_sources/dependencies.json").read_text())["sources"]["icu"]
 
