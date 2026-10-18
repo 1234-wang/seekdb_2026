@@ -1,6 +1,6 @@
 """Ordered final link using the selected C++ toolchain.
 
-Inputs are direct objects, cyclic groups, whole archives, tail dependencies,
+Inputs are direct objects, cyclic groups, whole-archive groups, tail dependencies,
 then explicitly ordered files and the source SDK closure. Only ordered_link_files
 preserves repetition.
 """
@@ -53,11 +53,9 @@ def _selected_static_archive(library):
         return library.pic_static_library
     return library.static_library
 
-def _static_link_inputs(target, direct = False):
+def _static_link_inputs(target):
     inputs = []
     for linker_input in target[CcInfo].linking_context.linker_inputs.to_list():
-        if direct and linker_input.owner != target.label:
-            continue
         for library in linker_input.libraries:
             archive = _selected_static_archive(library)
             inputs.extend([archive] if archive != None else _library_objects(library))
@@ -76,25 +74,6 @@ def _static_inputs_from_deps(targets):
         # ordered_link_files instead.
         _append_unique(inputs, seen, _static_link_inputs(target))
     return inputs
-
-def _whole_archive_inputs(targets):
-    direct_inputs = []
-    direct_seen = {}
-    for target in targets:
-        _append_unique(
-            direct_inputs,
-            direct_seen,
-            _static_link_inputs(target, direct = True),
-        )
-
-    transitive_inputs = []
-    transitive_seen = {}
-    for target in targets:
-        for file in _static_link_inputs(target):
-            if file.path not in direct_seen and file.path not in transitive_seen:
-                transitive_seen[file.path] = True
-                transitive_inputs.append(file)
-    return direct_inputs, transitive_inputs
 
 def _file_paths(files):
     return [file.path for file in files]
@@ -175,17 +154,7 @@ def _final_link_impl(ctx):
 
     group_inputs = _static_inputs_from_deps(ctx.attr.group_deps)
     whole_group_inputs = _static_inputs_from_deps(ctx.attr.whole_group_deps)
-    whole_inputs, whole_transitive_inputs = _whole_archive_inputs(
-        ctx.attr.whole_archive_deps,
-    )
-    tail_inputs = []
-    tail_seen = {}
-    _append_unique(tail_inputs, tail_seen, whole_transitive_inputs)
-    _append_unique(
-        tail_inputs,
-        tail_seen,
-        _static_inputs_from_deps(ctx.attr.tail_deps),
-    )
+    tail_inputs = _static_inputs_from_deps(ctx.attr.tail_deps)
     ordered_link_files = _files_from_targets(
         ctx.attr.ordered_link_files,
     )
@@ -193,11 +162,10 @@ def _final_link_impl(ctx):
     sdk_paths = {file.path: True for file in sdk_inputs}
     group_inputs = [file for file in group_inputs if file.path not in sdk_paths]
     whole_group_inputs = [file for file in whole_group_inputs if file.path not in sdk_paths]
-    whole_inputs = [file for file in whole_inputs if file.path not in sdk_paths]
     tail_inputs = [file for file in tail_inputs if file.path not in sdk_paths]
     dependency_flags, dependency_inputs, alwayslink = _dependency_link_metadata(
         ctx.attr.direct_object_deps + ctx.attr.group_deps + ctx.attr.whole_group_deps +
-        ctx.attr.whole_archive_deps + ctx.attr.tail_deps + ctx.attr.sdk_deps,
+        ctx.attr.tail_deps + ctx.attr.sdk_deps,
     )
     extra_inputs = _files_from_targets(ctx.attr.extra_inputs) + dependency_inputs
 
@@ -205,7 +173,6 @@ def _final_link_impl(ctx):
         direct_objects +
         group_inputs +
         whole_group_inputs +
-        whole_inputs +
         tail_inputs +
         ordered_link_files +
         sdk_inputs +
@@ -217,13 +184,11 @@ def _final_link_impl(ctx):
     ordered_link_args = _file_paths(direct_objects)
     ordered_link_args.extend(_archive_group(group_inputs, is_apple, alwayslink = alwayslink))
     ordered_link_args.extend(_archive_group(whole_group_inputs, is_apple, whole = True))
-    ordered_link_args.extend(_archive_group(whole_inputs, is_apple, whole = True))
     ordered_link_args.extend(_archive_args(tail_inputs, is_apple, alwayslink))
     ordered_link_args.extend(_file_paths(ordered_link_files))
     ordered_link_args.extend(_archive_group(sdk_inputs, is_apple, alwayslink = alwayslink))
     ordered_link_args.extend(_file_paths(static_cpp_runtime_inputs))
     ordered_link_args.extend(dependency_flags)
-    ordered_link_args.extend(["-l" + library for library in ctx.attr.system_libs])
     ordered_link_args.extend([
         ctx.expand_location(option, targets = ctx.attr.extra_inputs)
         for option in ctx.attr.linkopts
@@ -296,12 +261,10 @@ final_link = rule(
         "direct_object_deps": attr.label_list(providers = [CcInfo]),
         "group_deps": attr.label_list(providers = [CcInfo]),
         "whole_group_deps": attr.label_list(providers = [CcInfo]),
-        "whole_archive_deps": attr.label_list(providers = [CcInfo]),
         "tail_deps": attr.label_list(providers = [CcInfo]),
         "sdk_deps": attr.label_list(providers = [CcInfo]),
         "ordered_link_files": attr.label_list(allow_files = True),
         "extra_inputs": attr.label_list(allow_files = True),
-        "system_libs": attr.string_list(),
         "linkopts": attr.string_list(),
         "out": attr.output(mandatory = True),
         "side_outputs": attr.output_list(),

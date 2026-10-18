@@ -50,10 +50,9 @@ export JEMALLOC_SYS_CONFIGURE_ARGS='--with-jemalloc-prefix=je_
     cargo_action(
         ctx,
         command = command,
-        inputs = [ctx.file.external_src, ctx.file.lockfile, ctx.file.manifest],
+        sources = [ctx.file.external_src, ctx.file.lockfile, ctx.file.manifest],
         outputs = [archive, public_header],
         work_dir = cargo_target,
-        source_files = [ctx.file.external_src, ctx.file.lockfile, ctx.file.manifest],
         arguments = [archive.dirname + "/..", ctx.file.manifest.path],
         mnemonic = "SeekdbJemallocBuild",
         progress_message = "Building seekdb-jemalloc-sys for " + platform.os,

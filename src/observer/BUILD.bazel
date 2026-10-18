@@ -409,19 +409,19 @@ _SEEKDB_EXTRA_LINK_INPUTS = select({
     "//conditions:default": [],
 })
 
-_SEEKDB_SYSTEM_LIBS = select({
-    "@platforms//os:android": ["dl", "m", "log", "android", "atomic"],
+_SEEKDB_SYSTEM_LINKOPTS = select({
+    "@platforms//os:android": ["-ldl", "-lm", "-llog", "-landroid", "-latomic"],
     "@platforms//os:macos": [
-        "pthread",
-        "dl",
-        "m",
-        "resolv",
+        "-lpthread",
+        "-ldl",
+        "-lm",
+        "-lresolv",
     ],
     "//conditions:default": [
-        "pthread",
-        "dl",
-        "m",
-        "rt",
+        "-lpthread",
+        "-ldl",
+        "-lm",
+        "-lrt",
     ],
 })
 
@@ -473,12 +473,10 @@ final_link(
     ),
     # Repeat oblib in tail_deps to resolve references introduced by later archives.
     group_deps = _SEEKDB_CORE_LINK_DEPS,
-    whole_archive_deps = [],
     tail_deps = _SEEKDB_TAIL_LINK_DEPS,
     ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
     extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
-    system_libs = _SEEKDB_SYSTEM_LIBS,
-    linkopts = _SEEKDB_EXECUTABLE_LINKOPTS + sanity_linkopts() + select({
+    linkopts = _SEEKDB_SYSTEM_LINKOPTS + _SEEKDB_EXECUTABLE_LINKOPTS + sanity_linkopts() + select({
         "//bazel:linux_package_runtime": ["-Wl,-rpath,$ORIGIN/../libexec/seekdb/lib"],
         "//conditions:default": [],
     }),
@@ -504,8 +502,7 @@ final_link(
     ),
     ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
     extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
-    system_libs = _SEEKDB_SYSTEM_LIBS,
-    linkopts = _SEEKDB_SHARED_LINKOPTS + sanity_linkopts(),
+    linkopts = _SEEKDB_SYSTEM_LINKOPTS + _SEEKDB_SHARED_LINKOPTS + sanity_linkopts(),
     out = "liboceanbase.so",
     shared = True,
     tags = ["manual"],

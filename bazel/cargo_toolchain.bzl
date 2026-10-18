@@ -59,7 +59,7 @@ def _local_cargo_repository_impl(ctx):
     channel = [line.split('"')[1] for line in native_pin.splitlines() if line.startswith("channel =")][0]
     wasm_channel = ctx.read(ctx.attr.wasm_toolchain).strip()
     result = ctx.execute([
-        python, ctx.path(ctx.attr.prepare), "discover", str(ctx.workspace_root), str(ctx.path(".")),
+        python, ctx.path(ctx.attr.prepare), "discover", str(ctx.path(".")),
         str(rustup), channel, wasm_channel,
     ], timeout = 600, quiet = True)
     if result.return_code:

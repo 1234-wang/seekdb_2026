@@ -12,8 +12,8 @@ import sysconfig
 import tarfile
 
 def discover(arguments):
-    root, output = map(Path, arguments[:2])
-    rustup, native_channel, wasm_channel = arguments[2:]
+    output = Path(arguments[0])
+    rustup, native_channel, wasm_channel = arguments[1:]
     exe = ".exe" if os.name == "nt" else ""
     installed = subprocess.check_output([rustup, "toolchain", "list"], text=True)
     channels = {"native": native_channel}

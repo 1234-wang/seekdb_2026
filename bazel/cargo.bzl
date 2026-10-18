@@ -15,18 +15,18 @@ CARGO_ACTION_ATTRS = PLATFORM_ATTRS | CC_TOOLCHAIN_ATTRS | apple_support.action_
     "_cargo_runner": attr.label(default = Label("//bazel:cargo_runner.py"), allow_single_file = True),
 }
 
-def cargo_action(ctx, command, inputs, outputs, work_dir, source_files, **kwargs):
+def cargo_action(ctx, command, sources, outputs, work_dir, **kwargs):
     """Run a sandboxed, offline Cargo action using the selected local toolchain."""
     platform = target_platform(ctx)
     toolchain = ctx.toolchains[CARGO_TOOLCHAIN_TYPE]
     cc = find_cpp_toolchain(ctx)
-    sources = ctx.actions.declare_file(ctx.label.name + ".cargo-sources.json")
-    ctx.actions.write(sources, json.encode([file.path for file in source_files]))
+    source_manifest = ctx.actions.declare_file(ctx.label.name + ".cargo-sources.json")
+    ctx.actions.write(source_manifest, json.encode([file.path for file in sources]))
     arguments = [
         ctx.file._cargo_runner.path,
         "--work-dir", work_dir.path, "--vendor", toolchain.vendor.path,
         "--cargo", toolchain.cargo.path, "--rustc", toolchain.rustc.path,
-        "--sources", sources.path, "--target", platform.rust_target, "--cc", cc.compiler_executable, "--ar", cc.ar_executable,
+        "--sources", source_manifest.path, "--target", platform.rust_target, "--cc", cc.compiler_executable, "--ar", cc.ar_executable,
         "--",
     ]
     environment = {"DEFAULT_LOG_LEVEL": ctx.attr.default_log_level, "PYTHONHOME": toolchain.python_home}
@@ -53,8 +53,8 @@ def cargo_action(ctx, command, inputs, outputs, work_dir, source_files, **kwargs
         executable = toolchain.python,
         arguments = arguments,
         inputs = depset(
-            direct = [ctx.file._cargo_runner, sources, toolchain.vendor],
-            transitive = [inputs if type(inputs) == "depset" else depset(inputs), toolchain.files, cc.all_files],
+            direct = [ctx.file._cargo_runner, source_manifest, toolchain.vendor] + sources,
+            transitive = [toolchain.files, cc.all_files],
         ),
         outputs = outputs + [work_dir],
         env = environment,
@@ -95,7 +95,6 @@ def _cargo_build_impl(ctx):
 
     outputs = libraries.values() + generated_headers.values()
     directory = ctx.bin_dir.path + "/" + ctx.label.package
-    inputs = ctx.files.srcs + ctx.files.platform_inputs
     work_dir = ctx.actions.declare_directory("cargo-work")
     command = 'python "$CARGO_WORKSPACE/rust/build.py" --cargo "$CARGO" --target-dir "$CARGO_TARGET_DIR" --output "%s/cargo"' % directory
     if platform.rust_target:
@@ -112,10 +111,9 @@ python "$wasm/workspace/build.py" --cargo "$CARGO" --target wasm32-unknown-emscr
     cargo_action(
         ctx,
         command = command,
-        inputs = inputs,
+        sources = ctx.files.srcs + ctx.files.platform_inputs,
         outputs = outputs,
         work_dir = work_dir,
-        source_files = inputs,
         mnemonic = "CargoBuild",
         progress_message = "Building Rust libraries for " + platform.os,
     )
