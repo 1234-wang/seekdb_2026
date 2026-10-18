@@ -12,6 +12,9 @@ bazel_dep(name = "rules_cc", version = "0.2.25")
 bazel_dep(name = "apple_support", version = "2.8.4")
 bazel_dep(name = "platforms", version = "1.0.0")
 
+host_tools_repository = use_repo_rule("//bazel:parser.bzl", "host_tools_repository")
+host_tools_repository(name = "seekdb_host_tools")
+
 seekdb_third_party_headers_repository = use_repo_rule(
     "//bazel:third_party_headers_repo.bzl",
     "seekdb_third_party_headers_repository",

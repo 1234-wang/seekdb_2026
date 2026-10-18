@@ -1,3 +1,4 @@
+load("//bazel:parser.bzl", "seekdb_parser")
 load(
     "//bazel:defs.bzl",
     "SEEKDB_MIGRATION_C_COPTS",
@@ -6,14 +7,12 @@ load(
 )
 load(
     ":pl_header_inventory.bzl",
-    "PL_IGNORED_GENERATED_HEADERS",
     "PL_PRIVATE_HEADERS",
     "PL_PUBLIC_HEADER_ROOTS",
     "pl_validate_header_inventory",
 )
 load(
     ":pl_source_inventory.bzl",
-    "PL_IGNORED_GENERATED_SOURCES",
     "PL_STANDALONE_SOURCES",
     "PL_UNITY_GROUPS",
 )
@@ -33,41 +32,19 @@ pl_validate_source_inventory(
         "**/*.cc",
         "**/*.cpp",
         "**/*.cxx",
-    ], exclude = PL_IGNORED_GENERATED_SOURCES, allow_empty = True),
+    ], allow_empty = True),
 )
 
-pl_validate_header_inventory(glob(
-    ["**/*.h"],
-    exclude = PL_IGNORED_GENERATED_HEADERS,
-))
+pl_validate_header_inventory(glob(["**/*.h"]))
 
-genrule(
+seekdb_parser(
     name = "generate_pl_parser",
-    srcs = [
-        "parser/pl_parser_mysql_mode.l",
-        "parser/pl_parser_mysql_mode.y",
-    ],
-    outs = [
-        "parser/bazel_generated/pl_parser_mysql_mode_lex.c",
-        "parser/bazel_generated/pl_parser_mysql_mode_lex.h",
-        "parser/bazel_generated/pl_parser_mysql_mode_tab.c",
-        "parser/bazel_generated/pl_parser_mysql_mode_tab.h",
-    ],
-    cmd = """
-      bash $(location //tools/bazel_migration:generate_pl_parser.sh) \
-        $(location @seekdb_3rd_headers//:devtools/bin/bison) \
-        $(location @seekdb_3rd_headers//:devtools/bin/flex) \
-        $$(dirname $(location @seekdb_3rd_headers//:devtools/share/bison/README)) \
-        $(RULEDIR)/parser/bazel_generated \
-        $$(dirname $(location parser/pl_parser_mysql_mode.y))
-    """,
-    tools = [
-        "//tools/bazel_migration:generate_pl_parser.sh",
-        "@seekdb_3rd_headers//:bison_runtime",
-        "@seekdb_3rd_headers//:devtools/bin/bison",
-        "@seekdb_3rd_headers//:devtools/bin/flex",
-        "@seekdb_3rd_headers//:devtools/share/bison/README",
-    ],
+    grammar = "parser/pl_parser_mysql_mode.y",
+    lexer_source = "parser/pl_parser_mysql_mode.l",
+    parser = "parser/bazel_generated/pl_parser_mysql_mode_tab.c",
+    parser_header = "parser/bazel_generated/pl_parser_mysql_mode_tab.h",
+    lexer = "parser/bazel_generated/pl_parser_mysql_mode_lex.c",
+    lexer_header = "parser/bazel_generated/pl_parser_mysql_mode_lex.h",
     tags = ["manual"],
 )
 

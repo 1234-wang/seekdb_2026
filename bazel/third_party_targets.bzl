@@ -68,16 +68,12 @@ SDK_IMPORTS.update({
 SDK_FILEGROUPS = {
     "ios_base_metadata": {"srcs": ["verified/*.json"]},
     "ios_base_licenses": {"srcs": ["licenses/**/*"]},
-    "bison_runtime": {"srcs": ["devtools/share/bison/**/*"]},
     "sanity_pass": {"srcs": ["devtools/lib64/libsanitypass.so"]},
 }
 
 HOST_FILES = [
-    "devtools/bin/bison",
-    "devtools/bin/flex",
     "devtools/bin/llvm-objcopy",
     "devtools/lib64/libsanitypass.so",
-    "devtools/share/bison/README",
 ]
 
 NATIVE_LINK_FILES = [
@@ -111,7 +107,7 @@ def sdk_aliases():
         }),
     )
     for name in list(SDK_HEADERS) + list(SDK_IMPORTS) + list(SDK_FILEGROUPS) + HOST_FILES + NATIVE_LINK_FILES:
-        if name in HOST_FILES + ["bison_runtime", "sanity_pass", "sanity_headers"]:
+        if name in HOST_FILES + ["sanity_pass", "sanity_headers"]:
             actual = "@seekdb_3rd_native//:" + name
         else:
             ios = "@seekdb_3rd_ios//:" + name

@@ -1,3 +1,4 @@
+load("//bazel:parser.bzl", "seekdb_parser", "seekdb_parser_type_names")
 load(
     "//bazel:defs.bzl",
     "SEEKDB_MIGRATION_C_COPTS",
@@ -41,44 +42,34 @@ _PARSER_CXX_STANDALONE_SOURCES = [
     ) and source not in _PARSER_DRIVER_UNITY_MEMBERS
 ]
 
-genrule(
+seekdb_parser(
+    name = "generate_fts_parser",
+    grammar = "ftsparser.y",
+    lexer_source = "ftsblex.l",
+    parser = "bazel_generated/ftsparser_tab.c",
+    parser_header = "bazel_generated/ftsparser_tab.h",
+    lexer = "bazel_generated/ftsblex_lex.c",
+    lexer_header = "bazel_generated/ftsblex_lex.h",
+    flex_options = ["-Cfa", "-B", "-8"],
+    lexer_patch = "fts",
+)
+
+seekdb_parser(
     name = "generate_sql_parser",
-    srcs = [
-        "ftsblex.l",
-        "ftsparser.y",
-        "gen_type_name.sh",
-        "ob_item_type.h",
-        "//src/query:_sql_item_type_definition",
-        "sql_parser_mysql_mode.l",
-        "sql_parser_mysql_mode.y",
-    ],
-    outs = [
-        "bazel_generated/ftsblex_lex.c",
-        "bazel_generated/ftsblex_lex.h",
-        "bazel_generated/ftsparser_tab.c",
-        "bazel_generated/ftsparser_tab.h",
-        "bazel_generated/sql_parser_mysql_mode_lex.c",
-        "bazel_generated/sql_parser_mysql_mode_lex.h",
-        "bazel_generated/sql_parser_mysql_mode_tab.c",
-        "bazel_generated/sql_parser_mysql_mode_tab.h",
-        "bazel_generated/type_name.c",
-    ],
-    cmd = """
-      bash $(location //tools/bazel_migration:generate_sql_parser.sh) \
-        $(location @seekdb_3rd_headers//:devtools/bin/bison) \
-        $(location @seekdb_3rd_headers//:devtools/bin/flex) \
-        $$(dirname $(location @seekdb_3rd_headers//:devtools/share/bison/README)) \
-        $(@D)/bazel_generated \
-        $$(dirname $(location :ftsparser.y)) \
-        $(location //src/query:_sql_item_type_definition)
-    """,
-    tools = [
-        "//tools/bazel_migration:generate_sql_parser.sh",
-        "@seekdb_3rd_headers//:bison_runtime",
-        "@seekdb_3rd_headers//:devtools/bin/bison",
-        "@seekdb_3rd_headers//:devtools/bin/flex",
-        "@seekdb_3rd_headers//:devtools/share/bison/README",
-    ],
+    grammar = "sql_parser_mysql_mode.y",
+    lexer_source = "sql_parser_mysql_mode.l",
+    parser = "bazel_generated/sql_parser_mysql_mode_tab.c",
+    parser_header = "bazel_generated/sql_parser_mysql_mode_tab.h",
+    lexer = "bazel_generated/sql_parser_mysql_mode_lex.c",
+    lexer_header = "bazel_generated/sql_parser_mysql_mode_lex.h",
+    flex_options = ["-Cfa", "-B", "-8"],
+    lexer_patch = "sql",
+)
+
+seekdb_parser_type_names(
+    name = "generate_type_names",
+    src = "//src/query:_sql_item_type_definition",
+    out = "bazel_generated/type_name.c",
 )
 
 cc_library(

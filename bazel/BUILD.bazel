@@ -1,6 +1,9 @@
 load(":seekdb_build_settings.bzl", "seekdb_bool_flag")
 
 exports_files([
+    "build_metadata.py",
+    "parser.bzl",
+    "parser_codegen.py",
     "cargo.bzl",
     "platforms.bzl",
     "third_party.BUILD",

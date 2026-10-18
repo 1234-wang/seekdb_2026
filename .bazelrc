@@ -6,7 +6,6 @@ build --aspects=//bazel/architecture:module_dependency_aspect.bzl%module_depende
 build --experimental_disk_cache_gc_max_size=50G
 build --experimental_disk_cache_gc_max_age=14d
 build --experimental_disk_cache_gc_idle_delay=1m
-build --workspace_status_command=./tools/bazel_migration/workspace_status.sh
 build --enable_platform_specific_config
 # Release-compatible O2 is the default. O1 uses fastbuild only as its output
 # configuration; the explicit copt also makes O1 portable to the native macOS

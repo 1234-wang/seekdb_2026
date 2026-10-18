@@ -50,7 +50,7 @@ def declare_cargo_toolchains(kinds, executable_suffix, execution_constraints):
 
 
 def _local_cargo_repository_impl(ctx):
-    python = ctx.which("python3") if ctx.os.name != "windows" else ctx.which("python")
+    python = ctx.which("python" if ctx.os.name.startswith("windows") else "python3")
     rustup = ctx.which("rustup")
     if not python or not rustup:
         fail("Install Python 3 and rustup before building seekdb")

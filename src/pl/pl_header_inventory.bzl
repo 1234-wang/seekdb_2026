@@ -41,13 +41,6 @@ PL_PRIVATE_HEADERS = [
     "sys_package/ob_dbms_vector_mysql.h",
 ]
 
-PL_IGNORED_GENERATED_HEADERS = [
-    "parser/pl_parser_mysql_mode_lex.h",
-    "parser/pl_parser_mysql_mode_tab.h",
-    "parser/pl_parser_oracle_mode_lex.h",
-    "parser/pl_parser_oracle_mode_tab.h",
-]
-
 def pl_validate_header_inventory(checked_in_headers):
     owner = {}
     for category, headers in [("public", PL_PUBLIC_HEADER_ROOTS), ("private", PL_PRIVATE_HEADERS)]:

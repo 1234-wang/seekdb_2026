@@ -1,12 +1,5 @@
 """Tracked and generated source inventory for the native PL module."""
 
-PL_IGNORED_GENERATED_SOURCES = [
-    "parser/pl_parser_mysql_mode_lex.c",
-    "parser/pl_parser_mysql_mode_tab.c",
-    "parser/pl_parser_oracle_mode_lex.c",
-    "parser/pl_parser_oracle_mode_tab.c",
-]
-
 PL_UNITY_GROUPS = [
     struct(
         name = "pl_common",

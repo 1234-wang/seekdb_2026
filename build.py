@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -198,10 +199,19 @@ def main(arguments: List[str]) -> int:
 
     # Only machine-specific paths belong here. Build policy lives in .bazelrc;
     # ordinary Bazel flags on the command line override these defaults.
+    status_command = (
+        "python bazel/build_metadata.py status"
+        if os.name == "nt" else shlex.join([
+            sys.executable,
+            str(root / "bazel/build_metadata.py"),
+            "status",
+        ])
+    )
     lines = [
         "common --downloader_config=" + _quote((root / "bazel/downloader.cfg").as_posix()),
         "build --disk_cache=" + _quote((_cache_directory() / "disk-cache").as_posix()),
         "build --symlink_prefix=" + _quote(build_directory.as_posix() + "/"),
+        "build --workspace_status_command=" + _quote(status_command),
     ]
     descriptor, name = tempfile.mkstemp(prefix="runtime.", suffix=".bazelrc", dir=cache)
     try:
