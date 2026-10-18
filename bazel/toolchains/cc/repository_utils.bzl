@@ -6,10 +6,10 @@ def host_substitutions(ctx):
         "@HOST_CPU@": {"amd64": "x86_64", "x86_64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}[ctx.os.arch],
     }
 
-def builtin_include_directories(ctx, compiler, flags = [], environment = {}):
+def builtin_include_directories(ctx, compiler):
     result = ctx.execute(
-        [compiler, "-E", "-x", "c++", "/dev/null", "-v"] + flags,
-        environment = environment | {"LC_ALL": "C"},
+        [compiler, "-E", "-x", "c++", "/dev/null", "-v"],
+        environment = {"LC_ALL": "C"},
     )
     if result.return_code:
         fail("Cannot query %s include directories: %s" % (compiler, result.stderr))

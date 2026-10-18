@@ -1,13 +1,9 @@
 exports_files([
     "repository_utils.bzl",
     "emscripten_cc_toolchain_repo.bzl",
-    "emscripten_toolchain_config.bzl.tpl",
     "BUILD.emscripten_cc_toolchain.tpl",
     "android_cc_toolchain_repo.bzl",
-    "android_toolchain_config.bzl.tpl",
     "BUILD.android_cc_toolchain.tpl",
     "BUILD.seekdb_cc_toolchain.tpl",
     "seekdb_cc_toolchain_repo.bzl",
-    "toolchain_config.bzl.tpl",
-    "validate_static_library.sh",
 ])

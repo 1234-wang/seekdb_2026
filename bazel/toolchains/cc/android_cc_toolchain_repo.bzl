@@ -17,8 +17,7 @@ def _android_cc_toolchain_repository_impl(ctx):
     if resource.return_code:
         fail("Cannot run Android NDK Clang: %s" % resource.stderr)
     version = resource.stdout.strip().split("/")[-1]
-    ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = host_substitutions(ctx) | {"@CLANG_VERSION@": version})
-    ctx.template("toolchain_config.bzl", ctx.attr.config_file, substitutions = {
+    ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = host_substitutions(ctx) | {
         "@CLANG_VERSION@": version,
         "@REPOSITORY_ROOT@": "external/" + ctx.name,
     })
@@ -34,7 +33,6 @@ android_cc_toolchain_repository = repository_rule(
     implementation = _android_cc_toolchain_repository_impl,
     attrs = {
         "build_file": attr.label(default = Label("//bazel/toolchains/cc:BUILD.android_cc_toolchain.tpl")),
-        "config_file": attr.label(default = Label("//bazel/toolchains/cc:android_toolchain_config.bzl.tpl")),
     },
     configure = True,
     local = True,

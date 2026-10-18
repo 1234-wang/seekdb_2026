@@ -80,7 +80,6 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
     workspace_root = str(repository_ctx.workspace_root)
     architecture = host_substitutions(repository_ctx)["@HOST_CPU@"]
     devtools = repository_ctx.path(workspace_root + "/" + repository_ctx.attr.devtools_path)
-    tools = {}
     for tool_name in [
         "clang",
         "ld.lld",
@@ -98,20 +97,17 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
         tool = devtools.get_child("bin").get_child(tool_name)
         if not tool.exists:
             fail("bundled tool is missing: %s" % tool)
-        tools[tool_name] = tool
-    compiler = tools["clang"]
 
     repository_ctx.symlink(devtools, "devtools")
 
     repository_ctx.template(
-        "BUILD.bazel",
-        repository_ctx.attr.build_file,
-        substitutions = {"@HOST_CPU@": architecture},
-        executable = False,
-    )
-    repository_ctx.template(
         "validate_static_library.sh",
         repository_ctx.attr.validate_static_library,
+        substitutions = {
+            "%{nm}": '$(dirname "${BASH_SOURCE[0]}")/devtools/bin/llvm-nm',
+            "%{c++filt}": '$(dirname "${BASH_SOURCE[0]}")/devtools/bin/llvm-cxxfilt',
+            "%{nm_extra_args}": "",
+        },
         executable = True,
     )
 
@@ -120,8 +116,8 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
         str(repository_ctx.path("devtools/bin/clang")),
     )
     repository_ctx.template(
-        "toolchain_config.bzl",
-        repository_ctx.attr.toolchain_config,
+        "BUILD.bazel",
+        repository_ctx.attr.build_file,
         substitutions = {
             "@CXX_BUILTIN_INCLUDE_DIRECTORIES@": repr(builtin_include_directories),
             "@HOST_CPU@": architecture,
@@ -145,13 +141,9 @@ seekdb_cc_toolchain_repository = repository_rule(
         "devtools_path": attr.string(
             default = "deps/3rd/usr/local/oceanbase/devtools",
         ),
-        "toolchain_config": attr.label(
-            allow_single_file = True,
-            default = Label("//bazel/toolchains/cc:toolchain_config.bzl.tpl"),
-        ),
         "validate_static_library": attr.label(
             allow_single_file = True,
-            default = Label("//bazel/toolchains/cc:validate_static_library.sh"),
+            default = Label("@rules_cc//cc/private/toolchain:validate_static_library.sh.tpl"),
         ),
     },
     configure = True,
