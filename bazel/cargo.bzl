@@ -10,7 +10,7 @@ load("@rules_cc//cc:find_cc_toolchain.bzl", "CC_TOOLCHAIN_ATTRS", "find_cpp_tool
 
 CARGO_TOOLCHAINS = use_cc_toolchain() + [CARGO_TOOLCHAIN_TYPE]
 
-CARGO_ACTION_ATTRS = PLATFORM_ATTRS | CC_TOOLCHAIN_ATTRS | apple_support.action_required_attrs() | apple_support.platform_constraint_attrs() | {
+CARGO_ACTION_ATTRS = PLATFORM_ATTRS | CC_TOOLCHAIN_ATTRS | apple_support.action_required_attrs() | {
     "default_log_level": attr.string(default = "OB_LOG_LEVEL_ERROR"),
     "_cargo_runner": attr.label(default = Label("//bazel:cargo_runner.py"), allow_single_file = True),
 }
@@ -33,27 +33,27 @@ def cargo_action(ctx, command, sources, outputs, work_dir, **kwargs):
         "--",
     ]
     environment = {"DEFAULT_LOG_LEVEL": ctx.attr.default_log_level, "PYTHONHOME": toolchain.python_home}
-    run = ctx.actions.run
+    # Cargo's C/C++ compiler and linker need the selected toolchain's environment.
+    environment.update(cc_common.get_environment_variables(
+        feature_configuration = features,
+        action_name = CPP_COMPILE_ACTION_NAME,
+        variables = cc_common.create_compile_variables(cc_toolchain = cc, feature_configuration = features),
+    ))
+    # The installed toolchain uses this machine's system runtime and SDK.
+    execution_requirements = {"no-remote": "1"}
     if platform.os == "windows":
         environment["CXXFLAGS"] = "/D" + WINDOWS_STL_COMPAT_DEFINE
-        # MSVC needs INCLUDE/LIB/PATH from its configured execution toolchain.
-        environment.update(cc_common.get_environment_variables(
-            feature_configuration = features,
-            action_name = CPP_COMPILE_ACTION_NAME,
-            variables = cc_common.create_compile_variables(cc_toolchain = cc, feature_configuration = features),
-        ))
         arguments += command
     else:
         if platform.apple:
             config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]
+            execution_requirements.update(config.execution_info())
             if platform.os == "ios":
                 environment["IPHONEOS_DEPLOYMENT_TARGET"] = str(config.minimum_os_for_platform_type(apple_common.platform_type.ios))
             else:
                 environment["MACOSX_DEPLOYMENT_TARGET"] = str(config.minimum_os_for_platform_type(apple_common.platform_type.macos))
-            run = apple_support.run
-            kwargs.update(actions = ctx.actions, xcode_config = config, apple_platform_info = apple_support.platform_info_from_rule_ctx(ctx))
         arguments += ["/bin/bash", "-c", "set -eu\n" + command, "cargo-action"] + kwargs.pop("arguments", [])
-    run(
+    ctx.actions.run(
         executable = toolchain.python,
         arguments = arguments,
         inputs = depset(
@@ -63,8 +63,7 @@ def cargo_action(ctx, command, sources, outputs, work_dir, **kwargs):
         outputs = outputs + [work_dir],
         env = environment,
         use_default_shell_env = True,
-        # The installed toolchain uses this machine's system runtime and SDK.
-        execution_requirements = {"no-remote": "1"},
+        execution_requirements = execution_requirements,
         **kwargs
     )
 
