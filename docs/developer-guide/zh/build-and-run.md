@@ -50,7 +50,21 @@ Linux 上通过以下命令启用 Sanity 插桩：
 ./build.py build --sanity=true seekdb
 ```
 
-产物路径与普通构建相同。如需保留独立的 Sanity 构建目录，在 `build` 前加 `--build-dir build_sanity`，产物将位于 `build_sanity/bin/src/observer/seekdb`。
+产物仍通过相同的链接访问。如需保留独立的 Sanity 构建，为它指定独立的 Bazel 工作目录和产物链接：
+
+```bash
+./build.py --build-dir build_sanity --output_base="$HOME/.cache/seekdb-sanity" build --sanity=true seekdb
+```
+
+二进制通过 `build_sanity/bin/src/observer/seekdb` 访问。
+
+## 构建目录
+
+Bazel 将实际工作目录放在源码树外的用户缓存目录中，每份源码有独立的目录。使用 `./build.py info output_base` 查看实际位置。项目内的 `build/bin`、`build/out` 等是指向它的链接；Linux/macOS 的二进制仍通过 `build/bin/src/observer/seekdb` 访问。
+
+`--build-dir PATH` 只改变这些链接的位置。需要隔离实际构建状态时，在命令前指定 Bazel 的 `--output_base=PATH`。普通 `find` 不遍历目录软链接，`find -L` 会遍历。
+
+使用 `./build.py clean --expunge` 清理当前源码的工作目录。旧版入口留下的 `build/output-base` 不会自动迁移，可用 `./build.py --output_base="$PWD/build/output-base" clean --expunge` 清理。
 
 ## 复用构建缓存
 

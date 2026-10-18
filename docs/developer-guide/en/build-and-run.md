@@ -50,7 +50,21 @@ On Linux, enable Sanity instrumentation with:
 ./build.py build --sanity=true seekdb
 ```
 
-The binary is written to the same output path. To keep a separate Sanity build directory, place `--build-dir build_sanity` before `build`; its binary will be `build_sanity/bin/src/observer/seekdb`.
+The binary is accessible through the same output link. To keep a separate Sanity build, give it its own Bazel working directory and output links:
+
+```bash
+./build.py --build-dir build_sanity --output_base="$HOME/.cache/seekdb-sanity" build --sanity=true seekdb
+```
+
+Its binary is accessible at `build_sanity/bin/src/observer/seekdb`.
+
+## Build directories
+
+Bazel keeps its working directory outside the source tree, under its user cache, with a separate directory for each checkout. Run `./build.py info output_base` to locate it. The project's `build/bin`, `build/out`, and other output links point into that directory; `build/bin/src/observer/seekdb` remains the native Linux/macOS binary path.
+
+`--build-dir PATH` only changes where these links are created. To isolate build state as well, put Bazel's `--output_base=PATH` before the command. Ordinary `find` does not traverse directory links; `find -L` does.
+
+Use `./build.py clean --expunge` to remove this checkout's working directory. Existing `build/output-base` directories from older launcher versions are not migrated automatically: clean one with `./build.py --output_base="$PWD/build/output-base" clean --expunge`.
 
 ## Reuse build caches
 
