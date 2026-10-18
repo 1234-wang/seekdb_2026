@@ -14,7 +14,6 @@ SDK_HEADERS = {
         "defines": ["_GLIBCXX_USE_CXX11_ABI=1"],
         "linkopts": select({"@platforms//os:linux": ["-pthread"], "//conditions:default": []}),
     },
-    "gmock": _headers("gmock") | {"deps": [":gmock_archive", ":gtest"]},
     "sanity_headers": {"hdrs": ["devtools/include/sanity/**/*.h"], "includes": ["devtools/include"]},
     "jemalloc_headers": _headers("jemalloc"),
     "absl_headers": _headers("absl"),
@@ -38,8 +37,6 @@ SDK_HEADERS = {
 }
 SDK_IMPORTS = {
     "gtest_archive": {"static_library": "lib/libgtest.a"},
-    "gmock_archive": {"static_library": "lib/libgmock.a"},
-    "sanity_runtime": {"static_library": "devtools/lib64/libsanity.a"},
     "libaio": {
         "static_library": "lib/libaio.a",
         "hdrs": ["include/libaio.h"],
@@ -114,7 +111,7 @@ def sdk_aliases():
         }),
     )
     for name in list(SDK_HEADERS) + list(SDK_IMPORTS) + list(SDK_FILEGROUPS) + HOST_FILES + NATIVE_LINK_FILES:
-        if name in HOST_FILES + ["bison_runtime", "sanity_pass", "sanity_runtime", "sanity_headers"]:
+        if name in HOST_FILES + ["bison_runtime", "sanity_pass", "sanity_headers"]:
             actual = "@seekdb_3rd_native//:" + name
         else:
             ios = "@seekdb_3rd_ios//:" + name

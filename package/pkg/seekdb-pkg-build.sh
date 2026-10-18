@@ -129,12 +129,7 @@ info "Assembling staging directory ..."
 
 python3 "$TOPDIR/package/package.py" stage --layout macos \
   --artifacts "$SEEKDB_BUILD" --version "$VERSION" --release "$RELEASE" --output "$STAGING"
-install -d "$STAGING/opt/seekdb/lib/seekdb"
-
-if [[ -x "$SEEKDB_BUILD/tools/ob_error/ob_error" ]]; then
-  install -m 755 "$SEEKDB_BUILD/tools/ob_error/ob_error" "$STAGING/opt/seekdb/bin/ob_error"
-fi
-python3 "$SCRIPT_DIR/bundle_dylibs.py" "$STAGING/opt/seekdb" "$SEEKDB_BIN" "$SEEKDB_BUILD/tools/ob_error/ob_error"
+python3 "$SCRIPT_DIR/bundle_dylibs.py" "$STAGING/opt/seekdb" "$SEEKDB_BIN"
 
 for script in seekdbctl seekdb_start seekdb_stop seekdb_status seekdb_config \
               seekdb_setup seekdb_paths seekdb_uninstall; do

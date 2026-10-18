@@ -1,12 +1,12 @@
 # 编写与运行单元测试
 
-C++ 单元测试使用 Google Test，并通过 Bazel `cc_test` 显式声明。当前仓库有 `unittest/oblib/` 下的两个分配器测试，以及 `tools/ob_error/test/` 下的错误码工具测试。
+C++ 单元测试使用 Google Test，并通过 Bazel `cc_test` 显式声明。当前仓库有 `unittest/oblib/` 下的两个分配器测试。
 
 ## 在 Linux 上编译
 
 ```bash
 ./build.py init
-./build.py build //unittest/oblib:test_malloc_backend //tools/ob_error:test_ob_error
+./build.py build //unittest/oblib:test_malloc_backend
 ./build.py build --sanity //unittest/oblib:test_jemalloc_hook
 ```
 
@@ -15,7 +15,7 @@ C++ 单元测试使用 Google Test，并通过 Bazel `cc_test` 显式声明。�
 列出仓库中的测试目标：
 
 ```bash
-./build.py query 'kind(cc_test, //unittest/... + //tools/ob_error/...)'
+./build.py query 'kind(cc_test, //unittest/...)'
 ```
 
 ## 运行测试
@@ -23,7 +23,6 @@ C++ 单元测试使用 Google Test，并通过 Bazel `cc_test` 显式声明。�
 ```bash
 ./build.py test //unittest/oblib:test_malloc_backend --test_output=errors
 ./build.py test --sanity //unittest/oblib:test_jemalloc_hook --test_output=errors
-./build.py test //tools/ob_error:test_ob_error --test_filter=TestObError.test_parser
 ```
 
 ## 添加测试

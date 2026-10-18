@@ -1,12 +1,12 @@
 # Write and run unit tests
 
-C++ unit tests use Google Test and explicit Bazel `cc_test` targets. The current checkout contains two allocator tests under `unittest/oblib/` and the error-tool test under `tools/ob_error/test/`.
+C++ unit tests use Google Test and explicit Bazel `cc_test` targets. The current checkout contains two allocator tests under `unittest/oblib/`.
 
 ## Build tests on Linux
 
 ```bash
 ./build.py init
-./build.py build //unittest/oblib:test_malloc_backend //tools/ob_error:test_ob_error
+./build.py build //unittest/oblib:test_malloc_backend
 ./build.py build --sanity //unittest/oblib:test_jemalloc_hook
 ```
 
@@ -15,7 +15,7 @@ C++ unit tests use Google Test and explicit Bazel `cc_test` targets. The current
 List the checked-in test targets with:
 
 ```bash
-./build.py query 'kind(cc_test, //unittest/... + //tools/ob_error/...)'
+./build.py query 'kind(cc_test, //unittest/...)'
 ```
 
 ## Run a test
@@ -23,7 +23,6 @@ List the checked-in test targets with:
 ```bash
 ./build.py test //unittest/oblib:test_malloc_backend --test_output=errors
 ./build.py test --sanity //unittest/oblib:test_jemalloc_hook --test_output=errors
-./build.py test //tools/ob_error:test_ob_error --test_filter=TestObError.test_parser
 ```
 
 ## Add a test

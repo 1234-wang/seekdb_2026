@@ -38,7 +38,7 @@ The seekdb binary is generated at `build_bazel/bin/src/observer/seekdb`.
 Build the existing C++ tests on Linux without running them:
 
 ```bash
-./build.py build //unittest/oblib:test_malloc_backend //tools/ob_error:test_ob_error
+./build.py build //unittest/oblib:test_malloc_backend
 ./build.py build --sanity //unittest/oblib:test_jemalloc_hook
 ```
 

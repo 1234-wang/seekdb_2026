@@ -1,5 +1,4 @@
 load(":seekdb_build_settings.bzl", "seekdb_bool_flag")
-load(":defs.bzl", cc_library = "seekdb_cc_library")
 
 exports_files([
     "cargo.bzl",
@@ -36,13 +35,6 @@ config_setting(
     name = "sanity_enabled",
     flag_values = {":enable_sanity": "true"},
     visibility = ["//visibility:public"],
-)
-
-cc_library(
-    name = "sanity_abort_runtime",
-    srcs = ["sanity_abort.cpp"],
-    tags = ["manual"],
-    visibility = ["//src/oblib:__pkg__"],
 )
 
 toolchain_type(name = "cargo_toolchain_type", visibility = ["//visibility:public"])

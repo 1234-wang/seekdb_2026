@@ -89,8 +89,6 @@ runs:
         registry = "sparse+https://rsproxy.cn/index/"
         EOF
 
-    # NOTE: needs a node20-capable runner (same constraint as the cache action
-    # pin in buildbase); disable via `cache: 'false'` on runners that cannot.
     - name: Cache cargo registry
       if: inputs.cache == 'true'
       uses: actions/cache@v4

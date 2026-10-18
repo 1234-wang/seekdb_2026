@@ -714,11 +714,9 @@ cmd_uninstall() {
   cmd_stop || true
   quit_monitor_app
   rm -f "$PLIST"
-  for cmd in seekdb seekdbctl ob_admin ob_error \
+  for cmd in seekdb seekdbctl \
              seekdb_start seekdb_stop seekdb_status seekdb_config \
-             seekdb_setup seekdb_paths seekdb_uninstall \
-             seekdb-start seekdb-stop seekdb-status seekdb-config \
-             seekdb-setup seekdb-paths seekdb-uninstall; do
+             seekdb_setup seekdb_paths seekdb_uninstall; do
     remove_seekdb_link "/usr/local/bin/${cmd}"
   done
   safe_rm_rf "$data_dir"

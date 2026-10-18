@@ -87,10 +87,6 @@ def main():
         package.stage(payload, options.artifacts.resolve(), options.dependencies.resolve(), "windows",
                       options.version, str(options.release), timezone=options.timezone_file)
         configurator = options.configurator
-        if configurator is None:
-            published = ROOT / "tools/windows/seekdbConfigurator/publish/seekdbConfigurator.exe"
-            if published.is_file():
-                configurator = published
         if configurator:
             package.copy(configurator, payload / "bin/seekdbConfigurator.exe", True)
         directories = [payload / "bin", options.dependencies / "vcpkg/x64-windows/bin",

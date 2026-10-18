@@ -17,21 +17,20 @@ def loader_path(path, binary, executable):
                 .replace("@executable_path", str(executable.parent)))
 
 
-def bundle(prefix, executable, tools):
+def bundle(prefix, executable):
     libraries = prefix / "lib/seekdb"
     libraries.mkdir(parents=True, exist_ok=True)
-    originals = [executable] + [tool for tool in tools if tool.is_file()]
-    pending = deque((source, prefix / "bin" / source.name, (), source) for source in originals)
+    pending = deque([(executable, prefix / "bin" / executable.name, ())])
     visited = set()
     origins = {}
     signed = []
     while pending:
-        original, staged, inherited, process = pending.popleft()
+        original, staged, inherited = pending.popleft()
         if staged in visited:
             continue
         visited.add(staged)
         metadata = output("otool", "-l", str(original))
-        rpaths = tuple(loader_path(value, original, process) for value in re.findall(
+        rpaths = tuple(loader_path(value, original, executable) for value in re.findall(
             r"cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset", metadata)) + inherited
         identity = re.search(r"cmd LC_ID_DYLIB\s+cmdsize \d+\s+name (.*?) \(offset", metadata)
         imports = output("otool", "-L", str(original)).splitlines()[1:]
@@ -42,7 +41,7 @@ def bundle(prefix, executable, tools):
             if dependency.startswith("@rpath/"):
                 candidates = [directory / dependency[len("@rpath/"):] for directory in rpaths]
             else:
-                candidates = [loader_path(dependency, original, process)]
+                candidates = [loader_path(dependency, original, executable)]
             resolved = next((path.resolve() for path in candidates if path.is_file()), None)
             if resolved is None:
                 raise ValueError("unresolved dylib %s imported by %s" % (dependency, original))
@@ -53,7 +52,7 @@ def bundle(prefix, executable, tools):
                 origins[target] = resolved
                 shutil.copyfile(resolved, target)
                 target.chmod(0o755)
-                pending.append((resolved, target, rpaths, process))
+                pending.append((resolved, target, rpaths))
             relative = "@executable_path/../lib/seekdb/" if staged.parent == prefix / "bin" else "@loader_path/"
             subprocess.run(["install_name_tool", "-change", dependency, relative + target.name, str(staged)], check=True)
         if staged.parent == libraries:
@@ -64,4 +63,4 @@ def bundle(prefix, executable, tools):
 
 
 if __name__ == "__main__":
-    bundle(Path(sys.argv[1]), Path(sys.argv[2]), [Path(value) for value in sys.argv[3:]])
+    bundle(Path(sys.argv[1]), Path(sys.argv[2]))

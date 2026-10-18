@@ -64,9 +64,6 @@ def stage(destination, artifacts, dependencies, layout, version, release, compon
     (config / "ob_system_variable_init.json").write_text(json.dumps(clear_links(variables), indent=2) + "\n")
     if layout == "windows":
         copy(ROOT / "tools/windows/installer/seekdb.cnf", config / "seekdb.cnf")
-        manager = ROOT / "tools/windows/seekdb_manage.ps1"
-        if manager.is_file():
-            copy(manager, binary / manager.name)
         return
     for script in ("import_time_zone_info.py", "import_srs_data.py"):
         copy(ROOT / "tools" / script, helpers / script, True)
