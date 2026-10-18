@@ -26,7 +26,6 @@
 .clang_complete
 .configured
 .cproject
-.dep_create
 .deps*
 .dirstamp
 .libs

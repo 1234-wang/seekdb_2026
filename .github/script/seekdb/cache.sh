@@ -87,7 +87,7 @@ deps_digest()
 {
   hash_inputs \
     "$WORKSPACE/deps/init/oceanbase.el9.x86_64.deps" \
-    "$WORKSPACE/deps/init/dep_create.sh"
+    "$WORKSPACE/deps/init/prepare.py"
 }
 
 cargo_digest()
@@ -127,7 +127,7 @@ cache_key()
       digest="$(hash_inputs \
         "$WORKSPACE/.bazelversion" \
         "$WORKSPACE/deps/init/oceanbase.el9.x86_64.deps" \
-        "$WORKSPACE/deps/init/dep_create.sh")" || return 1
+        "$WORKSPACE/deps/init/prepare.py")" || return 1
       printf 'bazel-v1-%s-%s-%s\n' \
         "$PLATFORM" "$safe_mode" "$digest"
       ;;

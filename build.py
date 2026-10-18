@@ -14,7 +14,7 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
-from typing import List, Optional
+from typing import List
 
 
 class BuildError(RuntimeError):
@@ -107,80 +107,12 @@ def _quote(value: str) -> str:
     return '"' + value.replace('"', '\\"') + '"'
 
 
-def _initialize(root: Path, arguments: List[str]) -> Optional[int]:
-    if not arguments or arguments[0] != "init":
-        return None
-    parser = argparse.ArgumentParser(prog="build.py init")
-    target_platform = parser.add_mutually_exclusive_group()
-    target_platform.add_argument("--android", action="store_true")
-    target_platform.add_argument("--ios", action="store_true")
-    target_platform.add_argument("--wasm", action="store_true")
-    parser.add_argument("--simulator", action="store_true")
-    options = parser.parse_args(arguments[1:])
-    if options.simulator and not options.ios:
-        parser.error("--simulator requires --ios")
-    if os.name == "nt":
-        if options.android or options.ios or options.wasm:
-            parser.error("Android/iOS/Wasm dependency initialization requires a Unix host")
-        return subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-             str(root / "deps/init/dep_create.ps1")],
-            cwd=str(root),
-        ).returncode
-
-    initializer = root / "deps/init/dep_create.sh"
-    environment = os.environ.copy()
-    environment["ANDROID_BUILD"] = "false"
-    environment["WORKSPACE_DEPS_3RD"] = str(root / "deps/3rd")
-    if options.ios:
-        sdk = "iphonesimulator" if options.simulator else "iphoneos"
-        if sys.platform != "darwin" or subprocess.run(
-            ["xcrun", "--sdk", sdk, "--show-sdk-path"], env=environment,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        ).returncode:
-            raise BuildError("iOS SDK unavailable; install Xcode and set DEVELOPER_DIR to its Contents/Developer directory")
-    status = subprocess.run(
-        ["bash", initializer.name],
-        cwd=str(initializer.parent),
-        env=environment,
-    ).returncode
-    if status:
-        return status
-    if options.wasm:
-        return subprocess.run(
-            [sys.executable, str(root / "deps/init/wasm/build.py")], cwd=root, env=environment,
-        ).returncode
-    if options.android:
-        environment["ANDROID_BUILD"] = "true"
-        environment["WORKSPACE_DEPS_3RD"] = str(root / "deps/android")
-        status = subprocess.run(["bash", initializer.name], cwd=str(initializer.parent), env=environment).returncode
-    if status or not (options.ios or options.android):
-        return status
-    target = "aarch64-linux-android" if options.android else (
-        "aarch64-apple-ios-sim" if options.simulator else "aarch64-apple-ios")
-    status = subprocess.run(
-        ["rustup", "target", "add", target], cwd=str(root / "rust"), env=environment,
-    ).returncode
-    if status or options.android:
-        return status
-    status = subprocess.run(
-        [sys.executable, str(root / "deps/init/ios/build.py"), "--reuse", "--jobs", str(os.cpu_count() or 1)]
-        + (["--simulator"] if options.simulator else []),
-        cwd=str(root), env=environment,
-    ).returncode
-    if status:
-        return status
-    return main([
-        "build", "--config=" + ("ios-simulator" if options.simulator else "ios"),
-        "//bazel/sdk_sources:source_sdk",
-    ])
-
-
 def main(arguments: List[str]) -> int:
     root = Path(__file__).resolve().parent
-    status = _initialize(root, arguments)
-    if status is not None:
-        return status
+    if arguments and arguments[0] == "init":
+        return subprocess.run([
+            sys.executable, str(root / "deps/init/prepare.py"), *arguments[1:],
+        ], cwd=root).returncode
 
     # Parse launcher options only before the Bazel command. Everything after
     # the command (including `run -- ...`) belongs to Bazel or the program.

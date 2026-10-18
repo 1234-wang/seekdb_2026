@@ -38,7 +38,7 @@ Do not infer aarch64 support for Fedora, openSUSE/SLES, UOS, or TencentOS from t
 
 The compatibility build also recognizes macOS 13 or later on both `arm64` and `x86_64`. Apple Silicon is the primary tested development platform; accepting an Intel host in the build scripts does not constitute a production-support guarantee.
 
-Windows 11 x64 uses `python build.py`; `init` selects the Windows dependency initializer.
+Windows 11 x64 uses `python build.py`; `init` selects the Windows dependency manifest.
 
 ## Linux host packages
 

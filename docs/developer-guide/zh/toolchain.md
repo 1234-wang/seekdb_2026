@@ -60,7 +60,7 @@ aarch64-apple-ios-sim
 
 兼容构建还可以识别 macOS 13 或更高版本的 `arm64` 和 `x86_64`。Apple Silicon 是主要测试的开发平台；构建脚本接受 Intel 主机并不等同于生产支持承诺。
 
-Windows 11 x64 使用 `python build.py`，`init` 会选择 Windows 依赖初始化脚本。
+Windows 11 x64 使用 `python build.py`，`init` 会选择 Windows 依赖清单。
 
 ## Linux 宿主机依赖
 
