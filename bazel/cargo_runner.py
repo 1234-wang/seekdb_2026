@@ -65,7 +65,7 @@ environment.update({
 # System utilities (shell, make, SDK launchers) belong to the local execution
 # platform. Rust/Python/C++ compilers themselves are declared action inputs.
 environment["PATH"] = os.pathsep.join([
-    str(cargo.parent), str(Path(os.sys.executable).absolute().parent), str(cc.parent),
+    str(cargo.parent), str(Path(environment["PYTHONHOME"]).absolute() / "bin"), str(cc.parent),
     environment.get("PATH", os.defpath),
 ])
 environment["PYTHONHOME"] = str(Path(environment["PYTHONHOME"]).absolute())

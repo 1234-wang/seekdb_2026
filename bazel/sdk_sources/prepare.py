@@ -48,6 +48,10 @@ if package == "vsag":
     Path("antlr4-autogen").symlink_to("extern/antlr4/fc", target_is_directory=True)
 if package == "antlr4":
     Path("antlr4-runtime").symlink_to("runtime/Cpp/runtime/src", target_is_directory=True)
+    # DiskANN's exceptions.h collides with ANTLR's Exceptions.h on macOS.
+    for path in Path("runtime/Cpp/runtime/src").rglob("*"):
+        if path.suffix in (".h", ".cpp"):
+            path.write_text(path.read_text().replace('#include "Exceptions.h"', '#include "antlr4-runtime/Exceptions.h"'))
 if package == "openblas":
     source = Path("lapack-netlib/CBLAS/include/cblas_mangling_with_flags.h.in")
     Path("lapack-netlib/CBLAS/include/cblas_mangling.h").write_bytes(source.read_bytes())

@@ -151,8 +151,8 @@ def target_environment(sdk, options, environment, prefix=None):
     result["CFLAGS"] = flags
     result["CXXFLAGS"] = flags
     result["LDFLAGS"] = "-target " + triple + " -isysroot " + shlex.quote(sdk)
-    result["PKG_CONFIG"] = "false"
-    result["PKG_CONFIG_LIBDIR"] = ""
+    result["PKG_CONFIG"] = "pkg-config"
+    result["PKG_CONFIG_LIBDIR"] = str(prefix / "lib/pkgconfig") if prefix else ""
     result["PKG_CONFIG_PATH"] = ""
     if prefix:
         result["CPPFLAGS"] = "-I" + shlex.quote(str(prefix / "include"))

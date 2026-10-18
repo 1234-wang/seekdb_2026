@@ -7,6 +7,7 @@ def _source_impl(ctx):
         type = "tar.xz" if source["url"].endswith(".xz") else ("tar.bz2" if source["url"].endswith(".bz2") else "tar.gz"),
         url = source["url"],
     )
+    ctx.watch(ctx.path(ctx.attr.prepare))
     result = ctx.execute([
         "python3",
         str(ctx.path(ctx.attr.prepare)),

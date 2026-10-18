@@ -6,7 +6,7 @@
 
 - Apple Silicon Mac
 - 安装了 iOS SDK 的 Xcode，位于 `/Applications/Xcode.app`，或通过 `DEVELOPER_DIR` 指定
-- 已将 `rustup`、Autoconf、Automake 1.16.3 及以上、Libtool、Gettext 加入 `PATH`（`brew install autoconf automake libtool gettext`）
+- 已将 `rustup`、Autoconf、Automake 1.16.3 及以上、Libtool、Gettext、pkg-config 加入 `PATH`（`brew install autoconf automake libtool gettext pkgconf`）
 - 约 10 GB 可用磁盘空间，用于依赖和一个构建目录
 
 ## 构建

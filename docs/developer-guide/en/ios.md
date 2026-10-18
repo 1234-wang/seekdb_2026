@@ -6,7 +6,7 @@ Cross-compile seekdb on an Apple Silicon Mac into `SeekDB.framework`, a dynamic 
 
 - Apple Silicon Mac
 - Xcode with the iOS SDKs, at `/Applications/Xcode.app` or pointed to by `DEVELOPER_DIR`
-- `rustup`, Autoconf, Automake 1.16.3 or later, Libtool, and Gettext on `PATH` (`brew install autoconf automake libtool gettext`)
+- `rustup`, Autoconf, Automake 1.16.3 or later, Libtool, Gettext, and pkg-config on `PATH` (`brew install autoconf automake libtool gettext pkgconf`)
 - About 10 GB of free disk space for the dependencies and one build directory
 
 ## Build

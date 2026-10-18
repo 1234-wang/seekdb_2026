@@ -5,7 +5,7 @@ load("@apple_support//lib:apple_support.bzl", "apple_support")
 load("//bazel:platforms.bzl", "PLATFORM_ATTRS", "target_platform")
 load("//bazel:cargo_toolchain.bzl", "CARGO_TOOLCHAIN_TYPE")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
-load("@rules_cc//cc:action_names.bzl", "CPP_COMPILE_ACTION_NAME")
+load("@rules_cc//cc:action_names.bzl", "C_COMPILE_ACTION_NAME", "CPP_COMPILE_ACTION_NAME")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "CC_TOOLCHAIN_ATTRS", "find_cpp_toolchain", "use_cc_toolchain")
 
 CARGO_TOOLCHAINS = use_cc_toolchain() + [CARGO_TOOLCHAIN_TYPE]
@@ -20,21 +20,22 @@ def cargo_action(ctx, command, sources, outputs, work_dir, **kwargs):
     platform = target_platform(ctx)
     toolchain = ctx.toolchains[CARGO_TOOLCHAIN_TYPE]
     cc = find_cpp_toolchain(ctx)
+    features = cc_common.configure_features(ctx = ctx, cc_toolchain = cc)
+    compiler = cc_common.get_tool_for_action(feature_configuration = features, action_name = C_COMPILE_ACTION_NAME)
     source_manifest = ctx.actions.declare_file(ctx.label.name + ".cargo-sources.json")
     ctx.actions.write(source_manifest, json.encode([file.path for file in sources]))
     arguments = [
         ctx.file._cargo_runner.path,
         "--work-dir", work_dir.path, "--vendor", toolchain.vendor.path,
         "--cargo", toolchain.cargo.path, "--rustc", toolchain.rustc.path,
-        "--sources", source_manifest.path, "--target", platform.rust_target, "--cc", cc.compiler_executable, "--ar", cc.ar_executable,
+        # Cargo's cc crate expects ar syntax; Apple's C++ archive action uses libtool.
+        "--sources", source_manifest.path, "--target", platform.rust_target, "--cc", compiler, "--ar", "/usr/bin/ar" if platform.apple else cc.ar_executable,
         "--",
     ]
     environment = {"DEFAULT_LOG_LEVEL": ctx.attr.default_log_level, "PYTHONHOME": toolchain.python_home}
     run = ctx.actions.run
     if platform.os == "windows":
         # MSVC needs INCLUDE/LIB/PATH from its configured execution toolchain.
-        features = cc_common.configure_features(ctx = ctx, cc_toolchain = cc)
-        environment.update(ctx.configuration.default_shell_env)
         environment.update(cc_common.get_environment_variables(
             feature_configuration = features,
             action_name = CPP_COMPILE_ACTION_NAME,
@@ -42,10 +43,12 @@ def cargo_action(ctx, command, sources, outputs, work_dir, **kwargs):
         ))
         arguments += command
     else:
-        if platform.os == "ios":
+        if platform.apple:
             config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]
-            environment["IPHONEOS_DEPLOYMENT_TARGET"] = str(config.minimum_os_for_platform_type(apple_common.platform_type.ios))
-            command = 'export SDKROOT="$(xcrun --sdk %s --show-sdk-path)"\n' % platform.ios_sdk + command
+            if platform.os == "ios":
+                environment["IPHONEOS_DEPLOYMENT_TARGET"] = str(config.minimum_os_for_platform_type(apple_common.platform_type.ios))
+            else:
+                environment["MACOSX_DEPLOYMENT_TARGET"] = str(config.minimum_os_for_platform_type(apple_common.platform_type.macos))
             run = apple_support.run
             kwargs.update(actions = ctx.actions, xcode_config = config, apple_platform_info = apple_support.platform_info_from_rule_ctx(ctx))
         arguments += ["/bin/bash", "-c", "set -eu\n" + command, "cargo-action"] + kwargs.pop("arguments", [])
@@ -58,6 +61,7 @@ def cargo_action(ctx, command, sources, outputs, work_dir, **kwargs):
         ),
         outputs = outputs + [work_dir],
         env = environment,
+        use_default_shell_env = True,
         # The installed toolchain uses this machine's system runtime and SDK.
         execution_requirements = {"no-remote": "1"},
         **kwargs
