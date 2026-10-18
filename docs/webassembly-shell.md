@@ -143,7 +143,7 @@ After changing engine sources, rebuild and serve the generated assets:
 python3 tools/wasm/serve-shell.py --build-dir build/bin/src/wasm/dist
 ```
 
-`./build.py clean` clears Bazel outputs and preserves `build_wasm_deps/`.
+`./build.py clean` clears Bazel outputs and preserves `deps/wasm/`.
 
 Open `/shell.html` when using this server. A static host must send
 `Cross-Origin-Opener-Policy: same-origin` and

@@ -38,7 +38,7 @@ def _seekdb_third_party_headers_repository_impl(repository_ctx):
         libraries = prefix + "/lib"
         libraries64 = prefix + "/lib64"
     if platform == "wasm":
-        prefix = repository_ctx.getenv("SEEKDB_WASM_DEPS") or str(repository_ctx.workspace_root) + "/build_wasm_deps"
+        prefix = repository_ctx.getenv("SEEKDB_WASM_DEPS") or str(repository_ctx.workspace_root) + "/deps/wasm"
         headers = prefix + "/include"
         libraries = prefix + "/lib"
         libraries64 = libraries

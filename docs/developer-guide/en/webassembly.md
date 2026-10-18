@@ -18,7 +18,7 @@ Activate the pinned Emscripten SDK, prepare dependencies, then build with Bazel:
 # emcc must come from the pinned Emscripten SDK.
 export EMSCRIPTEN=/path/to/emsdk/upstream/emscripten
 export PATH="$EMSCRIPTEN:$PATH"
-export SEEKDB_WASM_DEPS="$PWD/build_wasm_deps"
+export SEEKDB_WASM_DEPS="$PWD/deps/wasm"
 
 # Reuse deps/3rd if it is already initialized.
 python3 build.py init
@@ -33,7 +33,7 @@ python3 build.py build --config=wasm //src/wasm:database
 
 `init` prepares host tools and headers; `build-deps.py` builds Wasm third-party libraries from pinned sources. Once dependencies are ready, repeat only the final Bazel command with these environment variables set. Bazel builds the Rust libraries; Wasm-specific patches apply only to private dependency copies in the build directory. SDK selection follows the Bazel target platform; `SEEKDB_WASM_DEPS` only locates the Wasm SDK and does not affect native or Android builds.
 
-The engine and its JS, HTML and CSS assets are in `build/bin/src/wasm/dist/`. `python3 build.py clean` clears Bazel build outputs and preserves `build_wasm_deps`.
+The engine and its JS, HTML and CSS assets are in `build/bin/src/wasm/dist/`. `python3 build.py clean` clears Bazel build outputs and preserves `deps/wasm`.
 
 ## Build directory contents
 

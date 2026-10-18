@@ -85,10 +85,10 @@ def main():
     repo = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "install_prefix", nargs="?", help="install directory, defaults to build_wasm_deps in the repository",
+        "install_prefix", nargs="?", help="install directory, defaults to deps/wasm in the repository",
     )
     args = parser.parse_args()
-    prefix = Path(args.install_prefix or repo / "build_wasm_deps")
+    prefix = Path(args.install_prefix or repo / "deps/wasm")
     prefix.mkdir(parents=True, exist_ok=True)
     prefix = prefix.resolve()
     sdk_version = (repo / "tools/wasm/emscripten-version").read_text().strip()

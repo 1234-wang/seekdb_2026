@@ -9,7 +9,7 @@ def _emscripten_cc_toolchain_repository_impl(ctx):
         return
     root = ctx.path(emscripten).dirname
     ctx.symlink(root, "sdk")
-    prefix = ctx.getenv("SEEKDB_WASM_DEPS") or str(ctx.workspace_root) + "/build_wasm_deps"
+    prefix = ctx.getenv("SEEKDB_WASM_DEPS") or str(ctx.workspace_root) + "/deps/wasm"
     cache = ctx.path(prefix + "/em-cache")
     # A native build may discover this toolchain before the Wasm SDK has
     # been prepared. Only Wasm compile/link actions require the frozen cache.
