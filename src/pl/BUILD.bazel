@@ -11,7 +11,8 @@ load(
 )
 load(
     ":pl_source_inventory.bzl",
-    "PL_STANDALONE_SOURCES",
+    "PL_STANDALONE_CXX_SOURCES",
+    "PL_STANDALONE_C_SOURCES",
     "PL_UNITY_GROUPS",
 )
 load(
@@ -173,7 +174,7 @@ _PL_RUNTIME_NON_OBLIB_DEPS = [
 ]
 
 _PL_RUNTIME_UNITY_GROUPS = PL_UNITY_GROUPS + singleton_unity_groups(
-    PL_STANDALONE_SOURCES,
+    PL_STANDALONE_CXX_SOURCES,
     "pl_parser_cxx",
     "c++",
 )
@@ -203,7 +204,7 @@ grouped_unity_cc_library(
 grouped_unity_cc_library(
     name = "pl_parser_c",
     unity_groups = singleton_unity_groups(
-        PL_STANDALONE_SOURCES,
+        PL_STANDALONE_C_SOURCES,
         "pl_parser_c",
         "c",
     ),

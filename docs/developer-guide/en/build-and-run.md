@@ -68,6 +68,29 @@ To change dependency download settings, use Bazel's `--registry=URL` or `--downl
 
 Follow the [Android](android.md), [iOS](ios.md), or [WebAssembly](webassembly.md) guide for dependency setup and target names. Android uses the server target above. iOS builds a framework, and WebAssembly builds an engine and SQL shell.
 
+## Maintain build declarations
+
+Choose the file by what you need to change:
+
+| File | Responsibility |
+| --- | --- |
+| `build.py` | Launch the pinned Bazel binary and prepare platform dependencies with `init`. |
+| `.bazelrc` | Default Bazel options and named platform configurations. |
+| `MODULE.bazel` | Bazel module dependencies and repository/toolchain registration. |
+| `bazel/defs.bzl` | Shared C++ and linking rule entry points for `BUILD.bazel` files. |
+| `bazel/compile_config.bzl` | Common compiler options and Sanity instrumentation settings. |
+| `bazel/build_settings.bzl`, `bazel/BUILD.bazel` | Custom setting types and shared flag declarations. |
+| A package's `BUILD.bazel` | Targets, headers, explicit dependencies, and visibility. |
+
+For C++ libraries, load `cc_library`, `unity_cc_library`, or `grouped_unity_cc_library` from `//bazel:defs.bzl`. `cc_library` compiles each source separately. `unity_cc_library` combines an ordered `unity_members` list into one translation unit. `grouped_unity_cc_library` creates one translation unit per named group in `unity_groups`.
+
+- Add a normal source to its owning target's `srcs`. For an existing Unity group, add its repository-relative path to that group's `srcs` in the package's `*_source_inventory.bzl`; preserve the member order. Targets declared with `unity_members` list package-relative paths directly in `BUILD.bazel`.
+- To keep a file out of a multi-file Unity group, add it to the standalone source list consumed by its target. These lists contain paths. Keep C and C++ lists separate; the rule call selects the language. A new list must be connected to a target in `BUILD.bazel`.
+- Put public headers in `hdrs` or the module's public header list. Put private headers in `srcs` or the module's internal header target; modules that use a header `glob()` pick up matching new files automatically. The Unity helpers call these attributes `public_hdrs` and `private_hdrs`.
+- Add dependencies used by public headers to `deps`. Put dependencies used only by implementation files in `implementation_deps`. Set `visibility` to the intended consumers. Dependencies are maintained explicitly; there is no include scanner that generates them.
+
+Build the affected target with `./build.py build //package:target`. Existing module-direction and header-layering checks run as part of the build.
+
 ## Run a local instance
 
 Prepare an isolated deployment and start seekdb through the repository's `obd.sh` wrapper:

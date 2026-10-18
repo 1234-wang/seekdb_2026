@@ -18,6 +18,6 @@ def select_unity_groups(groups, names, language = "c++"):
 
 def singleton_unity_groups(sources, name_prefix, language = "c++"):
     return [
-        struct(name = "%s_%d" % (name_prefix, index), language = language, srcs = [source.path])
-        for index, source in enumerate([source for source in sources if source.language == language])
+        struct(name = "%s_%d" % (name_prefix, index), language = language, srcs = [source])
+        for index, source in enumerate(sources)
     ]

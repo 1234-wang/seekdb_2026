@@ -68,6 +68,29 @@ Bazel 二进制和默认的构建结果缓存可供不同代码目录共用。�
 
 按 [Android](android.md)、[iOS](ios.md) 或 [WebAssembly](webassembly.md) 指南准备依赖并选择目标。Android 使用上面的服务端目标，iOS 生成 framework，WebAssembly 生成引擎和 SQL shell。
 
+## 维护构建声明
+
+根据需要修改的内容选择文件：
+
+| 文件 | 职责 |
+| --- | --- |
+| `build.py` | 启动指定版本的 Bazel，通过 `init` 准备平台依赖。 |
+| `.bazelrc` | Bazel 默认参数和各平台的命名配置。 |
+| `MODULE.bazel` | Bazel 模块依赖，以及仓库和工具链注册。 |
+| `bazel/defs.bzl` | 供 `BUILD.bazel` 使用的公共 C++ 和链接规则入口。 |
+| `bazel/compile_config.bzl` | 公共编译参数和 Sanity 插桩配置。 |
+| `bazel/build_settings.bzl`、`bazel/BUILD.bazel` | 自定义配置项类型和公共开关声明。 |
+| 各目录的 `BUILD.bazel` | 目标、头文件、显式依赖和可见性。 |
+
+C++ 库从 `//bazel:defs.bzl` 加载 `cc_library`、`unity_cc_library` 或 `grouped_unity_cc_library`。`cc_library` 分别编译每个源文件；`unity_cc_library` 将有序的 `unity_members` 列表合为一个编译单元；`grouped_unity_cc_library` 为 `unity_groups` 中的每个命名分组生成一个编译单元。
+
+- 普通源码加入所属目标的 `srcs`。加入已有 Unity 分组时，在该模块 `*_source_inventory.bzl` 对应分组的 `srcs` 中添加仓库相对路径，保留成员顺序。使用 `unity_members` 的目标直接在 `BUILD.bazel` 中列出包内相对路径。
+- 不应与其他源码合编的文件，加入所属目标使用的独立源码列表。列表直接填写路径，C 和 C++ 分开，由规则调用指定语言。新增列表还需要在 `BUILD.bazel` 中接入目标。
+- 公共头文件加入 `hdrs` 或模块的公共头文件列表；私有头文件放入 `srcs` 或模块内部头文件目标。使用头文件 `glob()` 的模块会自动纳入匹配的新文件。Unity 辅助规则对应的属性名是 `public_hdrs` 和 `private_hdrs`。
+- 公共头文件需要的依赖放入 `deps`，只有实现文件需要的依赖放入 `implementation_deps`。用 `visibility` 限定使用方。依赖由开发者显式维护，没有扫描 include 并自动生成依赖的脚本。
+
+通过 `./build.py build //package:target` 编译受影响的目标。现有模块依赖方向和头文件分层检查随构建执行。
+
 ## 运行本地实例
 
 使用仓库中的 `obd.sh` 包装脚本准备隔离环境并启动 seekdb：

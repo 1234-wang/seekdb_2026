@@ -1,5 +1,3 @@
-"""Generated source inventory for the native Observer composition root."""
-
 OBSERVER_UNITY_GROUPS = [
     struct(
         name = "ob_server_ai_service_0",
@@ -358,15 +356,15 @@ OBSERVER_UNITY_GROUPS = [
 ]
 
 OBSERVER_MAIN_SOURCES = [
-    struct(path = "src/observer/main.cpp", language = "c++"),
-    struct(path = "src/observer/ob_command_line_parser.cpp", language = "c++"),
+    "src/observer/main.cpp",
+    "src/observer/ob_command_line_parser.cpp",
 ]
 
 OBSERVER_RETRIEVAL_COMPOSITION_SOURCES = [
-    struct(path = "src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp", language = "c++"),
+    "src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp",
 ]
 
 OBSERVER_STANDALONE_SOURCES = [
-    struct(path = "src/observer/ob_server.cpp", language = "c++"),
-    struct(path = "src/observer/ob_service.cpp", language = "c++"),
+    "src/observer/ob_server.cpp",
+    "src/observer/ob_service.cpp",
 ]

@@ -1,5 +1,3 @@
-"""Generated source inventory for Storage."""
-
 STORAGE_TABLET_AUTOINCREMENT_STATE_SOURCES = [
     "tablet/ob_tablet_autoincrement_state.cpp",
 ]

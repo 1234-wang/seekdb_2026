@@ -1,5 +1,3 @@
-"""Generated source inventory for SQL."""
-
 SQL_UNITY_GROUPS = [
     struct(
         name = "ob_sql_code_generator_0",
@@ -1525,35 +1523,35 @@ SQL_SIMD_UNITY_GROUPS = [
 ]
 
 SQL_STANDALONE_SOURCES = [
-    struct(path = "src/sql/engine/aggregate/ob_aggregate_processor.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_add.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_array_sort.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_in.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_mul.cpp", language = "c++"),
+    "src/sql/engine/aggregate/ob_aggregate_processor.cpp",
+    "src/sql/engine/expr/ob_expr_add.cpp",
+    "src/sql/engine/expr/ob_expr_array_sort.cpp",
+    "src/sql/engine/expr/ob_expr_in.cpp",
+    "src/sql/engine/expr/ob_expr_mul.cpp",
 ]
 
 SQL_EXTRA_SOURCES = [
-    struct(path = "src/sql/engine/expr/ob_datum_cast.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_obj_cast_runtime.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_compile_init.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part0.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part1.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part2.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part3.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part4.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part5.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part6.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part7.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_all.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_0.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_1.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_2.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_3.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_4.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_5.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_6.cpp", language = "c++"),
-    struct(path = "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_7.cpp", language = "c++"),
+    "src/sql/engine/expr/ob_datum_cast.cpp",
+    "src/sql/engine/expr/ob_obj_cast_runtime.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_compile_init.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part0.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part1.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part2.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part3.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part4.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part5.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part6.cpp",
+    "src/sql/engine/expr/ob_expr_cmp_func_compile/ob_expr_cmp_func_part7.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_all.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_0.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_1.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_2.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_3.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_4.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_5.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_6.cpp",
+    "src/sql/engine/expr/ob_expr_str_cmp_func_compile/ob_expr_str_cmp_func_part_7.cpp",
 ]
 
 SQL_PARSER_SOURCES = [

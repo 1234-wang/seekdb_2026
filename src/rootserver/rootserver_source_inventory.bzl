@@ -1,6 +1,3 @@
-"""Generated source inventory for the native Rootserver module."""
-
-
 ROOTSERVER_UNITY_GROUPS = [
     struct(
         name = "ob_rootserver_base_common_0",
@@ -164,9 +161,9 @@ ROOTSERVER_UNITY_GROUPS = [
 ]
 
 ROOTSERVER_STANDALONE_SOURCES = [
-    struct(path = "src/rootserver/ddl_task/ob_ddl_redefinition_task.cpp", language = "c++"),
-    struct(path = "src/rootserver/ob_ddl_service.cpp", language = "c++"),
-    struct(path = "src/rootserver/ob_ddl_service_launcher.cpp", language = "c++"),
-    struct(path = "src/rootserver/ob_debug_sync_broadcaster_adapter.cpp", language = "c++"),
-    struct(path = "src/rootserver/ob_lonely_table_cleaner.cpp", language = "c++"),
+    "src/rootserver/ddl_task/ob_ddl_redefinition_task.cpp",
+    "src/rootserver/ob_ddl_service.cpp",
+    "src/rootserver/ob_ddl_service_launcher.cpp",
+    "src/rootserver/ob_debug_sync_broadcaster_adapter.cpp",
+    "src/rootserver/ob_lonely_table_cleaner.cpp",
 ]

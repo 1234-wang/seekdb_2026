@@ -1,13 +1,12 @@
 """Helpers for declaring OBLib's semantic native source groups."""
 
-def standalone_sources(sources, key, language = "c++"):
+def standalone_sources(sources, key):
     prefix = "src/oblib/"
     result = []
     for source in sources[key]:
-        if source.language == language:
-            if not source.path.startswith(prefix):
-                fail("source outside src/oblib: %s" % source.path)
-            result.append(source.path[len(prefix):])
+        if not source.startswith(prefix):
+            fail("source outside src/oblib: %s" % source)
+        result.append(source[len(prefix):])
     if not result:
-        fail("no %s standalone sources in %s" % (language, key))
+        fail("no standalone sources in %s" % key)
     return result
