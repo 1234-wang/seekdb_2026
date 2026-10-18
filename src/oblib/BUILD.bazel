@@ -1,4 +1,4 @@
-load("//bazel:seekdb_build_config.bzl", "seekdb_sanity_linkopts")
+load("//bazel:compile_config.bzl", "sanity_linkopts")
 load("@rules_cc//cc:cc_import.bzl", "cc_import")
 load(
     ":oblib_source_inventory.bzl",
@@ -7,18 +7,18 @@ load(
 )
 load(
     ":oblib_module_sources.bzl",
-    "oblib_select_unity_groups",
-    "oblib_standalone_sources",
+    "standalone_sources",
 )
+load("//bazel:module_sources.bzl", "select_unity_groups")
 load(
     "//bazel:defs.bzl",
     "SEEKDB_OBLIB_CXX_COPTS",
     "SEEKDB_OBLIB_C_COPTS",
     "SEEKDB_OBLIB_LOCAL_DEFINES",
-    "seekdb_localized_partial_link",
-    "seekdb_openmp_copts",
-    "seekdb_semantic_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "localized_partial_link",
+    "openmp_copts",
+    "grouped_unity_cc_library",
+    "cc_library",
 )
 
 package(default_visibility = ["//visibility:private"])
@@ -875,12 +875,12 @@ _RPC_GROUP_NAMES = [
     "oblib_rpc_obmysql_packet_0",
 ]
 
-_FOUNDATION_CXX_GROUPS = oblib_select_unity_groups(
+_FOUNDATION_CXX_GROUPS = select_unity_groups(
     OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
     _FOUNDATION_CXX_GROUP_NAMES,
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_foundation_impl",
     unity_groups = _FOUNDATION_CXX_GROUPS,
     implementation_deps = [
@@ -889,15 +889,15 @@ seekdb_semantic_unity_cc_library(
         "//rust:logger",
         "@seekdb_3rd_headers//:fast_float_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + seekdb_openmp_copts(),
+    copts = SEEKDB_OBLIB_CXX_COPTS + openmp_copts(),
     local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_foundation_c_impl",
-    unity_groups = oblib_select_unity_groups(
+    unity_groups = select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         _FOUNDATION_C_GROUP_NAMES,
         language = "c",
@@ -909,13 +909,13 @@ seekdb_semantic_unity_cc_library(
         "//src/oblib/easy:easy",
         "@seekdb_3rd_headers//:libunwind_headers",
     ],
-    copts = SEEKDB_OBLIB_C_COPTS + seekdb_openmp_copts(),
+    copts = SEEKDB_OBLIB_C_COPTS + openmp_copts(),
     local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_bitmap_impl",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib_bitmap"],
     implementation_deps = [
@@ -928,9 +928,9 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_codec_scalar_impl",
-    unity_groups = oblib_select_unity_groups(
+    unity_groups = select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         ["oblib_lib_codec_0"],
     ),
@@ -938,13 +938,13 @@ seekdb_semantic_unity_cc_library(
         ":_oblib_implementation_headers",
         ":oblib_foundation",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + seekdb_openmp_copts(),
+    copts = SEEKDB_OBLIB_CXX_COPTS + openmp_copts(),
     local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_codec_simd_impl",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib_simd"],
     implementation_deps = [
@@ -964,9 +964,9 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_vector_impl",
-    unity_groups = oblib_select_unity_groups(
+    unity_groups = select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/lib:oblib_lib"],
         ["oblib_lib_ob_vector_util_0"],
     ),
@@ -975,13 +975,13 @@ seekdb_semantic_unity_cc_library(
         ":oblib_foundation",
         "@seekdb_3rd_headers//:vsag_headers",
     ],
-    copts = SEEKDB_OBLIB_CXX_COPTS + seekdb_openmp_copts(),
+    copts = SEEKDB_OBLIB_CXX_COPTS + openmp_copts(),
     local_defines = SEEKDB_OBLIB_LOCAL_DEFINES,
     features = ["layering_check"],
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_ob_malloc_impl",
     unity_groups = OBLIB_UNITY_GROUPS["src/oblib/lib:ob_malloc_object"],
     implementation_deps = [
@@ -996,9 +996,9 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_common_impl",
-    unity_groups = oblib_select_unity_groups(
+    unity_groups = select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/common:oblib_common"],
         _COMMON_GROUP_NAMES,
     ),
@@ -1018,7 +1018,7 @@ seekdb_semantic_unity_cc_library(
 
 cc_library(
     name = "_oblib_common_standalone_impl",
-    srcs = oblib_standalone_sources(
+    srcs = standalone_sources(
         OBLIB_STANDALONE_SOURCES,
         "src/oblib/common:oblib_common",
     ),
@@ -1032,9 +1032,9 @@ cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "_oblib_rpc_impl",
-    unity_groups = oblib_select_unity_groups(
+    unity_groups = select_unity_groups(
         OBLIB_UNITY_GROUPS["src/oblib/rpc:oblib_rpc"],
         _RPC_GROUP_NAMES,
     ),
@@ -1052,7 +1052,7 @@ seekdb_semantic_unity_cc_library(
 
 cc_library(
     name = "_zstd_1_3_8_c_impl",
-    srcs = oblib_standalone_sources(
+    srcs = standalone_sources(
         OBLIB_STANDALONE_SOURCES,
         "src/oblib/lib/compress/zstd_1_3_8:zstd_1_3_8_objs",
         language = "c",
@@ -1075,7 +1075,7 @@ cc_library(
 
 cc_library(
     name = "_zstd_1_3_8_cxx_impl",
-    srcs = oblib_standalone_sources(
+    srcs = standalone_sources(
         OBLIB_STANDALONE_SOURCES,
         "src/oblib/lib/compress/zstd_1_3_8:zstd_1_3_8_objs",
     ),
@@ -1095,7 +1095,7 @@ cc_library(
     tags = ["manual"],
 )
 
-seekdb_localized_partial_link(
+localized_partial_link(
     name = "_zstd_1_3_8_partial_link_object",
     deps = [
         ":_zstd_1_3_8_c_impl",
@@ -1112,7 +1112,7 @@ cc_import(
 
 cc_library(
     name = "_oblib_compression_impl",
-    srcs = oblib_standalone_sources(
+    srcs = standalone_sources(
         OBLIB_STANDALONE_SOURCES,
         "src/oblib/lib/compress:compress",
     ),
@@ -1130,7 +1130,7 @@ cc_library(
 
 cc_library(
     name = "_oblib_restore_impl",
-    srcs = oblib_standalone_sources(
+    srcs = standalone_sources(
         OBLIB_STANDALONE_SOURCES,
         "src/oblib/lib/restore:restore",
     ),
@@ -1152,7 +1152,7 @@ cc_library(
         # The hook interposes glibc allocation symbols and has never been part
         # of the native macOS build.
         "@platforms//os:macos": [],
-        "//conditions:default": oblib_standalone_sources(
+        "//conditions:default": standalone_sources(
             OBLIB_STANDALONE_SOURCES,
             "src/oblib/lib:malloc_hook",
         ),
@@ -1169,7 +1169,7 @@ cc_library(
 
 cc_library(
     name = "_mock_di_impl",
-    srcs = oblib_standalone_sources(
+    srcs = standalone_sources(
         OBLIB_STANDALONE_SOURCES,
         "src/oblib/lib:mock_di",
     ),
@@ -1260,6 +1260,6 @@ cc_library(
         "//bazel:sanity_enabled": ["//deps/external:jemalloc_library"],
         "//conditions:default": [],
     }),
-    linkopts = seekdb_sanity_linkopts(),
+    linkopts = sanity_linkopts(),
     visibility = ["//unittest/oblib:__pkg__"],
 )

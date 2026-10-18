@@ -1,9 +1,9 @@
-load("//bazel:defs.bzl", cc_library = "seekdb_cc_library")
-load("//bazel:seekdb_build_settings.bzl", "seekdb_bool_flag")
+load("//bazel:defs.bzl", "cc_library")
+load("//bazel:build_settings.bzl", "bool_flag")
 
 package(default_visibility = ["//visibility:private"])
 
-seekdb_bool_flag(
+bool_flag(
     name = "enable_standby",
     build_setting_default = True,
     visibility = ["//visibility:public"],
@@ -14,7 +14,7 @@ config_setting(
     flag_values = {":enable_standby": "false"},
 )
 
-STANDBY_DEPS = [
+_STANDBY_DEPS = [
     "//src/logservice:append_callback_interface",
     "//src/logservice:logservice",
     "//src/oblib/grpc:grpc_runtime",
@@ -86,7 +86,7 @@ cc_library(
         "standby_host.h",
         "standby_module.h",
     ]),
-    deps = STANDBY_DEPS + [
+    deps = _STANDBY_DEPS + [
         ":standby_interface",
         ":standby_state",
     ],
@@ -94,15 +94,9 @@ cc_library(
 )
 
 cc_library(
-    name = "standby_unit_test_interface",
-    deps = [":standby_runtime"],
-    visibility = ["//unittest/standby:__pkg__"],
-)
-
-cc_library(
     name = "standby_enabled",
     srcs = ["standby_module.cpp"],
-    deps = STANDBY_DEPS + [
+    deps = _STANDBY_DEPS + [
         ":standby_interface",
         ":standby_runtime",
         ":standby_state",

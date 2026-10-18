@@ -5,44 +5,44 @@ load(
     _rules_cc_library = "cc_library",
 )
 load(
-    "//bazel:seekdb_build_config.bzl",
+    "//bazel:compile_config.bzl",
     "SEEKDB_MODULE_C_COPTS",
     "SEEKDB_RELEASE_LOCAL_DEFINES",
     "SEEKDB_MODULE_CXX_COPTS",
-    "seekdb_sanity_settings",
-    "seekdb_logging_defines",
+    "sanity_settings",
+    "logging_defines",
 )
 load(
     "//bazel:platforms.bzl",
-    "seekdb_arch_copts",
-    "seekdb_platform_compiler_inputs",
-    "seekdb_platform_copts",
-    "seekdb_platform_local_defines",
+    "arch_copts",
+    "platform_compiler_inputs",
+    "platform_copts",
+    "platform_local_defines",
 )
 
 
-def _seekdb_cc_library_impl(
+def _cc_library_impl(
         name, visibility, copts, local_defines, sanity_instrumentation,
         additional_compiler_inputs, cxxopts, implementation_deps,
         target_compatible_with, **kwargs):
-    sanity = seekdb_sanity_settings(sanity_instrumentation)
+    sanity = sanity_settings(sanity_instrumentation)
     _rules_cc_library(
         name = name,
         visibility = visibility,
-        additional_compiler_inputs = additional_compiler_inputs + seekdb_platform_compiler_inputs() + sanity.additional_compiler_inputs,
-        copts = copts + seekdb_arch_copts() + seekdb_platform_copts() + sanity.copts,
+        additional_compiler_inputs = additional_compiler_inputs + platform_compiler_inputs() + sanity.additional_compiler_inputs,
+        copts = copts + arch_copts() + platform_copts() + sanity.copts,
         cxxopts = cxxopts + sanity.cxxopts,
         implementation_deps = implementation_deps + sanity.implementation_deps,
         linkstatic = True,
-        local_defines = local_defines + seekdb_logging_defines() + seekdb_platform_local_defines() + sanity.local_defines,
+        local_defines = local_defines + logging_defines() + platform_local_defines() + sanity.local_defines,
         target_compatible_with = target_compatible_with + sanity.target_compatible_with,
         **kwargs
     )
 
 # rules_cc's public cc_library entry point is a legacy forwarding function,
 # so declare our supported C++ attributes and inherit Bazel's common attrs.
-seekdb_cc_library = macro(
-    implementation = _seekdb_cc_library_impl,
+cc_library = macro(
+    implementation = _cc_library_impl,
     inherit_attrs = "common",
     attrs = {
         "srcs": attr.label_list(allow_files = True),
@@ -130,7 +130,7 @@ _emit_unity_source = rule(
 )
 
 
-def seekdb_generated_unity_source(
+def unity_source(
         name,
         unity_members,
         language = "c++",
@@ -175,7 +175,7 @@ def _unity_cc_library(
         fail("%s must contain at least one Unity source" % name)
 
     unity_members_target = "_" + name + "_unity_members"
-    seekdb_cc_library(
+    cc_library(
         name = unity_members_target,
         textual_hdrs = unity_members,
         sanity_instrumentation = sanity_instrumentation,
@@ -183,7 +183,7 @@ def _unity_cc_library(
         visibility = ["//visibility:private"],
     )
 
-    seekdb_cc_library(
+    cc_library(
         name = name,
         srcs = _dedupe(unity_srcs + private_hdrs),
         hdrs = public_hdrs,
@@ -200,7 +200,7 @@ def _unity_cc_library(
         visibility = visibility,
     )
 
-def seekdb_generated_unity_cc_library(
+def unity_cc_library(
         name,
         unity_members,
         public_hdrs = [],
@@ -214,7 +214,7 @@ def seekdb_generated_unity_cc_library(
         features = [],
         tags = [],
         visibility = None):
-    """Defines a Unity-only library and generates its aggregate source.
+    """Compiles one generated Unity source from an ordered list of members.
 
     The member order is significant and is preserved. Each include is followed
     by the USING_LOG_PREFIX cleanup required between aggregate members.
@@ -223,7 +223,7 @@ def seekdb_generated_unity_cc_library(
     if language not in ("c", "c++"):
         fail("language must be 'c' or 'c++', got %s" % language)
 
-    unity_source = seekdb_generated_unity_source(
+    unity_src = unity_source(
         name = name,
         unity_members = unity_members,
         language = language,
@@ -232,7 +232,7 @@ def seekdb_generated_unity_cc_library(
 
     _unity_cc_library(
         name = name,
-        unity_srcs = [unity_source],
+        unity_srcs = [unity_src],
         unity_members = unity_members,
         public_hdrs = public_hdrs,
         private_hdrs = private_hdrs,
@@ -246,7 +246,7 @@ def seekdb_generated_unity_cc_library(
         visibility = visibility,
     )
 
-def seekdb_semantic_unity_cc_library(
+def grouped_unity_cc_library(
         name,
         unity_groups,
         language = "c++",
@@ -262,12 +262,11 @@ def seekdb_semantic_unity_cc_library(
         features = [],
         tags = [],
         visibility = None):
-    """Defines one native semantic library from same-language Unity groups.
+    """Compiles named Unity groups of the same language.
 
     By default all generated Unity sources are compiled by one cc_library and
     therefore share one dependency closure. split_unity_groups preserves
     separate archives when the final link needs individual group objects.
-
     """
 
     if language not in ("c", "c++"):
@@ -299,7 +298,7 @@ def seekdb_semantic_unity_cc_library(
         if not members:
             fail("%s contains an empty Unity group: %s" % (name, group.name))
         unity_members.extend(members)
-        unity_src = seekdb_generated_unity_source(
+        unity_src = unity_source(
             name = name + "_" + group.name,
             unity_members = members,
             language = language,
@@ -348,7 +347,7 @@ def seekdb_semantic_unity_cc_library(
             )
             group_targets.append(":" + group_target)
 
-        seekdb_cc_library(
+        cc_library(
             name = name,
             deps = deps,
             implementation_deps = group_targets,

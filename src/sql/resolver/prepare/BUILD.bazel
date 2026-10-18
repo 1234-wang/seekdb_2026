@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "seekdb_generated_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "unity_cc_library",
+    "cc_library",
 )
 load(
     "//src/sql:sql_header_inventory.bzl",
@@ -10,16 +10,16 @@ load(
 )
 load(
     "//src/sql:sql_module_sources.bzl",
-    "sql_paths_under",
+    "paths_under",
 )
 
 package(default_visibility = ["//visibility:private"])
 
-_PUBLIC_ROOTS = sql_paths_under(
+_PUBLIC_ROOTS = paths_under(
     SQL_PUBLIC_HEADER_ROOTS,
     "resolver/prepare/",
 )
-_INTERFACE_CLOSURE = sql_paths_under(
+_INTERFACE_CLOSURE = paths_under(
     SQL_INTERFACE_CLOSURE_HEADERS,
     "resolver/prepare/",
 )
@@ -105,7 +105,7 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
-seekdb_generated_unity_cc_library(
+unity_cc_library(
     name = "resolver_prepare",
     unity_members = [
         "ob_deallocate_resolver.cpp",

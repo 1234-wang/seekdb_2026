@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "seekdb_generated_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "unity_cc_library",
+    "cc_library",
 )
 load(
     ":data_plane_build_defs.bzl",
@@ -34,7 +34,7 @@ cc_library(
     visibility = ["//visibility:private"],
 )
 
-seekdb_generated_unity_cc_library(
+unity_cc_library(
     name = "tablet_scan_interface",
     unity_members = ["ob_tablet_scan.cpp"],
     deps = [":_tablet_scan_headers"],

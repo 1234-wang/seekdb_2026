@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "seekdb_generated_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "unity_cc_library",
+    "cc_library",
 )
 
 package(default_visibility = ["//visibility:private"])
@@ -27,7 +27,7 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
-seekdb_generated_unity_cc_library(
+unity_cc_library(
     name = "engine_prepare",
     unity_members = [
         "ob_deallocate_executor.cpp",

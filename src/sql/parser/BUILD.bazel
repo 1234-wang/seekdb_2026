@@ -1,10 +1,10 @@
-load("//bazel:parser.bzl", "seekdb_parser", "seekdb_parser_type_names")
+load("//bazel:parser.bzl", "parser", "parser_type_names")
 load(
     "//bazel:defs.bzl",
     "SEEKDB_C_COPTS",
     "SEEKDB_CXX_COPTS",
-    "seekdb_generated_unity_source",
-    cc_library = "seekdb_cc_library",
+    "unity_source",
+    "cc_library",
 )
 load(
     "//src/sql:sql_header_inventory.bzl",
@@ -18,12 +18,12 @@ load(
 )
 load(
     "//src/sql:sql_module_sources.bzl",
-    "sql_paths_under",
+    "paths_under",
 )
 
 package(default_visibility = ["//visibility:private"])
 
-_PARSER_SOURCES = sql_paths_under(
+_PARSER_SOURCES = paths_under(
     SQL_PARSER_SOURCES,
     "src/sql/parser/",
 )
@@ -46,7 +46,7 @@ _PARSER_CXX_STANDALONE_SOURCES = [
     ) and source not in _PARSER_DRIVER_UNITY_MEMBERS
 ]
 
-seekdb_parser(
+parser(
     name = "generate_fts_parser",
     grammar = "ftsparser.y",
     lexer_source = "ftsblex.l",
@@ -58,7 +58,7 @@ seekdb_parser(
     lexer_patch = "fts",
 )
 
-seekdb_parser(
+parser(
     name = "generate_sql_parser",
     grammar = "sql_parser_mysql_mode.y",
     lexer_source = "sql_parser_mysql_mode.l",
@@ -70,7 +70,7 @@ seekdb_parser(
     lexer_patch = "sql",
 )
 
-seekdb_parser_type_names(
+parser_type_names(
     name = "generate_type_names",
     src = "//src/query:_sql_item_type_definition",
     out = "bazel_generated/type_name.c",
@@ -90,15 +90,15 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
-_PARSER_PUBLIC_ROOTS = sql_paths_under(
+_PARSER_PUBLIC_ROOTS = paths_under(
     SQL_PUBLIC_HEADER_ROOTS,
     "parser/",
 )
-_PARSER_INTERFACE_CLOSURE = sql_paths_under(
+_PARSER_INTERFACE_CLOSURE = paths_under(
     SQL_INTERFACE_CLOSURE_HEADERS,
     "parser/",
 )
-_PARSER_COMPOSITION_HEADERS = sql_paths_under(
+_PARSER_COMPOSITION_HEADERS = paths_under(
     SQL_COMPOSITION_HEADERS,
     "parser/",
 )
@@ -180,7 +180,7 @@ cc_library(
     textual_hdrs = _PARSER_DRIVER_UNITY_MEMBERS,
 )
 
-sql_parser_driver_unity = seekdb_generated_unity_source(
+sql_parser_driver_unity = unity_source(
     name = "sql_parser_driver_impl",
     unity_members = _PARSER_DRIVER_UNITY_MEMBERS,
     tags = ["manual"],

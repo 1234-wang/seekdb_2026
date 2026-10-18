@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "seekdb_semantic_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "grouped_unity_cc_library",
+    "cc_library",
 )
 load(
     "//src/sql:sql_header_inventory.bzl",
@@ -10,10 +10,10 @@ load(
 )
 load(
     "//src/sql:sql_module_sources.bzl",
-    "SQL_OPTIMIZER_GROUP_NAMES",
-    "sql_groups_named",
-    "sql_paths_under",
+    "OPTIMIZER_GROUP_NAMES",
+    "paths_under",
 )
+load("//bazel:module_sources.bzl", "select_unity_groups")
 load(
     "//src/sql:sql_source_inventory.bzl",
     "SQL_UNITY_GROUPS",
@@ -21,11 +21,11 @@ load(
 
 package(default_visibility = ["//visibility:private"])
 
-_OPTIMIZER_PUBLIC_ROOTS = sql_paths_under(
+_OPTIMIZER_PUBLIC_ROOTS = paths_under(
     SQL_PUBLIC_HEADER_ROOTS,
     "optimizer/",
 )
-_OPTIMIZER_INTERFACE_CLOSURE = sql_paths_under(
+_OPTIMIZER_INTERFACE_CLOSURE = paths_under(
     SQL_INTERFACE_CLOSURE_HEADERS,
     "optimizer/",
 )
@@ -61,11 +61,12 @@ cc_library(
     textual_hdrs = ["ob_join_property.map"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "optimizer",
-    unity_groups = sql_groups_named(
+    unity_groups = select_unity_groups(
         SQL_UNITY_GROUPS,
-        SQL_OPTIMIZER_GROUP_NAMES,
+        OPTIMIZER_GROUP_NAMES,
+        language = None,
     ),
     split_unity_groups = True,
     deps = [

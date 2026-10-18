@@ -1,9 +1,9 @@
-load("//bazel:parser.bzl", "seekdb_parser")
+load("//bazel:parser.bzl", "parser")
 load(
     "//bazel:defs.bzl",
     "SEEKDB_C_COPTS",
-    "seekdb_semantic_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "grouped_unity_cc_library",
+    "cc_library",
 )
 load(
     ":pl_header_inventory.bzl",
@@ -22,7 +22,7 @@ load(
 package(default_visibility = ["//visibility:private"])
 
 
-seekdb_parser(
+parser(
     name = "generate_pl_parser",
     grammar = "parser/pl_parser_mysql_mode.y",
     lexer_source = "parser/pl_parser_mysql_mode.l",
@@ -178,7 +178,7 @@ _PL_RUNTIME_UNITY_GROUPS = PL_UNITY_GROUPS + singleton_unity_groups(
     "c++",
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "pl_runtime",
     unity_groups = _PL_RUNTIME_UNITY_GROUPS,
     implementation_deps = _PL_RUNTIME_NON_OBLIB_DEPS + ["//rust:config_headers"] + [
@@ -200,7 +200,7 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "pl_parser_c",
     unity_groups = singleton_unity_groups(
         PL_STANDALONE_SOURCES,

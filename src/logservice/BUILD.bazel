@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "seekdb_semantic_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "grouped_unity_cc_library",
+    "cc_library",
 )
 load(":logservice_build_defs.bzl", "LOGSERVICE_UNITY_GROUPS")
 
@@ -90,7 +90,7 @@ _PRIVATE_HDRS = glob(
 
 # One semantic module and one archive, retaining five independent Unity compile
 # actions for parallelism and incremental rebuild granularity.
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "logservice",
     unity_groups = LOGSERVICE_UNITY_GROUPS,
     public_hdrs = _PUBLIC_HDRS,

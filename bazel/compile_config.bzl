@@ -91,7 +91,7 @@ _SANITY_NO_BUILTIN_COPTS = [
     "-fno-builtin-snprintf",
 ]
 
-def seekdb_sanity_settings(instrument):
+def sanity_settings(instrument):
     """Keeps Sanity's instrumentation, inputs, and platform constraint together."""
     settings = {
         "copts": _SANITY_NO_BUILTIN_COPTS if instrument else [],
@@ -109,7 +109,7 @@ def seekdb_sanity_settings(instrument):
     })
 
 
-def seekdb_sanity_linkopts():
+def sanity_linkopts():
     return select({
         "//bazel:sanity_enabled": [
             "-Wl,--wrap=memcpy",
@@ -133,7 +133,7 @@ def seekdb_sanity_linkopts():
         "//conditions:default": [],
     })
 
-def seekdb_logging_defines():
+def logging_defines():
     return select({
         "//bazel:rpm_logging_enabled": ["DEFAULT_LOG_FILE_SIZE_MB=16", "DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_DBA_WARN"],
         "//conditions:default": ["DEFAULT_LOG_FILE_SIZE_MB=256", "DEFAULT_LOG_LEVEL=OB_LOG_LEVEL_ERROR"],

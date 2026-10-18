@@ -1,12 +1,6 @@
 """Helpers for declaring SQL's native semantic source graph."""
 
-load(
-    "//bazel:module_sources.bzl",
-    _select_unity_groups = "select_unity_groups",
-)
-
-
-SQL_OPTIMIZER_GROUP_NAMES = [
+OPTIMIZER_GROUP_NAMES = [
     "ob_sql_optimizer_0",
     "ob_sql_optimizer_1",
     "ob_sql_optimizer_2",
@@ -14,7 +8,7 @@ SQL_OPTIMIZER_GROUP_NAMES = [
     "ob_sql_optimizer_stat_1",
 ]
 
-SQL_PREPARE_SOURCES = [
+PREPARE_SOURCES = [
     "src/sql/engine/prepare/ob_deallocate_executor.cpp",
     "src/sql/engine/prepare/ob_execute_executor.cpp",
     "src/sql/engine/prepare/ob_prepare_executor.cpp",
@@ -26,7 +20,7 @@ SQL_PREPARE_SOURCES = [
     "src/sql/resolver/prepare/ob_prepare_stmt.cpp",
 ]
 
-def sql_headers_outside(headers, prefixes):
+def headers_outside(headers, prefixes):
     """Returns root-package headers after semantic subpackage ownership."""
 
     return [
@@ -35,7 +29,7 @@ def sql_headers_outside(headers, prefixes):
         if not any([header.startswith(prefix) for prefix in prefixes])
     ]
 
-def sql_paths_under(paths, prefix):
+def paths_under(paths, prefix):
     """Returns package-relative paths owned below one prefix."""
 
     return [
@@ -45,10 +39,7 @@ def sql_paths_under(paths, prefix):
     ]
 
 
-def sql_groups_named(groups, names):
-    return _select_unity_groups(groups, names, language = None)
-
-def sql_groups_without(groups, excluded_group_names, excluded_sources):
+def groups_without(groups, excluded_group_names, excluded_sources):
     """Removes separately-owned semantic groups and sources from root SQL."""
 
     excluded_groups = {name: False for name in excluded_group_names}

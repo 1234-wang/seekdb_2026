@@ -21,7 +21,7 @@ def _direct_pic_objects(target):
                 objects.extend(library.objects)
     return objects
 
-def _seekdb_localized_partial_link_impl(ctx):
+def _localized_partial_link_impl(ctx):
     cc_toolchain = find_cpp_toolchain(ctx)
     objects = []
     for dep in ctx.attr.deps:
@@ -73,8 +73,8 @@ def _seekdb_localized_partial_link_impl(ctx):
 
     return [DefaultInfo(files = depset([output]))]
 
-seekdb_localized_partial_link = rule(
-    implementation = _seekdb_localized_partial_link_impl,
+localized_partial_link = rule(
+    implementation = _localized_partial_link_impl,
     attrs = {
         "deps": attr.label_list(
             mandatory = True,

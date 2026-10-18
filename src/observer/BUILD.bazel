@@ -1,13 +1,13 @@
-load("//bazel:seekdb_build_config.bzl", "seekdb_sanity_linkopts")
+load("//bazel:compile_config.bzl", "sanity_linkopts")
 load(":observer_link_deps.bzl", "observer_third_party_link_files")
 load("//bazel:ios_framework.bzl", "seekdb_ios_framework")
 load(
     "//bazel:defs.bzl",
     "cc_import",
-    "seekdb_final_link",
-    "seekdb_semantic_unity_cc_library",
-    "seekdb_version_source",
-    cc_library = "seekdb_cc_library",
+    "final_link",
+    "grouped_unity_cc_library",
+    "version_source",
+    "cc_library",
 )
 load(
     ":observer_source_inventory.bzl",
@@ -214,7 +214,7 @@ _OBSERVER_RUNTIME_UNITY_GROUPS = OBSERVER_UNITY_GROUPS + singleton_unity_groups(
     "ob_server_standalone",
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "observer_runtime",
     unity_groups = _OBSERVER_RUNTIME_UNITY_GROUPS,
     source_replacements = _OBSERVER_GENERATED_SOURCE_REPLACEMENTS,
@@ -246,7 +246,7 @@ seekdb_semantic_unity_cc_library(
 
 # SQL owns the retrieval lifecycle facade; this composition object owns the
 # physical SQL/Storage binding and registers it during final-link startup.
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "observer_retrieval_composition",
     unity_groups = singleton_unity_groups(
         OBSERVER_RETRIEVAL_COMPOSITION_SOURCES,
@@ -276,7 +276,7 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "observer_main",
     unity_groups = singleton_unity_groups(
         OBSERVER_MAIN_SOURCES,
@@ -318,7 +318,7 @@ _OBSERVER_MAIN_OBJECT_TARGETS = [
     ":_observer_main_ob_main_1_objects",
 ]
 
-seekdb_version_source(
+version_source(
     name = "_generate_ob_version",
     template = "//src/share:ob_version.cpp.in",
     out = "ob_version.cpp",
@@ -465,7 +465,7 @@ _SEEKDB_SHARED_LINKOPTS = select({
     ],
 })
 
-seekdb_final_link(
+final_link(
     name = "seekdb_link",
     direct_object_deps = (
         _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS +
@@ -478,7 +478,7 @@ seekdb_final_link(
     ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
     extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
     system_libs = _SEEKDB_SYSTEM_LIBS,
-    linkopts = _SEEKDB_EXECUTABLE_LINKOPTS + seekdb_sanity_linkopts() + select({
+    linkopts = _SEEKDB_EXECUTABLE_LINKOPTS + sanity_linkopts() + select({
         "//bazel:linux_package_runtime": ["-Wl,-rpath,$ORIGIN/../libexec/seekdb/lib"],
         "//conditions:default": [],
     }),
@@ -487,7 +487,7 @@ seekdb_final_link(
     visibility = ["//visibility:public"],
 )
 
-seekdb_final_link(
+final_link(
     name = "_liboceanbase_link",
     whole_group_deps = (
         _OBSERVER_RETRIEVAL_COMPOSITION_OBJECT_TARGETS +
@@ -505,7 +505,7 @@ seekdb_final_link(
     ordered_link_files = _SEEKDB_ORDERED_LINK_FILES,
     extra_inputs = _SEEKDB_EXTRA_LINK_INPUTS,
     system_libs = _SEEKDB_SYSTEM_LIBS,
-    linkopts = _SEEKDB_SHARED_LINKOPTS + seekdb_sanity_linkopts(),
+    linkopts = _SEEKDB_SHARED_LINKOPTS + sanity_linkopts(),
     out = "liboceanbase.so",
     shared = True,
     tags = ["manual"],

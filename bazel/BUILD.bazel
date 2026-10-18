@@ -1,4 +1,4 @@
-load(":seekdb_build_settings.bzl", "seekdb_bool_flag")
+load(":build_settings.bzl", "bool_flag")
 
 exports_files([
     "build_metadata.py",
@@ -8,11 +8,11 @@ exports_files([
     "platforms.bzl",
     "third_party.BUILD",
     "defs.bzl",
-    "seekdb_cc_library.bzl",
-    "seekdb_build_config.bzl",
-    "seekdb_build_settings.bzl",
-    "seekdb_final_link.bzl",
-    "seekdb_partial_link.bzl",
+    "cc_library.bzl",
+    "compile_config.bzl",
+    "build_settings.bzl",
+    "final_link.bzl",
+    "localized_partial_link.bzl",
     "third_party_headers_repo.bzl",
 ])
 
@@ -28,7 +28,7 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-seekdb_bool_flag(
+bool_flag(
     name = "enable_sanity",
     build_setting_default = False,
     visibility = ["//visibility:public"],
@@ -43,7 +43,7 @@ config_setting(
 toolchain_type(name = "cargo_toolchain_type", visibility = ["//visibility:public"])
 exports_files(["cargo_toolchain.bzl", "prepare_cargo.py", "cargo_runner.py", "third_party_targets.bzl"])
 
-seekdb_bool_flag(
+bool_flag(
     name = "package_runtime",
     build_setting_default = False,
     visibility = ["//visibility:public"],
@@ -56,7 +56,7 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-seekdb_bool_flag(
+bool_flag(
     name = "rpm_logging",
     build_setting_default = False,
     visibility = ["//visibility:public"],

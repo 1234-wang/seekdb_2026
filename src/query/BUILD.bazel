@@ -1,6 +1,6 @@
 load(
     "//bazel:defs.bzl",
-    cc_library = "seekdb_cc_library",
+    "cc_library",
 )
 load(
     ":query_build_defs.bzl",

@@ -1,7 +1,7 @@
 load(
     "//bazel:defs.bzl",
-    "seekdb_semantic_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "grouped_unity_cc_library",
+    "cc_library",
 )
 load(
     ":rootserver_source_inventory.bzl",
@@ -325,7 +325,7 @@ _ROOTSERVER_RUNTIME_UNITY_GROUPS = ROOTSERVER_UNITY_GROUPS + singleton_unity_gro
     "ob_rootserver_standalone",
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "rootserver_runtime",
     unity_groups = _ROOTSERVER_RUNTIME_UNITY_GROUPS,
     split_unity_groups = True,

@@ -139,7 +139,7 @@ def _archive_group(files, apple, whole = False, alwayslink = {}):
     start, end = ("--whole-archive", "--no-whole-archive") if whole else ("--start-group", "--end-group")
     return ["-Wl," + start] + (paths if whole else _archive_args(files, apple, alwayslink)) + ["-Wl," + end]
 
-def _seekdb_final_link_impl(ctx):
+def _final_link_impl(ctx):
     cc_toolchain = find_cpp_toolchain(ctx)
     platform = target_platform(ctx)
     is_apple = platform.apple
@@ -290,8 +290,8 @@ def _seekdb_final_link_impl(ctx):
         ),
     ]
 
-seekdb_final_link = rule(
-    implementation = _seekdb_final_link_impl,
+final_link = rule(
+    implementation = _final_link_impl,
     attrs = {
         "direct_object_deps": attr.label_list(providers = [CcInfo]),
         "group_deps": attr.label_list(providers = [CcInfo]),

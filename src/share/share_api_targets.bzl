@@ -2,7 +2,7 @@
 
 load(
     "//bazel:defs.bzl",
-    cc_library = "seekdb_cc_library",
+    "cc_library",
 )
 
 _PUBLIC_VISIBILITY = [

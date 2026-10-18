@@ -2,8 +2,8 @@ load(
     "//bazel:defs.bzl",
     "SEEKDB_MODULE_CXX_COPTS",
     "SEEKDB_X86_SIMD_COPTS",
-    "seekdb_semantic_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "grouped_unity_cc_library",
+    "cc_library",
 )
 load(
     "//src/sql:sql_header_inventory.bzl",
@@ -20,10 +20,10 @@ load(
 )
 load(
     "//src/sql:sql_module_sources.bzl",
-    "SQL_OPTIMIZER_GROUP_NAMES",
-    "SQL_PREPARE_SOURCES",
-    "sql_groups_without",
-    "sql_headers_outside",
+    "OPTIMIZER_GROUP_NAMES",
+    "PREPARE_SOURCES",
+    "groups_without",
+    "headers_outside",
 )
 load(
     "//src/sql:sql_runtime_deps.bzl",
@@ -121,7 +121,7 @@ _SQL_SEMANTIC_HEADER_PREFIXES = [
 ]
 
 
-_SQL_RETRIEVAL_COMPOSITION_HEADERS = sql_headers_outside(
+_SQL_RETRIEVAL_COMPOSITION_HEADERS = headers_outside(
     SQL_COMPOSITION_HEADERS,
     ["parser/"],
 )
@@ -135,27 +135,16 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
-# Narrow internal seam for the relation-map invariant test. It exposes only
-# the SQL-owned textual tables and the OBLib type vocabulary they encode.
-cc_library(
-    name = "sql_relation_map_test_interface",
-    testonly = True,
-    deps = [
-        ":_textual_sql_map_inputs",
-    ],
-    visibility = ["//unittest/sql/engine/expr:__pkg__"],
-)
-
 # SQL's external seam owns only headers actually reached from outside SQL.
 # Semantic subpackages own their physical files and contribute header-only
 # targets; no implementation target is pulled into this interface.
 cc_library(
     name = "sql_runtime_interface",
-    hdrs = sql_headers_outside(
+    hdrs = headers_outside(
         SQL_PUBLIC_HEADER_ROOTS,
         _SQL_SEMANTIC_HEADER_PREFIXES,
     ),
-    textual_hdrs = sql_headers_outside(
+    textual_hdrs = headers_outside(
         SQL_INTERFACE_CLOSURE_HEADERS,
         _SQL_SEMANTIC_HEADER_PREFIXES,
     ),
@@ -216,10 +205,10 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
-_SQL_RUNTIME_UNITY_GROUPS = sql_groups_without(
+_SQL_RUNTIME_UNITY_GROUPS = groups_without(
     SQL_UNITY_GROUPS,
-    SQL_OPTIMIZER_GROUP_NAMES,
-    SQL_PREPARE_SOURCES,
+    OPTIMIZER_GROUP_NAMES,
+    PREPARE_SOURCES,
 ) + singleton_unity_groups(
     SQL_STANDALONE_SOURCES,
     "sql_runtime_standalone",
@@ -243,7 +232,7 @@ _SQL_RUNTIME_IMPLEMENTATION_DEPS = [
 
 # One SQL module/library with the existing release Unity translation units.
 # Standalone sources remain singleton groups, preserving compile granularity.
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "sql_runtime",
     unity_groups = _SQL_RUNTIME_UNITY_GROUPS,
     split_unity_groups = True,
@@ -340,7 +329,7 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "sql_runtime_without_pass",
     unity_groups = _SQL_RUNTIME_WITHOUT_PASS_UNITY_GROUPS,
     split_unity_groups = True,
@@ -397,7 +386,7 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "sql_runtime_simd",
     unity_groups = SQL_SIMD_UNITY_GROUPS,
     split_unity_groups = True,

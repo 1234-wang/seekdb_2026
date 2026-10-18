@@ -86,7 +86,7 @@ def _parser_impl(ctx):
         ctx.outputs.lexer_header,
     ]))]
 
-seekdb_parser = rule(
+parser = rule(
     implementation = _parser_impl,
     attrs = {
         "_bison": attr.label(default = "@seekdb_host_tools//:bison_tool", allow_single_file = True, cfg = "exec"),
@@ -115,7 +115,7 @@ def _type_names_impl(ctx):
         mnemonic = "ParserTypeNames",
     )
 
-seekdb_parser_type_names = rule(
+parser_type_names = rule(
     implementation = _type_names_impl,
     attrs = {
         "src": attr.label(allow_single_file = True, mandatory = True),

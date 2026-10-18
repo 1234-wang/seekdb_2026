@@ -1,6 +1,6 @@
 """Expose the Cargo workspace's declared C++ exports to Bazel."""
 
-load("//bazel:defs.bzl", cc_library = "seekdb_cc_library")
+load("//bazel:defs.bzl", "cc_library")
 load("@apple_support//lib:apple_support.bzl", "apple_support")
 load("//bazel:platforms.bzl", "PLATFORM_ATTRS", "target_platform")
 load("//bazel:cargo_toolchain.bzl", "CARGO_TOOLCHAIN_TYPE")

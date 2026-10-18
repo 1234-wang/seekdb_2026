@@ -28,7 +28,7 @@ def target_platform(ctx):
             )
     fail("Unsupported target platform for %s" % ctx.label)
 
-def seekdb_arch_copts():
+def arch_copts():
     return select({
         "@platforms//cpu:wasm32": [],
         "@platforms//cpu:x86_64": ["-mtune=core2"],
@@ -36,7 +36,7 @@ def seekdb_arch_copts():
         "//conditions:default": ["-mtune=generic"],
     })
 
-def seekdb_platform_local_defines():
+def platform_local_defines():
     return select({
         "@platforms//os:emscripten": [
             "_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION",
@@ -55,7 +55,7 @@ def seekdb_platform_local_defines():
         "//conditions:default": [],
     })
 
-def seekdb_openmp_copts():
+def openmp_copts():
     # Apple Clang does not ship an OpenMP runtime. The affected implementation
     # remains serial on macOS.
     return select({
@@ -65,13 +65,13 @@ def seekdb_openmp_copts():
         "//conditions:default": ["-fopenmp"],
     })
 
-def seekdb_platform_compiler_inputs():
+def platform_compiler_inputs():
     return select({
         "@platforms//os:android": ["//include:android_compat.h"],
         "//conditions:default": [],
     })
 
-def seekdb_platform_copts():
+def platform_copts():
     return select({
         "@platforms//os:android": ["-include", "include/android_compat.h"],
         "//conditions:default": [],

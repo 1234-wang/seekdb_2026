@@ -1,5 +1,5 @@
-load("//bazel:defs.bzl", "seekdb_final_link", cc_library = "seekdb_cc_library")
-load("//bazel:seekdb_build_config.bzl", "SEEKDB_VERSION", "SEEKDB_RELEASE_LOCAL_DEFINES")
+load("//bazel:defs.bzl", "final_link", "cc_library")
+load("//bazel:compile_config.bzl", "SEEKDB_VERSION", "SEEKDB_RELEASE_LOCAL_DEFINES")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -57,7 +57,7 @@ _WRAPPED_CALLS = [
     "emscripten_futex_wait",
 ]
 
-seekdb_final_link(
+final_link(
     name = "database_link",
     direct_object_deps = [":database_entry"],
     group_deps = ["//src/observer:observer_embedded_runtime"],

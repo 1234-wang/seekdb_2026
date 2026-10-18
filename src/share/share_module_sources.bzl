@@ -1,6 +1,6 @@
 """Helpers for declaring Share's native semantic source graph."""
 
-def share_select_unity_sources(groups, name, source_paths, language = "c++"):
+def select_unity_sources(groups, name, source_paths, language = "c++"):
     """Builds one semantic Unity group from exact checked-in Unity members."""
 
     requested = {path: False for path in source_paths}
@@ -23,7 +23,7 @@ def share_select_unity_sources(groups, name, source_paths, language = "c++"):
         srcs = selected,
     )
 
-def share_unity_group_sources(groups):
+def unity_group_sources(groups):
     """Flattens semantic Unity groups into one duplicate-checked source set."""
 
     result = []
@@ -39,7 +39,7 @@ def share_unity_group_sources(groups):
             result.append(source)
     return result
 
-def share_remaining_unity_groups(groups, excluded_sources, language = "c++"):
+def remaining_unity_groups(groups, excluded_sources, language = "c++"):
     """Preserves release Unity action boundaries after native extractions."""
 
     excluded = {source: False for source in excluded_sources}

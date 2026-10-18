@@ -1,12 +1,12 @@
 """Native Bazel entry point for the embedded iOS framework."""
 
-load("//bazel:defs.bzl", "seekdb_final_link", "seekdb_version_source", cc_library = "seekdb_cc_library")
-load("//bazel:seekdb_build_config.bzl", "SEEKDB_CXX_COPTS")
+load("//bazel:defs.bzl", "final_link", "version_source", "cc_library")
+load("//bazel:compile_config.bzl", "SEEKDB_CXX_COPTS")
 load("@apple_support//rules:apple_genrule.bzl", "apple_genrule")
 
 def seekdb_ios_framework():
     """Declare device/simulator framework targets inside the Observer package."""
-    seekdb_version_source(
+    version_source(
         name = "_ios_build_config",
         template = "ios/driver/build_config.h.in",
         out = "ios-build-config.h",
@@ -28,7 +28,7 @@ def seekdb_ios_framework():
         target_compatible_with = ["@platforms//os:ios"],
         tags = ["manual"],
     )
-    seekdb_final_link(
+    final_link(
         name = "_ios_framework_link",
         direct_object_deps = [":_ios_entry"],
         group_deps = [":observer_embedded_runtime"],

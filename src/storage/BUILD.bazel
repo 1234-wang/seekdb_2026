@@ -2,9 +2,9 @@ load(
     "//bazel:defs.bzl",
     "SEEKDB_MODULE_CXX_COPTS",
     "SEEKDB_X86_SIMD_COPTS",
-    "seekdb_generated_unity_cc_library",
-    "seekdb_semantic_unity_cc_library",
-    cc_library = "seekdb_cc_library",
+    "unity_cc_library",
+    "grouped_unity_cc_library",
+    "cc_library",
 )
 load(
     ":storage_source_inventory.bzl",
@@ -49,7 +49,7 @@ cc_library(
     visibility = ["//src:__subpackages__"],
 )
 
-seekdb_generated_unity_cc_library(
+unity_cc_library(
     name = "tablet_autoincrement_state",
     unity_members = STORAGE_TABLET_AUTOINCREMENT_STATE_SOURCES,
     public_hdrs = ["tablet/ob_tablet_autoincrement_state.h"],
@@ -443,7 +443,7 @@ cc_library(
 )
 
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "storage_runtime",
     unity_groups = STORAGE_UNITY_GROUPS,
     split_unity_groups = True,
@@ -538,7 +538,7 @@ seekdb_semantic_unity_cc_library(
     tags = ["manual"],
 )
 
-seekdb_semantic_unity_cc_library(
+grouped_unity_cc_library(
     name = "storage_runtime_simd",
     unity_groups = STORAGE_SIMD_UNITY_GROUPS,
     split_unity_groups = True,

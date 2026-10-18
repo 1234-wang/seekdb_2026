@@ -1,6 +1,6 @@
 """Generates seekdb's version source from Bazel workspace status."""
 
-def _seekdb_version_source_impl(ctx):
+def _version_source_impl(ctx):
     ctx.actions.run(
         executable = ctx.file._python,
         inputs = [ctx.file._codegen, ctx.file.template, ctx.info_file],
@@ -16,8 +16,8 @@ def _seekdb_version_source_impl(ctx):
     )
     return [DefaultInfo(files = depset([ctx.outputs.out]))]
 
-seekdb_version_source = rule(
-    implementation = _seekdb_version_source_impl,
+version_source = rule(
+    implementation = _version_source_impl,
     attrs = {
         "_python": attr.label(default = "@seekdb_host_tools//:python", allow_single_file = True, cfg = "exec"),
         "_codegen": attr.label(default = "//bazel:build_metadata.py", allow_single_file = True, cfg = "exec"),
