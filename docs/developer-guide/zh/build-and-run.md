@@ -47,13 +47,15 @@ C++ 编译在远端执行。Cargo、生成器和链接仍在本机运行。如�
 Linux 上通过以下命令启用 Sanity 插桩：
 
 ```bash
-./build.py build --sanity=true seekdb
+./build.py build --sanity seekdb
 ```
+
+Sanity 默认关闭；`--sanity` 等价于 `--sanity=true`，显式关闭用 `--sanity=false`。
 
 如需保留独立的 Sanity 构建，指定构建目录：
 
 ```bash
-./build.py --build-dir build_sanity build --sanity=true seekdb
+./build.py --build-dir build_sanity build --sanity seekdb
 ```
 
 二进制通过 `build_sanity/bin/src/observer/seekdb` 访问。

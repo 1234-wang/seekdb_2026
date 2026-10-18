@@ -47,13 +47,15 @@ C++ compilation runs remotely. Cargo, generators, and linking run locally. If th
 On Linux, enable Sanity instrumentation with:
 
 ```bash
-./build.py build --sanity=true seekdb
+./build.py build --sanity seekdb
 ```
+
+Sanity is disabled by default. `--sanity` is equivalent to `--sanity=true`; use `--sanity=false` to disable it explicitly.
 
 To keep a separate Sanity build, specify a build directory:
 
 ```bash
-./build.py --build-dir build_sanity build --sanity=true seekdb
+./build.py --build-dir build_sanity build --sanity seekdb
 ```
 
 Its binary is accessible at `build_sanity/bin/src/observer/seekdb`.
