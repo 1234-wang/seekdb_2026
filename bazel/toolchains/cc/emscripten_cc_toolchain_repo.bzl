@@ -32,15 +32,12 @@ if [ ! -d "$EM_CACHE/sysroot" ]; then
 fi
 exec "$(dirname "$0")/sdk/emscripten/emcc" --sysroot="$(dirname "$0")/cache/sysroot" "$@"
 """)
-    ctx.template("BUILD.bazel", ctx.attr.build_file, substitutions = host_substitutions(ctx) | {
+    ctx.template("BUILD.bazel", Label(":BUILD.emscripten_cc_toolchain.tpl"), substitutions = host_substitutions(ctx) | {
         "@INCLUDES@": repr(includes),
     })
 
 emscripten_cc_toolchain_repository = repository_rule(
     implementation = _emscripten_cc_toolchain_repository_impl,
-    attrs = {
-        "build_file": attr.label(default = Label("//bazel/toolchains/cc:BUILD.emscripten_cc_toolchain.tpl")),
-    },
     configure = True,
     local = True,
 )

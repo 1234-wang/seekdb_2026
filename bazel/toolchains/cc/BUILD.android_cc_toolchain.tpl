@@ -2,7 +2,6 @@ load("@rules_cc//cc/toolchains:cc_toolchain.bzl", "cc_toolchain")
 load("@rules_cc//cc/private/toolchain:unix_cc_toolchain_config.bzl", "cc_toolchain_config")
 
 package(default_visibility = ["//visibility:public"])
-exports_files(["rust_env.sh"])
 
 filegroup(name = "empty")
 filegroup(

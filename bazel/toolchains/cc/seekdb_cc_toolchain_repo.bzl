@@ -2,9 +2,6 @@
 
 load(":repository_utils.bzl", "builtin_include_directories", "host_substitutions")
 
-def _quote(value):
-    return "\"%s\"" % value.replace("\\", "\\\\").replace("\"", "\\\"")
-
 def _discover_builtin_include_directories(repository_ctx, compiler):
     resource_result = repository_ctx.execute(
         [compiler, "-print-resource-dir"],
@@ -69,7 +66,7 @@ def _write_builtin_module_map(repository_ctx, builtin_include_directories):
         fail("no bundled Clang headers were found under %s" % roots)
 
     lines = ['module "crosstool" [system] {']
-    lines.extend(["  textual header %s" % _quote(path) for path in headers])
+    lines.extend(["  textual header %s" % json.encode(path) for path in headers])
     lines.append("}")
     repository_ctx.file("module.modulemap", "\n".join(lines) + "\n")
 
@@ -77,9 +74,8 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
     if repository_ctx.os.name != "linux":
         repository_ctx.file("BUILD.bazel", "# The bundled toolchain is Linux-only.\n")
         return
-    workspace_root = str(repository_ctx.workspace_root)
     architecture = host_substitutions(repository_ctx)["@HOST_CPU@"]
-    devtools = repository_ctx.path(workspace_root + "/" + repository_ctx.attr.devtools_path)
+    devtools = repository_ctx.workspace_root.get_child("deps", "3rd", "usr", "local", "oceanbase", "devtools")
     for tool_name in [
         "clang",
         "ld.lld",
@@ -102,7 +98,7 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
 
     repository_ctx.template(
         "validate_static_library.sh",
-        repository_ctx.attr.validate_static_library,
+        Label("@rules_cc//cc/private/toolchain:validate_static_library.sh.tpl"),
         substitutions = {
             "%{nm}": '$(dirname "${BASH_SOURCE[0]}")/devtools/bin/llvm-nm',
             "%{c++filt}": '$(dirname "${BASH_SOURCE[0]}")/devtools/bin/llvm-cxxfilt',
@@ -117,7 +113,7 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
     )
     repository_ctx.template(
         "BUILD.bazel",
-        repository_ctx.attr.build_file,
+        Label(":BUILD.seekdb_cc_toolchain.tpl"),
         substitutions = {
             "@CXX_BUILTIN_INCLUDE_DIRECTORIES@": repr(builtin_include_directories),
             "@HOST_CPU@": architecture,
@@ -133,19 +129,6 @@ def _seekdb_cc_toolchain_repository_impl(repository_ctx):
 
 seekdb_cc_toolchain_repository = repository_rule(
     implementation = _seekdb_cc_toolchain_repository_impl,
-    attrs = {
-        "build_file": attr.label(
-            allow_single_file = True,
-            default = Label("//bazel/toolchains/cc:BUILD.seekdb_cc_toolchain.tpl"),
-        ),
-        "devtools_path": attr.string(
-            default = "deps/3rd/usr/local/oceanbase/devtools",
-        ),
-        "validate_static_library": attr.label(
-            allow_single_file = True,
-            default = Label("@rules_cc//cc/private/toolchain:validate_static_library.sh.tpl"),
-        ),
-    },
     configure = True,
     local = True,
 )
