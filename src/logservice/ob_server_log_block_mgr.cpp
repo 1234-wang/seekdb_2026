@@ -89,9 +89,27 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
     CLOG_LOG(WARN, "Fail to open dir, ", K(ret), K(errno), K(clog_dir));
   } else {
     result = true;
-    while (NULL != (entry = readdir(dir))) {
+    while (OB_SUCC(ret) && NULL != (entry = readdir(dir))) {
       if (0 != strcmp(entry->d_name, ".") && 0 != strcmp(entry->d_name, "..")) {
+#ifdef _WIN32
+        // Some Windows directory filters can return a name from FindNextFileW
+        // that no longer resolves to an object.  Only ignore that precise
+        // not-found result; real entries and metadata errors remain
+        // conservative so the data/redo consistency guard is not weakened.
+        char path[1024];
+        struct _stat64 info;
+        const int len = snprintf(path, sizeof(path), "%s\\%s", clog_dir, entry->d_name);
+        if (len <= 0 || static_cast<size_t>(len) >= sizeof(path)) {
+          ret = OB_SIZE_OVERFLOW;
+        } else if (0 == ::_stat64(path, &info)) {
+          result = false;
+        } else if (ENOENT != errno) {
+          ret = OB_ERR_SYS;
+          CLOG_LOG(WARN, "Fail to inspect directory entry", K(ret), K(errno), K(path));
+        }
+#else
         result = false;
+#endif
       }
     }
   }
