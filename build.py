@@ -141,23 +141,23 @@ def main(arguments: List[str]) -> int:
     # Parse launcher options before the command, then handle build concurrency.
     parser = argparse.ArgumentParser(
         description=__doc__,
-        usage="%(prog)s [--build-dir PATH] [--launcher-cache-dir PATH] <bazel command> [args]",
+        usage="%(prog)s [--output_base PATH] [--launcher-cache-dir PATH] <bazel command> [args]",
         epilog="Prepare project dependencies with: ./build.py init [--android | --ios [--simulator] | --wasm]",
         allow_abbrev=False,
     )
-    parser.add_argument("--build-dir", type=Path, default=Path("build"),
+    parser.add_argument("--output_base", type=Path, default=Path("build"),
                         help="directory for build state and output links (default: build)")
     parser.add_argument("--launcher-cache-dir", type=Path, default=_cache_directory())
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     options, startup_options = parser.parse_known_args(arguments)
     bazel_arguments, concurrency_defaults = _concurrency_options(options.arguments)
-    build_directory = (root / options.build_dir.expanduser()).resolve()
-    if build_directory == root:
-        raise BuildError("--build-dir must not name the workspace root")
+    output_base = (root / options.output_base.expanduser()).resolve()
+    if output_base == root:
+        raise BuildError("--output_base must not name the workspace root")
     cache = options.launcher_cache_dir.expanduser().resolve()
     version = (root / ".bazelversion").read_text().strip()
     bazel = _ensure_bazel(root, cache, version)
-    build_directory.mkdir(parents=True, exist_ok=True)
+    output_base.mkdir(parents=True, exist_ok=True)
 
     # Build policy lives in .bazelrc; paths and explicit local concurrency go
     # here. Bazel flags on the command line override these defaults.
@@ -172,7 +172,7 @@ def main(arguments: List[str]) -> int:
     lines = [
         "common --downloader_config=" + _quote((root / "bazel/downloader.cfg").as_posix()),
         "build --disk_cache=" + _quote((_cache_directory() / "disk-cache").as_posix()),
-        "build --symlink_prefix=" + _quote(build_directory.as_posix() + "/"),
+        "build --symlink_prefix=" + _quote(output_base.as_posix() + "/"),
         "build --workspace_status_command=" + _quote(status_command),
     ]
     lines.extend(concurrency_defaults)
@@ -185,7 +185,7 @@ def main(arguments: List[str]) -> int:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write("\n".join(lines) + "\n")
         return subprocess.run([
-            str(bazel), "--output_base=" + str(build_directory / "output-base"),
+            str(bazel), "--output_base=" + str(output_base),
             "--bazelrc=" + name,
         ] + startup_options + bazel_arguments, cwd=root).returncode
     finally:

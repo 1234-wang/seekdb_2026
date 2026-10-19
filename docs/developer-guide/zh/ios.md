@@ -39,8 +39,8 @@ build/bin/src/observer/framework/SeekDB.framework
 如需保留独立的真机和模拟器构建，分别指定构建目录：
 
 ```bash
-./build.py --build-dir build_ios build --config=ios seekdb
-./build.py --build-dir build_ios_simulator build --config=ios-simulator seekdb
+./build.py --output_base=build_ios build --config=ios seekdb
+./build.py --output_base=build_ios_simulator build --config=ios-simulator seekdb
 ```
 
 单元测试修改应按照[编写与运行单元测试](unittest.md)中的流程，在受支持的 Linux 主机上验证。

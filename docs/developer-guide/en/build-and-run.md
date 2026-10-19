@@ -61,18 +61,18 @@ Sanity is disabled by default. `--sanity` is equivalent to `--sanity=true`; use 
 To keep a separate Sanity build, specify a build directory:
 
 ```bash
-./build.py --build-dir build_sanity build --sanity seekdb
+./build.py --output_base=build_sanity build --sanity seekdb
 ```
 
 Its binary is accessible at `build_sanity/bin/src/observer/seekdb`.
 
 ## Build directories
 
-Bazel's working directory defaults to `build/output-base` inside the project. It contains intermediate files and final outputs. The `build/bin`, `build/out`, and other output links point into this directory; `build/bin/src/observer/seekdb` is the native Linux/macOS binary path.
+Bazel's working directory defaults to `build/` inside the project. It contains intermediate files and final outputs. The `build/bin`, `build/out`, and other output links point into this directory; `build/bin/src/observer/seekdb` is the native Linux/macOS binary path.
 
-Put `--build-dir PATH` before the command to change both the working directory and output link locations. Relative paths are resolved from the project root; absolute paths can place builds on another disk. Different build directories have independent build state and can build concurrently. Bazel serializes commands using the same build directory.
+Put Bazel's native `--output_base=PATH` before the command; `build.py` also sets the output link prefix to `PATH/`. For example, `--output_base=build3` uses `build3/` as the working directory and `build3/bin/src/observer/seekdb` as the binary path. Relative paths are resolved from the project root; absolute paths can place builds on another disk. Different directories have independent build state and links and can build concurrently. Bazel serializes commands using the same directory.
 
-Run `./build.py info output_base` to locate the working directory and `./build.py clean --expunge` to remove it. For a custom directory, add the same `--build-dir PATH` before either command. Exclude build directories when searching source files, for example: `find . -path './build' -prune -o -type f -name '*.cpp' -print`.
+Run `./build.py info output_base` to locate the working directory and `./build.py clean --expunge` to remove it. For a custom directory, add the same `--output_base=PATH` before either command. Exclude build directories when searching source files, for example: `find . -path './build' -prune -o -type f -name '*.cpp' -print`.
 
 ## Reuse build caches
 

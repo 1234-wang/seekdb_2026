@@ -61,18 +61,18 @@ Sanity 默认关闭；`--sanity` 等价于 `--sanity=true`，显式关闭用 `--
 如需保留独立的 Sanity 构建，指定构建目录：
 
 ```bash
-./build.py --build-dir build_sanity build --sanity seekdb
+./build.py --output_base=build_sanity build --sanity seekdb
 ```
 
 二进制通过 `build_sanity/bin/src/observer/seekdb` 访问。
 
 ## 构建目录
 
-Bazel 的实际工作目录默认是项目内的 `build/output-base`，中间文件和最终产物都放在这里。`build/bin`、`build/out` 等链接指向这个目录内的对应位置；Linux/macOS 的二进制通过 `build/bin/src/observer/seekdb` 访问。
+Bazel 的实际工作目录默认是项目内的 `build/`，中间文件和最终产物都放在这里。`build/bin`、`build/out` 等链接指向这个目录内的对应位置；Linux/macOS 的二进制通过 `build/bin/src/observer/seekdb` 访问。
 
-在命令前指定 `--build-dir PATH`，会同时改变工作目录和产物链接的位置。相对路径以项目根目录为基准，也可指定其他磁盘上的绝对路径。不同构建目录的构建状态互相独立，可以并行构建；同一个构建目录的命令由 Bazel 排队执行。
+在命令前指定 Bazel 原生参数 `--output_base=PATH`，`build.py` 会同时将产物链接前缀设为 `PATH/`。例如 `--output_base=build3` 的实际工作目录是 `build3/`，二进制入口是 `build3/bin/src/observer/seekdb`。相对路径以项目根目录为基准，也可指定其他磁盘上的绝对路径。不同目录的构建状态和链接互相独立，可以并行构建；同一个目录的命令由 Bazel 排队执行。
 
-使用 `./build.py info output_base` 查看实际工作目录，`./build.py clean --expunge` 清理它。自定义目录时，在这两个命令前同样加上 `--build-dir PATH`。搜索源码时可排除构建目录，例如 `find . -path './build' -prune -o -type f -name '*.cpp' -print`。
+使用 `./build.py info output_base` 查看实际工作目录，`./build.py clean --expunge` 清理它。自定义目录时，在这两个命令前同样加上 `--output_base=PATH`。搜索源码时可排除构建目录，例如 `find . -path './build' -prune -o -type f -name '*.cpp' -print`。
 
 ## 复用构建缓存
 
