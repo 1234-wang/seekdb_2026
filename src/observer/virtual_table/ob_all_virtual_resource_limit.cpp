@@ -19,6 +19,7 @@
 #include "observer/virtual_table/ob_all_virtual_resource_limit.h"
 #include "share/rc/ob_server_runtime.h"
 #include "share/cache/ob_kv_storecache.h"
+#include "sql/engine/ob_sql_memory_manager.h"
 #include "storage/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 
@@ -54,39 +55,57 @@ void ObResourceLimitTable::reset()
 const char *ObResourceLimitTable::memory_resource_name(const int64_t index)
 {
   static const char *const NAMES[] = {
-      "kv_cache_memory", "vector_memory", "meta_object_memory"};
+      "kv_cache_memory", "sql_workarea_memory", "vector_memory", "meta_object_memory"};
   return index >= 0 && index < memory_resource_count() ? NAMES[index] : nullptr;
 }
 
 int ObResourceLimitTable::get_memory_resource_sample(
-    const int64_t index, MemoryQuotaSample &sample)
+    const int64_t index, MemoryResourceSample &sample)
 {
   int ret = OB_SUCCESS;
+  MemoryQuotaSample quota_sample;
+  sample = MemoryResourceSample();
   switch (index) {
     case 0:
-      sample = ObKVGlobalCache::get_instance().get_memory_quota_sample();
+      quota_sample = ObKVGlobalCache::get_instance().get_memory_quota_sample();
       break;
     case 1: {
-      ObSharedMemAllocMgr *manager = server_service<ObSharedMemAllocMgr>();
+      sql::ObSqlMemoryManager *manager = server_service<sql::ObSqlMemoryManager>();
       if (OB_ISNULL(manager)) {
         ret = OB_NOT_INIT;
       } else {
-        sample = manager->vector_allocator().get_memory_quota_sample();
+        sample.used_bytes_ = manager->get_total_mem_used();
+        sample.limit_bytes_ = manager->get_max_workarea_size();
+        sample.is_scheduling_budget_ = true;
       }
       break;
     }
     case 2: {
+      ObSharedMemAllocMgr *manager = server_service<ObSharedMemAllocMgr>();
+      if (OB_ISNULL(manager)) {
+        ret = OB_NOT_INIT;
+      } else {
+        quota_sample = manager->vector_allocator().get_memory_quota_sample();
+      }
+      break;
+    }
+    case 3: {
       ObStorageMetaMemMgr *manager = server_service<ObStorageMetaMemMgr>();
       if (OB_ISNULL(manager)) {
         ret = OB_NOT_INIT;
       } else {
-        sample = manager->get_memory_quota_sample();
+        quota_sample = manager->get_memory_quota_sample();
       }
       break;
     }
     default:
       ret = OB_INVALID_ARGUMENT;
       break;
+  }
+  if (OB_SUCC(ret) && !sample.is_scheduling_budget_) {
+    sample.used_bytes_ = quota_sample.committed_bytes_;
+    sample.reserved_bytes_ = quota_sample.reserved_bytes_;
+    sample.limit_bytes_ = quota_sample.limit_bytes_;
   }
   return ret;
 }
@@ -107,6 +126,7 @@ int ObResourceLimitTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObResourceInfo info;
+  MemoryResourceSample sample;
   row = nullptr;
   if (OB_ISNULL(allocator_) || OB_ISNULL(cur_row_.cells_)) {
     ret = OB_NOT_INIT;
@@ -119,13 +139,13 @@ int ObResourceLimitTable::inner_get_next_row(ObNewRow *&row)
       }
     }
     if (OB_SUCC(ret) && logical_resources_finished_) {
-      MemoryQuotaSample sample;
       if (memory_resource_index_ >= memory_resource_count()) {
         ret = OB_ITER_END;
       } else if (OB_FAIL(get_memory_resource_sample(memory_resource_index_, sample))) {
       } else {
-        // Independent atomic samples, not a joint quota snapshot. Units: bytes.
-        info.curr_utilization_ = sample.committed_bytes_;
+        // Independent observations, not a joint snapshot. WorkArea reports
+        // profile usage and a scheduling budget rather than quota admission.
+        info.curr_utilization_ = sample.used_bytes_;
         info.reserved_value_ = sample.reserved_bytes_;
         info.min_constraint_value_ = sample.limit_bytes_;
         info.min_constraint_type_ = MEMORY_CONSTRAINT;
@@ -157,13 +177,19 @@ int ObResourceLimitTable::inner_get_next_row(ObNewRow *&row)
           }
           break;
         case RSERVED_VALUE:
-          cur_row_.cells_[i].set_int(info.reserved_value_);
+          if (logical_resources_finished_ && sample.is_scheduling_budget_) {
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_int(info.reserved_value_);
+          }
           break;
         case LIMIT_VALUE:
           cur_row_.cells_[i].set_int(info.min_constraint_value_);
           break;
         case EFFECTIVE_LIMIT_TYPE:
-          cur_row_.cells_[i].set_varchar(get_constraint_type_name(info.min_constraint_type_));
+          cur_row_.cells_[i].set_varchar(
+              logical_resources_finished_ && sample.is_scheduling_budget_
+                  ? "scheduling" : get_constraint_type_name(info.min_constraint_type_));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         default:

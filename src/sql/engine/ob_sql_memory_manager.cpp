@@ -1107,7 +1107,7 @@ int ObSqlMemoryManager::calculate_global_bound_size(
   if (work_area_max_size < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    max_workarea_size_ = work_area_max_size;
+    ATOMIC_STORE(&max_workarea_size_, work_area_max_size);
   }
   // Set enable_auto_memory_mgr_ after calculating the policy-specific bound.
   if (OB_FAIL(ret)) {
@@ -1217,7 +1217,7 @@ int ObSqlMemoryManager::get_workarea_memory_info(
   int ret = OB_SUCCESS;
   // Here it is temporarily output in a transient manner, without considering concurrency issues
   memory_info.enable_ = enable_auto_memory_mgr_;
-  memory_info.max_workarea_size_ = max_workarea_size_;
+  memory_info.max_workarea_size_ = get_max_workarea_size();
   memory_info.max_auto_workarea_size_ = max_auto_workarea_size_;
   memory_info.mem_target_ = mem_target_;
   memory_info.total_mem_used_ = get_total_mem_used();

@@ -86,6 +86,7 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   int64_t limit_value;
+  bool is_scheduling_budget = false;
   row = nullptr;
   if (OB_ISNULL(allocator_) || OB_ISNULL(cur_row_.cells_)) {
     ret = OB_NOT_INIT;
@@ -99,13 +100,14 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
       }
     }
     if (OB_SUCC(ret) && logical_resources_finished_) {
-      MemoryQuotaSample sample;
+      MemoryResourceSample sample;
       if (memory_resource_index_ >= ObResourceLimitTable::memory_resource_count()) {
         ret = OB_ITER_END;
       } else if (OB_FAIL(ObResourceLimitTable::get_memory_resource_sample(
                      memory_resource_index_, sample))) {
       } else {
         limit_value = sample.limit_bytes_;
+        is_scheduling_budget = sample.is_scheduling_budget_;
       }
     }
   }
@@ -122,8 +124,9 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
           break;
         }
         case LIMIT_TYPE:
-          cur_row_.cells_[i].set_varchar(get_constraint_type_name(
-              logical_resources_finished_ ? MEMORY_CONSTRAINT : constraint_iter_.get_curr_type()));
+          cur_row_.cells_[i].set_varchar(is_scheduling_budget ? "scheduling"
+              : get_constraint_type_name(logical_resources_finished_
+                    ? MEMORY_CONSTRAINT : constraint_iter_.get_curr_type()));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case LIMIT_VALUE:

@@ -678,7 +678,7 @@ public:
   int get_all_active_workarea(common::ObIArray<ObSqlWorkareaProfileInfo> &wa_actives);
   int get_workarea_memory_info(ObSqlWorkareaCurrentMemoryInfo &memory_info);
 
-  int64_t get_max_workarea_size() const { return max_workarea_size_; }
+  int64_t get_max_workarea_size() const { return ATOMIC_LOAD(&max_workarea_size_); }
   int64_t get_max_auto_workarea_size() const { return max_auto_workarea_size_; }
   int64_t get_mem_target() const { return mem_target_; }
   int64_t get_drift_size() const { return drift_size_; }

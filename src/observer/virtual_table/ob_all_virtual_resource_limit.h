@@ -18,7 +18,6 @@
 #define OB_ALL_VIRTUAL_RESOURCE_LIMIT_H_
 
 #include "observer/virtual_table/ob_virtual_table_scanner_iterator.h"
-#include "lib/resource/ob_memory_quota.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 
 namespace oceanbase
@@ -30,6 +29,17 @@ class ObResourceInfo;
 
 namespace observer
 {
+// Resource-table observation, not an allocation-admission quota snapshot.
+// For SQL WorkArea, usage is reported by profiles and the limit is a budget;
+// there is no reservation counter or physical-allocation hard cap.
+struct MemoryResourceSample
+{
+  int64_t used_bytes_ = 0;
+  int64_t reserved_bytes_ = 0;
+  int64_t limit_bytes_ = 0;
+  bool is_scheduling_budget_ = false;
+};
+
 class ObResourceLimitTable : public common::ObVirtualTableScannerIterator
 {
 public:
@@ -40,10 +50,10 @@ public:
   virtual void reset();
   // Observation-only resources: do not register these with the calculator,
   // which also converts tablet counts into physical resource requirements.
-  static int64_t memory_resource_count() { return 3; }
+  static int64_t memory_resource_count() { return 4; }
   static const char *memory_resource_name(int64_t index);
   static int get_memory_resource_sample(int64_t index,
-      common::MemoryQuotaSample &sample);
+      MemoryResourceSample &sample);
   enum COLUMN_NAME
   {
         RESOURCE_NAME = common::OB_APP_MIN_COLUMN_ID,

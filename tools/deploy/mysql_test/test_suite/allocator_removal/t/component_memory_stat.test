@@ -2,7 +2,7 @@
 # owner group: storage
 # tags: allocator
 
-SELECT COUNT(*) = 4 AS resource_rows
+SELECT COUNT(*) = 5 AS resource_rows
 FROM oceanbase.__all_virtual_resource_limit;
 
 SELECT GROUP_CONCAT(resource_name ORDER BY resource_name SEPARATOR ',') AS resources
@@ -33,7 +33,7 @@ FROM oceanbase.__all_virtual_resource_limit_detail
 WHERE resource_name = 'tablet';
 
 # Repeated reads and projections must not lose the tablet-to-memory boundary.
-SELECT COUNT(*) = 3 AS repeated_memory_rows
+SELECT COUNT(*) = 4 AS repeated_memory_rows
 FROM oceanbase.__all_virtual_resource_limit
 WHERE max_utilization IS NULL;
 
@@ -42,13 +42,22 @@ FROM information_schema.columns
 WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_resource_limit'
   AND column_name = 'max_utilization' AND is_nullable = 'YES';
 
-SELECT COUNT(*) = 0 AS workarea_has_no_hard_quota
+SELECT COUNT(*) = 1 AS workarea_has_profile_reports
 FROM oceanbase.__all_virtual_resource_limit
-WHERE resource_name = 'sql_workarea_memory';
+WHERE resource_name = 'sql_workarea_memory'
+  AND current_utilization >= 0 AND limit_value >= 0
+  AND reserved_value IS NULL AND max_utilization IS NULL
+  AND effective_limit_type = 'scheduling';
 
-SELECT COUNT(*) = 0 AS workarea_has_no_memory_constraint
+SELECT COUNT(*) = 1 AS workarea_has_scheduling_budget
 FROM oceanbase.__all_virtual_resource_limit_detail
-WHERE resource_name = 'sql_workarea_memory';
+WHERE resource_name = 'sql_workarea_memory' AND limit_type = 'scheduling'
+  AND limit_value >= 0;
+
+SELECT COUNT(*) = 1 AS nullable_reservation_schema
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_resource_limit'
+  AND column_name = 'reserved_value' AND is_nullable = 'YES';
 
 # The AUTO scheduler is initialized by its background timer after startup.
 # Wait for its first snapshot instead of assuming readiness from a connection.

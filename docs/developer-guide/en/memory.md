@@ -133,25 +133,33 @@ the AUTO scheduler has initialized, and no row while that scheduler is disabled.
 ## Component memory diagnostics
 
 `oceanbase.__all_virtual_resource_limit` preserves its existing `tablet` row
-and adds three local component resources: `kv_cache_memory`,
-`vector_memory`, and `meta_object_memory`. SQL WorkArea is not a hard-quota
-resource and has no `sql_workarea_memory` row in either resource-limit table.
-For these memory rows, `CURRENT_UTILIZATION` is committed (physically charged)
+and adds four local component resources: `kv_cache_memory`,
+`sql_workarea_memory`, `vector_memory`, and `meta_object_memory`.
+For KVCache, Vector and Meta, `CURRENT_UTILIZATION` is committed (physically charged)
 memory, `RESERVED_VALUE` is in-flight quota reservation, and `LIMIT_VALUE` is
 the current quota limit, all in bytes. These are not process RSS or payload-only
 sizes. `MAX_UTILIZATION` is `NULL` because no memory high-water counter is
 maintained; `EFFECTIVE_LIMIT_TYPE` is `memory`. A disabled component may have
 zero usage; a missing data source is an error, not a fabricated zero sample.
 
+The `sql_workarea_memory` row instead uses SQL memory manager's registered-profile
+reports for `CURRENT_UTILIZATION` and its scheduling budget for `LIMIT_VALUE`.
+`EFFECTIVE_LIMIT_TYPE` is `scheduling`; `RESERVED_VALUE` and `MAX_UTILIZATION`
+are NULL because no aggregate admission reservation or peak is maintained.
+The row remains available in MANUAL mode; it does not depend on the AUTO-only
+information table's visibility. Missing SQL memory manager is an error, not a
+fabricated zero sample.
+
 `oceanbase.__all_virtual_resource_limit_detail` adds one `memory` constraint
-per component with its quota limit in bytes. Existing tablet rows in both tables
+for each hard-quota component and one `scheduling` budget for SQL WorkArea,
+all in bytes. Existing tablet rows in both tables
 remain counts, not bytes; their capacity calculation is unchanged. No new
 component table or view is introduced.
 
-The numeric fields are independent atomic samples. A row has no joint
+The numeric fields are independent samples. A row has no joint
 linearization point and must not be treated as a transactionally consistent
 snapshot. Use it for capacity trends and component attribution. Tests or tools
-that require a strict invariant must first stop and join component workers,
+that require a strict hard-quota invariant must first stop and join component workers,
 wait for reclaim work, and then verify that no reservation is in flight.
 
 Reject and reclaim counters remain internal quota diagnostics and are not

@@ -6079,7 +6079,7 @@ def_table_schema(
   ('resource_name', 'varchar:MAX_RESOURCE_NAME_LEN'),
   ('current_utilization', 'bigint'),
   ('max_utilization', 'bigint', 'true'),
-  ('reserved_value', 'bigint'),
+  ('reserved_value', 'bigint', 'true'),
   ('limit_value', 'bigint'),
   ('effective_limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN')
   ],  vtable_route_policy = 'local'

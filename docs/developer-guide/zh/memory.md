@@ -109,20 +109,26 @@ SQL WorkArea 不使用底层共享 quota。SQL memory manager 根据
 ## 组件内存诊断
 
 `oceanbase.__all_virtual_resource_limit` 保留已有的 `tablet` 行，增加本地组件资源
-`kv_cache_memory`、`vector_memory`、`meta_object_memory` 三行。
-SQL WorkArea 不是硬额度资源，两张资源限制表不再提供 `sql_workarea_memory` 行。
-内存行中，`CURRENT_UTILIZATION` 表示 committed（已实际计费内存），
+`kv_cache_memory`、`sql_workarea_memory`、`vector_memory`、`meta_object_memory` 四行。
+对 KVCache、Vector、Meta，`CURRENT_UTILIZATION` 表示 committed（已实际计费内存），
 `RESERVED_VALUE` 表示尚未结算的预占额度，`LIMIT_VALUE` 表示当前组件额度，单位均为字节。
 这些值不是进程 RSS，也不只是 payload 大小。`MAX_UTILIZATION` 返回 `NULL`，
 不额外维护内存峰值计数；`EFFECTIVE_LIMIT_TYPE` 为 `memory`。
 未使用的组件可以是零占用；缺失数据源时报错，不伪造零值。
 
-`oceanbase.__all_virtual_resource_limit_detail` 为每个组件增加一条 `memory` 约束，
-其额度单位也是字节。两表原有的 tablet 行仍以个数为单位，容量计算不变。
+`sql_workarea_memory` 行改用 SQL memory manager 的已注册 profile 上报汇总作为
+`CURRENT_UTILIZATION`，调度预算作为 `LIMIT_VALUE`，`EFFECTIVE_LIMIT_TYPE` 为
+`scheduling`。不维护聚合 admission 预占或峰值，`RESERVED_VALUE` 和
+`MAX_UTILIZATION` 均返回 NULL。该资源行在 MANUAL 模式下也存在，不依赖仅在
+AUTO 模式输出行的信息表；缺失 SQL memory manager 时仍报错，不伪造零值。
+
+`oceanbase.__all_virtual_resource_limit_detail` 为硬额度组件提供 `memory` 约束，
+为 SQL WorkArea 提供 `scheduling` 调度预算，单位均为字节。
+两表原有的 tablet 行仍以个数为单位，容量计算不变。
 不新增组件内存表或视图。
 
-数值字段分别进行原子采样，同一行没有多字段联合线性化点，不能当作事务一致快照。
-该表用于容量趋势和组件归因；需要验证严格不变量时，必须先停止并 join 组件 worker、
+数值字段分别采样，同一行没有多字段联合线性化点，不能当作事务一致快照。
+该表用于容量趋势和组件归因；验证硬额度组件的严格不变量时，必须先停止并 join 组件 worker、
 等待回收完成，并确认没有 in-flight reservation。
 
 拒绝和回收计数继续用于 quota 内部诊断，不作为上述资源限制表的列。
