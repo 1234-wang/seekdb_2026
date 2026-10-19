@@ -89,21 +89,6 @@ jobs:
           cp -f "$SOURCE_ARCHIVE" "$DEST_DIR/seekdb-ci-source.tar.zst"
           echo "source snapshot saved to $DEST_DIR/seekdb-ci-source.tar.zst"
 
-      - name: Diagnose Bazel download connectivity
-        shell: bash
-        run: |
-          python3 -u - <<'PYPROBE'
-          import subprocess
-          url = "https://github.com/bazelbuild/bazel/releases/download/9.3.0/bazel-9.3.0-linux-x86_64"
-          for name, options in (
-              ("DIRECT", []),
-              ("GATEWAY", ["--resolve", "github.com:443:172.16.0.220", "--resolve", "release-assets.githubusercontent.com:443:172.16.0.220"]),
-          ):
-              result = subprocess.run(["curl", "-4", "--fail", "--location", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", *options, url + ".sha256"], capture_output=True, text=True, timeout=25)
-              print("OFFICIAL_GITHUB_" + name, result.returncode, result.stdout[:512], result.stderr[:512], flush=True)
-          PYPROBE
-          exit 1
-
       - name: Configure local cache paths
         shell: bash
         env:
