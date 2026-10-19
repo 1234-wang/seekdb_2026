@@ -175,19 +175,25 @@ TEST(TestVectorMemoryQuota, production_bitmap_path_charges_and_releases_quota)
   EXPECT_EQ(0, rb_mem_mgr_guard.mem_mgr().get_vec_idx_used());
 }
 
-TEST(TestVectorMemoryQuota, fifo_metadata_pages_use_vector_context_quota)
+TEST(TestVectorMemoryQuota, fifo_metadata_pages_do_not_use_vector_quota)
 {
-  MemoryQuota quota(4L << 20);
+  MemoryQuota quota(0);
   TestVectorQuotaResolverGuard resolver_guard(quota);
   {
     ObFIFOAllocator allocator;
     ASSERT_EQ(OB_SUCCESS, allocator.init(
-        nullptr, 4096, ObMemAttr("VectorMetadata", ObCtxIds::VECTOR_CTX_ID)));
+        nullptr, OB_MALLOC_MIDDLE_BLOCK_SIZE, ObMemAttr("VecIdxSrv")));
     void *metadata = allocator.alloc(128);
     ASSERT_NE(nullptr, metadata);
-    EXPECT_GT(quota.committed(), 0);
+    EXPECT_EQ(128, allocator.used());
+    EXPECT_GT(allocator.total(), 0);
+    EXPECT_EQ(0, quota.committed());
+    EXPECT_EQ(0, quota.reserved());
     allocator.free(metadata);
+    EXPECT_EQ(0, allocator.used());
+    EXPECT_GT(allocator.total(), 0); // The empty current page remains reusable.
     allocator.reset();
+    EXPECT_EQ(0, allocator.total());
     EXPECT_EQ(0, quota.committed());
     EXPECT_EQ(0, quota.reserved());
   }
