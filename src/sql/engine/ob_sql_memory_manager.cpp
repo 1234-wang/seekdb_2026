@@ -33,105 +33,15 @@ using namespace oceanbase::observer;
 
 namespace sql {
 
-namespace
-{
-common::MemoryQuota *get_workarea_memory_quota()
-{
-  common::MemoryQuota *quota =
-      common::resolve_memory_quota(common::ObCtxIds::WORK_AREA);
-  if (OB_ISNULL(quota)) {
-    ObSqlMemoryManager *manager = share::server_service<ObSqlMemoryManager>();
-    if (OB_NOT_NULL(manager)) {
-      quota = &manager->get_workarea_quota();
-    }
-  }
-  return quota;
-}
-}
-
-int64_t calculate_workarea_memory_limit(
-    const int64_t configured_limit,
-    const int64_t manager_limit)
-{
-  return 0 == configured_limit && manager_limit > 0
-      ? manager_limit / 10 * 8 + manager_limit % 10 * 8 / 10
-      : configured_limit;
-}
-
-int64_t effective_workarea_memory_limit(const int64_t configured_limit)
-{
-  int64_t manager_limit = 0;
-  if (0 == configured_limit) {
-    common::MemoryQuota *quota = get_workarea_memory_quota();
-    if (OB_NOT_NULL(quota)) {
-      manager_limit = quota->limit();
-    }
-  }
-  return calculate_workarea_memory_limit(configured_limit, manager_limit);
-}
-
 bool should_spill_workarea(const int64_t configured_limit,
                            const int64_t local_bytes,
                            const int64_t incoming_bytes)
 {
-  bool should_spill = false;
   const int64_t nonnegative_local = std::max<int64_t>(0, local_bytes);
   const int64_t nonnegative_incoming = std::max<int64_t>(0, incoming_bytes);
-  should_spill = configured_limit > 0
+  return configured_limit > 0
       && (nonnegative_incoming > configured_limit
           || nonnegative_local > configured_limit - nonnegative_incoming);
-  common::MemoryQuota *quota = get_workarea_memory_quota();
-  if (!should_spill && OB_NOT_NULL(quota)) {
-    const common::MemoryQuotaSample sample = quota->sample();
-    const int64_t spill_watermark =
-        calculate_workarea_memory_limit(0, sample.limit_bytes_);
-    const int64_t committed = std::max<int64_t>(0, sample.committed_bytes_);
-    const int64_t reserved = std::max<int64_t>(0, sample.reserved_bytes_);
-    const int64_t accounted = committed > INT64_MAX - reserved
-        ? INT64_MAX : committed + reserved;
-    should_spill = spill_watermark > 0
-        && (accounted >= spill_watermark
-            || nonnegative_incoming >= spill_watermark - accounted);
-  }
-  return should_spill;
-}
-
-bool should_retry_workarea_allocation(const int alloc_ret,
-                                      const int64_t ctx_id,
-                                      const bool enable_dump)
-{
-  return OB_ALLOCATE_MEMORY_FAILED == alloc_ret
-      && common::ObCtxIds::WORK_AREA == ctx_id
-      && enable_dump
-      && config::enable_sql_operator_dump();
-}
-
-namespace
-{
-common::MemoryUsageTracker *resolve_sql_memory_usage_tracker(const int64_t ctx_id)
-{
-  common::MemoryUsageTracker *tracker = nullptr;
-  if (common::ObCtxIds::WORK_AREA == ctx_id) {
-    ObSqlMemoryManager *manager =
-        share::server_service<ObSqlMemoryManager>();
-    if (nullptr != manager) {
-      tracker = &manager->get_workarea_managed_tracker();
-    }
-  }
-  return tracker;
-}
-
-common::MemoryQuota *resolve_sql_memory_quota(const int64_t ctx_id)
-{
-  common::MemoryQuota *quota = nullptr;
-  if (common::ObCtxIds::WORK_AREA == ctx_id) {
-    ObSqlMemoryManager *manager = share::server_service<ObSqlMemoryManager>();
-    if (nullptr != manager) {
-      quota = &manager->get_workarea_quota();
-    }
-  }
-  return quota;
-}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -513,11 +423,6 @@ int ObSqlMemoryManager::server_module_init(ObSqlMemoryManager *&sql_mem_mgr)
       common::ob_delete(sql_mem_mgr);
     }
     sql_mem_mgr = nullptr;
-  } else {
-    common::set_memory_usage_tracker_resolver(
-        common::ObCtxIds::WORK_AREA, resolve_sql_memory_usage_tracker);
-    common::set_memory_quota_resolver(
-        common::ObCtxIds::WORK_AREA, resolve_sql_memory_quota);
   }
   return ret;
 }
@@ -538,8 +443,6 @@ void ObSqlMemoryManager::server_module_destroy(ObSqlMemoryManager *&sql_mem_mgr)
     sql_mem_mgr->workarea_histograms_.reset();
     sql_mem_mgr->allocator_.reset();
   }
-  common::set_memory_usage_tracker_resolver(common::ObCtxIds::WORK_AREA, nullptr);
-  common::set_memory_quota_resolver(common::ObCtxIds::WORK_AREA, nullptr);
   common::ob_delete(sql_mem_mgr);
   sql_mem_mgr = nullptr;
 }
@@ -623,6 +526,7 @@ int ObSqlMemoryManager::get_work_area_size(
 int ObSqlMemoryManager::register_work_area_profile(ObSqlWorkAreaProfile &profile)
 {
   int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(mutex_);
   if (!profile.is_registered()) {
     if (OB_NOT_NULL(profile.get_prev())) {
       ret = OB_ERR_UNEXPECTED;
@@ -633,10 +537,11 @@ int ObSqlMemoryManager::register_work_area_profile(ObSqlWorkAreaProfile &profile
       if (hash_val < 0 || hash_val >= HASH_CNT) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect hash val", K(hash_val), K(profile));
-      } else if (OB_FAIL(profile_lists_[hash_val].register_work_area_profile(profile))) {
       } else {
+        ObLockGuard<ObSpinLock> list_guard(profile_lists_[hash_val].get_lock());
+        profile_lists_[hash_val].get_profile_list().add_last(&profile);
         increase_profile_cnt();
-        adjust_active_profile_used(profile.get_profile_total_used());
+        ATOMIC_FAA(&active_profile_used_, profile.get_profile_total_used());
         profile.active_time_ = ObTimeUtility::current_time();
       }
     }
@@ -859,10 +764,11 @@ int ObSqlMemoryManager::unregister_work_area_profile(ObSqlWorkAreaProfile &profi
     if (hash_val < 0 || hash_val >= HASH_CNT) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect hash val", K(hash_val), K(profile));
-    } else if (OB_FAIL(profile_lists_[hash_val].unregister_work_area_profile(profile))) {
     } else {
+      ObLockGuard<ObSpinLock> list_guard(profile_lists_[hash_val].get_lock());
+      profile_lists_[hash_val].get_profile_list().remove(&profile);
       decrease_profile_cnt();
-      adjust_active_profile_used(-profile.get_profile_total_used());
+      ATOMIC_FAA(&active_profile_used_, -profile.get_profile_total_used());
       if (enable_auto_memory_mgr_ && profile.get_auto_policy()) {
         decrease(profile.get_cache_size());
       }
@@ -875,7 +781,7 @@ int ObSqlMemoryManager::unregister_work_area_profile(ObSqlWorkAreaProfile &profi
   return ret;
 }
 
-int ObSqlMemoryManager::get_work_area_hard_limit(int64_t &work_area_max_size)
+int ObSqlMemoryManager::get_work_area_budget(int64_t &work_area_max_size)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -905,21 +811,14 @@ int ObSqlMemoryManager::get_max_work_area_size(
   const bool auto_calc)
 {
   int ret = OB_SUCCESS;
-  const int64_t MIN_AVAILABLE_MEMORY = 1;
   if (work_area_max_size < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const int64_t workarea_managed_used = get_workarea_managed_used();
-    const int64_t active_profile_used = MAX(get_active_profile_used(), 0);
-    const int64_t non_active_workarea_used =
-        MAX(workarea_managed_used - active_profile_used, 0);
-    max_wa_memory_size = MAX(
-        work_area_max_size - non_active_workarea_used, MIN_AVAILABLE_MEMORY);
-    workarea_hold_size_ = workarea_managed_used;
+    // This is a scheduling budget, not a physical-allocation admission limit.
+    max_wa_memory_size = work_area_max_size;
     max_auto_workarea_size_ = max_wa_memory_size;
-    if (auto_calc || MIN_AVAILABLE_MEMORY == max_wa_memory_size) {
-      LOG_INFO("trace max work area", K(auto_calc), K(work_area_max_size), K(workarea_managed_used),
-          K(active_profile_used), K(non_active_workarea_used), K(max_wa_memory_size));
+    if (auto_calc) {
+      LOG_INFO("trace max work area", K(auto_calc), K(work_area_max_size), K(max_wa_memory_size));
     }
   }
   return ret;
@@ -1081,7 +980,14 @@ void ObSqlMemoryManager::reset()
 {
   if (nullptr != profile_lists_) {
     for (int64_t i = 0; i < HASH_CNT; ++i) {
-      profile_lists_[i].reset();
+      ObLockGuard<ObSpinLock> list_guard(profile_lists_[i].get_lock());
+      auto &profiles = profile_lists_[i].get_profile_list();
+      DLIST_FOREACH_REMOVESAFE_NORET(profile, profiles) {
+        ATOMIC_FAA(&active_profile_used_, -profile->get_profile_total_used());
+        profiles.remove(profile);
+        profile->set_expect_size(OB_INVALID_ID);
+      }
+      profiles.reset();
     }
   }
   // The memory statistics are determined by each operator itself, otherwise during the start and stop process, there will be inconsistencies in allocation and deallocation statistics
@@ -1089,6 +995,19 @@ void ObSqlMemoryManager::reset()
   drift_size_ = 0;
   profile_cnt_ = 0;
   global_bound_size_ = 0;
+}
+
+void ObSqlMemoryManager::adjust_profile_used(
+    ObSqlWorkAreaProfile &profile, const int64_t delta)
+{
+  // Serialize membership and reporting for this profile. In particular,
+  // AUTO/MANUAL reset must not strand a delta in the aggregate after removal.
+  const int64_t hash_val = get_hash_value(profile.get_id());
+  ObLockGuard<ObSpinLock> guard(profile_lists_[hash_val].get_lock());
+  ATOMIC_FAA(&profile.profile_total_used_, delta);
+  if (profile.is_registered()) {
+    ATOMIC_FAA(&active_profile_used_, delta);
+  }
 }
 
 // try best to push global_bound_size to every profile registered
@@ -1170,7 +1089,7 @@ int ObSqlMemoryManager::calculate_global_bound_size(ObIAllocator *allocator, boo
   int ret = OB_SUCCESS;
   int64_t work_area_max_size = 0;
   const bool auto_memory_mgr = enable_auto_sql_memory_manager();
-  if (OB_FAIL(get_work_area_hard_limit(work_area_max_size))) {
+  if (OB_FAIL(get_work_area_budget(work_area_max_size))) {
   } else if (OB_FAIL(calculate_global_bound_size(
       auto_memory_mgr, work_area_max_size, allocator, auto_calc))) {
   }
@@ -1189,7 +1108,6 @@ int ObSqlMemoryManager::calculate_global_bound_size(
     ret = OB_INVALID_ARGUMENT;
   } else {
     max_workarea_size_ = work_area_max_size;
-    workarea_quota_.set_limit(work_area_max_size);
   }
   // Set enable_auto_memory_mgr_ after calculating the policy-specific bound.
   if (OB_FAIL(ret)) {
@@ -1300,10 +1218,9 @@ int ObSqlMemoryManager::get_workarea_memory_info(
   // Here it is temporarily output in a transient manner, without considering concurrency issues
   memory_info.enable_ = enable_auto_memory_mgr_;
   memory_info.max_workarea_size_ = max_workarea_size_;
-  memory_info.workarea_hold_size_ = workarea_hold_size_;
   memory_info.max_auto_workarea_size_ = max_auto_workarea_size_;
   memory_info.mem_target_ = mem_target_;
-  memory_info.total_mem_used_ = get_workarea_managed_used();
+  memory_info.total_mem_used_ = get_total_mem_used();
   memory_info.global_bound_size_ = global_bound_size_;
   memory_info.drift_size_ = drift_size_;
   memory_info.workarea_cnt_ = profile_cnt_;

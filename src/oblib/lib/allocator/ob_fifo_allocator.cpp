@@ -100,7 +100,7 @@ int ObFIFOAllocator::init_(ObIAllocator *allocator,
     page_size_ = page_size;
     attr_ = attr;
     page_allocator_.configure(
-        *allocator_, resolve_memory_usage_tracker(attr_.ctx_id_),
+        *allocator_, nullptr,
         quota, attr_, use_malloc_usable_size);
     // reserve
     if (init_size > 0) {

@@ -112,18 +112,11 @@ private:
 };
 
 // Resolvers map an ObCtxIds category, not a MemoryContext instance, to
-// component-owned accounting objects shared by contexts and allocators.
+// component-owned quotas shared by contexts and allocators.
 // Returned pointers are borrowed: the objects must outlive all allocations
 // charged to them. Register before dependent allocations start, and unregister
 // only after those allocations have been released; lookup state must stay
 // stable throughout their lifetime.
-typedef MemoryUsageTracker *(*MemoryUsageTrackerResolver)(const int64_t ctx_id);
-// Register the tracker lookup callback; nullptr unregisters it.
-void set_memory_usage_tracker_resolver(const int64_t ctx_id,
-                                       MemoryUsageTrackerResolver resolver);
-// Return the component's tracker, or nullptr if no resolver/object is available.
-MemoryUsageTracker *resolve_memory_usage_tracker(const int64_t ctx_id);
-
 // A callback that finds an existing quota; it does not create or own the quota.
 typedef MemoryQuota *(*MemoryQuotaResolver)(const int64_t ctx_id);
 // Register the quota lookup callback for this context category. This does not
@@ -430,7 +423,6 @@ public:
     void *ptr = nullptr;
     if (size > 0 && size <= INT64_MAX - static_cast<int64_t>(sizeof(Header))) {
       const int64_t raw_size = size + sizeof(Header);
-      MemoryUsageTracker *tracker = resolve_memory_usage_tracker(attr.ctx_id_);
       MemoryQuota *quota = resolve_memory_quota(attr.ctx_id_);
       MemoryReservation reservation(quota, raw_size);
       void *raw_ptr = reservation.valid() ? allocator_->alloc(raw_size, attr) : nullptr;
@@ -438,14 +430,11 @@ public:
         const int64_t charged_size = allocation_size(raw_ptr, raw_size);
         if (reservation.reconcile(charged_size)) {
           Header *header = new (raw_ptr) Header(
-              this, tracker, quota, charged_size, size);
+              this, quota, charged_size, size);
           {
             OptionalLockGuard guard(*this);
             link_locked(header);
             live_bytes_.fetch_add(header->allocation_size_, std::memory_order_relaxed);
-          }
-          if (nullptr != tracker) {
-            tracker->alloc(charged_size);
           }
           ptr = header + 1;
         } else {
@@ -491,14 +480,10 @@ public:
     while (nullptr != list) {
       Header *next = list->next_;
       abort_unless(list->is_valid() && this == list->owner_);
-      MemoryUsageTracker *tracker = list->tracker_;
       MemoryQuota *quota = list->quota_;
       const int64_t allocation_size = list->allocation_size_;
       list->invalidate();
       allocator_->free(list);
-      if (nullptr != tracker) {
-        tracker->free(allocation_size);
-      }
       if (nullptr != quota) {
         quota->release(allocation_size);
       }
@@ -512,12 +497,10 @@ private:
     static constexpr uint64_t MAGIC = 0x4d434d414c4c4f43ULL;
 
     Header(MemoryContextMalloc *owner,
-           MemoryUsageTracker *tracker,
            MemoryQuota *quota,
            const int64_t allocation_size, const int64_t requested_size)
       : magic_(MAGIC),
         owner_(owner),
-        tracker_(tracker),
         quota_(quota),
         prev_(nullptr),
         next_(nullptr),
@@ -535,7 +518,6 @@ private:
     {
       magic_ = 0;
       owner_ = nullptr;
-      tracker_ = nullptr;
       quota_ = nullptr;
       prev_ = nullptr;
       next_ = nullptr;
@@ -545,7 +527,6 @@ private:
 
     uint64_t magic_;
     MemoryContextMalloc *owner_;
-    MemoryUsageTracker *tracker_;
     MemoryQuota *quota_;
     Header *prev_;
     Header *next_;
@@ -594,7 +575,6 @@ private:
   {
     abort_unless(nullptr != header && header->is_valid() && this == header->owner_);
     const int64_t old_allocation_size = header->allocation_size_;
-    MemoryUsageTracker *tracker = header->tracker_;
     if (nullptr != header->quota_) {
       const int64_t raw_size = size + sizeof(Header);
       // Keep the old block fully charged until the replacement is copied and
@@ -605,7 +585,7 @@ private:
       const int64_t new_allocation_size = allocation_size(raw_ptr, raw_size);
       if (nullptr != raw_ptr && reservation.reconcile(new_allocation_size)) {
         Header *new_header = new (raw_ptr) Header(
-            this, tracker, header->quota_, new_allocation_size, size);
+            this, header->quota_, new_allocation_size, size);
         MEMCPY(new_header + 1, header + 1, MIN(size, header->requested_size_));
         {
           OptionalLockGuard guard(*this);
@@ -614,9 +594,6 @@ private:
           live_bytes_.fetch_add(new_allocation_size - old_allocation_size,
                                 std::memory_order_relaxed);
           header->invalidate();
-        }
-        if (nullptr != new_header->tracker_) {
-          new_header->tracker_->adjust(new_allocation_size - old_allocation_size);
         }
         new_header->quota_->release(old_allocation_size);
         allocator_->free(header);
@@ -640,16 +617,12 @@ private:
     }
 
     Header *new_header = new (raw_ptr) Header(
-        this, tracker, nullptr, allocation_size(raw_ptr, raw_size), size);
+        this, nullptr, allocation_size(raw_ptr, raw_size), size);
     {
       OptionalLockGuard guard(*this);
       link_locked(new_header);
       live_bytes_.fetch_add(new_header->allocation_size_ - old_allocation_size,
                             std::memory_order_relaxed);
-    }
-    if (nullptr != new_header->tracker_) {
-      new_header->tracker_->adjust(
-          new_header->allocation_size_ - old_allocation_size);
     }
     return new_header + 1;
   }
@@ -658,7 +631,6 @@ private:
   {
     abort_unless(nullptr != header && header->is_valid() && this == header->owner_);
     const int64_t old_allocation_size = header->allocation_size_;
-    MemoryUsageTracker *tracker = header->tracker_;
     MemoryQuota *quota = header->quota_;
     {
       OptionalLockGuard guard(*this);
@@ -667,9 +639,6 @@ private:
       header->invalidate();
     }
     allocator_->free(header);
-    if (nullptr != tracker) {
-      tracker->free(old_allocation_size);
-    }
     if (nullptr != quota) {
       quota->release(old_allocation_size);
     }

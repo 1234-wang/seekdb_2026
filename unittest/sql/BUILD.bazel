@@ -9,7 +9,7 @@ seekdb_test_interface(
 
 seekdb_module_cc_test(
     name = "sql_tests",
-    srcs = ["engine/test_workarea_memory_quota.cpp"],
+    srcs = ["engine/test_workarea_memory_policy.cpp"],
     test_hdrs = [],
     module_interface = ":sql_unit_test_interface",
     unity_size = 1,

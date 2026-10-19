@@ -127,10 +127,9 @@ struct ModulePageAllocator: public ObIAllocator
       ptr = !attr_.label_.is_valid() && 0 == attr_.ctx_id_
           ? allocator_->alloc(sz) : allocator_->alloc(sz, attr_);
     } else {
-      MemoryUsageTracker *tracker = resolve_memory_usage_tracker(attr_.ctx_id_);
       MemoryQuota *quota = nullptr != quota_
           ? quota_ : resolve_memory_quota(attr_.ctx_id_);
-      ptr = tracked_alloc(sz, attr_, tracker, quota);
+      ptr = tracked_alloc(sz, attr_, quota);
     }
     return ptr;
   }
@@ -140,10 +139,9 @@ struct ModulePageAllocator: public ObIAllocator
     if (nullptr != allocator_) {
       ptr = allocator_->alloc(size, attr);
     } else {
-      MemoryUsageTracker *tracker = resolve_memory_usage_tracker(attr.ctx_id_);
       MemoryQuota *quota = nullptr != quota_
           ? quota_ : resolve_memory_quota(attr.ctx_id_);
-      ptr = tracked_alloc(size, attr, tracker, quota);
+      ptr = tracked_alloc(size, attr, quota);
     }
     return ptr;
   }
@@ -152,10 +150,9 @@ struct ModulePageAllocator: public ObIAllocator
     if (nullptr != allocator_) {
       allocator_->free(p);
     } else {
-      MemoryUsageTracker *tracker = resolve_memory_usage_tracker(attr_.ctx_id_);
       MemoryQuota *quota = nullptr != quota_
           ? quota_ : resolve_memory_quota(attr_.ctx_id_);
-      tracked_free(p, tracker, quota);
+      tracked_free(p, quota);
     }
     p = NULL;
   }
@@ -172,31 +169,30 @@ struct ModulePageAllocator: public ObIAllocator
 protected:
   void *tracked_alloc(const int64_t size,
                       const ObMemAttr &attr,
-                      MemoryUsageTracker *tracker,
                       MemoryQuota *quota)
   {
     void *ptr = nullptr;
     if (NULL == allocator_) {
       ObMalloc fallback_allocator(attr);
       TrackedAllocator tracked_allocator(
-          fallback_allocator, tracker, quota, attr, true);
+          fallback_allocator, nullptr, quota, attr, true);
       ptr = tracked_allocator.alloc(size, attr);
     } else {
-      TrackedAllocator tracked_allocator(*allocator_, tracker, quota, attr);
+      TrackedAllocator tracked_allocator(*allocator_, nullptr, quota, attr);
       ptr = tracked_allocator.alloc(size, attr);
     }
     return ptr;
   }
 
-  void tracked_free(void *ptr, MemoryUsageTracker *tracker, MemoryQuota *quota)
+  void tracked_free(void *ptr, MemoryQuota *quota)
   {
     if (NULL == allocator_) {
       ObMalloc fallback_allocator(attr_);
       TrackedAllocator tracked_allocator(
-          fallback_allocator, tracker, quota, attr_, true);
+          fallback_allocator, nullptr, quota, attr_, true);
       tracked_allocator.free(ptr);
     } else {
-      TrackedAllocator tracked_allocator(*allocator_, tracker, quota, attr_);
+      TrackedAllocator tracked_allocator(*allocator_, nullptr, quota, attr_);
       tracked_allocator.free(ptr);
     }
   }

@@ -26,22 +26,13 @@ insert into t2 values (0),(1),(2),(3),(4),(5);
 
 connection conn1;
 
-connection obsys;
-let $sql_workarea_mem_pre = query_get_value(select current_utilization value from oceanbase.__all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-
-connection conn1;
+# The former aggregate WORK_AREA allocation/reservation assertions are retired.
+# This case retains query timeout/cancellation coverage; registered-profile
+# accounting and local spill/readback are covered by TestWorkareaMemoryPolicy.
 send select /*+query_timeout(2500000) */ case when count(distinct x) > 0 then sleep(3) else 0 end from (select a.c1 + b.c1 * 10 + c.c1 * 100 + d.c1 * 1000 + e.c1 * 10000 + g.c1 * 100000 x from t1 a, t1 b, t1 c, t1 d, t1 e, t2 g) t;
 
 --sleep 2
-connection obsys;
-let $sql_workarea_mem_now = query_get_value(select current_utilization value from oceanbase.__all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-eval select $sql_workarea_mem_now - $sql_workarea_mem_pre < 100000000 mem_less_than_100M;
-
-connection conn1;
 --error 4012
 reap;
 
 --sleep 1
-connection obsys;
-let $sql_workarea_reserved_after = query_get_value(select reserved_value value from oceanbase.__all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-eval select $sql_workarea_reserved_after = 0 reservation_released;

@@ -38,7 +38,7 @@ Cargo.lock 锁定的 bundled jemalloc；ASAN、Windows 和 Android 使用各自�
 平台分配器，不再提供运行时 allocator 切换。
 
 `ObMemAttr` 继续作为源码层分配契约。需要硬额度的组件为对应 ctx ID 注册
-自己的 tracker 和 quota；label 以及未注册的 ctx ID 只保留描述作用，不再重建
+自己的 quota；label 以及未注册的 ctx ID 只保留描述作用，不再重建
 旧的全进程 label 统计平台。
 
 `ob_realloc` 遵循常规失败语义：非零 resize 失败时原指针仍然有效。
@@ -89,14 +89,28 @@ facade 推断租户归属。
 **ctx_id**
 
 ctx id 在 `alloc_struct.h` 中预定义。除非组件明确拥有 tracker 或 quota，否则应使用
-`DEFAULT_CTX_ID`。KVCache、SQL WorkArea、Vector 和 Meta Object 分别拥有自己的
-admission、wash/spill/GC 和错误策略；共享 quota 原语只负责原子的
+`DEFAULT_CTX_ID`。KVCache、Vector 和 Meta Object 分别拥有自己的
+admission、wash/cleanup/GC 和错误策略；共享 quota 原语只负责原子的
 reserve/reconcile/rollback 记账。
+
+SQL WorkArea 不使用底层共享 quota。SQL memory manager 根据
+`memory_budget * ob_sql_work_area_percentage / 100` 分配调度预算，
+保留算子局部用量、峰值、AUTO/MANUAL 策略和 spill 决策；不再维护 WORK_AREA
+全部物理分配的总账、硬上限或全局 80% spill 水位。store 的零限额明确表示无局部
+限制，调用方须在算子层统一控制 spill（如 PX Merge Receive），或明确选择
+不落盘的物化（如 PX datahub 消息）。
+
+`__all_virtual_sql_workarea_memory_info.TOTAL_MEM_USED` 表示当前已注册 profile
+上报用量的近似汇总，不包含未注册的小查询和注销后保留的页，也不是进程 RSS
+或所有 WORK_AREA ctx 分配的总量。`WORKAREA_HOLD_SIZE` 保留兼容列并返回 NULL。
+预算和用量不是联合一致快照，profile 汇总不参与硬额度 admission。
+信息表保留原有可见性：AUTO 调度器初始化后输出一行，禁用时不输出行。
 
 ## 组件内存诊断
 
 `oceanbase.__all_virtual_resource_limit` 保留已有的 `tablet` 行，增加本地组件资源
-`kv_cache_memory`、`sql_workarea_memory`、`vector_memory`、`meta_object_memory`。
+`kv_cache_memory`、`vector_memory`、`meta_object_memory` 三行。
+SQL WorkArea 不是硬额度资源，两张资源限制表不再提供 `sql_workarea_memory` 行。
 内存行中，`CURRENT_UTILIZATION` 表示 committed（已实际计费内存），
 `RESERVED_VALUE` 表示尚未结算的预占额度，`LIMIT_VALUE` 表示当前组件额度，单位均为字节。
 这些值不是进程 RSS，也不只是 payload 大小。`MAX_UTILIZATION` 返回 `NULL`，
@@ -114,9 +128,7 @@ reserve/reconcile/rollback 记账。
 拒绝和回收计数继续用于 quota 内部诊断，不作为上述资源限制表的列。
 拒绝计数统计每次失败的 quota reserve/reconcile 尝试，包括随后被组件重试
 挽救的尝试。回收计数统计实际回收了至少一个字节或对象的成功
-wash/spill/cleanup/GC 批次；失败尝试只记录日志，不计入该字段。对 SQL
-WorkArea，一次成功的正向物理 spill 写回调计为一次；后续负向统计调整
-不增加该计数。
+wash/cleanup/GC 批次；失败尝试只记录日志，不计入该字段。
 
 obmalloc 专用的 `V$OB_MEMORY`、`__all_virtual_memory_info`、
 `__all_virtual_ctx_memory_info`、`__all_virtual_malloc_sample_info`，以及

@@ -1114,8 +1114,7 @@ int ObTempBlockStore::dump_block_if_need(const int64_t extra_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(need_dump(extra_size))) {
-    const int64_t effective_limit = effective_workarea_memory_limit(mem_limit_);
-    int64_t target_dump_size = extra_size + mem_hold_ - effective_limit;
+    int64_t target_dump_size = extra_size + mem_hold_ - mem_limit_;
     // Check whether an IndexBlock will be added, and pre-allocate the corresponding mem size
     if ((NULL == idx_blk_ && blocks_.count() >= DEFAULT_BLOCK_CNT - 1) ||
          (NULL != idx_blk_ && idx_blk_->is_full())) {

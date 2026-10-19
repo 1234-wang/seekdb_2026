@@ -334,9 +334,7 @@ ObRADatumStore::ObRADatumStore(common::ObIAllocator *alloc /* = NULL */)
   : inited_(false), label_(nullptr), ctx_id_(0), mem_limit_(0),
     idx_blk_(NULL), save_row_cnt_(0), row_cnt_(0), fd_(-1), dir_id_(-1), file_size_(0),
     inner_reader_(*this), mem_hold_(0),
-    inner_backing_allocator_(lib::ObMemAttr(common::ObModIds::OB_SQL_ROW_STORE)),
-    inner_allocator_(inner_backing_allocator_, nullptr, nullptr,
-                     lib::ObMemAttr(common::ObModIds::OB_SQL_ROW_STORE)),
+    inner_allocator_(lib::ObMemAttr(common::ObModIds::OB_SQL_ROW_STORE)),
     allocator_(NULL == alloc ? &inner_allocator_ : alloc),
     use_inner_allocator_(NULL == alloc),
     row_extend_size_(0), mem_stat_(NULL), io_observer_(NULL)
@@ -357,12 +355,7 @@ int ObRADatumStore::init(int64_t mem_limit,
     label_ = label;
     if (use_inner_allocator_) {
       const ObMemAttr attr(label_, ctx_id_);
-      inner_backing_allocator_.set_attr(attr);
-      inner_allocator_.configure(
-          inner_backing_allocator_,
-          common::resolve_memory_usage_tracker(ctx_id_),
-          common::resolve_memory_quota(ctx_id_),
-          attr);
+      inner_allocator_.set_attr(attr);
     }
     mem_limit_ = mem_limit;
     row_extend_size_ = row_extend_size;
@@ -588,7 +581,6 @@ int ObRADatumStore::switch_block(const int64_t min_size)
     LOG_WARN("fail to dump block if need", K(ret), K(min_size));
   } else {
     BlockBuffer new_blkbuf;
-    bool reclaimed_after_rejection = false;
     BlockIndex bi;
     bi.is_idx_block_ = false;
     bi.on_disk_ = false;
@@ -598,30 +590,10 @@ int ObRADatumStore::switch_block(const int64_t min_size)
     bi.capacity_ = static_cast<int32_t>(blkbuf_.buf_.capacity()); // used to calc mem_hold for dump
     if (OB_SUCC(ret) && !finish_add) { // need alloc new block
       if (OB_FAIL(alloc_block(new_blkbuf, min_size))) {
-        // The shared WORK_AREA quota may be consumed or shrunk after the
-        // preceding spill sample.  Index and spill the current block through
-        // the regular dump path, then retry allocation once.
-        if (should_retry_workarea_allocation(ret, ctx_id_, true)) {
-          ret = OB_SUCCESS;
-          if (OB_FAIL(dump(true, BIG_BLOCK_SIZE))) {
-            LOG_WARN("failed to reclaim RA datum block after quota rejection",
-                     K(ret), K(min_size), K_(mem_hold));
-          } else if (OB_FAIL(alloc_block(new_blkbuf, min_size))) {
-            LOG_WARN("failed to allocate RA datum block after reclaim",
-                     K(ret), K(min_size), K_(mem_hold));
-          } else {
-            reclaimed_after_rejection = true;
-          }
-        }
       }
     }
     if (OB_SUCC(ret)) {
-      if (reclaimed_after_rejection) {
-        blkbuf_ = new_blkbuf;
-        new_blkbuf.reset();
-        if (OB_FAIL(setup_block(blkbuf_))) {
-        }
-      } else if (OB_FAIL(add_block_idx(bi))) {
+      if (OB_FAIL(add_block_idx(bi))) {
       } else {
         save_row_cnt_ = row_cnt_;
         blkbuf_.reset();
@@ -1324,8 +1296,7 @@ int ObRADatumStore::dump_block_if_need(const int64_t extra_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(need_dump(extra_size))) {
-    const int64_t effective_limit = effective_workarea_memory_limit(mem_limit_);
-    int64_t target_dump_size = extra_size + mem_hold_ - effective_limit;
+    int64_t target_dump_size = extra_size + mem_hold_ - mem_limit_;
     // Check whether an IndexBlock will be added, and pre-allocate the corresponding mem size
     if ((NULL == idx_blk_ && blocks_.count() >= DEFAULT_BLOCK_CNT - 1) ||
          (NULL != idx_blk_ && idx_blk_->is_full())) {

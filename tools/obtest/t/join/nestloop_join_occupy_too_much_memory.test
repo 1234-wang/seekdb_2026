@@ -60,26 +60,8 @@ while ($i < 50)
 
 set ob_query_timeout = 200000000;
 
-connection conn3;
-let $sql_workarea_mem_pre = query_get_value(select current_utilization value from __all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-
-connection conn1;
+# Aggregate WORK_AREA physical-cap assertions are retired. Keep join result
+# correctness; TestWorkareaMemoryPolicy covers profile release and local spill.
 send select /*+use_nl(t1 t2) */ count(*) from t1, t2 where t1.k = t2.k;
 
-connection conn3;
---sleep 2
-let $sql_workarea_mem_now = query_get_value(select current_utilization value from __all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-eval select $sql_workarea_mem_now - $sql_workarea_mem_pre < 10000000 sql_workarea_less_than_10M;
---sleep 2
-let $sql_workarea_mem_now = query_get_value(select current_utilization value from __all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-eval select $sql_workarea_mem_now - $sql_workarea_mem_pre < 10000000 sql_workarea_less_than_10M;
---sleep 5
-let $sql_workarea_mem_now = query_get_value(select current_utilization value from __all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-eval select $sql_workarea_mem_now - $sql_workarea_mem_pre < 10000000 sql_workarea_less_than_10M;
-
-connection conn1;
 reap;
-
-connection conn3;
-let $sql_workarea_mem_after = query_get_value(select current_utilization value from __all_virtual_resource_limit where resource_name = 'sql_workarea_memory', value, 1);
-eval select $sql_workarea_mem_after <= $sql_workarea_mem_pre + 10000000 sql_workarea_released;

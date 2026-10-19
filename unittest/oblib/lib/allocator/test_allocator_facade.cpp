@@ -132,27 +132,30 @@ private:
   void *freed_;
 };
 
-MemoryUsageTracker *context_memory_tracker = nullptr;
-
-MemoryUsageTracker *resolve_context_memory_tracker(const int64_t ctx_id)
-{
-  return ObCtxIds::WORK_AREA == ctx_id ? context_memory_tracker : nullptr;
-}
-
-class ContextMemoryTrackerGuard final
+// A test-only quota on a non-WORK_AREA category checks physical release
+// without restoring SQL's retired global tracker.
+class ContextTestQuota final : public MemoryQuota
 {
 public:
-  explicit ContextMemoryTrackerGuard(MemoryUsageTracker &tracker)
+  int64_t used() const { return committed(); }
+};
+MemoryQuota *context_test_quota = nullptr;
+MemoryQuota *resolve_context_test_quota(const int64_t)
+{
+  return context_test_quota;
+}
+class ContextQuotaGuard final
+{
+public:
+  explicit ContextQuotaGuard(ContextTestQuota &quota)
   {
-    context_memory_tracker = &tracker;
-    set_memory_usage_tracker_resolver(
-        ObCtxIds::WORK_AREA, resolve_context_memory_tracker);
+    context_test_quota = &quota;
+    set_memory_quota_resolver(ObCtxIds::VECTOR_CTX_ID, resolve_context_test_quota);
   }
-
-  ~ContextMemoryTrackerGuard()
+  ~ContextQuotaGuard()
   {
-    set_memory_usage_tracker_resolver(ObCtxIds::WORK_AREA, nullptr);
-    context_memory_tracker = nullptr;
+    set_memory_quota_resolver(ObCtxIds::VECTOR_CTX_ID, nullptr);
+    context_test_quota = nullptr;
   }
 };
 
@@ -192,11 +195,11 @@ TEST(TestMallocBackend, documented_mem_attr_shape_matches_header)
   EXPECT_EQ(OB_NORMAL_ALLOC, attr.prio_);
 }
 
-TEST(TestMallocBackend, module_page_allocation_follows_resolver_lifetime)
+TEST(TestMallocBackend, module_page_allocation_follows_quota_resolver_lifetime)
 {
-  ObMemAttr attr("ResolverTrans", ObCtxIds::WORK_AREA);
+  ObMemAttr attr("ResolverTrans", ObCtxIds::VECTOR_CTX_ID);
   ModulePageAllocator allocator(attr);
-  MemoryUsageTracker tracker;
+  ContextTestQuota tracker;
 
   void *before_resolver = allocator.alloc(64);
   ASSERT_NE(nullptr, before_resolver);
@@ -204,7 +207,7 @@ TEST(TestMallocBackend, module_page_allocation_follows_resolver_lifetime)
   EXPECT_GE(ob_malloc_usable_size(before_resolver), 64);
   allocator.free(before_resolver);
   {
-    ContextMemoryTrackerGuard tracker_guard(tracker);
+    ContextQuotaGuard tracker_guard(tracker);
     void *while_resolver = allocator.alloc(128);
     ASSERT_NE(nullptr, while_resolver);
     ASSERT_GT(tracker.used(), 0);
@@ -212,7 +215,7 @@ TEST(TestMallocBackend, module_page_allocation_follows_resolver_lifetime)
     ASSERT_EQ(0, tracker.used());
   }
 
-  EXPECT_EQ(nullptr, resolve_memory_usage_tracker(ObCtxIds::WORK_AREA));
+  EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
   void *after_resolver = allocator.alloc(256);
   ASSERT_NE(nullptr, after_resolver);
   EXPECT_GE(ob_malloc_usable_size(after_resolver), 256);
@@ -222,11 +225,11 @@ TEST(TestMallocBackend, module_page_allocation_follows_resolver_lifetime)
 
 TEST(TestMallocBackend, module_page_allocator_preserves_explicit_owner_layout)
 {
-  MemoryUsageTracker tracker;
-  ContextMemoryTrackerGuard tracker_guard(tracker);
+  ContextTestQuota tracker;
+  ContextQuotaGuard tracker_guard(tracker);
   ArenaLikeAllocator arena;
   ModulePageAllocator allocator(arena, "ArenaDelegate");
-  allocator.set_ctx_id(ObCtxIds::WORK_AREA);
+  allocator.set_ctx_id(ObCtxIds::VECTOR_CTX_ID);
 
   void *ptr = allocator.alloc(128);
   ASSERT_NE(nullptr, ptr);
@@ -251,6 +254,24 @@ TEST(TestMallocBackend, untracked_adapter_preserves_backing_layout)
 
   allocator.free(ptr);
   EXPECT_EQ(ptr, arena.freed());
+}
+
+TEST(TestMallocBackend, explicit_arena_tracker_does_not_require_ctx_registry)
+{
+  MemoryUsageTracker tracker;
+  {
+    ObArenaAllocator arena("ExplicitTracker");
+    arena.set_memory_tracker(&tracker); // TxData uses this explicit contract.
+    ASSERT_NE(nullptr, arena.alloc(4097));
+    EXPECT_GT(tracker.used(), 0);
+    EXPECT_EQ(arena.total(), tracker.used());
+    arena.reuse();
+    EXPECT_EQ(arena.total(), tracker.used());
+    arena.reset();
+    EXPECT_EQ(0, tracker.used());
+    ASSERT_NE(nullptr, arena.alloc(1024));
+  }
+  EXPECT_EQ(0, tracker.used());
 }
 
 TEST(TestMallocBackend, quota_realloc_preserves_original_on_rejection)
@@ -354,10 +375,10 @@ TEST(TestMemoryContextJemalloc, destroy_reclaims_owned_allocations)
 
 TEST(TestMemoryContextJemalloc, context_lifecycle_releases_tracked_pages)
 {
-  MemoryUsageTracker tracker;
-  ContextMemoryTrackerGuard tracker_guard(tracker);
+  ContextTestQuota tracker;
+  ContextQuotaGuard tracker_guard(tracker);
   ContextParam param;
-  param.set_mem_attr("TrackCtxArena", ObCtxIds::WORK_AREA);
+  param.set_mem_attr("TrackCtxArena", ObCtxIds::VECTOR_CTX_ID);
   MemoryContext context;
   ASSERT_EQ(OB_SUCCESS,
             MemoryContext::root()->CREATE_CONTEXT(context, param));
@@ -365,7 +386,7 @@ TEST(TestMemoryContextJemalloc, context_lifecycle_releases_tracked_pages)
 
   ASSERT_NE(nullptr, context->get_arena_allocator().alloc(4097));
   ASSERT_GT(context->arena_hold(), 0);
-  // The tracker charges the backend usable size, including the allocator's
+  // The test quota charges the backend usable size, including the allocator's
   // owner header and size-class rounding; arena_hold() reports page payload.
   ASSERT_GE(tracker.used(), context_overhead + context->arena_hold());
 
@@ -389,10 +410,10 @@ TEST(TestMemoryContextJemalloc, context_lifecycle_releases_tracked_pages)
 
 TEST(TestMemoryContextParentDestroy, recursively_reclaims_children_once)
 {
-  MemoryUsageTracker tracker;
-  ContextMemoryTrackerGuard tracker_guard(tracker);
+  ContextTestQuota tracker;
+  ContextQuotaGuard tracker_guard(tracker);
   ContextParam param;
-  param.set_mem_attr("ParentDestroy", ObCtxIds::WORK_AREA);
+  param.set_mem_attr("ParentDestroy", ObCtxIds::VECTOR_CTX_ID);
   MemoryContext parent;
   MemoryContext child;
   MemoryContext grandchild;
@@ -414,10 +435,10 @@ TEST(TestMemoryContextParentDestroy, recursively_reclaims_children_once)
 
 TEST(TestMemoryContextParentDestroy, explicitly_destroyed_child_is_unlinked)
 {
-  MemoryUsageTracker tracker;
-  ContextMemoryTrackerGuard tracker_guard(tracker);
+  ContextTestQuota tracker;
+  ContextQuotaGuard tracker_guard(tracker);
   ContextParam param;
-  param.set_mem_attr("PartialDestroy", ObCtxIds::WORK_AREA);
+  param.set_mem_attr("PartialDestroy", ObCtxIds::VECTOR_CTX_ID);
   MemoryContext parent;
   MemoryContext child;
   ASSERT_EQ(OB_SUCCESS, MemoryContext::root()->CREATE_CONTEXT(parent, param));
@@ -434,10 +455,10 @@ TEST(TestMemoryContextParentDestroy, explicitly_destroyed_child_is_unlinked)
 
 TEST(TestMemoryContextParentDestroy, repeated_subtree_lifecycle)
 {
-  MemoryUsageTracker tracker;
-  ContextMemoryTrackerGuard tracker_guard(tracker);
+  ContextTestQuota tracker;
+  ContextQuotaGuard tracker_guard(tracker);
   ContextParam param;
-  param.set_mem_attr("RepeatedSubtree", ObCtxIds::WORK_AREA);
+  param.set_mem_attr("RepeatedSubtree", ObCtxIds::VECTOR_CTX_ID);
   for (int i = 0; i < 1000; ++i) {
     MemoryContext parent;
     MemoryContext child;

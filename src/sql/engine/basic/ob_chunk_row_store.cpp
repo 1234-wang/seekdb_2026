@@ -585,28 +585,6 @@ int ObChunkRowStore::switch_block(const int64_t min_size)
     }
     if (!can_find) { // need alloc new block
       if (OB_FAIL(alloc_block_buffer(new_block, min_size, false))) {
-        // The shared quota can change after need_dump() samples it.  Preserve
-        // the aggregate spill contract by reclaiming a local block and
-        // retrying the rejected allocation once.
-        if (should_retry_workarea_allocation(ret, ctx_id_, enable_dump_)
-            && !blocks_.is_empty()) {
-          ret = OB_SUCCESS;
-          if (OB_FAIL(dump(true, true))) {
-            LOG_WARN("failed to reclaim workarea block after quota rejection",
-                     K(ret), K(min_size), K_(mem_hold), K_(mem_used));
-          } else {
-            need_shrink = false;
-            can_find = find_block_can_hold(min_size, need_shrink);
-            if (need_shrink) {
-              static_cast<void>(shrink_block(min_size));
-            }
-            if (!can_find
-                && OB_FAIL(alloc_block_buffer(new_block, min_size, false))) {
-              LOG_WARN("failed to allocate workarea block after reclaim",
-                       K(ret), K(min_size), K_(mem_hold), K_(mem_used));
-            }
-          }
-        }
       }
       if (!can_find && OB_SUCC(ret)){
         blocks_.add_last(new_block);

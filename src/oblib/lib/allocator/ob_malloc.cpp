@@ -50,11 +50,9 @@ namespace oceanbase
 namespace common
 {
 ObIAllocator *global_default_allocator = nullptr;
-static constexpr int64_t MEMORY_USAGE_TRACKER_RESOLVER_COUNT = ObCtxIds::MAX_CTX_ID;
-std::atomic<MemoryUsageTrackerResolver>
-    g_memory_usage_tracker_resolvers[MEMORY_USAGE_TRACKER_RESOLVER_COUNT];
+static constexpr int64_t MEMORY_QUOTA_RESOLVER_COUNT = ObCtxIds::MAX_CTX_ID;
 std::atomic<MemoryQuotaResolver>
-    g_memory_quota_resolvers[MEMORY_USAGE_TRACKER_RESOLVER_COUNT];
+    g_memory_quota_resolvers[MEMORY_QUOTA_RESOLVER_COUNT];
 
 namespace
 {
@@ -149,27 +147,10 @@ bool configure_darwin_malloc_zone()
 }
 #endif
 
-void set_memory_usage_tracker_resolver(const int64_t ctx_id,
-                                       MemoryUsageTrackerResolver resolver)
-{
-  if (ctx_id >= 0 && ctx_id < MEMORY_USAGE_TRACKER_RESOLVER_COUNT) {
-    g_memory_usage_tracker_resolvers[ctx_id].store(resolver, std::memory_order_release);
-  }
-}
-
-MemoryUsageTracker *resolve_memory_usage_tracker(const int64_t ctx_id)
-{
-  MemoryUsageTrackerResolver resolver = nullptr;
-  if (ctx_id >= 0 && ctx_id < MEMORY_USAGE_TRACKER_RESOLVER_COUNT) {
-    resolver = g_memory_usage_tracker_resolvers[ctx_id].load(std::memory_order_acquire);
-  }
-  return nullptr != resolver ? resolver(ctx_id) : nullptr;
-}
-
 void set_memory_quota_resolver(const int64_t ctx_id,
                                MemoryQuotaResolver resolver)
 {
-  if (ctx_id >= 0 && ctx_id < MEMORY_USAGE_TRACKER_RESOLVER_COUNT) {
+  if (ctx_id >= 0 && ctx_id < MEMORY_QUOTA_RESOLVER_COUNT) {
     g_memory_quota_resolvers[ctx_id].store(resolver, std::memory_order_release);
   }
 }
@@ -177,7 +158,7 @@ void set_memory_quota_resolver(const int64_t ctx_id,
 MemoryQuota *resolve_memory_quota(const int64_t ctx_id)
 {
   MemoryQuotaResolver resolver = nullptr;
-  if (ctx_id >= 0 && ctx_id < MEMORY_USAGE_TRACKER_RESOLVER_COUNT) {
+  if (ctx_id >= 0 && ctx_id < MEMORY_QUOTA_RESOLVER_COUNT) {
     resolver = g_memory_quota_resolvers[ctx_id].load(std::memory_order_acquire);
   }
   return nullptr != resolver ? resolver(ctx_id) : nullptr;

@@ -1,7 +1,3 @@
 ob1=OBI(cluster=1, proxy_num=0, init_unit_cpu=0);
 ob1.reboot;
-mem_less_than_100M
-1
 ERROR HY000: Timeout, query has reached the maximum query timeout: 2500000(us), maybe you can adjust the session variable ob_query_timeout or query_timeout hint, and try again.
-reservation_released
-1

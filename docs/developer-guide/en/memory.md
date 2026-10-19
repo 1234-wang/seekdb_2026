@@ -40,7 +40,7 @@ ASAN, Windows, and Android use their platform allocator. There is no runtime
 allocator switch.
 
 `ObMemAttr` remains part of the source-level allocation contract. A component
-that needs a hard budget registers its own tracker and quota for the relevant
+that needs a hard budget supplies its own quota for the relevant
 context ID; labels and unregistered context IDs are descriptive and do not
 recreate the former process-wide label accounting platform.
 
@@ -109,15 +109,33 @@ At the beginning, seekdb uses a predefined method to create memory labels for ea
 **ctx_id**
 
 Context IDs are predefined in `alloc_struct.h`. Use `DEFAULT_CTX_ID` unless a
-component explicitly owns a tracker or quota. KV cache, SQL WorkArea, Vector,
-and Meta Object own their admission and reclaim policy; the shared quota
+component explicitly owns a quota. KV cache, Vector, and Meta Object own
+their admission and reclaim policy; the shared quota
 primitive only provides atomic reserve/reconcile/rollback accounting.
+
+SQL WorkArea is different: SQL memory manager distributes the scheduling
+budget derived from `memory_budget * ob_sql_work_area_percentage / 100`.
+Operators retain their local usage/peak reports, AUTO/MANUAL policies and spill
+decisions. There is no aggregate WORK_AREA physical-allocation quota or 80%
+global spill watermark. Zero store limits mean no local limit: callers must
+either manage spilling at operator level (such as PX Merge Receive), or
+deliberately use non-spilling materialization (such as PX datahub messages).
+
+`__all_virtual_sql_workarea_memory_info.TOTAL_MEM_USED` is an approximate sum
+of usage reported by currently registered profiles. It excludes unregistered
+small queries and pages retained after unregister, and is not process RSS or
+the total of all allocations tagged WORK_AREA. `WORKAREA_HOLD_SIZE` is retained
+for compatibility but returns NULL. Budget and usage fields are not a joint
+snapshot, and the profile sum is not used for hard allocation admission.
+The information table retains its existing visibility: it emits a row after
+the AUTO scheduler has initialized, and no row while that scheduler is disabled.
 
 ## Component memory diagnostics
 
 `oceanbase.__all_virtual_resource_limit` preserves its existing `tablet` row
-and adds four local component resources: `kv_cache_memory`,
-`sql_workarea_memory`, `vector_memory`, and `meta_object_memory`.
+and adds three local component resources: `kv_cache_memory`,
+`vector_memory`, and `meta_object_memory`. SQL WorkArea is not a hard-quota
+resource and has no `sql_workarea_memory` row in either resource-limit table.
 For these memory rows, `CURRENT_UTILIZATION` is committed (physically charged)
 memory, `RESERVED_VALUE` is in-flight quota reservation, and `LIMIT_VALUE` is
 the current quota limit, all in bytes. These are not process RSS or payload-only
@@ -139,10 +157,8 @@ wait for reclaim work, and then verify that no reservation is in flight.
 Reject and reclaim counters remain internal quota diagnostics and are not
 columns of these resource-limit tables. The reject counter counts each failed quota admission or reconcile attempt,
 including an attempt later recovered by a component retry. The reclaim counter
-counts successful wash, spill, cleanup, or GC batches that physically reclaim
-at least one byte/object; failed attempts are logged but not counted. For SQL
-WorkArea specifically, one event is one successful positive physical-spill
-write callback. A later negative accounting adjustment does not add an event.
+counts successful wash, cleanup, or GC batches that physically reclaim
+at least one byte/object; failed attempts are logged but not counted.
 
 The obmalloc-specific `V$OB_MEMORY`, `__all_virtual_memory_info`,
 `__all_virtual_ctx_memory_info`, and `__all_virtual_malloc_sample_info` tables,

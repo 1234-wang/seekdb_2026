@@ -19,7 +19,6 @@
 #include "observer/virtual_table/ob_all_virtual_resource_limit.h"
 #include "share/rc/ob_server_runtime.h"
 #include "share/cache/ob_kv_storecache.h"
-#include "sql/engine/ob_sql_memory_manager.h"
 #include "storage/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 
@@ -55,7 +54,7 @@ void ObResourceLimitTable::reset()
 const char *ObResourceLimitTable::memory_resource_name(const int64_t index)
 {
   static const char *const NAMES[] = {
-      "kv_cache_memory", "sql_workarea_memory", "vector_memory", "meta_object_memory"};
+      "kv_cache_memory", "vector_memory", "meta_object_memory"};
   return index >= 0 && index < memory_resource_count() ? NAMES[index] : nullptr;
 }
 
@@ -68,15 +67,6 @@ int ObResourceLimitTable::get_memory_resource_sample(
       sample = ObKVGlobalCache::get_instance().get_memory_quota_sample();
       break;
     case 1: {
-      sql::ObSqlMemoryManager *manager = server_service<sql::ObSqlMemoryManager>();
-      if (OB_ISNULL(manager)) {
-        ret = OB_NOT_INIT;
-      } else {
-        sample = manager->get_memory_quota_sample();
-      }
-      break;
-    }
-    case 2: {
       ObSharedMemAllocMgr *manager = server_service<ObSharedMemAllocMgr>();
       if (OB_ISNULL(manager)) {
         ret = OB_NOT_INIT;
@@ -85,7 +75,7 @@ int ObResourceLimitTable::get_memory_resource_sample(
       }
       break;
     }
-    case 3: {
+    case 2: {
       ObStorageMetaMemMgr *manager = server_service<ObStorageMetaMemMgr>();
       if (OB_ISNULL(manager)) {
         ret = OB_NOT_INIT;

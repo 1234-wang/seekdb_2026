@@ -40,7 +40,7 @@ public:
   virtual void reset();
   // Observation-only resources: do not register these with the calculator,
   // which also converts tablet counts into physical resource requirements.
-  static int64_t memory_resource_count() { return 4; }
+  static int64_t memory_resource_count() { return 3; }
   static const char *memory_resource_name(int64_t index);
   static int get_memory_resource_sample(int64_t index,
       common::MemoryQuotaSample &sample);

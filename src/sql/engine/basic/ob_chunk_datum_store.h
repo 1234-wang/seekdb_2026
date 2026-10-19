@@ -1180,8 +1180,7 @@ private:
   int64_t mem_hold_;
   int64_t mem_used_;
   int64_t max_hold_mem_;
-  common::DefaultPageAllocator inner_backing_allocator_;
-  common::TrackedAllocator inner_allocator_;
+  common::DefaultPageAllocator inner_allocator_;
   common::ObIAllocator *allocator_;
   bool use_inner_allocator_;
 
