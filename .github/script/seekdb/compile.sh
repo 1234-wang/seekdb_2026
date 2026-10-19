@@ -17,6 +17,14 @@ if [[ -n "${FORWARDING_HOST:-}" ]]; then
   echo "$FORWARDING_HOST mirrors.oceanbase.com" >> /etc/hosts
 fi
 started=$SECONDS
+# Trust the CI proxy's CA alongside the bundled public CAs.
+bazel_java_home=$(python3 ./build.py info --batch java-home)
+bazel_trust_store="$task_dir/bazel-cacerts"
+install -m 644 "$bazel_java_home/lib/security/cacerts" "$bazel_trust_store"
+"$bazel_java_home/bin/keytool" -importcert -noprompt -alias ci-root \
+  -file /usr/local/share/ca-certificates/rootCA.crt \
+  -keystore "$bazel_trust_store" -storepass changeit
+args+=(--host_jvm_args="-Djavax.net.ssl.trustStore=$bazel_trust_store")
 python3 ./build.py init 2>&1 | tee "$task_dir/compile_init.output"
 if [[ -n "${SEEKDB_CACHE_NFS_ROOT:-}" ]]; then
   bash .github/script/seekdb/cache.sh baseline-bazel || echo "Failed to record Bazel cache baseline" >&2
