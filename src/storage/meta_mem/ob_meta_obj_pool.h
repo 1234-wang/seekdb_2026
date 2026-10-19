@@ -272,7 +272,7 @@ void ObMetaObjPool<T>::free_node_(typename BasePool::Node *ptr)
         _COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "free node to list fail, size=%ld ptr=%p", BasePool::free_list_.get_total(), ptr);
       }
       (void)ATOMIC_AAF(&(BasePool::inner_used_num_), -1);
-    } else if (BasePool::ALLOC_BY_BACKING_ALLOCATOR == ptr->flag) {
+    } else if (BasePool::ALLOC_BY_OVERFLOW_ALLOCATOR == ptr->flag) {
       ptr->~Node();
       common::ob_free(ptr);
     } else {

@@ -122,6 +122,9 @@ public:
   int64_t last_access_time_;
 };
 
+// TODO: ObStorageMetaMemMgr is currently the only user of ObBaseResourcePool's
+// quota support. If this manager is removed, also remove the resource pool's
+// overflow allocator and its quota plumbing.
 class ObStorageMetaMemMgr final
 {
 public:

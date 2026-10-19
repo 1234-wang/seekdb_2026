@@ -72,7 +72,7 @@ protected:
   static const int64_t WARN_INTERVAL = 60000000L; //60s
   static const uint64_t ALLOC_MAGIC_NUM = 0x72737263706f6f6c; // rsrcpool
   static const uint64_t ALLOC_BY_INNER_ALLOCATOR = 0x0;
-  static const uint64_t ALLOC_BY_BACKING_ALLOCATOR = 0x1;
+  static const uint64_t ALLOC_BY_OVERFLOW_ALLOCATOR = 0x1;
   static const int64_t CHECK_INTERVAL = 100000;
   static const int64_t UPDATE_INTERVAL = 5000000;
   struct Node
@@ -96,7 +96,7 @@ public:
     : max_free_list_num_(max_free_list_num),
       mem_attr_(mem_attr),
       allocator_(allocator),
-      backing_allocator_(nullptr),
+      overflow_allocator_(nullptr),
       inner_allocated_num_(0),
       inner_used_num_(0),
       free_list_allocator_(ObMemAttr("PoolFreeList", mem_attr.ctx_id_),
@@ -148,7 +148,7 @@ protected:
       }
       allocator_ = NULL;
     }
-    backing_allocator_ = NULL;
+    overflow_allocator_ = NULL;
   }
 public:
   T *alloc()
@@ -206,16 +206,16 @@ public:
     return free_list_.get_total();
   }
 protected:
-  void set_backing_allocator(common::ObIAllocator *allocator)
+  void set_overflow_allocator(common::ObIAllocator *allocator)
   {
-    backing_allocator_ = allocator;
+    overflow_allocator_ = allocator;
   }
 
-  void free_backing_node_(Node *ptr)
+  void free_overflow_node_(Node *ptr)
   {
     ptr->~Node();
-    if (OB_NOT_NULL(backing_allocator_)) {
-      backing_allocator_->free(ptr);
+    if (OB_NOT_NULL(overflow_allocator_)) {
+      overflow_allocator_->free(ptr);
     } else {
       common::ob_free(ptr);
     }
@@ -238,9 +238,9 @@ protected:
           (void)ATOMIC_AAF(&inner_used_num_, 1);
         }
       } else {
-        flag = ALLOC_BY_BACKING_ALLOCATOR;
-        buffer = OB_NOT_NULL(backing_allocator_)
-            ? backing_allocator_->alloc(sizeof(Node), mem_attr_)
+        flag = ALLOC_BY_OVERFLOW_ALLOCATOR;
+        buffer = OB_NOT_NULL(overflow_allocator_)
+            ? overflow_allocator_->alloc(sizeof(Node), mem_attr_)
             : common::ob_malloc(sizeof(Node), mem_attr_);
         (void)ATOMIC_AAF(&inner_allocated_num_, -1);
       }
@@ -281,8 +281,8 @@ protected:
           allocator_->free(ptr);
         }
         (void)ATOMIC_AAF(&inner_used_num_, -1);
-      } else if (ALLOC_BY_BACKING_ALLOCATOR == ptr->flag) {
-        free_backing_node_(ptr);
+      } else if (ALLOC_BY_OVERFLOW_ALLOCATOR == ptr->flag) {
+        free_overflow_node_(ptr);
       } else {
         _COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid flag=%lu", ptr->flag);
       }
@@ -292,7 +292,7 @@ protected:
   const int64_t max_free_list_num_;
   const lib::ObMemAttr mem_attr_;
   common::ObIAllocator *allocator_;
-  common::ObIAllocator *backing_allocator_;
+  common::ObIAllocator *overflow_allocator_;
   volatile int64_t inner_allocated_num_;
   volatile int64_t inner_used_num_;
   NodeQueue free_list_;
