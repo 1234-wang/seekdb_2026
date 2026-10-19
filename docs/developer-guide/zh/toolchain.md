@@ -20,18 +20,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-上述环境变量也会让同一终端中后续的 rustup 工具链下载使用 TUNA 镜像。首次构建还需要下载 Cargo 依赖；如果 crates.io 访问缓慢，可以在 `$HOME/.cargo/config.toml` 中配置 [TUNA crates.io 稀疏索引](https://mirrors.tuna.tsinghua.edu.cn/help/crates.io-index/)：
-
-```toml
-[source.crates-io]
-replace-with = "tuna"
-
-[source.tuna]
-registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
-
-[registries.tuna]
-index = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
-```
+上述环境变量也会让同一终端中后续的 rustup 工具链下载使用 TUNA 镜像。
 
 在 Windows 上，从 [Rust 官方安装页面](https://www.rust-lang.org/tools/install) 下载并运行 `rustup-init.exe`，然后重新打开 PowerShell，使 `%USERPROFILE%\.cargo\bin` 出现在 `PATH` 中。
 
@@ -45,7 +34,7 @@ aarch64-apple-ios
 aarch64-apple-ios-sim
 ```
 
-编译前先在 `rust/` 目录执行 `rustup toolchain install --no-self-update`，安装固定版本的工具链、组件和目标。Bazel 查找已安装的工具链，并通过 Cargo 生成 Rust 库和 C++ 头文件。首次构建还可能下载 Cargo 的锁定依赖；如果主机无法访问默认 registry，请配置 crates.io 镜像。
+编译前先在 `rust/` 目录执行 `rustup toolchain install --no-self-update`，安装固定版本的工具链、组件和目标。Bazel 查找已安装的工具链，并通过 Cargo 生成 Rust 库和 C++ 头文件。构建脚本统一通过 [RsProxy 稀疏源](https://rsproxy.cn/)下载锁定的 Cargo 依赖，在这一步覆盖用户的 crates.io 源选择，无需修改全局镜像配置；下载仍复用原有 Cargo 缓存（`$CARGO_HOME`，默认 `~/.cargo`）。
 
 ## 宿主机检测与架构
 

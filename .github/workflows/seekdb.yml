@@ -126,9 +126,6 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          # The rustup mirror below covers only rustup; this routes the crates
-          # `cargo build --locked` downloads through the same mirror.
-          crates-mirror: 'true'
           cache: 'false'
         env:
           RUSTUP_INIT_URL: https://rsproxy.cn/rustup-init.sh

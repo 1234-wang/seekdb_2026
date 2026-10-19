@@ -48,7 +48,11 @@ def vendor(arguments):
     sysroot = Path(config["rust"][name])
     cargo = sysroot / "bin" / ("cargo" + exe)
     vendor = output / "vendor"
-    command = [str(cargo), "vendor", "--locked", "--respect-source-config", "--manifest-path", str(root / "rust/Cargo.toml"),
+    # A registry alias avoids conflicting with existing names for the same mirror.
+    command = [str(cargo), "vendor", "--locked", "--respect-source-config",
+               "--config", 'source.crates-io.replace-with="seekdb"',
+               "--config", 'registries.seekdb.index="sparse+https://rsproxy.cn/index/"',
+               "--manifest-path", str(root / "rust/Cargo.toml"),
                "--sync", str(root / "deps/external/Cargo.toml")]
     if name == "wasm":
         command += ["--sync", str(sysroot / "lib/rustlib/src/rust/library/sysroot/Cargo.toml")]
@@ -56,7 +60,7 @@ def vendor(arguments):
     environment = os.environ.copy()
     environment["RUSTC"] = str(sysroot / "bin" / ("rustc" + exe))
     # Downloads happen only during repository fetching, using Cargo's existing
-    # cache and configured source. Build actions below always run offline.
+    # cache and the project mirror. Build actions below always run offline.
     subprocess.run(command, cwd=root / "rust", env=environment, check=True, stdout=subprocess.DEVNULL)
     # One input archive avoids exposing vendored BUILD files as Bazel packages.
     # Normalize archive metadata so identical sources have identical digests.

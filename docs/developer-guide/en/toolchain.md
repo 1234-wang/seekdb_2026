@@ -23,7 +23,7 @@ aarch64-apple-ios
 aarch64-apple-ios-sim
 ```
 
-Install the pinned Rust toolchain before building: run `rustup toolchain install --no-self-update` from the `rust/` directory. Bazel discovers the installed toolchain and runs Cargo to produce the Rust libraries and C++ headers. The first build may also download the locked Cargo dependencies; configure a crates.io mirror if the host cannot reach the default registry.
+Install the pinned Rust toolchain before building: run `rustup toolchain install --no-self-update` from the `rust/` directory. Bazel discovers the installed toolchain and runs Cargo to produce the Rust libraries and C++ headers. The build script downloads locked Cargo dependencies through the [RsProxy sparse registry](https://rsproxy.cn/), overriding the user's crates.io source selection for this step. No global mirror configuration is needed; downloads still use the existing Cargo cache (`$CARGO_HOME`, or `~/.cargo` by default).
 
 ## Host detection and supported architectures
 
