@@ -238,12 +238,10 @@ const db = await seekdb.open("./node-seekdb.db", {
 let connection;
 try {
   const endpoint = db.connectionOptions();
-  if (endpoint.transport === "named_pipe") {
-    throw new Error("This example requires TCP or a Unix socket.");
-  }
-  const location = endpoint.transport === "unix_socket"
-    ? { socketPath: endpoint.unixSocket }
-    : { host: endpoint.host, port: endpoint.port };
+  const location = endpoint.transport === "tcp"
+    ? { host: endpoint.host, port: endpoint.port }
+    : { socketPath: endpoint.transport === "unix_socket"
+        ? endpoint.unixSocket : endpoint.namedPipe };
   connection = await mysql.createConnection({
     ...location,
     user: endpoint.user,
