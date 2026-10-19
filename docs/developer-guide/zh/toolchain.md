@@ -24,7 +24,9 @@ source "$HOME/.cargo/env"
 
 在 Windows 上，从 [Rust 官方安装页面](https://www.rust-lang.org/tools/install) 下载并运行 `rustup-init.exe`，然后重新打开 PowerShell，使 `%USERPROFILE%\.cargo\bin` 出现在 `PATH` 中。
 
-仓库固定使用 Rust `1.98.1`，需要 `clippy` 组件，并声明以下目标：
+仓库通过 `rust/rust-toolchain.toml` 固定使用 Rust `1.98.1`。本机构建会调用 rustup 定位该版本；缺失时，rustup 默认自动安装（除非设置了 `RUSTUP_AUTO_INSTALL=0`），无需先手动执行安装命令。
+
+该配置文件还为 Rust 检查和交叉编译声明了 `clippy` 组件及以下目标；普通本机构建不需要全部安装：
 
 ```text
 x86_64-unknown-linux-gnu
@@ -34,7 +36,9 @@ aarch64-apple-ios
 aarch64-apple-ios-sim
 ```
 
-编译前先在 `rust/` 目录执行 `rustup toolchain install --no-self-update`，安装固定版本的工具链、组件和目标。Bazel 查找已安装的工具链，并通过 Cargo 生成 Rust 库和 C++ 头文件。构建脚本统一通过 [RsProxy 稀疏源](https://rsproxy.cn/)下载锁定的 Cargo 依赖，在这一步覆盖用户的 crates.io 源选择，无需修改全局镜像配置；下载仍复用原有 Cargo 缓存（`$CARGO_HOME`，默认 `~/.cargo`）。
+如需提前安装配置文件声明的工具链、组件和目标，可在 `rust/` 目录执行 `rustup toolchain install --no-self-update`。这是可选的预安装步骤；`--no-self-update` 仅禁止更新 rustup 自身。
+
+构建脚本统一通过 [RsProxy 稀疏源](https://rsproxy.cn/)下载锁定的 Cargo 依赖，在这一步覆盖用户的 crates.io 源选择，无需修改全局镜像配置；下载仍复用原有 Cargo 缓存（`$CARGO_HOME`，默认 `~/.cargo`）。
 
 ## 宿主机检测与架构
 
