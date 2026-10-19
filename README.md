@@ -176,27 +176,34 @@ Use a local seekdb database from Python or Node.js without deploying a database 
 <details open>
 <summary><b>🐍 Python</b></summary>
 
-Use [pylibseekdb](https://pypi.org/project/pylibseekdb/) to open a local database and execute SQL. Requires Python 3.11 or newer.
+Use [pylibseekdb](https://pypi.org/project/pylibseekdb/) to start a local seekdb database, then execute SQL with PyMySQL. Requires Python 3.11 or newer.
 
 ```bash
-python3 -m pip install -U pylibseekdb
+python3 -m pip install -U pylibseekdb pymysql
 ```
 
-Save the following as `example.py`. It opens a local database, runs a query, and closes the cursor, connection, and runtime handle when finished:
+Save the following as `example.py`. It gets the connection arguments from `connection_options()` and passes them to PyMySQL. The context managers close the cursor and SQL connection before releasing the runtime handle:
 
 ```python
 from contextlib import closing
 
 import pylibseekdb
+import pymysql
 
 with closing(pylibseekdb.open("./python-seekdb.db")) as db:
-    with closing(db.connect(database="test", autocommit=True)) as connection:
-        with closing(connection.cursor()) as cursor:
+    options = db.connection_options()
+    with pymysql.connect(
+        database="test",
+        autocommit=True,
+        cursorclass=pymysql.cursors.DictCursor,
+        **options,
+    ) as connection:
+        with connection.cursor() as cursor:
             cursor.execute("SELECT 1 AS value")
             print(cursor.fetchall())
 ```
 
-Run it; the result is `[(1,)]`:
+Run it; the result is `[{'value': 1}]`:
 
 ```bash
 python3 example.py

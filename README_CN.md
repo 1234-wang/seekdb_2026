@@ -162,27 +162,34 @@ ORDER BY dist APPROXIMATE LIMIT 10;
 <details open>
 <summary><b>🐍 Python</b></summary>
 
-使用 [pylibseekdb](https://pypi.org/project/pylibseekdb/) 打开本地数据库并执行 SQL。需要 Python 3.11 或更高版本。
+使用 [pylibseekdb](https://pypi.org/project/pylibseekdb/) 启动本地 seekdb，再通过 PyMySQL 执行 SQL。需要 Python 3.11 或更高版本。
 
 ```bash
-python3 -m pip install -U pylibseekdb
+python3 -m pip install -U pylibseekdb pymysql
 ```
 
-将下面的示例保存为 `example.py`。它会打开本地数据库、执行查询，并在结束时关闭游标、连接和运行时句柄：
+将下面的示例保存为 `example.py`。它通过 `connection_options()` 获取连接参数并传给 PyMySQL。上下文管理器会先关闭游标和 SQL 连接，再释放运行时句柄：
 
 ```python
 from contextlib import closing
 
 import pylibseekdb
+import pymysql
 
 with closing(pylibseekdb.open("./python-seekdb.db")) as db:
-    with closing(db.connect(database="test", autocommit=True)) as connection:
-        with closing(connection.cursor()) as cursor:
+    options = db.connection_options()
+    with pymysql.connect(
+        database="test",
+        autocommit=True,
+        cursorclass=pymysql.cursors.DictCursor,
+        **options,
+    ) as connection:
+        with connection.cursor() as cursor:
             cursor.execute("SELECT 1 AS value")
             print(cursor.fetchall())
 ```
 
-运行后输出 `[(1,)]`：
+运行后输出 `[{'value': 1}]`：
 
 ```bash
 python3 example.py

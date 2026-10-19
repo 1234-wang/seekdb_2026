@@ -162,27 +162,34 @@ ORDER BY dist APPROXIMATE LIMIT 10;
 <details open>
 <summary><b>🐍 Python</b></summary>
 
-[pylibseekdb](https://pypi.org/project/pylibseekdb/) でローカルデータベースを開き、SQL を実行します。Python 3.11 以降が必要です。
+[pylibseekdb](https://pypi.org/project/pylibseekdb/) でローカルの seekdb を起動し、PyMySQL で SQL を実行します。Python 3.11 以降が必要です。
 
 ```bash
-python3 -m pip install -U pylibseekdb
+python3 -m pip install -U pylibseekdb pymysql
 ```
 
-以下の例を `example.py` として保存します。ローカルデータベースを開いてクエリを実行し、終了時にカーソル、接続、ランタイムハンドルを閉じます：
+以下の例を `example.py` として保存します。`connection_options()` で接続引数を取得し、PyMySQL に渡します。コンテキストマネージャーにより、カーソルと SQL 接続を閉じてからランタイムハンドルを解放します：
 
 ```python
 from contextlib import closing
 
 import pylibseekdb
+import pymysql
 
 with closing(pylibseekdb.open("./python-seekdb.db")) as db:
-    with closing(db.connect(database="test", autocommit=True)) as connection:
-        with closing(connection.cursor()) as cursor:
+    options = db.connection_options()
+    with pymysql.connect(
+        database="test",
+        autocommit=True,
+        cursorclass=pymysql.cursors.DictCursor,
+        **options,
+    ) as connection:
+        with connection.cursor() as cursor:
             cursor.execute("SELECT 1 AS value")
             print(cursor.fetchall())
 ```
 
-実行すると `[(1,)]` が出力されます：
+実行すると `[{'value': 1}]` が出力されます：
 
 ```bash
 python3 example.py
