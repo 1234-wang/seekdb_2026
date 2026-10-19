@@ -43,10 +43,10 @@ To pass a job option to another tool, use an equals sign, such as `--test_arg=-j
 Specify your REAPI service address and concurrency:
 
 ```bash
-./build.py build --config=remote --remote_executor=grpc://HOST:PORT --jobs=100 seekdb
+./build.py build --remote_executor=grpc://HOST:PORT --jobs=100 seekdb
 ```
 
-C++ compilation runs remotely. Cargo, generators, and linking run locally. If the service requires an SSH tunnel, establish the tunnel separately.
+The default strategies in `.bazelrc` prefer remote execution for C++ compilation and use local execution when no remote executor is configured. Set `--remote_executor` without adding `--config=remote`. Cargo, generators, and linking run locally. The default local strategy order is `worker,sandboxed,local`, preserving the preference for sandboxing. Explicit execution strategies on the command line override these defaults. If the service requires an SSH tunnel, establish the tunnel separately.
 
 With `--config=remote` or a nonempty `--remote_executor` on the command line, `--jobs` only controls total concurrency. Bazel still detects the local CPU budget automatically unless you set it separately with `--local_resources=cpu=N`.
 

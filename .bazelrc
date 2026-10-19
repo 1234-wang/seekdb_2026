@@ -42,7 +42,10 @@ build:wasm --action_env=EMSDK_PYTHON
 build --flag_alias=sanity=//bazel:enable_sanity
 
 # Only C++ compilation uses REAPI. Cargo and generators run locally.
-# Supply --remote_executor=grpc://HOST:PORT on the command line.
+build --spawn_strategy=worker,sandboxed,local
+build --strategy=CppCompile=remote,worker,sandboxed,local
+
+# Preserve the explicit remote-only C++ config for existing callers.
 build:remote --spawn_strategy=local
 build:remote --strategy=CppCompile=remote
 
