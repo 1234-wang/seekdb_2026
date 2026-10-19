@@ -157,7 +157,7 @@ master_snapshot_parent()
 pr_snapshot_parent()
 {
   [[ -n "$PR_NUMBER" ]] || return 1
-  printf '%s/pr/pr-%s/bazel/%s/snapshots\n' "$NFS_ROOT" "$PR_NUMBER" "$1"
+  printf '%s/pr/pr-%s/%s/%s/snapshots\n' "$NFS_ROOT" "$PR_NUMBER" "$1" "$2"
 }
 
 manifest_value()
@@ -283,7 +283,7 @@ restore_pr_bazel_deltas()
 {
   local key="$1" destination="$2" parent snapshot restored=0
   [[ -n "$PR_NUMBER" ]] || return 0
-  parent="$(pr_snapshot_parent "$key")"
+  parent="$(pr_snapshot_parent bazel "$key")"
   while IFS= read -r snapshot; do
     [[ -n "$snapshot" ]] || continue
     if restore_snapshot "$snapshot" bazel pr "$key" "$PR_NUMBER" "$destination"; then
@@ -293,17 +293,33 @@ restore_pr_bazel_deltas()
   log "restored $restored PR bazel delta(s) for PR $PR_NUMBER"
 }
 
+restore_latest_pr()
+{
+  local kind="$1" key="$2" destination="$3" snapshot
+  [[ -n "$PR_NUMBER" ]] || return 1
+  while IFS= read -r snapshot; do
+    if restore_snapshot "$snapshot" "$kind" pr "$key" "$PR_NUMBER" "$destination"; then
+      return 0
+    fi
+  done < <(snapshot_directories "$(pr_snapshot_parent "$kind" "$key")" newest)
+  return 1
+}
+
 restore_cache()
 {
-  local kind="$1" key destination started
+  local kind="$1" key destination started status=miss
   key="$(cache_key "$kind")" || return 1
   destination="$(cache_destination "$kind")" || return 1
   started=$SECONDS
   mkdir -p "$destination"
-  restore_latest_master "$kind" "$key" "$destination" || true
   if [[ "$kind" == "bazel" ]]; then
+    restore_latest_master "$kind" "$key" "$destination" || true
     restore_pr_bazel_deltas "$key" "$destination"
+  elif restore_latest_pr "$kind" "$key" "$destination" \
+      || restore_latest_master "$kind" "$key" "$destination"; then
+    status=hit
   fi
+  printf '%s\n' "$status" > "$LOCAL_ROOT/restore-${kind}.status"
   log "restore $kind finished in $((SECONDS - started))s (key=$key)"
 }
 
@@ -443,7 +459,7 @@ publish_archive()
   if [[ "$scope" == "master" ]]; then
     parent="$(master_snapshot_parent "$kind" "$key")"
   else
-    parent="$(pr_snapshot_parent "$key")"
+    parent="$(pr_snapshot_parent "$kind" "$key")"
   fi
   final_name="${RUN_ID}-${RUN_ATTEMPT}"
   final_dir="$parent/$final_name"
@@ -504,6 +520,27 @@ publish_master()
   log "publish master $kind finished in $((SECONDS - started))s"
 }
 
+publish_pr_dependencies()
+{
+  local kind="$1" key archive status_file
+  [[ -n "$PR_NUMBER" ]] || return 0
+  case "$kind" in deps|rustup|cargo) ;; *) die "not a dependency cache: $kind"; return 1 ;; esac
+  status_file="$LOCAL_ROOT/restore-${kind}.status"
+  if [[ "$kind" != cargo && -f "$status_file" && "$(<"$status_file")" == hit ]]; then
+    log "PR $kind cache already restored; publish skipped"
+    return 0
+  fi
+  key="$(cache_key "$kind")" || return 1
+  archive="$(mktemp "$LOCAL_ROOT/${kind}-pr.XXXXXX.tar.zst")"
+  if ! create_archive "$kind" "$archive" ""; then
+    rm -f -- "$archive"
+    return 0
+  fi
+  publish_archive "$kind" pr "$key" "$PR_NUMBER" "$archive" "$ARCHIVE_ENTRY_COUNT"
+  rm -f -- "$archive"
+  prune_snapshots "$(pr_snapshot_parent "$kind" "$key")" 1
+}
+
 publish_pr_bazel()
 {
   local key current_list delta_list archive started
@@ -534,7 +571,7 @@ publish_pr_bazel()
   fi
   publish_archive bazel pr "$key" "$PR_NUMBER" "$archive" "$ARCHIVE_ENTRY_COUNT"
   rm -f -- "$archive"
-  prune_snapshots "$(pr_snapshot_parent "$key")" 8 "$PR_MAX_BYTES"
+  prune_snapshots "$(pr_snapshot_parent bazel "$key")" 8 "$PR_MAX_BYTES"
   log "publish PR bazel delta finished in $((SECONDS - started))s"
 }
 
@@ -602,6 +639,7 @@ Usage:
   cache.sh restore <deps|rustup|cargo|bazel>
   cache.sh baseline-bazel
   cache.sh publish-master <deps|rustup|cargo|bazel>
+  cache.sh publish-pr <deps|rustup|cargo>
   cache.sh publish-pr-bazel
   cache.sh gc
   cache.sh key <deps|rustup|cargo|bazel>
@@ -621,6 +659,9 @@ main()
       ;;
     publish-master)
       publish_master "$kind"
+      ;;
+    publish-pr)
+      publish_pr_dependencies "$kind"
       ;;
     publish-pr-bazel)
       publish_pr_bazel

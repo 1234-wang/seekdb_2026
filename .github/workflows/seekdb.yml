@@ -142,6 +142,12 @@ jobs:
         run: bash .github/script/seekdb/cache.sh publish-master rustup
         continue-on-error: true
 
+      - name: Publish PR Rust toolchain cache
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        shell: bash
+        run: bash .github/script/seekdb/cache.sh publish-pr rustup
+        continue-on-error: true
+
       - name: Compile
         id: compile
         shell: bash
@@ -174,6 +180,15 @@ jobs:
               github.event.pull_request.number != null }}
         shell: bash
         run: bash .github/script/seekdb/cache.sh publish-pr-bazel
+        continue-on-error: true
+
+      - name: Publish PR dependency caches
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          for kind in deps cargo; do
+            bash .github/script/seekdb/cache.sh publish-pr "$kind" || true
+          done
         continue-on-error: true
 
       - name: Garbage collect shared caches
