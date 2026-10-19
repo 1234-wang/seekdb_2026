@@ -56,7 +56,7 @@ MySQL-compatible · Embedded or Server · Hybrid Vector + Full-text Search · CO
 
 **English** | [中文版](README_CN.md) | [日本語](README_JP.md)
 
-[30-Second Try](#30-second-try) · [Quick Start](#quick-start) · [Why seekdb](#why-seekdb-for-agents) · [Ecosystem](#ecosystem--integrations) · [Contributing](#development)
+[30-Second Try](#30-second-try) · [Quick Start](#quick-start) · [Embedded SDKs](#embedded-sdks) · [Why seekdb](#why-seekdb-for-agents) · [Ecosystem](#ecosystem--integrations) · [Contributing](#development)
 
 <sub>If you find seekdb useful, consider giving it a <a href="https://github.com/oceanbase/seekdb/stargazers">star</a> — it helps others discover the project.</sub>
 
@@ -88,7 +88,7 @@ pip install -U pyseekdb   # pyseekdb is the Python SDK for seekdb
 
 > 📋 [View demo.py source →](images/demo.py)
 
-No servers, no schemas, no embedding setup. Embedded mode runs in-process; switch to server / OceanBase mode with one line. [More examples →](#more-examples)
+No manual server deployment, schema definition, or embedding setup for this Python demo. [Run a local database with Python or JavaScript →](#embedded-sdks)
 
 ---
 
@@ -167,9 +167,119 @@ real-time writes, and the entire MySQL ecosystem out of the box.
 
 ## 🎬 Quick Start
 
-### Installation
+<a id="embedded-sdks"></a>
 
-Choose your platform:
+### Embedded SDKs
+
+Use seekdb from your application without deploying a database service yourself. The SDK packages include the native runtime and manage local startup. Choose the API you need:
+
+| Language / API | Package |
+|---|---|
+| Python collections, vector and hybrid search | [pyseekdb](https://github.com/oceanbase/pyseekdb) |
+| Python SQL / DB-API | [pylibseekdb](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) |
+| JavaScript / TypeScript local SQL | [@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) + a MySQL client |
+
+<details open>
+<summary><b>🐍 Python — vector search</b></summary>
+
+Requires Python 3.11+ on Linux x86_64/aarch64 (glibc 2.28+) or macOS Apple Silicon. See the [native runtime requirements](https://pypi.org/project/pylibseekdb/#requirements) for OS versions.
+
+```bash
+python3 -m pip install -U pyseekdb
+```
+
+Save as `example.py`. This example supplies small vectors directly, so it needs no embedding model download or API key:
+
+```python
+import pyseekdb
+
+client = pyseekdb.Client(path="./python-seekdb.db", database="test")
+schema = pyseekdb.Schema(
+    vector_index=pyseekdb.VectorIndexConfig(
+        hnsw=pyseekdb.HNSWConfiguration(dimension=3),
+        embedding_function=None,
+    )
+)
+collection = client.get_or_create_collection("quickstart", schema=schema)
+collection.upsert(
+    ids=["doc1", "doc2"],
+    documents=["Hello seekdb", "Vector search"],
+    embeddings=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+)
+collection.refresh_index()
+results = collection.query(query_embeddings=[1.0, 0.0, 0.0], n_results=1)
+print(results["ids"][0])
+```
+
+Run it; the result is `['doc1']`:
+
+```bash
+python3 example.py
+```
+
+For text embedding, metadata filters, and server connections, see the [pyseekdb guide](https://github.com/oceanbase/pyseekdb). For direct SQL, install `pylibseekdb` and follow its [DB-API examples](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md).
+
+</details>
+
+<details open>
+<summary><b>🟨 JavaScript / TypeScript — local SQL</b></summary>
+
+Requires Node.js 22+. Native packages are available for Linux x64/arm64 (glibc 2.28+), macOS Apple Silicon (15.6.1+), and Windows x64. See the [supported environments](https://www.npmjs.com/package/@oceanbase/seekdb-node). Keep npm optional dependencies enabled so npm installs the matching native runtime.
+
+The binding starts or reuses a separate local seekdb process. Use a MySQL client such as `mysql2` for SQL; close the SQL connection before releasing the runtime handle.
+
+```bash
+npm install @oceanbase/seekdb-node mysql2
+```
+
+Save as `example.mjs` (ES modules; TypeScript declarations are also included):
+
+```javascript
+import { seekdb } from "@oceanbase/seekdb-node";
+import mysql from "mysql2/promise";
+
+const db = await seekdb.open("./node-seekdb.db", {
+  parameters: { memory_budget: "2G", mysql_port_mode: "random" },
+});
+let connection;
+try {
+  const endpoint = db.connectionOptions();
+  if (endpoint.transport === "named_pipe") {
+    throw new Error("This example requires TCP or a Unix socket.");
+  }
+  const location = endpoint.transport === "unix_socket"
+    ? { socketPath: endpoint.unixSocket }
+    : { host: endpoint.host, port: endpoint.port };
+  connection = await mysql.createConnection({
+    ...location,
+    user: endpoint.user,
+    password: "",
+    database: "test",
+  });
+  const [rows] = await connection.query("SELECT 1 AS value");
+  console.log(rows);
+} finally {
+  try {
+    if (connection) await connection.end();
+  } finally {
+    db.close();
+  }
+}
+```
+
+Run it; the result is `[ { value: 1 } ]`:
+
+```bash
+node example.mjs
+```
+
+The example requests a 2 GiB database memory budget; leave additional memory for Node.js and the OS. See the [Node.js package guide](https://www.npmjs.com/package/@oceanbase/seekdb-node) for lifecycle and connection options. For a higher-level JavaScript Collection API, see [seekdb-js](https://github.com/oceanbase/seekdb-js), which currently uses `@seekdb/js-bindings` and has a different API.
+
+</details>
+
+These examples store data in `./python-seekdb.db` and `./node-seekdb.db`, respectively, and can be rerun. The paths are database directories; reopening them preserves data. Initializing a new directory can take longer than subsequent opens.
+
+### Server deployments
 
 <details open>
 <summary><b>☁️ Cloud (Zero Install)</b></summary>
@@ -181,15 +291,6 @@ curl -X POST https://d0.seekdb.ai/api/v1/instances
 ```
 
 Free for 7 days. [Learn more →](https://d0.seekdb.ai)
-
-</details>
-
-<details open>
-<summary><b>🐍 Python (Recommended for AI/ML)</b></summary>
-
-```bash
-pip install -U pyseekdb
-```
 
 </details>
 
@@ -228,9 +329,9 @@ See [deployment docs](https://docs.seekdb.ai/seekdb/deploy-by-systemd/) for DEB/
 
 ### 📝 More Examples
 
-For the full Python SDK walkthrough — connection modes, embedding functions, metadata filters — see the [pyseekdb User Guide](https://github.com/oceanbase/pyseekdb).
+Start with the runnable [Python and JavaScript examples](#embedded-sdks) above. The following application pattern assumes an existing agent implementation.
 
-<details open>
+<details>
 <summary><b>🤖 Agent Memory Pattern (continuous write + immediate retrieval)</b></summary>
 
 The canonical agent loop: write an observation, retrieve relevant context

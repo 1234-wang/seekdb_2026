@@ -56,7 +56,7 @@ MySQL 兼容 · 嵌入式 / 服务器双模式 · 向量 + 全文混合搜索 ·
 
 [English](README.md) | **中文版** | [日本語](README_JP.md)
 
-[30 秒体验](#30-秒体验) · [快速开始](#快速开始) · [为什么选择 seekdb](#为什么-ai-agent-要选择-seekdb) · [生态系统](#生态系统与集成) · [开发](#开发)
+[30 秒体验](#30-秒体验) · [快速开始](#快速开始) · [嵌入式 SDK](#embedded-sdks) · [为什么选择 seekdb](#为什么-ai-agent-要选择-seekdb) · [生态系统](#生态系统与集成) · [开发](#开发)
 
 <sub>如果你觉得 seekdb 有用，请给一个 <a href="https://github.com/oceanbase/seekdb/stargazers">star</a> — 让更多人发现这个项目。</sub>
 
@@ -88,7 +88,7 @@ pip install -U pyseekdb   # pyseekdb 是 seekdb 的 Python SDK
 
 > 📋 [查看 demo.py 源码 →](images/demo.py)
 
-无需服务器、无需定义 Schema、无需配置 Embedding。嵌入式模式直接在进程内运行；一行代码切换到服务器模式或 OceanBase 分布式模式。[更多示例 →](#更多示例)
+这个 Python 演示无需手动部署服务器、定义 Schema 或配置 Embedding。[使用 Python 或 JavaScript 运行本地数据库 →](#embedded-sdks)
 
 ---
 
@@ -153,9 +153,119 @@ ORDER BY dist APPROXIMATE LIMIT 10;
 
 ## 🎬 快速开始
 
-### 安装
+<a id="embedded-sdks"></a>
 
-选择你的平台：
+### 嵌入式 SDK
+
+在应用中使用 seekdb，无需自行部署数据库服务。SDK 包含原生运行时并管理本地启动过程。根据需要选择 API：
+
+| 语言 / API | 安装包 |
+|---|---|
+| Python 集合、向量及混合检索 | [pyseekdb](https://github.com/oceanbase/pyseekdb) |
+| Python SQL / DB-API | [pylibseekdb](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) |
+| JavaScript / TypeScript 本地 SQL | [@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) + MySQL 客户端 |
+
+<details open>
+<summary><b>🐍 Python — 向量检索</b></summary>
+
+需要 Python 3.11+，支持 Linux x86_64/aarch64（glibc 2.28+）和 macOS Apple Silicon。操作系统版本要求参见[原生运行时要求](https://pypi.org/project/pylibseekdb/#requirements)。
+
+```bash
+python3 -m pip install -U pyseekdb
+```
+
+保存为 `example.py`。示例直接传入小向量，无需下载 Embedding 模型或配置 API Key：
+
+```python
+import pyseekdb
+
+client = pyseekdb.Client(path="./python-seekdb.db", database="test")
+schema = pyseekdb.Schema(
+    vector_index=pyseekdb.VectorIndexConfig(
+        hnsw=pyseekdb.HNSWConfiguration(dimension=3),
+        embedding_function=None,
+    )
+)
+collection = client.get_or_create_collection("quickstart", schema=schema)
+collection.upsert(
+    ids=["doc1", "doc2"],
+    documents=["Hello seekdb", "Vector search"],
+    embeddings=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+)
+collection.refresh_index()
+results = collection.query(query_embeddings=[1.0, 0.0, 0.0], n_results=1)
+print(results["ids"][0])
+```
+
+运行后输出 `['doc1']`：
+
+```bash
+python3 example.py
+```
+
+文本 Embedding、元数据过滤及服务器连接方式参见 [pyseekdb 指南](https://github.com/oceanbase/pyseekdb)。如需直接执行 SQL，可安装 `pylibseekdb` 并参考其 [DB-API 示例](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md)。
+
+</details>
+
+<details open>
+<summary><b>🟨 JavaScript / TypeScript — 本地 SQL</b></summary>
+
+需要 Node.js 22+。原生包支持 Linux x64/arm64（glibc 2.28+）、macOS Apple Silicon（15.6.1+）和 Windows x64，详见[支持环境](https://www.npmjs.com/package/@oceanbase/seekdb-node)。请启用 npm 可选依赖，以自动安装匹配的原生运行时。
+
+该绑定会启动或复用独立的本地 seekdb 进程。通过 `mysql2` 等 MySQL 客户端执行 SQL；释放运行时句柄前，先关闭 SQL 连接。
+
+```bash
+npm install @oceanbase/seekdb-node mysql2
+```
+
+保存为 `example.mjs`（使用 ES modules，同时提供 TypeScript 类型声明）：
+
+```javascript
+import { seekdb } from "@oceanbase/seekdb-node";
+import mysql from "mysql2/promise";
+
+const db = await seekdb.open("./node-seekdb.db", {
+  parameters: { memory_budget: "2G", mysql_port_mode: "random" },
+});
+let connection;
+try {
+  const endpoint = db.connectionOptions();
+  if (endpoint.transport === "named_pipe") {
+    throw new Error("This example requires TCP or a Unix socket.");
+  }
+  const location = endpoint.transport === "unix_socket"
+    ? { socketPath: endpoint.unixSocket }
+    : { host: endpoint.host, port: endpoint.port };
+  connection = await mysql.createConnection({
+    ...location,
+    user: endpoint.user,
+    password: "",
+    database: "test",
+  });
+  const [rows] = await connection.query("SELECT 1 AS value");
+  console.log(rows);
+} finally {
+  try {
+    if (connection) await connection.end();
+  } finally {
+    db.close();
+  }
+}
+```
+
+运行后输出 `[ { value: 1 } ]`：
+
+```bash
+node example.mjs
+```
+
+示例为数据库申请 2 GiB 内存预算，还需为 Node.js 和操作系统预留内存。生命周期和连接参数详见 [Node.js 包使用指南](https://www.npmjs.com/package/@oceanbase/seekdb-node)。如需更高层的 JavaScript Collection API，可参考 [seekdb-js](https://github.com/oceanbase/seekdb-js)；它目前使用 `@seekdb/js-bindings`，API 与本示例不同。
+
+</details>
+
+两个示例分别将数据保存在 `./python-seekdb.db` 和 `./node-seekdb.db`，均可重复运行。这些路径是数据库目录，再次打开会保留数据。首次初始化新目录通常比后续打开耗时更长。
+
+### 部署服务器
 
 <details open>
 <summary><b>☁️ 云服务（零安装）</b></summary>
@@ -167,15 +277,6 @@ curl -X POST https://d0.seekdb.ai/api/v1/instances
 ```
 
 免费使用 7 天。[了解更多 →](https://d0.seekdb.ai)
-
-</details>
-
-<details open>
-<summary><b>🐍 Python（推荐用于 AI/ML）</b></summary>
-
-```bash
-pip install -U pyseekdb
-```
 
 </details>
 
@@ -214,9 +315,9 @@ DEB/RPM 离线安装和配置详情请参见[部署文档](https://docs.seekdb.a
 
 ### 📝 更多示例
 
-完整的 Python SDK 指南 — 连接模式、嵌入函数、元数据过滤 — 请参见 [pyseekdb 用户指南](https://github.com/oceanbase/pyseekdb)。
+首次使用请先运行上面的 [Python 和 JavaScript 示例](#embedded-sdks)。下面的应用模式假设你已有 Agent 实现。
 
-<details open>
+<details>
 <summary><b>🤖 Agent 记忆模式（持续写入 + 即时检索）</b></summary>
 
 Agent 的经典循环：写入一条观察，毫秒后检索相关上下文，周而复始。seekdb 的异步索引流水线确保在持续并发下读写两端均保持高吞吐。
