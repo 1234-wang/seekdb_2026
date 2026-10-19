@@ -23,7 +23,7 @@ def _platform_files(unix, windows = None):
         "//conditions:default": ["unix/" + f for f in unix],
     })
 
-def cargo_workspace(exports, srcs):
+def cargo_workspace(exports, srcs, cargo_args = ""):
     """Build once per platform; declare each library, headers, and archive target."""
     native.config_setting(name = "windows", constraint_values = ["@platforms//os:windows"])
     native.config_setting(name = "macos", constraint_values = ["@platforms//os:macos"])
@@ -31,6 +31,8 @@ def cargo_workspace(exports, srcs):
     for platform in ["unix", "windows"]:
         windows = platform == "windows"
         command = '"$(location build.py)" --target-dir "$(@D)/cargo-target" --output "$(@D)/%s"' % platform
+        if cargo_args:
+            command += " -- " + cargo_args
         native.genrule(
             name = "_rust_static_" + platform,
             srcs = srcs,

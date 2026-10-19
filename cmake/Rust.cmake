@@ -110,6 +110,15 @@ foreach(_rust_manifest IN LISTS _rust_crate_manifests)
   list(APPEND _rust_inputs ${_rust_crate_sources} ${_rust_crate_build_inputs})
 endforeach()
 
+set(_rust_host_features)
+if(SEEKDB_ENABLE_EXPERIMENTAL_PLUGINS)
+  list(APPEND _rust_host_features --features seekdb-rust/plugins)
+endif()
+# Make generators must also rerun Cargo when only the feature option changes.
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/seekdb-rust-host-features.txt"
+  CONTENT "${_rust_host_features}\n")
+list(APPEND _rust_inputs "${CMAKE_CURRENT_BINARY_DIR}/seekdb-rust-host-features.txt")
+
 # CC/AR: cargo inherits CMake's PATH but not its compiler variables, and
 # `ring` (rustls's crypto backend) compiles C through the `cc` crate. Pin it
 # to the same toolchain as the rest of the build instead of whatever `cc`
@@ -195,6 +204,7 @@ add_custom_command(
           "${Python3_EXECUTABLE}" "${RUST_WORKSPACE_DIR}/build.py"
           --cargo "${CARGO}" --profile "${_cargo_out_subdir}" ${_cargo_target_args}
           --target-dir "${RUST_TARGET_DIR}" --output "${_rust_export_dir}"
+          -- ${_rust_host_features}
   WORKING_DIRECTORY "${RUST_WORKSPACE_DIR}"
   DEPENDS ${_rust_inputs} "${CMAKE_CURRENT_LIST_FILE}"
           "${RUST_WORKSPACE_DIR}/build.py" "${RUST_WORKSPACE_DIR}/exports.json"

@@ -1,4 +1,10 @@
 {
+  "seekdb_rust_host": {
+    "crate": "plugin-runtime",
+    "headers": {},
+    "deps": [],
+    "library": "seekdb_rust"
+  },
   "sql_nio": {
     "crate": "sql-nio",
     "headers": {},

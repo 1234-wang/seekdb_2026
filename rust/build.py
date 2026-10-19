@@ -62,10 +62,10 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     for name, export in exports.items():
         archive = libraries[export.get("library", name)]
-        package = packages[export["crate"].replace("-", "_")]
         library_name = name + ".lib" if archive.suffix == ".lib" else "lib" + name + ".a"
         shutil.copyfile(archive, output / library_name)
         for header, source in export["headers"].items():
+            package = packages[export["crate"].replace("-", "_")]
             destination = output / "include" / header
             destination.parent.mkdir(parents=True, exist_ok=True)
             contents = (build_dirs[package] / source).read_bytes()

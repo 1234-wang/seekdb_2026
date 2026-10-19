@@ -161,7 +161,10 @@ def sql_validate_source_inventory(
         standalone_sources,
         extra_sources,
         parser_sources,
-        separately_owned_sources):
+        separately_owned_sources,
+        gis_plugin_adapters,
+        extension_runtime_sources,
+        core_gis_replaced_sources):
     """Validates SQL source paths, unique ownership, and required groups."""
 
     group_keys = {}
@@ -207,6 +210,21 @@ def sql_validate_source_inventory(
         if path in separate_paths or path in unity_paths or path in standalone_paths or path in parser_paths:
             fail("duplicate separately owned SQL source: %s" % path)
         separate_paths[path] = True
+
+    conditional_paths = {}
+    for path in gis_plugin_adapters + extension_runtime_sources:
+        if not path.startswith(_SQL_SOURCE_PREFIX) or "/../" in path:
+            fail("conditional SQL source is outside src/sql: %s" % path)
+        if path in conditional_paths or path in unity_paths or path in standalone_paths or path in parser_paths or path in separate_paths:
+            fail("duplicate conditional SQL source: %s" % path)
+        conditional_paths[path] = True
+    replaced_paths = {}
+    for path in core_gis_replaced_sources:
+        if path in replaced_paths or (path not in unity_paths and path not in standalone_paths):
+            fail("SQL GIS replacement must reference a distinct baseline owner: %s" % path)
+        replaced_paths[path] = True
+    if len(gis_plugin_adapters) != 2 or len(extension_runtime_sources) != 4 or len(replaced_paths) != 1:
+        fail("SQL conditional inventory requires 2 GIS adapters, 4 runtime sources and 1 replacement")
 
     sql_groups_named(unity_groups, SQL_OPTIMIZER_GROUP_NAMES)
     sql_groups_without(unity_groups, SQL_OPTIMIZER_GROUP_NAMES, SQL_PREPARE_SOURCES)
