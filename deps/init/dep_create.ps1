@@ -25,10 +25,24 @@ $TOPDIR     = (Resolve-Path "$ScriptDir\..\..").Path
 $DEPS_3RD   = "$TOPDIR\deps\3rd"
 $DONE_FILE  = "$DEPS_3RD\DONE"
 $DEP_FILE   = "$ScriptDir\oceanbase.windows.x86_64.deps"
+$DIRENT_HEADER = "$DEPS_3RD\vcpkg\x64-windows\include\dirent.h"
+$DIRENT_PATCH = "$ScriptDir\patches\dirent-1.26-sticky-eof.diff"
+$DIRENT_INPUT_SHA256 = "de26601714921e855f45c3318ef01ae19a892db3d77d0c9b769a4f5c5f8478a7"
+$DIRENT_OUTPUT_SHA256 = "0a12fc6d3172c2254a27b598447dc313bf3a979fdc3da98a761e380cfc9a4425"
 
 # -- Helpers ----------------------------------------------------------
 function Write-Log  { param([string]$msg) Write-Host "[dep_create.ps1] $msg" }
 function Write-Err  { param([string]$msg) Write-Host "[dep_create.ps1][ERROR] $msg" -ForegroundColor Red }
+
+function Get-Sha256 {
+    param([string]$Path)
+    return (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLower()
+}
+
+function Test-DirentPatched {
+    return (Test-Path $DIRENT_HEADER) -and
+        ((Get-Sha256 $DIRENT_HEADER) -eq $DIRENT_OUTPUT_SHA256)
+}
 
 # -- Check deps file -------------------------------------------------
 if (-not (Test-Path $DEP_FILE)) {
@@ -41,7 +55,7 @@ Write-Log "Using dependencies profile: $DEP_FILE"
 $md5 = (Get-FileHash -Path $DEP_FILE -Algorithm MD5).Hash.ToLower()
 $MD5_FILE = "$DEPS_3RD\$md5"
 
-if ((Test-Path $MD5_FILE) -and (Test-Path $DONE_FILE)) {
+if ((Test-Path $MD5_FILE) -and (Test-Path $DONE_FILE) -and (Test-DirentPatched)) {
     Write-Log "Dependencies already initialized (MD5=$md5). Skipping."
     exit 0
 }
@@ -148,6 +162,38 @@ foreach ($sect in $sections.Keys) {
         }
         Write-Log "  done"
     }
+}
+
+# -- Apply repository-owned dependency patches ----------------------
+if (-not (Test-Path $DIRENT_HEADER)) {
+    Write-Err "dirent header not found after dependency extraction: $DIRENT_HEADER"
+    exit 6
+}
+if (-not (Test-Path $DIRENT_PATCH)) {
+    Write-Err "dirent patch not found: $DIRENT_PATCH"
+    exit 6
+}
+
+$direntHash = Get-Sha256 $DIRENT_HEADER
+if ($direntHash -eq $DIRENT_OUTPUT_SHA256) {
+    Write-Log "dirent sticky-EOF patch already applied"
+} elseif ($direntHash -ne $DIRENT_INPUT_SHA256) {
+    Write-Err "Unexpected dirent.h SHA256: $direntHash"
+    exit 6
+} else {
+    Write-Log "Applying dirent sticky-EOF patch ..."
+    $patchDirectory = "deps/3rd/vcpkg/x64-windows/include"
+    & git -C $TOPDIR apply --unidiff-zero "--directory=$patchDirectory" -- $DIRENT_PATCH
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "Failed to apply dirent sticky-EOF patch"
+        exit 6
+    }
+    $patchedHash = Get-Sha256 $DIRENT_HEADER
+    if ($patchedHash -ne $DIRENT_OUTPUT_SHA256) {
+        Write-Err "Patched dirent.h SHA256 mismatch: $patchedHash"
+        exit 6
+    }
+    Write-Log "dirent sticky-EOF patch applied"
 }
 
 # -- Mark done --------------------------------------------------------
