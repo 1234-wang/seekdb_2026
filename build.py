@@ -78,13 +78,13 @@ def _ensure_bazel(root: Path, cache_directory: Path, version: str) -> Path:
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         host = _host_platform()
-        binary = manifest["platforms"][host]
-        checksum = binary["sha256"]
+        checksum = manifest["sha256"][host]
         if manifest["version"] != version or not re.fullmatch(r"[0-9a-f]{64}", checksum):
             raise ValueError("version/checksum does not match .bazelversion")
-        url = binary["url"]
+        url = manifest["url_template"]
         if not isinstance(url, str):
             raise ValueError("url must be an HTTP or HTTPS URL")
+        url = url.format(version=version, platform=host)
         source = urllib.parse.urlsplit(url)
         if source.scheme not in ("http", "https") or not source.hostname or source.fragment:
             raise ValueError("url must be an HTTP or HTTPS URL without a fragment")
