@@ -93,15 +93,14 @@ jobs:
         shell: bash
         run: |
           python3 -u - <<'PYPROBE'
-          import socket
           import subprocess
-          for host in ("github.com", "release-assets.githubusercontent.com"):
-              print("DNS", host, sorted({a[4][0] for a in socket.getaddrinfo(host, 443)}), flush=True)
           url = "https://github.com/bazelbuild/bazel/releases/download/9.3.0/bazel-9.3.0-linux-x86_64"
-          result = subprocess.run(["curl", "--fail", "--location", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "30", url + ".sha256"], capture_output=True, text=True)
-          print("OFFICIAL_GITHUB_CHECKSUM", result.returncode, result.stdout[:512], result.stderr[:512], flush=True)
-          result = subprocess.run(["curl", "--fail", "--location", "--head", "--silent", "--show-error", "--output", "/dev/null", "--write-out", "status=%{http_code} redirects=%{num_redirects} seconds=%{time_total}", "--connect-timeout", "5", "--max-time", "30", url], capture_output=True, text=True)
-          print("OFFICIAL_GITHUB_BINARY", result.returncode, result.stdout, result.stderr[:512], flush=True)
+          for name, options in (
+              ("DIRECT", []),
+              ("GATEWAY", ["--resolve", "github.com:443:172.16.0.220", "--resolve", "release-assets.githubusercontent.com:443:172.16.0.220"]),
+          ):
+              result = subprocess.run(["curl", "-4", "--fail", "--location", "--silent", "--show-error", "--connect-timeout", "5", "--max-time", "20", *options, url + ".sha256"], capture_output=True, text=True, timeout=25)
+              print("OFFICIAL_GITHUB_" + name, result.returncode, result.stdout[:512], result.stderr[:512], flush=True)
           PYPROBE
           exit 1
 
