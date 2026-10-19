@@ -110,10 +110,13 @@ jobs:
               result = subprocess.run(["curl", "-I", "-sS", "--connect-timeout", "5", "--max-time", "10", *options, url], capture_output=True, text=True)
               return name, url, result.returncode, result.stdout, result.stderr
           cases = [(name, options, url) for url in urls for name, options in [("environment", []), ("direct-ipv4", ["--noproxy", "*", "-4"])]]
+          gateway = socket.gethostbyname("rsproxy.cn")
+          cases += [("existing-gateway", ["--noproxy", "*", "--resolve", url.split("/")[2] + ":443:" + gateway], url) for url in urls[:2]]
           with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
               for result in pool.map(probe, cases):
                   print("PROBE", result, flush=True)
           PY
+          exit 1
 
       - name: Configure local cache paths
         shell: bash
