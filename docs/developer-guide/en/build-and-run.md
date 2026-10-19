@@ -22,6 +22,8 @@ The repository's `build.py` downloads the Bazel version pinned in `.bazelversion
 
 `init` prepares platform dependencies; run it on the first build or after dependency metadata changes. For incremental builds, repeat only the `build` command. The resulting binary is `build/bin/src/observer/seekdb`.
 
+Put all options after the command, including Bazel startup options such as `--batch` and `--bazelrc`. `build.py` reads the installed Bazel's option definitions on each invocation and moves startup options before the command internally. Keep Bazel's original option names, including underscores.
+
 On Windows, use `python build.py` with the same commands. For C++ test targets, see [Write and run unit tests](unittest.md). When you change Rust dependencies, commit the updated `rust/Cargo.lock`.
 
 ## Set build concurrency
@@ -61,7 +63,7 @@ Sanity is disabled by default. `--sanity` is equivalent to `--sanity=true`; use 
 To keep a separate Sanity build, specify a build directory:
 
 ```bash
-./build.py --output_base=build_sanity build --sanity seekdb
+./build.py build -o build_sanity --sanity seekdb
 ```
 
 Its binary is accessible at `build_sanity/bin/src/observer/seekdb`.
@@ -70,18 +72,18 @@ Its binary is accessible at `build_sanity/bin/src/observer/seekdb`.
 
 Bazel's working directory defaults to `build/` inside the project. It contains intermediate files and final outputs. The `build/bin`, `build/out`, and other output links point into this directory; `build/bin/src/observer/seekdb` is the native Linux/macOS binary path.
 
-Put Bazel's native `--output_base=PATH` before the command; `build.py` also sets the output link prefix to `PATH/`. For example, `--output_base=build3` uses `build3/` as the working directory and `build3/bin/src/observer/seekdb` as the binary path. Relative paths are resolved from the project root; absolute paths can place builds on another disk. Different directories have independent build state and links and can build concurrently. Bazel serializes commands using the same directory.
+Put `-o PATH` or `--output_base=PATH` after the command; `build.py` also sets the output link prefix to `PATH/`. For example, `./build.py build -o build3 seekdb` uses `build3/` as the working directory and `build3/bin/src/observer/seekdb` as the binary path. Relative paths are resolved from the project root; absolute paths can place builds on another disk. Different directories have independent build state and links and can build concurrently. Bazel serializes commands using the same directory.
 
-Run `./build.py info output_base` to locate the working directory and `./build.py clean --expunge` to remove it. For a custom directory, add the same `--output_base=PATH` before either command. Exclude build directories when searching source files, for example: `find . -path './build' -prune -o -type f -name '*.cpp' -print`.
+Run `./build.py info output_base` to locate the working directory and `./build.py clean --expunge` to remove it. For a custom directory, use `./build.py info -o build3 output_base` or `./build.py clean -o build3 --expunge`. Exclude build directories when searching source files, for example: `find . -path './build' -prune -o -type f -name '*.cpp' -print`.
 
 ## Reuse build caches
 
 Bazel binaries and the default action cache are shared between checkouts. Their base directory is `~/.cache/bazel` on Linux, `~/Library/Caches/bazel` on macOS, or `%LOCALAPPDATA%/bazel` on Windows. Linux honors `XDG_CACHE_HOME`. Bazel manages its shared repository download cache separately.
 
-To choose cache locations, put `--launcher-cache-dir PATH` before the command for the Bazel binary cache. Put `--disk_cache=PATH` or `--repository_cache=PATH` after the command for build actions or downloaded dependencies. For example:
+Use `--launcher_cache_dir PATH` for the Bazel binary cache, `--disk_cache=PATH` for build actions, or `--repository_cache=PATH` for downloaded dependencies. All go after the command. For example:
 
 ```bash
-./build.py --launcher-cache-dir /data/bazel build --disk_cache=/data/bazel-actions seekdb
+./build.py build --launcher_cache_dir=/data/bazel --disk_cache=/data/bazel-actions seekdb
 ```
 
 To change dependency download settings, use Bazel's `--registry=URL` or `--downloader_config=PATH` after the command.

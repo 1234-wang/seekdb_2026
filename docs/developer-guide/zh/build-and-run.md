@@ -22,6 +22,8 @@ cd seekdb
 
 `init` 准备平台依赖，首次编译或依赖定义变化后执行。后续增量编译只需重复 `build` 命令。产物位于 `build/bin/src/observer/seekdb`。
 
+所有参数都放在命令后，包括 `--batch`、`--bazelrc` 等 Bazel 启动参数。`build.py` 每次读取当前 Bazel 的参数定义，在内部将启动参数移到命令前。参数名称保留 Bazel 原生拼写，多词参数用下划线连接。
+
 Windows 使用 `python build.py`，命令参数相同。C++ 测试目标参见[编写与运行单元测试](unittest.md)。修改 Rust 依赖时，一并提交更新后的 `rust/Cargo.lock`。
 
 ## 设置编译并发
@@ -61,7 +63,7 @@ Sanity 默认关闭；`--sanity` 等价于 `--sanity=true`，显式关闭用 `--
 如需保留独立的 Sanity 构建，指定构建目录：
 
 ```bash
-./build.py --output_base=build_sanity build --sanity seekdb
+./build.py build -o build_sanity --sanity seekdb
 ```
 
 二进制通过 `build_sanity/bin/src/observer/seekdb` 访问。
@@ -70,18 +72,18 @@ Sanity 默认关闭；`--sanity` 等价于 `--sanity=true`，显式关闭用 `--
 
 Bazel 的实际工作目录默认是项目内的 `build/`，中间文件和最终产物都放在这里。`build/bin`、`build/out` 等链接指向这个目录内的对应位置；Linux/macOS 的二进制通过 `build/bin/src/observer/seekdb` 访问。
 
-在命令前指定 Bazel 原生参数 `--output_base=PATH`，`build.py` 会同时将产物链接前缀设为 `PATH/`。例如 `--output_base=build3` 的实际工作目录是 `build3/`，二进制入口是 `build3/bin/src/observer/seekdb`。相对路径以项目根目录为基准，也可指定其他磁盘上的绝对路径。不同目录的构建状态和链接互相独立，可以并行构建；同一个目录的命令由 Bazel 排队执行。
+在命令后指定 `-o PATH` 或 `--output_base=PATH`，`build.py` 会同时将产物链接前缀设为 `PATH/`。例如 `./build.py build -o build3 seekdb` 的实际工作目录是 `build3/`，二进制入口是 `build3/bin/src/observer/seekdb`。相对路径以项目根目录为基准，也可指定其他磁盘上的绝对路径。不同目录的构建状态和链接互相独立，可以并行构建；同一个目录的命令由 Bazel 排队执行。
 
-使用 `./build.py info output_base` 查看实际工作目录，`./build.py clean --expunge` 清理它。自定义目录时，在这两个命令前同样加上 `--output_base=PATH`。搜索源码时可排除构建目录，例如 `find . -path './build' -prune -o -type f -name '*.cpp' -print`。
+使用 `./build.py info output_base` 查看实际工作目录，`./build.py clean --expunge` 清理它。自定义目录时，使用 `./build.py info -o build3 output_base` 或 `./build.py clean -o build3 --expunge`。搜索源码时可排除构建目录，例如 `find . -path './build' -prune -o -type f -name '*.cpp' -print`。
 
 ## 复用构建缓存
 
 Bazel 二进制和默认的构建结果缓存可供不同代码目录共用。它们的根目录在 Linux 上是 `~/.cache/bazel`，macOS 上是 `~/Library/Caches/bazel`，Windows 上是 `%LOCALAPPDATA%/bazel`。Linux 支持 `XDG_CACHE_HOME`。依赖下载缓存由 Bazel 单独管理，也可跨代码目录复用。
 
-指定 Bazel 二进制缓存目录时，将 `--launcher-cache-dir PATH` 放在命令前。指定构建结果或依赖下载缓存目录时，将 `--disk_cache=PATH` 或 `--repository_cache=PATH` 放在命令后。例如：
+使用 `--launcher_cache_dir PATH` 指定 Bazel 二进制缓存目录，`--disk_cache=PATH` 指定构建结果缓存目录，`--repository_cache=PATH` 指定依赖下载缓存目录。这些参数都放在命令后。例如：
 
 ```bash
-./build.py --launcher-cache-dir /data/bazel build --disk_cache=/data/bazel-actions seekdb
+./build.py build --launcher_cache_dir=/data/bazel --disk_cache=/data/bazel-actions seekdb
 ```
 
 如需更改依赖下载设置，在命令后使用 Bazel 的 `--registry=URL` 或 `--downloader_config=PATH`。

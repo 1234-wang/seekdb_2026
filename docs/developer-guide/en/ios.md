@@ -39,8 +39,8 @@ build/bin/src/observer/framework/SeekDB.framework
 To keep independent device and simulator builds, specify separate build directories:
 
 ```bash
-./build.py --output_base=build_ios build --config=ios seekdb
-./build.py --output_base=build_ios_simulator build --config=ios-simulator seekdb
+./build.py build -o build_ios --config=ios seekdb
+./build.py build -o build_ios_simulator --config=ios-simulator seekdb
 ```
 
 Validate affected unit tests on a supported Linux host by following [Write and run unit tests](unittest.md).

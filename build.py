@@ -14,7 +14,7 @@ import sys
 import tempfile
 import urllib.parse
 import urllib.request
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 class BuildError(RuntimeError):
@@ -107,28 +107,74 @@ def _quote(value: str) -> str:
     return '"' + value.replace('"', '\\"') + '"'
 
 
-def _concurrency_options(arguments: List[str]) -> Tuple[List[str], List[str]]:
-    """Normalize -jN and match the CPU budget to an explicit local job count."""
-    if not arguments or arguments[0] not in ("build", "test", "run", "coverage"):
-        return arguments, []
-    separator = arguments.index("--") if "--" in arguments else len(arguments)
-    command_options = [
-        re.sub(r"^-j([0-9]+)$", r"--jobs=\1", argument)
-        for argument in arguments[1:separator]
-    ]
-    arguments = [arguments[0], *command_options, *arguments[separator:]]
-    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    parser.add_argument("-j", "--jobs")
-    parser.add_argument("--remote_executor")
-    parser.add_argument("--config", action="append", default=[])
-    options, _ = parser.parse_known_args(command_options)
+def _bazel_options(bazel: Path, command: str) -> Tuple[Dict[str, bool], Dict[str, bool]]:
+    """Read option names and value requirements from this Bazel, without caching."""
+    with tempfile.TemporaryDirectory(prefix="options.", dir=bazel.parent) as directory:
+        result = subprocess.run([
+            str(bazel), "--batch", "--ignore_all_rc_files", "--output_base=" + directory,
+            "help", "completion",
+        ], cwd=directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+    if result.returncode:
+        raise BuildError("cannot read Bazel options: " + result.stderr.strip())
+    sections = dict(re.findall(r'^BAZEL_(\w+)="([^"]*)"', result.stdout, re.MULTILINE))
+    command_section = "COMMAND_" + command.upper().replace("-", "_") + "_FLAGS"
+    if "STARTUP_OPTIONS" not in sections:
+        raise BuildError("Bazel completion output is missing startup options")
+    if command_section not in sections:
+        raise BuildError("unknown Bazel command: " + command)
+    return tuple({
+        option.split("=", 1)[0]: "=" in option
+        for option in sections[section].split()
+    } for section in ("STARTUP_OPTIONS", command_section))
+
+
+def _route_options(
+    command: str,
+    arguments: List[str],
+    startup_options: Dict[str, bool],
+    command_options: Dict[str, bool],
+) -> Tuple[List[str], List[str], List[str]]:
+    """Move startup options before the command, keeping option values together."""
+    startup, forwarded = [], [command]
+    jobs, remote_executor, remote_config = "", "", False
+    takes_value = {**command_options, **startup_options}
+    remaining = iter(arguments)
+    for argument in remaining:
+        if argument == "--":
+            forwarded.extend([argument, *remaining])
+            break
+        if argument.startswith("-o") and not argument.startswith("--"):
+            suffix = argument[3:] if argument.startswith("-o=") else argument[2:]
+            argument = "--output_base" + ("=" + suffix if argument[2:] else "")
+        elif argument == "-j" or re.fullmatch(r"-j[0-9]+", argument):
+            argument = "--jobs" + ("=" + argument[2:] if argument[2:] else "")
+        name, equals, value = argument.partition("=")
+        group = [argument]
+        if takes_value.get(name) and not equals:
+            try:
+                value = next(remaining)
+            except StopIteration:
+                raise BuildError(name + " requires a value") from None
+            group.append(value)
+        if name in startup_options:
+            startup.extend([name + "=" + value] if takes_value[name] else group)
+        else:
+            forwarded.extend(group)
+            if name == "--jobs":
+                jobs = value
+            elif name == "--remote_executor":
+                remote_executor = value
+            elif name == "--config" and value == "remote":
+                remote_config = True
+    defaults = []
     if (
-        options.remote_executor
-        or "remote" in options.config
-        or not re.fullmatch(r"[0-9]+", options.jobs or "")
+        command in ("build", "test", "run", "coverage")
+        and re.fullmatch(r"[0-9]+", jobs)
+        and not remote_executor
+        and not remote_config
     ):
-        return arguments, []
-    return arguments, ["build --local_resources=cpu=" + options.jobs]
+        defaults.append("build --local_resources=cpu=" + jobs)
+    return startup, forwarded, defaults
 
 
 def main(arguments: List[str]) -> int:
@@ -138,25 +184,37 @@ def main(arguments: List[str]) -> int:
             sys.executable, str(root / "deps/init/prepare.py"), *arguments[1:],
         ], cwd=root).returncode
 
-    # Parse launcher options before the command, then handle build concurrency.
+    # Find the binary before asking it which options belong before the command.
+    bootstrap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    bootstrap.add_argument("--launcher_cache_dir", type=Path, default=_cache_directory(),
+                           help="directory for the downloaded Bazel binary")
     parser = argparse.ArgumentParser(
+        parents=[bootstrap],
         description=__doc__,
-        usage="%(prog)s [--output_base PATH] [--launcher-cache-dir PATH] <bazel command> [args]",
+        usage="%(prog)s <command> [-o PATH] [-j N] [Bazel options] [targets]",
         epilog="Prepare project dependencies with: ./build.py init [--android | --ios [--simulator] | --wasm]",
         allow_abbrev=False,
     )
-    parser.add_argument("--output_base", type=Path, default=Path("build"),
+    parser.add_argument("-o", "--output_base", type=Path, default=Path("build"),
                         help="directory for build state and output links (default: build)")
-    parser.add_argument("--launcher-cache-dir", type=Path, default=_cache_directory())
-    parser.add_argument("arguments", nargs=argparse.REMAINDER)
-    options, startup_options = parser.parse_known_args(arguments)
-    bazel_arguments, concurrency_defaults = _concurrency_options(options.arguments)
-    output_base = (root / options.output_base.expanduser()).resolve()
-    if output_base == root:
-        raise BuildError("--output_base must not name the workspace root")
+    if not arguments or arguments[0] in ("-h", "--help"):
+        parser.print_help()
+        return 0
+    command, *arguments = arguments
+    if command.startswith("-"):
+        parser.error("put the command before its options, for example: build -o build3 seekdb")
+    separator = arguments.index("--") if "--" in arguments else len(arguments)
+    options, remaining = bootstrap.parse_known_args(arguments[:separator])
     cache = options.launcher_cache_dir.expanduser().resolve()
     version = (root / ".bazelversion").read_text().strip()
     bazel = _ensure_bazel(root, cache, version)
+    startup_options, bazel_arguments, concurrency_defaults = _route_options(
+        command, remaining + arguments[separator:], *_bazel_options(bazel, command),
+    )
+    options, startup_options = parser.parse_known_args(startup_options, namespace=options)
+    output_base = (root / options.output_base.expanduser()).resolve()
+    if output_base == root:
+        raise BuildError("--output_base must not name the workspace root")
     output_base.mkdir(parents=True, exist_ok=True)
 
     # Build policy lives in .bazelrc; paths and explicit local concurrency go
