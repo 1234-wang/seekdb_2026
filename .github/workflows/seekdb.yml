@@ -89,6 +89,32 @@ jobs:
           cp -f "$SOURCE_ARCHIVE" "$DEST_DIR/seekdb-ci-source.tar.zst"
           echo "source snapshot saved to $DEST_DIR/seekdb-ci-source.tar.zst"
 
+      - name: Diagnose Bazel download connectivity
+        shell: bash
+        run: |
+          python3 -u - <<'PY'
+          import concurrent.futures
+          import os
+          import socket
+          import subprocess
+          print("Proxy variables:", sorted(k for k in os.environ if k.lower() in ("http_proxy", "https_proxy", "all_proxy", "no_proxy")), flush=True)
+          for host in ("releases.bazel.build", "storage.googleapis.com", "rsproxy.cn"):
+              print("DNS", host, sorted({a[4][0] for a in socket.getaddrinfo(host, 443)}), flush=True)
+          urls = [
+              "https://releases.bazel.build/9.3.0/release/bazel-9.3.0-linux-x86_64.sha256",
+              "https://storage.googleapis.com/bazel/9.3.0/release/bazel-9.3.0-linux-x86_64.sha256",
+              "https://rsproxy.cn/index/config.json",
+          ]
+          def probe(case):
+              name, options, url = case
+              result = subprocess.run(["curl", "-I", "-sS", "--connect-timeout", "5", "--max-time", "10", *options, url], capture_output=True, text=True)
+              return name, url, result.returncode, result.stdout, result.stderr
+          cases = [(name, options, url) for url in urls for name, options in [("environment", []), ("direct-ipv4", ["--noproxy", "*", "-4"])]]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+              for result in pool.map(probe, cases):
+                  print("PROBE", result, flush=True)
+          PY
+
       - name: Configure local cache paths
         shell: bash
         env:
