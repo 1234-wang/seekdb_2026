@@ -39,7 +39,7 @@ socket2 = { version = "0.6", optional = true, features = ["all"] }
 # ships pre-generated assembly and needs only the C compiler already required
 # by the rest of the build. tls12 stays on: MySQL 5.7-era libmysqlclient never
 # negotiates TLS 1.3.
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls = { version = "0.23.46", default-features = false, features = ["std", "tls12"] }
 # PEM certificate/key loaders (ServerConfig inputs) live here.
 rustls-pki-types = { version = "1", features = ["std"] }
 # X.509 metadata parsing stays inside rust-nio. rustls remains the TLS
