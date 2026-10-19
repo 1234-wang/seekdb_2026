@@ -155,70 +155,57 @@ ORDER BY dist APPROXIMATE LIMIT 10;
 
 <a id="embedded-sdks"></a>
 
-### 組み込み SDK
+### 組み込みでの利用
 
-データベースサービスを自分でデプロイせずに、アプリケーションから seekdb を利用できます。SDK パッケージにはネイティブランタイムが含まれ、ローカルでの起動を管理します。用途に応じて API を選択してください：
-
-| 言語 / API | パッケージ |
-|---|---|
-| Python コレクション、ベクトル・ハイブリッド検索 | [pyseekdb](https://github.com/oceanbase/pyseekdb) |
-| Python SQL / DB-API | [pylibseekdb](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) |
-| JavaScript / TypeScript ローカル SQL | [@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) + MySQL クライアント |
+データベースサービスを手動でデプロイせずに、Python または Node.js からローカルの seekdb を利用できます。データは指定したローカルディレクトリに保存され、再度開いても引き続き利用できます。
 
 <details open>
-<summary><b>🐍 Python — ベクトル検索</b></summary>
+<summary><b>🐍 Python</b></summary>
 
-Python 3.11+ が必要です。Linux x86_64/aarch64（glibc 2.28+）および macOS Apple Silicon に対応しています。OS バージョンについては[ネイティブランタイムの要件](https://pypi.org/project/pylibseekdb/#requirements)を確認してください。
+[pylibseekdb](https://pypi.org/project/pylibseekdb/) でローカルデータベースを開き、SQL を実行します。Python 3.11 以降が必要です。
 
 ```bash
-python3 -m pip install -U pyseekdb
+python3 -m pip install -U pylibseekdb
 ```
 
-`example.py` として保存します。小さなベクトルを直接渡すため、エンベディングモデルのダウンロードや API キーは不要です：
+以下の例を `example.py` として保存します。ローカルデータベースを開いてクエリを実行し、終了時にカーソル、接続、ランタイムハンドルを閉じます：
 
 ```python
-import pyseekdb
+from contextlib import closing
 
-client = pyseekdb.Client(path="./python-seekdb.db", database="test")
-schema = pyseekdb.Schema(
-    vector_index=pyseekdb.VectorIndexConfig(
-        hnsw=pyseekdb.HNSWConfiguration(dimension=3),
-        embedding_function=None,
-    )
-)
-collection = client.get_or_create_collection("quickstart", schema=schema)
-collection.upsert(
-    ids=["doc1", "doc2"],
-    documents=["Hello seekdb", "Vector search"],
-    embeddings=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-)
-collection.refresh_index()
-results = collection.query(query_embeddings=[1.0, 0.0, 0.0], n_results=1)
-print(results["ids"][0])
+import pylibseekdb
+
+with closing(pylibseekdb.open("./python-seekdb.db")) as db:
+    with closing(db.connect(database="test", autocommit=True)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute("SELECT 1 AS value")
+            print(cursor.fetchall())
 ```
 
-実行すると `['doc1']` が出力されます：
+実行すると `[(1,)]` が出力されます：
 
 ```bash
 python3 example.py
 ```
 
-テキストのエンベディング、メタデータフィルター、サーバーへの接続は [pyseekdb ガイド](https://github.com/oceanbase/pyseekdb)を参照してください。SQL を直接実行する場合は `pylibseekdb` をインストールし、[DB-API の例](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md)を参照してください。
+[詳しい使い方](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) · [対応プラットフォームと環境要件](https://pypi.org/project/pylibseekdb/#requirements)
+
+テキストのエンベディングやハイブリッド検索を備えた高水準の Collection API が必要な場合は、[pyseekdb](https://github.com/oceanbase/pyseekdb) を参照してください。
 
 </details>
 
 <details open>
-<summary><b>🟨 JavaScript / TypeScript — ローカル SQL</b></summary>
+<summary><b>🟨 JavaScript / TypeScript (Node.js)</b></summary>
 
-Node.js 22+ が必要です。Linux x64/arm64（glibc 2.28+）、macOS Apple Silicon（15.6.1+）、Windows x64 向けのネイティブパッケージがあります。[対応環境](https://www.npmjs.com/package/@oceanbase/seekdb-node)も確認してください。対応するランタイムが自動インストールされるよう、npm の optional dependencies を有効にしてください。
-
-このバインディングは独立したローカル seekdb プロセスを起動または再利用します。SQL は `mysql2` などの MySQL クライアントで実行します。ランタイムハンドルを解放する前に SQL 接続を閉じてください。
+[@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) でローカルの seekdb を起動し、`mysql2` で SQL を実行します。Node.js 22 以降が必要で、JavaScript と TypeScript の両方に対応しています。
 
 ```bash
 npm install @oceanbase/seekdb-node mysql2
 ```
 
-`example.mjs` として保存します（ES modules を使用し、TypeScript の型宣言も付属しています）：
+対応するネイティブランタイムが自動インストールされるよう、npm の optional dependencies を有効にしてください。このバインディングは独立したローカル seekdb プロセスを管理します。ランタイムハンドルを解放する前に SQL 接続を閉じてください。
+
+以下の例を `example.mjs` として保存します（ES modules を使用し、TypeScript の型宣言も付属しています）：
 
 ```javascript
 import { seekdb } from "@oceanbase/seekdb-node";
@@ -259,11 +246,15 @@ try {
 node example.mjs
 ```
 
-この例はデータベースに 2 GiB のメモリ予算を指定します。Node.js と OS 用のメモリも確保してください。ライフサイクルと接続オプションは [Node.js パッケージガイド](https://www.npmjs.com/package/@oceanbase/seekdb-node)を参照してください。高水準の JavaScript Collection API が必要な場合は [seekdb-js](https://github.com/oceanbase/seekdb-js)を参照してください。現在は `@seekdb/js-bindings` を使用しており、この例とは API が異なります。
+この例はデータベースに 2 GiB のメモリ予算を指定します。Node.js と OS 用のメモリも確保してください。
+
+[詳しい使い方と対応プラットフォーム](https://www.npmjs.com/package/@oceanbase/seekdb-node)
+
+高水準の JavaScript Collection API が必要な場合は、[seekdb-js](https://github.com/oceanbase/seekdb-js) を参照してください。
 
 </details>
 
-データはそれぞれ `./python-seekdb.db` と `./node-seekdb.db` に保存され、両方の例を繰り返し実行できます。これらのパスはデータベースディレクトリです。再度開いてもデータは保持されます。新しいディレクトリの初期化には、次回以降の起動より時間がかかることがあります。
+データはそれぞれ `./python-seekdb.db` と `./node-seekdb.db` に保存され、両方の例を繰り返し実行できます。これらのパスはデータベースディレクトリです。新しいディレクトリの初期化には、次回以降の起動より時間がかかることがあります。
 
 ### サーバーのデプロイ
 

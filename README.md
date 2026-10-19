@@ -169,70 +169,57 @@ real-time writes, and the entire MySQL ecosystem out of the box.
 
 <a id="embedded-sdks"></a>
 
-### Embedded SDKs
+### Embedded use
 
-Use seekdb from your application without deploying a database service yourself. The SDK packages include the native runtime and manage local startup. Choose the API you need:
-
-| Language / API | Package |
-|---|---|
-| Python collections, vector and hybrid search | [pyseekdb](https://github.com/oceanbase/pyseekdb) |
-| Python SQL / DB-API | [pylibseekdb](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) |
-| JavaScript / TypeScript local SQL | [@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) + a MySQL client |
+Use a local seekdb database from Python or Node.js without deploying a database service yourself. Data is stored in a local directory and remains available when you reopen it.
 
 <details open>
-<summary><b>🐍 Python — vector search</b></summary>
+<summary><b>🐍 Python</b></summary>
 
-Requires Python 3.11+ on Linux x86_64/aarch64 (glibc 2.28+) or macOS Apple Silicon. See the [native runtime requirements](https://pypi.org/project/pylibseekdb/#requirements) for OS versions.
+Use [pylibseekdb](https://pypi.org/project/pylibseekdb/) to open a local database and execute SQL. Requires Python 3.11 or newer.
 
 ```bash
-python3 -m pip install -U pyseekdb
+python3 -m pip install -U pylibseekdb
 ```
 
-Save as `example.py`. This example supplies small vectors directly, so it needs no embedding model download or API key:
+Save the following as `example.py`. It opens a local database, runs a query, and closes the cursor, connection, and runtime handle when finished:
 
 ```python
-import pyseekdb
+from contextlib import closing
 
-client = pyseekdb.Client(path="./python-seekdb.db", database="test")
-schema = pyseekdb.Schema(
-    vector_index=pyseekdb.VectorIndexConfig(
-        hnsw=pyseekdb.HNSWConfiguration(dimension=3),
-        embedding_function=None,
-    )
-)
-collection = client.get_or_create_collection("quickstart", schema=schema)
-collection.upsert(
-    ids=["doc1", "doc2"],
-    documents=["Hello seekdb", "Vector search"],
-    embeddings=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-)
-collection.refresh_index()
-results = collection.query(query_embeddings=[1.0, 0.0, 0.0], n_results=1)
-print(results["ids"][0])
+import pylibseekdb
+
+with closing(pylibseekdb.open("./python-seekdb.db")) as db:
+    with closing(db.connect(database="test", autocommit=True)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute("SELECT 1 AS value")
+            print(cursor.fetchall())
 ```
 
-Run it; the result is `['doc1']`:
+Run it; the result is `[(1,)]`:
 
 ```bash
 python3 example.py
 ```
 
-For text embedding, metadata filters, and server connections, see the [pyseekdb guide](https://github.com/oceanbase/pyseekdb). For direct SQL, install `pylibseekdb` and follow its [DB-API examples](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md).
+[Full usage guide](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) · [Supported platforms and requirements](https://pypi.org/project/pylibseekdb/#requirements)
+
+For a higher-level Collection API with text embedding and hybrid search, see [pyseekdb](https://github.com/oceanbase/pyseekdb).
 
 </details>
 
 <details open>
-<summary><b>🟨 JavaScript / TypeScript — local SQL</b></summary>
+<summary><b>🟨 JavaScript / TypeScript (Node.js)</b></summary>
 
-Requires Node.js 22+. Native packages are available for Linux x64/arm64 (glibc 2.28+), macOS Apple Silicon (15.6.1+), and Windows x64. See the [supported environments](https://www.npmjs.com/package/@oceanbase/seekdb-node). Keep npm optional dependencies enabled so npm installs the matching native runtime.
-
-The binding starts or reuses a separate local seekdb process. Use a MySQL client such as `mysql2` for SQL; close the SQL connection before releasing the runtime handle.
+Use [@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) to start a local seekdb database, then execute SQL with `mysql2`. Requires Node.js 22 or newer and supports both JavaScript and TypeScript.
 
 ```bash
 npm install @oceanbase/seekdb-node mysql2
 ```
 
-Save as `example.mjs` (ES modules; TypeScript declarations are also included):
+Keep npm optional dependencies enabled so npm installs the matching native runtime. The binding manages a separate local seekdb process; close SQL connections before releasing its runtime handle.
+
+Save the following as `example.mjs` (ES modules; TypeScript declarations are also included):
 
 ```javascript
 import { seekdb } from "@oceanbase/seekdb-node";
@@ -273,11 +260,15 @@ Run it; the result is `[ { value: 1 } ]`:
 node example.mjs
 ```
 
-The example requests a 2 GiB database memory budget; leave additional memory for Node.js and the OS. See the [Node.js package guide](https://www.npmjs.com/package/@oceanbase/seekdb-node) for lifecycle and connection options. For a higher-level JavaScript Collection API, see [seekdb-js](https://github.com/oceanbase/seekdb-js), which currently uses `@seekdb/js-bindings` and has a different API.
+The example requests a 2 GiB database memory budget; leave additional memory for Node.js and the OS.
+
+[Full usage guide and supported platforms](https://www.npmjs.com/package/@oceanbase/seekdb-node)
+
+For a higher-level JavaScript Collection API, see [seekdb-js](https://github.com/oceanbase/seekdb-js).
 
 </details>
 
-These examples store data in `./python-seekdb.db` and `./node-seekdb.db`, respectively, and can be rerun. The paths are database directories; reopening them preserves data. Initializing a new directory can take longer than subsequent opens.
+These examples store data in `./python-seekdb.db` and `./node-seekdb.db`, respectively, and can be rerun. The paths are database directories. Initializing a new directory can take longer than subsequent opens.
 
 ### Server deployments
 

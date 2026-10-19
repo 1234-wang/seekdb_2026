@@ -155,70 +155,57 @@ ORDER BY dist APPROXIMATE LIMIT 10;
 
 <a id="embedded-sdks"></a>
 
-### 嵌入式 SDK
+### 嵌入式使用
 
-在应用中使用 seekdb，无需自行部署数据库服务。SDK 包含原生运行时并管理本地启动过程。根据需要选择 API：
-
-| 语言 / API | 安装包 |
-|---|---|
-| Python 集合、向量及混合检索 | [pyseekdb](https://github.com/oceanbase/pyseekdb) |
-| Python SQL / DB-API | [pylibseekdb](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) |
-| JavaScript / TypeScript 本地 SQL | [@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) + MySQL 客户端 |
+通过 Python 或 Node.js 在应用中使用本地 seekdb，无需手动部署数据库服务。数据保存在指定的本地目录中，再次打开即可继续使用。
 
 <details open>
-<summary><b>🐍 Python — 向量检索</b></summary>
+<summary><b>🐍 Python</b></summary>
 
-需要 Python 3.11+，支持 Linux x86_64/aarch64（glibc 2.28+）和 macOS Apple Silicon。操作系统版本要求参见[原生运行时要求](https://pypi.org/project/pylibseekdb/#requirements)。
+使用 [pylibseekdb](https://pypi.org/project/pylibseekdb/) 打开本地数据库并执行 SQL。需要 Python 3.11 或更高版本。
 
 ```bash
-python3 -m pip install -U pyseekdb
+python3 -m pip install -U pylibseekdb
 ```
 
-保存为 `example.py`。示例直接传入小向量，无需下载 Embedding 模型或配置 API Key：
+将下面的示例保存为 `example.py`。它会打开本地数据库、执行查询，并在结束时关闭游标、连接和运行时句柄：
 
 ```python
-import pyseekdb
+from contextlib import closing
 
-client = pyseekdb.Client(path="./python-seekdb.db", database="test")
-schema = pyseekdb.Schema(
-    vector_index=pyseekdb.VectorIndexConfig(
-        hnsw=pyseekdb.HNSWConfiguration(dimension=3),
-        embedding_function=None,
-    )
-)
-collection = client.get_or_create_collection("quickstart", schema=schema)
-collection.upsert(
-    ids=["doc1", "doc2"],
-    documents=["Hello seekdb", "Vector search"],
-    embeddings=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-)
-collection.refresh_index()
-results = collection.query(query_embeddings=[1.0, 0.0, 0.0], n_results=1)
-print(results["ids"][0])
+import pylibseekdb
+
+with closing(pylibseekdb.open("./python-seekdb.db")) as db:
+    with closing(db.connect(database="test", autocommit=True)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute("SELECT 1 AS value")
+            print(cursor.fetchall())
 ```
 
-运行后输出 `['doc1']`：
+运行后输出 `[(1,)]`：
 
 ```bash
 python3 example.py
 ```
 
-文本 Embedding、元数据过滤及服务器连接方式参见 [pyseekdb 指南](https://github.com/oceanbase/pyseekdb)。如需直接执行 SQL，可安装 `pylibseekdb` 并参考其 [DB-API 示例](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md)。
+[完整使用指南](https://github.com/oceanbase/seekdb-bindings/blob/main/python/README.md) · [支持平台与环境要求](https://pypi.org/project/pylibseekdb/#requirements)
+
+如需更高层的 Collection API、文本 Embedding 和混合检索，可参考 [pyseekdb](https://github.com/oceanbase/pyseekdb)。
 
 </details>
 
 <details open>
-<summary><b>🟨 JavaScript / TypeScript — 本地 SQL</b></summary>
+<summary><b>🟨 JavaScript / TypeScript (Node.js)</b></summary>
 
-需要 Node.js 22+。原生包支持 Linux x64/arm64（glibc 2.28+）、macOS Apple Silicon（15.6.1+）和 Windows x64，详见[支持环境](https://www.npmjs.com/package/@oceanbase/seekdb-node)。请启用 npm 可选依赖，以自动安装匹配的原生运行时。
-
-该绑定会启动或复用独立的本地 seekdb 进程。通过 `mysql2` 等 MySQL 客户端执行 SQL；释放运行时句柄前，先关闭 SQL 连接。
+使用 [@oceanbase/seekdb-node](https://www.npmjs.com/package/@oceanbase/seekdb-node) 启动本地 seekdb，再通过 `mysql2` 执行 SQL。需要 Node.js 22 或更高版本，同时支持 JavaScript 和 TypeScript。
 
 ```bash
 npm install @oceanbase/seekdb-node mysql2
 ```
 
-保存为 `example.mjs`（使用 ES modules，同时提供 TypeScript 类型声明）：
+请启用 npm 可选依赖，以自动安装匹配的原生运行时。该绑定管理独立的本地 seekdb 进程；释放运行时句柄前，先关闭 SQL 连接。
+
+将下面的示例保存为 `example.mjs`（使用 ES modules，同时提供 TypeScript 类型声明）：
 
 ```javascript
 import { seekdb } from "@oceanbase/seekdb-node";
@@ -259,11 +246,15 @@ try {
 node example.mjs
 ```
 
-示例为数据库申请 2 GiB 内存预算，还需为 Node.js 和操作系统预留内存。生命周期和连接参数详见 [Node.js 包使用指南](https://www.npmjs.com/package/@oceanbase/seekdb-node)。如需更高层的 JavaScript Collection API，可参考 [seekdb-js](https://github.com/oceanbase/seekdb-js)；它目前使用 `@seekdb/js-bindings`，API 与本示例不同。
+示例为数据库申请 2 GiB 内存预算，还需为 Node.js 和操作系统预留内存。
+
+[完整使用指南与支持平台](https://www.npmjs.com/package/@oceanbase/seekdb-node)
+
+如需更高层的 JavaScript Collection API，可参考 [seekdb-js](https://github.com/oceanbase/seekdb-js)。
 
 </details>
 
-两个示例分别将数据保存在 `./python-seekdb.db` 和 `./node-seekdb.db`，均可重复运行。这些路径是数据库目录，再次打开会保留数据。首次初始化新目录通常比后续打开耗时更长。
+两个示例分别将数据保存在 `./python-seekdb.db` 和 `./node-seekdb.db`，均可重复运行。这些路径是数据库目录。首次初始化新目录通常比后续打开耗时更长。
 
 ### 部署服务器
 
