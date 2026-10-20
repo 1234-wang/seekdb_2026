@@ -176,7 +176,7 @@ from contextlib import closing
 import pylibseekdb
 import pymysql
 
-with closing(pylibseekdb.open("./python-seekdb.db")) as db:
+with closing(pylibseekdb.open("./seekdb.db")) as db:
     options = db.connection_options()
     with pymysql.connect(
         database="test",
@@ -259,7 +259,7 @@ node example.mjs
 
 </details>
 
-两个示例分别将数据保存在 `./python-seekdb.db` 和 `./node-seekdb.db`，均可重复运行。这些路径是数据库目录。首次初始化新目录通常比后续打开耗时更长。
+两个示例分别将数据保存在 `./seekdb.db` 和 `./node-seekdb.db`，均可重复运行。这些路径是数据库目录。首次初始化新目录通常比后续打开耗时更长。
 
 ### 部署服务器
 

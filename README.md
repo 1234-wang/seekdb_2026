@@ -190,7 +190,7 @@ from contextlib import closing
 import pylibseekdb
 import pymysql
 
-with closing(pylibseekdb.open("./python-seekdb.db")) as db:
+with closing(pylibseekdb.open("./seekdb.db")) as db:
     options = db.connection_options()
     with pymysql.connect(
         database="test",
@@ -273,7 +273,7 @@ For a higher-level JavaScript Collection API, see [seekdb-js](https://github.com
 
 </details>
 
-These examples store data in `./python-seekdb.db` and `./node-seekdb.db`, respectively, and can be rerun. The paths are database directories. Initializing a new directory can take longer than subsequent opens.
+These examples store data in `./seekdb.db` and `./node-seekdb.db`, respectively, and can be rerun. The paths are database directories. Initializing a new directory can take longer than subsequent opens.
 
 ### Server deployments
 
