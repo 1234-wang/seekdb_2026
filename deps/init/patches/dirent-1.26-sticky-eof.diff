@@ -1,7 +1,0 @@
-diff --git a/dirent.h b/dirent.h
---- a/dirent.h
-+++ b/dirent.h
-@@ -608,0 +609 @@ dirent_first(_WDIR *dirp)
-+	dirp->invalid = 0;
-@@ -654,0 +656 @@ dirent_next(_WDIR *dirp)
-+		dirp->invalid = 1;
