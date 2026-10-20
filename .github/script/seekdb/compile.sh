@@ -26,5 +26,8 @@ install -m 644 "$bazel_java_home/lib/security/cacerts" "$bazel_trust_store"
   -keystore "$bazel_trust_store" -storepass changeit
 args+=(--host_jvm_args="-Djavax.net.ssl.trustStore=$bazel_trust_store")
 python3 ./build.py init 2>&1 | tee "$task_dir/compile_init.output"
-python3 ./build.py build "${args[@]}" //src/observer:seekdb 2>&1 | tee "$task_dir/compile.output"
+# Cargo skips its cache locks on NFS. Fetch under a CI lock, then build without it.
+flock --close "$CARGO_HOME/.seekdb-vendor.lock" \
+  python3 ./build.py fetch "${args[@]}" //src/observer:seekdb 2>&1 | tee "$task_dir/compile_fetch.output"
+python3 ./build.py build --nofetch "${args[@]}" //src/observer:seekdb 2>&1 | tee "$task_dir/compile.output"
 echo "[compile.sh] total elapsed=$((SECONDS - started))s"

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Snapshot installed tool locations and vendor locked Cargo dependencies."""
 
-from contextlib import ExitStack
 import json
 import os
 import platform
@@ -62,16 +61,7 @@ def vendor(arguments):
     environment["RUSTC"] = str(sysroot / "bin" / ("rustc" + exe))
     # Downloads happen only during repository fetching, using Cargo's existing
     # cache and the project mirror. Build actions below always run offline.
-    with ExitStack() as stack:
-        # Cargo skips its own cache locks on NFS; coordinate our vendor processes.
-        if os.name != "nt":
-            import fcntl
-
-            cargo_home = root / "rust" / Path(environment.get("CARGO_HOME", Path.home() / ".cargo")).expanduser()
-            cargo_home.mkdir(parents=True, exist_ok=True)
-            lock = stack.enter_context((cargo_home / ".seekdb-vendor.lock").open("a"))
-            fcntl.flock(lock, fcntl.LOCK_EX)
-        subprocess.run(command, cwd=root / "rust", env=environment, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(command, cwd=root / "rust", env=environment, check=True, stdout=subprocess.DEVNULL)
     # One input archive avoids exposing vendored BUILD files as Bazel packages.
     # Normalize archive metadata so identical sources have identical digests.
     with tarfile.open(output / "vendor.tar", "w") as archive:
