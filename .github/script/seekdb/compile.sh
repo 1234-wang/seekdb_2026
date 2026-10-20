@@ -11,7 +11,8 @@ case "${PACKAGE_TYPE:-release}" in
   *) echo "Unsupported package type: $PACKAGE_TYPE" >&2; exit 2 ;;
 esac
 if [[ -n "${BAZEL_DISK_CACHE:-}" ]]; then
-  args+=(--disk_cache="$BAZEL_DISK_CACHE" --experimental_disk_cache_gc_idle_delay=0)
+  args+=(--disk_cache="$BAZEL_DISK_CACHE"
+    --experimental_disk_cache_gc_max_size=500G --experimental_disk_cache_gc_idle_delay=0)
 fi
 if [[ -n "${FORWARDING_HOST:-}" ]]; then
   echo "$FORWARDING_HOST mirrors.oceanbase.com" >> /etc/hosts
