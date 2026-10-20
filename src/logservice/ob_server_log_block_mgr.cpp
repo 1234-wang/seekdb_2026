@@ -106,6 +106,8 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
           if (0 != strcmp(data.cFileName, ".") && 0 != strcmp(data.cFileName, "..")) {
             result = false;
             CLOG_LOG(WARN, "Redo directory contains an entry", K(clog_dir), "entry", data.cFileName);
+            std::fprintf(stderr, "Redo directory contains entry: %s\\%s\n", clog_dir, data.cFileName);
+            std::fflush(stderr);
           } else {
             next = FindNextFileA(handle, &data);
           }
