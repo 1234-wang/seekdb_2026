@@ -134,6 +134,14 @@ overflow，取消 quota 不保证不会耗尽内存。`_storage_meta_memory_limi
 继续用于 Tablet 容量估算，不再限制元数据分配。FIFO allocator 不再解析 context quota，
 组件统计由其所有者提供。
 
+`PageArena` / `ModulePageAllocator` 同样不再解析 context quota 或接收显式 quota，
+通过调用方提供的 allocator 分配，未指定时使用进程 allocator。arena 自身的
+`used()/total()` 和显式 `set_memory_tracker()` 保留。当前 HNSW/VSAG、IVF cache
+及建索引通过 `ObVectorMemContext` 使用 MemoryContext 的 freeable allocator，
+Vector 限额继续在该路径和 bitmap allocator 中执行。直接使用 Vector context 的
+arena 分配不计入该 quota，不能将其局部 hold 视为 quota committed bytes。
+当前生产 Vector 分配路径不依赖 arena 页的额度门禁。
+
 `oceanbase.__all_virtual_resource_limit_detail` 为硬额度组件提供 `memory` 约束，
 为 SQL WorkArea 提供 `scheduling` 调度预算，单位均为字节。
 两表原有的 tablet 行仍以个数为单位，容量计算不变。

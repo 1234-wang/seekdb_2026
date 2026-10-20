@@ -131,7 +131,7 @@ TEST(TestVectorMemoryQuota, actual_bytes_and_dynamic_limit)
   EXPECT_EQ(0, quota.committed());
 }
 
-TEST(TestVectorMemoryQuota, destroy_releases_context_pages_before_unregister)
+TEST(TestVectorMemoryQuota, destroy_releases_freeable_allocations_before_unregister)
 {
   TestVectorAllocatorServiceGuard service_guard;
   ObVectorAllocator &allocator = service_guard.allocator();
@@ -144,11 +144,12 @@ TEST(TestVectorMemoryQuota, destroy_releases_context_pages_before_unregister)
     EXPECT_EQ(&quota, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
     quota.set_limit(4L << 20);
     ASSERT_NE(nullptr, allocator.get_mem_context()->get_arena_allocator().alloc(4097));
+    EXPECT_EQ(0, quota.committed()); // Arena pages retain local accounting only.
     ASSERT_NE(nullptr, allocator.alloc(257));
     ASSERT_GT(quota.committed(), 0);
 
     // Leave arena and freeable allocations alive: destroy must release both
-    // while resolver-based page accounting can still find their owner.
+    // while the freeable-allocation quota owner remains registered.
     allocator.destroy();
     EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
     EXPECT_EQ(0, quota.committed());
@@ -156,6 +157,39 @@ TEST(TestVectorMemoryQuota, destroy_releases_context_pages_before_unregister)
     allocator.destroy();
     EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
   }
+}
+
+TEST(TestVectorMemoryQuota, vsag_and_ivf_allocations_keep_component_admission)
+{
+  TestVectorAllocatorServiceGuard service_guard;
+  ObVectorAllocator &allocator = service_guard.allocator();
+  ASSERT_EQ(OB_SUCCESS, allocator.init());
+  MemoryQuota &quota = allocator.memory_quota();
+  quota.set_limit(4L << 20);
+  oceanbase::lib::MemoryContext parent = allocator.get_mem_context();
+  uint64_t used = 0;
+  ObVsagMemContext vsag(&used);
+  ObIvfMemContext ivf(&used);
+  ASSERT_EQ(OB_SUCCESS, vsag.init(parent, &used));
+  ASSERT_EQ(OB_SUCCESS, ivf.init(parent, &used));
+
+  void *vsag_ptr = vsag.Allocate(512);
+  ASSERT_NE(nullptr, vsag_ptr);
+  const int64_t vsag_charge = quota.committed();
+  EXPECT_GT(vsag_charge, 0);
+  void *ivf_ptr = ivf.Allocate(1024);
+  ASSERT_NE(nullptr, ivf_ptr);
+  EXPECT_GT(quota.committed(), vsag_charge);
+  EXPECT_GT(used, 0);
+
+  quota.set_limit(0);
+  EXPECT_EQ(nullptr, vsag.Allocate(64));
+  EXPECT_EQ(nullptr, ivf.Allocate(64));
+  vsag.Deallocate(vsag_ptr);
+  ivf.Deallocate(ivf_ptr);
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+  EXPECT_EQ(0, used);
 }
 
 TEST(TestVectorMemoryQuota, production_bitmap_path_charges_and_releases_quota)

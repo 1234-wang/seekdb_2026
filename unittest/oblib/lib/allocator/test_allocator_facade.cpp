@@ -132,8 +132,8 @@ private:
   void *freed_;
 };
 
-// A test-only quota on a non-WORK_AREA category checks physical release
-// without restoring SQL's retired global tracker.
+// A test-only quota checks freeable release without restoring SQL's retired
+// global tracker. Arena lifetime is checked with explicit usage tracking.
 class ContextTestQuota final : public MemoryQuota
 {
 public:
@@ -195,11 +195,12 @@ TEST(TestMallocBackend, documented_mem_attr_shape_matches_header)
   EXPECT_EQ(OB_NORMAL_ALLOC, attr.prio_);
 }
 
-TEST(TestMallocBackend, module_page_allocation_follows_quota_resolver_lifetime)
+TEST(TestMallocBackend, module_page_allocations_do_not_resolve_context_quota)
 {
   ObMemAttr attr("ResolverTrans", ObCtxIds::VECTOR_CTX_ID);
   ModulePageAllocator allocator(attr);
   ContextTestQuota tracker;
+  tracker.reset(0);
 
   void *before_resolver = allocator.alloc(64);
   ASSERT_NE(nullptr, before_resolver);
@@ -210,9 +211,19 @@ TEST(TestMallocBackend, module_page_allocation_follows_quota_resolver_lifetime)
     ContextQuotaGuard tracker_guard(tracker);
     void *while_resolver = allocator.alloc(128);
     ASSERT_NE(nullptr, while_resolver);
-    ASSERT_GT(tracker.used(), 0);
+    EXPECT_GE(ob_malloc_usable_size(while_resolver), 128);
+    EXPECT_EQ(0, tracker.used());
     allocator.free(while_resolver);
     ASSERT_EQ(0, tracker.used());
+
+    ModulePageAllocator copy(allocator);
+    ModulePageAllocator assigned;
+    assigned = copy;
+    void *explicit_attr = assigned.alloc(256, attr);
+    ASSERT_NE(nullptr, explicit_attr);
+    EXPECT_GE(ob_malloc_usable_size(explicit_attr), 256);
+    assigned.free(explicit_attr);
+    EXPECT_EQ(0, tracker.reject_count());
   }
 
   EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::VECTOR_CTX_ID));
@@ -373,7 +384,7 @@ TEST(TestMemoryContextJemalloc, destroy_reclaims_owned_allocations)
   ASSERT_EQ(0, backing_allocator.live_allocations());
 }
 
-TEST(TestMemoryContextJemalloc, context_lifecycle_releases_tracked_pages)
+TEST(TestMemoryContextJemalloc, arena_usage_is_local_and_freeable_usage_is_quota_backed)
 {
   ContextTestQuota tracker;
   ContextQuotaGuard tracker_guard(tracker);
@@ -386,13 +397,11 @@ TEST(TestMemoryContextJemalloc, context_lifecycle_releases_tracked_pages)
 
   ASSERT_NE(nullptr, context->get_arena_allocator().alloc(4097));
   ASSERT_GT(context->arena_hold(), 0);
-  // The test quota charges the backend usable size, including the allocator's
-  // owner header and size-class rounding; arena_hold() reports page payload.
-  ASSERT_GE(tracker.used(), context_overhead + context->arena_hold());
+  ASSERT_EQ(context_overhead, tracker.used());
 
   context->reuse();
   ASSERT_EQ(0, context->arena_used());
-  ASSERT_GE(tracker.used(), context_overhead + context->arena_hold());
+  ASSERT_EQ(context_overhead, tracker.used());
 
   ASSERT_NE(nullptr, context->get_arena_allocator().alloc(4097));
   context->get_arena_allocator().reset();
@@ -400,10 +409,13 @@ TEST(TestMemoryContextJemalloc, context_lifecycle_releases_tracked_pages)
   ASSERT_EQ(context_overhead, tracker.used());
 
   ASSERT_NE(nullptr, context->get_arena_allocator().alloc(4097));
-  const int64_t tracked_arena_bytes = tracker.used();
+  ASSERT_EQ(context_overhead, tracker.used());
   ASSERT_NE(nullptr, context->get_malloc_allocator().alloc(257));
   ASSERT_GT(context->malloc_hold(), 0);
-  ASSERT_GT(tracker.used(), tracked_arena_bytes);
+  ASSERT_GT(tracker.used(), context_overhead);
+  tracker.set_limit(tracker.used());
+  EXPECT_EQ(nullptr, context->get_malloc_allocator().alloc(1));
+  EXPECT_NE(nullptr, context->get_arena_allocator().alloc(2 * OB_MALLOC_MIDDLE_BLOCK_SIZE));
   DESTROY_CONTEXT(context);
   ASSERT_EQ(0, tracker.used());
 }
@@ -412,6 +424,7 @@ TEST(TestMemoryContextParentDestroy, recursively_reclaims_children_once)
 {
   ContextTestQuota tracker;
   ContextQuotaGuard tracker_guard(tracker);
+  MemoryUsageTracker arena_tracker;
   ContextParam param;
   param.set_mem_attr("ParentDestroy", ObCtxIds::VECTOR_CTX_ID);
   MemoryContext parent;
@@ -420,17 +433,21 @@ TEST(TestMemoryContextParentDestroy, recursively_reclaims_children_once)
   ASSERT_EQ(OB_SUCCESS, MemoryContext::root()->CREATE_CONTEXT(parent, param));
   ASSERT_EQ(OB_SUCCESS, parent->CREATE_CONTEXT(child, param));
   ASSERT_EQ(OB_SUCCESS, child->CREATE_CONTEXT(grandchild, param));
+  parent->get_arena_allocator().set_memory_tracker(&arena_tracker);
+  grandchild->get_arena_allocator().set_memory_tracker(&arena_tracker);
 
   ASSERT_NE(nullptr, parent->get_arena_allocator().alloc(4097));
   ASSERT_NE(nullptr, child->get_malloc_allocator().alloc(257));
   ASSERT_NE(nullptr, grandchild->get_arena_allocator().alloc(8193));
   ASSERT_GT(tracker.used(), 0);
+  ASSERT_GT(arena_tracker.used(), 0);
 
   DESTROY_CONTEXT(parent);
   parent = nullptr;
   child = nullptr;
   grandchild = nullptr;
   ASSERT_EQ(0, tracker.used());
+  ASSERT_EQ(0, arena_tracker.used());
 }
 
 TEST(TestMemoryContextParentDestroy, explicitly_destroyed_child_is_unlinked)
@@ -457,6 +474,7 @@ TEST(TestMemoryContextParentDestroy, repeated_subtree_lifecycle)
 {
   ContextTestQuota tracker;
   ContextQuotaGuard tracker_guard(tracker);
+  MemoryUsageTracker arena_tracker;
   ContextParam param;
   param.set_mem_attr("RepeatedSubtree", ObCtxIds::VECTOR_CTX_ID);
   for (int i = 0; i < 1000; ++i) {
@@ -466,6 +484,7 @@ TEST(TestMemoryContextParentDestroy, repeated_subtree_lifecycle)
     ASSERT_EQ(OB_SUCCESS, MemoryContext::root()->CREATE_CONTEXT(parent, param));
     ASSERT_EQ(OB_SUCCESS, parent->CREATE_CONTEXT(child, param));
     ASSERT_EQ(OB_SUCCESS, child->CREATE_CONTEXT(grandchild, param));
+    child->get_arena_allocator().set_memory_tracker(&arena_tracker);
     ASSERT_NE(nullptr, parent->get_malloc_allocator().alloc(17 + i % 31));
     ASSERT_NE(nullptr, child->get_arena_allocator().alloc(257 + i % 63));
     ASSERT_NE(nullptr, grandchild->get_malloc_allocator().alloc(65 + i % 17));
@@ -474,6 +493,7 @@ TEST(TestMemoryContextParentDestroy, repeated_subtree_lifecycle)
     child = nullptr;
     grandchild = nullptr;
     ASSERT_EQ(0, tracker.used());
+    ASSERT_EQ(0, arena_tracker.used());
   }
 }
 

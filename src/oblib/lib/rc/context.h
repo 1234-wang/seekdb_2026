@@ -415,9 +415,9 @@ public:
     ret = init_default_alloc(thread_safe);
     if (OB_SUCC(ret)) {
       // init arena allocator
-      // The context page allocator is always the process allocator now.  Use
-      // the attribute-backed constructor so quota/tracker accounting charges
-      // the allocator's real usable bytes rather than only the page request.
+      // Arena pages use the process allocator and retain local used/hold
+      // accounting. Component quota admission belongs to the freeable path,
+      // not this page allocator.
       p_arena_alloc_ = new (&arena_alloc_) common::ObArenaAllocator(
           attr_, param_.page_size_);
       p_safe_arena_alloc_ = new (&safe_arena_alloc_) common::ObSafeArenaAllocator(arena_alloc_);

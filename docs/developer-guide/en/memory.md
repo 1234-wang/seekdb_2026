@@ -166,6 +166,16 @@ allocate overflow nodes; removing the quota does not prevent memory exhaustion.
 estimation, not a hard limit on metadata allocations. FIFO allocators do not
 resolve context quotas; component accounting is supplied by their owner.
 
+`PageArena` / `ModulePageAllocator` also do not resolve context quotas or accept
+an explicit quota. They allocate through the supplied allocator, or the process
+allocator by default. Arena `used()/total()` and explicit `set_memory_tracker()`
+remain available. Current HNSW/VSAG and IVF cache/build allocations use
+`ObVectorMemContext` and the MemoryContext freeable allocator; Vector admission
+remains there and in the bitmap allocator. A direct allocation through a Vector
+context's arena is not part of that quota, and its local hold must not be read
+as quota committed bytes. No current production Vector allocation path relies
+on arena-page admission.
+
 `oceanbase.__all_virtual_resource_limit_detail` adds one `memory` constraint
 for each hard-quota component and one `scheduling` budget for SQL WorkArea,
 all in bytes. Existing tablet rows in both tables
