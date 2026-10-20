@@ -78,50 +78,6 @@ namespace logservice
 int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, bool &result)
 {
   int ret = OB_SUCCESS;
-#ifdef _WIN32
-  result = false;
-  if (NULL == clog_dir) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "directory path is NULL, ", K(ret));
-  } else {
-    char pattern[1024];
-    const int len = snprintf(pattern, sizeof(pattern), "%s\\*", clog_dir);
-    if (len <= 0 || static_cast<size_t>(len) >= sizeof(pattern)) {
-      ret = OB_SIZE_OVERFLOW;
-    } else {
-      WIN32_FIND_DATAA data;
-      HANDLE handle = FindFirstFileA(pattern, &data);
-      if (INVALID_HANDLE_VALUE == handle) {
-        const DWORD error = GetLastError();
-        if (ERROR_FILE_NOT_FOUND == error) {
-          result = true;
-        } else {
-          ret = OB_ERR_SYS;
-          CLOG_LOG(WARN, "Fail to enumerate directory", K(ret), K(error), K(clog_dir));
-        }
-      } else {
-        result = true;
-        BOOL next = TRUE;
-        while (next && result) {
-          if (0 != strcmp(data.cFileName, ".") && 0 != strcmp(data.cFileName, "..")) {
-            result = false;
-            CLOG_LOG(WARN, "Redo directory contains an entry", K(clog_dir), "entry", data.cFileName);
-            std::fprintf(stderr, "Redo directory contains entry: %s\\%s\n", clog_dir, data.cFileName);
-            std::fflush(stderr);
-          } else {
-            next = FindNextFileA(handle, &data);
-          }
-        }
-        if (result && ERROR_NO_MORE_FILES != GetLastError()) {
-          const DWORD error = GetLastError();
-          ret = OB_ERR_SYS;
-          CLOG_LOG(WARN, "Fail to continue directory enumeration", K(ret), K(error), K(clog_dir));
-        }
-        FindClose(handle);
-      }
-    }
-  }
-#else
   DIR *dir = NULL;
   struct dirent *entry = NULL;
   result = false;
@@ -143,7 +99,6 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
   if (NULL != dir) {
     closedir(dir);
   }
-#endif
   return ret;
 }
 
