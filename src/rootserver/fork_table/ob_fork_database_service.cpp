@@ -24,11 +24,10 @@
 #include "rootserver/ob_ddl_service.h"
 #include "rootserver/fork_table/ob_fork_table_util.h"
 #include "rootserver/ob_rootserver_local_runtime.h"
-#include "observer/ob_inner_sql_connection.h"
 #include "sql/resolver/ddl/ob_fts_index_builder_util.h"
+#include "sql/session/ob_inner_sql_connection.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
-#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase {
 using namespace common;
@@ -271,8 +270,8 @@ int ObDDLService::fork_database(
     if (OB_SUCC(ret) && user_table_schemas.count() > 0) {
       bool need_wait = false;
       common::sqlclient::ObISQLConnection *iconn = trans.get_connection();
-      observer::ObInnerSQLConnection *inner_conn =
-          static_cast<observer::ObInnerSQLConnection *>(iconn);
+      sql::ObIInnerSQLConnection *inner_conn =
+          sql::as_inner_sql_connection(iconn);
       // Keep both the source-table locks and ChangeStream catch-up inside the
       // caller's DDL deadline.  The internal-SQL timeout is shorter than the
       // embedded FORK operation and can otherwise surface as a false 4012.
@@ -303,14 +302,12 @@ int ObDDLService::fork_database(
       }
       if (OB_SUCC(ret) && need_wait) {
         ObIRootserverLocalRuntime *local_runtime = rootserver_local_runtime();
-        transaction::ObTxDesc *tx_desc = nullptr;
         int64_t exempt_tx_id = 0;
         if (OB_ISNULL(local_runtime)) {
           ret = OB_ERR_UNEXPECTED;
-        } else if (OB_ISNULL(inner_conn)
-                   || OB_ISNULL(tx_desc = inner_conn->get_session().get_tx_desc())) {
+        } else if (OB_ISNULL(inner_conn)) {
           ret = OB_ERR_UNEXPECTED;
-        } else if (FALSE_IT(exempt_tx_id = tx_desc->get_tx_id().get_id())) {
+        } else if (FALSE_IT(exempt_tx_id = inner_conn->get_transaction_id())) {
         } else if (exempt_tx_id <= 0) {
           ret = OB_ERR_UNEXPECTED;
         } else if (ddl_abs_timeout_us <= ObTimeUtility::current_time()) {
