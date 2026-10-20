@@ -498,9 +498,9 @@ static int check_need_initialize(const char *base_dir, const char *data_dir, con
   } else if (OB_FAIL(create_redo_path(redo_dir, created_redo_leaf))) {
     LOG_WARN("Failed to create redo path", KCSTRING(redo_dir), KCSTRING(strerror(errno)));
   } else if (OB_FAIL(ObServerLogBlockMgr::check_clog_directory_is_empty(redo_dir, redo_empty))) {
-  } else if (!data_file_exists && created_redo_leaf) {
-    // Trust only this process's atomic creation under the existing single-owner
-    // startup contract. Never persist this fact or infer it from directory names.
+  } else if (!data_file_exists && created_redo_leaf && redo_empty) {
+    // Creation provenance never overrides a real nonempty redo scan.
+    // Never persist this fact or infer it from directory names.
     need_initialize = true;
   } else if (data_file_exists && created_redo_leaf) {
     ret = OB_ERR_UNEXPECTED;
