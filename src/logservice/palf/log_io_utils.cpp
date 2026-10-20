@@ -389,6 +389,7 @@ int check_log_directory_entry(const char *dir_name, const char *entry_name, bool
   } else {
 #ifdef _WIN32
     char entry_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    const size_t entry_length = strlen(entry_name);
     const DWORD parent_attributes = GetFileAttributesA(dir_name);
     const int length = snprintf(entry_path, sizeof(entry_path), "%s/%s", dir_name, entry_name);
     if (INVALID_FILE_ATTRIBUTES == parent_attributes
@@ -396,6 +397,8 @@ int check_log_directory_entry(const char *dir_name, const char *entry_name, bool
         || 0 != (parent_attributes & FILE_ATTRIBUTE_REPARSE_POINT)
         || length <= 0 || length >= static_cast<int>(sizeof(entry_path))
         || NULL != strpbrk(entry_name, "*?\\/:")
+        // Win32 normalizes these suffixes; absence could hide a real NTFS leaf.
+        || '.' == entry_name[entry_length - 1] || ' ' == entry_name[entry_length - 1]
         || 0 == strcmp(entry_name, ".") || 0 == strcmp(entry_name, "..")) {
       ret = OB_IO_ERROR;
     } else {
