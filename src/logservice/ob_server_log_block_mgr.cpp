@@ -78,6 +78,47 @@ namespace logservice
 int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, bool &result)
 {
   int ret = OB_SUCCESS;
+#ifdef _WIN32
+  result = false;
+  if (NULL == clog_dir) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "directory path is NULL, ", K(ret));
+  } else {
+    char pattern[1024];
+    const int len = snprintf(pattern, sizeof(pattern), "%s\\*", clog_dir);
+    if (len <= 0 || static_cast<size_t>(len) >= sizeof(pattern)) {
+      ret = OB_SIZE_OVERFLOW;
+    } else {
+      WIN32_FIND_DATAA data;
+      HANDLE handle = FindFirstFileA(pattern, &data);
+      if (INVALID_HANDLE_VALUE == handle) {
+        const DWORD error = GetLastError();
+        if (ERROR_FILE_NOT_FOUND == error) {
+          result = true;
+        } else {
+          ret = OB_ERR_SYS;
+          CLOG_LOG(WARN, "Fail to enumerate directory", K(ret), K(error), K(clog_dir));
+        }
+      } else {
+        result = true;
+        BOOL next = TRUE;
+        while (next && result) {
+          if (0 != strcmp(data.cFileName, ".") && 0 != strcmp(data.cFileName, "..")) {
+            result = false;
+          } else {
+            next = FindNextFileA(handle, &data);
+          }
+        }
+        if (result && ERROR_NO_MORE_FILES != GetLastError()) {
+          const DWORD error = GetLastError();
+          ret = OB_ERR_SYS;
+          CLOG_LOG(WARN, "Fail to continue directory enumeration", K(ret), K(error), K(clog_dir));
+        }
+        FindClose(handle);
+      }
+    }
+  }
+#else
   DIR *dir = NULL;
   struct dirent *entry = NULL;
   result = false;
@@ -89,27 +130,9 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
     CLOG_LOG(WARN, "Fail to open dir, ", K(ret), K(errno), K(clog_dir));
   } else {
     result = true;
-    while (OB_SUCC(ret) && NULL != (entry = readdir(dir))) {
+    while (NULL != (entry = readdir(dir))) {
       if (0 != strcmp(entry->d_name, ".") && 0 != strcmp(entry->d_name, "..")) {
-#ifdef _WIN32
-        // Some Windows directory filters can return a name from FindNextFileW
-        // that no longer resolves to an object.  Only ignore that precise
-        // not-found result; real entries and metadata errors remain
-        // conservative so the data/redo consistency guard is not weakened.
-        char path[1024];
-        struct _stat64 info;
-        const int len = snprintf(path, sizeof(path), "%s\\%s", clog_dir, entry->d_name);
-        if (len <= 0 || static_cast<size_t>(len) >= sizeof(path)) {
-          ret = OB_SIZE_OVERFLOW;
-        } else if (0 == ::_stat64(path, &info)) {
-          result = false;
-        } else if (ENOENT != errno) {
-          ret = OB_ERR_SYS;
-          CLOG_LOG(WARN, "Fail to inspect directory entry", K(ret), K(errno), K(path));
-        }
-#else
         result = false;
-#endif
       }
     }
   }
@@ -117,6 +140,7 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
   if (NULL != dir) {
     closedir(dir);
   }
+#endif
   return ret;
 }
 
