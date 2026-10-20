@@ -4,7 +4,11 @@ cmake_minimum_required(VERSION 3.20)
 # the authoritative modular build graph. Keep this surface deliberately
 # narrow: one Release-compatible configuration and Unity compilation only.
 include(cmake/Utils.cmake)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  include(cmake/IOS.cmake)
+endif()
 include(cmake/Env.cmake)
+include(cmake/clang_warnings.cmake)
 
 project("OceanBase"
   VERSION 1.4.0.0
@@ -31,48 +35,8 @@ option(ENABLE_SANITY "Build with seekdb memory Sanity instrumentation" OFF)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(SEEKDB_GENERATED_ROOT "${CMAKE_BINARY_DIR}/generated")
-set(SEEKDB_INNER_TABLE_GENERATOR
-  "${CMAKE_SOURCE_DIR}/src/share/inner_table/generate_inner_table_schema.py")
-set(SEEKDB_INNER_TABLE_DEF
-  "${CMAKE_SOURCE_DIR}/src/share/inner_table/ob_inner_table_schema_def.py")
-set(SEEKDB_INNER_TABLE_INIT_DATA
-  "${CMAKE_SOURCE_DIR}/src/share/inner_table/ob_inner_table_init_data.py")
-set(SEEKDB_INNER_TABLE_INPUTS
-  "${SEEKDB_INNER_TABLE_GENERATOR}"
-  "${SEEKDB_INNER_TABLE_DEF}"
-  "${SEEKDB_INNER_TABLE_INIT_DATA}")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  ${SEEKDB_INNER_TABLE_INPUTS})
-
-set(SEEKDB_INNER_TABLE_INPUT_DIGEST "")
-foreach(SEEKDB_INNER_TABLE_INPUT IN LISTS SEEKDB_INNER_TABLE_INPUTS)
-  file(SHA256 "${SEEKDB_INNER_TABLE_INPUT}" SEEKDB_INNER_TABLE_INPUT_SHA256)
-  string(APPEND SEEKDB_INNER_TABLE_INPUT_DIGEST
-    "${SEEKDB_INNER_TABLE_INPUT}:${SEEKDB_INNER_TABLE_INPUT_SHA256}\n")
-endforeach()
-string(SHA256 SEEKDB_INNER_TABLE_DIGEST "${SEEKDB_INNER_TABLE_INPUT_DIGEST}")
-set(SEEKDB_INNER_TABLE_STAMP "${SEEKDB_GENERATED_ROOT}/.inner_table_schema.sha256")
-set(SEEKDB_INNER_TABLE_CURRENT_DIGEST "")
-if(EXISTS "${SEEKDB_INNER_TABLE_STAMP}")
-  file(READ "${SEEKDB_INNER_TABLE_STAMP}" SEEKDB_INNER_TABLE_CURRENT_DIGEST)
-  string(STRIP "${SEEKDB_INNER_TABLE_CURRENT_DIGEST}"
-    SEEKDB_INNER_TABLE_CURRENT_DIGEST)
-endif()
-if(NOT "${SEEKDB_INNER_TABLE_CURRENT_DIGEST}" STREQUAL "${SEEKDB_INNER_TABLE_DIGEST}" OR
-   NOT EXISTS "${SEEKDB_GENERATED_ROOT}/share/inner_table/ob_inner_table_schema.h" OR
-   NOT EXISTS "${SEEKDB_GENERATED_ROOT}/observer/virtual_table/ob_all_virtual_sqlite_tables.cpp")
-  execute_process(
-    COMMAND "${Python3_EXECUTABLE}" "${SEEKDB_INNER_TABLE_GENERATOR}"
-      --def-file "${SEEKDB_INNER_TABLE_DEF}"
-      --share-output-dir "${SEEKDB_GENERATED_ROOT}/share/inner_table"
-      --observer-output-dir "${SEEKDB_GENERATED_ROOT}/observer/virtual_table"
-      --quiet
-    RESULT_VARIABLE SEEKDB_INNER_TABLE_GENERATOR_RESULT)
-  if(NOT SEEKDB_INNER_TABLE_GENERATOR_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to generate inner-table schema sources")
-  endif()
-  file(WRITE "${SEEKDB_INNER_TABLE_STAMP}" "${SEEKDB_INNER_TABLE_DIGEST}\n")
-endif()
+include(cmake/generate_inner_tables.cmake)
+seekdb_generate_inner_tables("${CMAKE_SOURCE_DIR}" "${SEEKDB_GENERATED_ROOT}")
 
 set(SEEKDB_CMAKE_INVENTORY "${CMAKE_BINARY_DIR}/seekdb_bazel_source_inventory.cmake")
 set(SEEKDB_CMAKE_INVENTORY_INPUTS
@@ -110,10 +74,11 @@ if(NOT SEEKDB_CMAKE_INVENTORY_RESULT EQUAL 0)
 endif()
 include("${SEEKDB_CMAKE_INVENTORY}")
 
-if(NOT CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+if(NOT CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" AND
+   NOT (CMAKE_SYSTEM_NAME STREQUAL "iOS" AND CMAKE_BUILD_TYPE STREQUAL "Debug"))
   message(FATAL_ERROR
-    "The compatibility CMake build supports only release "
-    "(-DCMAKE_BUILD_TYPE=RelWithDebInfo)")
+    "The compatibility CMake build requires RelWithDebInfo; "
+    "iOS also supports Debug")
 endif()
 if(NOT OB_ENABLE_UNITY)
   message(FATAL_ERROR "The compatibility CMake build supports only Unity compilation")

@@ -59,6 +59,8 @@ if(WIN32)
   STRING(STRIP "${ARCHITECTURE}" ARCHITECTURE)
 elseif(OB_ANDROID)
   set(ARCHITECTURE "aarch64")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  set(ARCHITECTURE "arm64")
 else()
   EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
 endif()
@@ -181,6 +183,16 @@ if(OB_ANDROID)
   set(OB_LD_BIN "${_NDK_TOOLCHAIN_BIN}/ld.lld")
   set(OB_OBJCOPY_BIN "${_NDK_TOOLCHAIN_BIN}/llvm-objcopy")
   message(STATUS "NDK toolchain bin: ${_NDK_TOOLCHAIN_BIN}")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  # iOS toolchain details are initialized by IOS.cmake. Do not infer macOS
+  # host deployment settings for the cross-compiled target.
+  set(OB_MACOS27 OFF)
+  ob_define(SYS_INCLUDE_DIR "/usr")
+  add_definitions(-D_DARWIN_C_SOURCE)
+  set(OB_CLANG_BIN "clang")
+  set(OB_CLANGXX_BIN "clang++")
+  set(CMAKE_TOOLCHAIN_PATH "/usr")
+  set(GCC_DEVTOOL_PATH "/usr/lib/")
 elseif(APPLE)
   ob_define(SYS_INCLUDE_DIR "/usr")
   add_definitions(-D_DARWIN_C_SOURCE)
@@ -210,7 +222,7 @@ elseif(WIN32)
   set(OB_CXX "clang-cl")
   add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
 
-  # All bundled / vcpkg-provided vendor libraries (s2.lib, sqlite3.lib,
+  # All bundled / vcpkg-provided vendor libraries (s2.lib,
   # zlib.lib, ...) are built against the Release MSVC runtime. Using /MDd
   # in a Debug build makes MSVC STL set _ITERATOR_DEBUG_LEVEL=2, which
   # then trips #pragma detect_mismatch at link time against those

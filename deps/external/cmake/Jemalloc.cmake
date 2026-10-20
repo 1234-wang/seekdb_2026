@@ -12,7 +12,28 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND GCC9)
   string(APPEND _jemalloc_cflags " --gcc-toolchain=${GCC9}")
 endif()
 set(_jemalloc_platform_env "")
-if(APPLE)
+set(_jemalloc_configure_args "--with-jemalloc-prefix=je_")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
+   CMAKE_C_COMPILER_ID MATCHES "Clang" AND
+   OB_USE_LLD AND OB_LD_BIN)
+  # Keep nested Autoconf probes on the same linker as the main build. The
+  # devtools GNU ld is too old to read Ubuntu 24.04 glibc's .relr.dyn
+  # sections, so allowing clang to select it makes configure report the
+  # misleading "C compiler cannot create executables" error.
+  list(APPEND _jemalloc_platform_env
+    "LDFLAGS=--ld-path=${OB_LD_BIN}")
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  # Configure must not execute iOS probes on the macOS build host.
+  string(APPEND _jemalloc_configure_args
+    "\n--host=aarch64-apple-ios\n--with-lg-page=14\n--disable-zone-allocator")
+  string(APPEND _jemalloc_cflags
+    " -target ${SEEKDB_IOS_CLANG_TARGET} -isysroot ${SEEKDB_IOS_SDK_PATH}")
+  list(APPEND _jemalloc_platform_env
+    "CPPFLAGS=" "LDFLAGS="
+    "SDKROOT=${SEEKDB_IOS_SDK_PATH}"
+    "IPHONEOS_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+elseif(APPLE)
   if(OB_MACOS27)
     list(APPEND _jemalloc_platform_env "DEVELOPER_DIR=${OB_MACOS_DEVELOPER_DIR}")
   endif()
@@ -37,7 +58,7 @@ set(_jemalloc_env
   "CC=${_jemalloc_cc}"
   "AR=${CMAKE_AR}"
   "CFLAGS=${_jemalloc_cflags}"
-  "JEMALLOC_SYS_CONFIGURE_ARGS=--with-jemalloc-prefix=je_"
+  "JEMALLOC_SYS_CONFIGURE_ARGS=${_jemalloc_configure_args}"
   "JEMALLOC_SYS_OUTPUT_DIR=${_jemalloc_root}"
   ${_jemalloc_platform_env})
 
