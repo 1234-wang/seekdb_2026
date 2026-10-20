@@ -30,6 +30,13 @@ runs:
       run: |
         set -euo pipefail
 
+        # Jobs sharing Cargo's tool binaries must serialize Rust installation.
+        if [[ -n "${CARGO_HOME:-}" ]]; then
+          mkdir -p "$CARGO_HOME"
+          exec 9>"$CARGO_HOME/.rustup-install.lock"
+          flock 9
+        fi
+
         if ! command -v rustup >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; then
           install_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/seekdb-rust"
           export CARGO_HOME="${CARGO_HOME:-$install_root/cargo}"

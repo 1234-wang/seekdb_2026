@@ -11,7 +11,7 @@ case "${PACKAGE_TYPE:-release}" in
   *) echo "Unsupported package type: $PACKAGE_TYPE" >&2; exit 2 ;;
 esac
 if [[ -n "${BAZEL_DISK_CACHE:-}" ]]; then
-  args+=(--disk_cache="$BAZEL_DISK_CACHE" --experimental_disk_cache_gc_max_size=3G)
+  args+=(--disk_cache="$BAZEL_DISK_CACHE" --experimental_disk_cache_gc_idle_delay=0)
 fi
 if [[ -n "${FORWARDING_HOST:-}" ]]; then
   echo "$FORWARDING_HOST mirrors.oceanbase.com" >> /etc/hosts
@@ -26,8 +26,5 @@ install -m 644 "$bazel_java_home/lib/security/cacerts" "$bazel_trust_store"
   -keystore "$bazel_trust_store" -storepass changeit
 args+=(--host_jvm_args="-Djavax.net.ssl.trustStore=$bazel_trust_store")
 python3 ./build.py init 2>&1 | tee "$task_dir/compile_init.output"
-if [[ -n "${SEEKDB_CACHE_NFS_ROOT:-}" ]]; then
-  bash .github/script/seekdb/cache.sh baseline-bazel || echo "Failed to record Bazel cache baseline" >&2
-fi
 python3 ./build.py build "${args[@]}" //src/observer:seekdb 2>&1 | tee "$task_dir/compile.output"
 echo "[compile.sh] total elapsed=$((SECONDS - started))s"
