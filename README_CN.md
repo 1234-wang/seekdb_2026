@@ -218,7 +218,7 @@ npm install @oceanbase/seekdb-node mysql2
 import { seekdb } from "@oceanbase/seekdb-node";
 import mysql from "mysql2/promise";
 
-const db = await seekdb.open("./node-seekdb.db", {
+const db = await seekdb.open("./seekdb.db", {
   parameters: { memory_budget: "2G", mysql_port_mode: "random" },
 });
 let connection;
@@ -259,7 +259,7 @@ node example.mjs
 
 </details>
 
-两个示例分别将数据保存在 `./seekdb.db` 和 `./node-seekdb.db`，均可重复运行。这些路径是数据库目录。首次初始化新目录通常比后续打开耗时更长。
+两个示例均将数据保存在 `./seekdb.db`，可以重复运行。该路径是数据库目录。首次初始化新目录通常比后续打开耗时更长。
 
 ### 部署服务器
 

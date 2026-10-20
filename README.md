@@ -232,7 +232,7 @@ Save the following as `example.mjs` (ES modules; TypeScript declarations are als
 import { seekdb } from "@oceanbase/seekdb-node";
 import mysql from "mysql2/promise";
 
-const db = await seekdb.open("./node-seekdb.db", {
+const db = await seekdb.open("./seekdb.db", {
   parameters: { memory_budget: "2G", mysql_port_mode: "random" },
 });
 let connection;
@@ -273,7 +273,7 @@ For a higher-level JavaScript Collection API, see [seekdb-js](https://github.com
 
 </details>
 
-These examples store data in `./seekdb.db` and `./node-seekdb.db`, respectively, and can be rerun. The paths are database directories. Initializing a new directory can take longer than subsequent opens.
+These examples store data in `./seekdb.db` and can be rerun. The path is a database directory. Initializing a new directory can take longer than subsequent opens.
 
 ### Server deployments
 

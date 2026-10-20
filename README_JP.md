@@ -218,7 +218,7 @@ npm install @oceanbase/seekdb-node mysql2
 import { seekdb } from "@oceanbase/seekdb-node";
 import mysql from "mysql2/promise";
 
-const db = await seekdb.open("./node-seekdb.db", {
+const db = await seekdb.open("./seekdb.db", {
   parameters: { memory_budget: "2G", mysql_port_mode: "random" },
 });
 let connection;
@@ -259,7 +259,7 @@ node example.mjs
 
 </details>
 
-データはそれぞれ `./seekdb.db` と `./node-seekdb.db` に保存され、両方の例を繰り返し実行できます。これらのパスはデータベースディレクトリです。新しいディレクトリの初期化には、次回以降の起動より時間がかかることがあります。
+データは `./seekdb.db` に保存され、どちらの例も繰り返し実行できます。このパスはデータベースディレクトリです。新しいディレクトリの初期化には、次回以降の起動より時間がかかることがあります。
 
 ### サーバーのデプロイ
 
