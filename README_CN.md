@@ -218,9 +218,7 @@ npm install @oceanbase/seekdb-node mysql2
 import { seekdb } from "@oceanbase/seekdb-node";
 import mysql from "mysql2/promise";
 
-const db = await seekdb.open("./seekdb.db", {
-  parameters: { memory_budget: "2G", mysql_port_mode: "random" },
-});
+const db = await seekdb.open("./seekdb.db");
 let connection;
 try {
   const endpoint = db.connectionOptions();
@@ -250,8 +248,6 @@ try {
 ```bash
 node example.mjs
 ```
-
-示例为数据库申请 2 GiB 内存预算，还需为 Node.js 和操作系统预留内存。
 
 [完整使用指南与支持平台](https://www.npmjs.com/package/@oceanbase/seekdb-node)
 

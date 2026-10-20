@@ -232,9 +232,7 @@ Save the following as `example.mjs` (ES modules; TypeScript declarations are als
 import { seekdb } from "@oceanbase/seekdb-node";
 import mysql from "mysql2/promise";
 
-const db = await seekdb.open("./seekdb.db", {
-  parameters: { memory_budget: "2G", mysql_port_mode: "random" },
-});
+const db = await seekdb.open("./seekdb.db");
 let connection;
 try {
   const endpoint = db.connectionOptions();
@@ -264,8 +262,6 @@ Run it; the result is `[ { value: 1 } ]`:
 ```bash
 node example.mjs
 ```
-
-The example requests a 2 GiB database memory budget; leave additional memory for Node.js and the OS.
 
 [Full usage guide and supported platforms](https://www.npmjs.com/package/@oceanbase/seekdb-node)
 
