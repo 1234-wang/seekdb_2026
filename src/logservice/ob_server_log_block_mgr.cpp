@@ -78,6 +78,47 @@ namespace logservice
 int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, bool &result)
 {
   int ret = OB_SUCCESS;
+#ifdef _WIN32
+  result = false;
+  ObSqlString pattern;
+  if (OB_ISNULL(clog_dir)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    const DWORD attributes = GetFileAttributesA(clog_dir);
+    if (INVALID_FILE_ATTRIBUTES == attributes
+        || 0 == (attributes & FILE_ATTRIBUTE_DIRECTORY)
+        || 0 != (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+      ret = OB_IO_ERROR;
+    } else if (OB_FAIL(pattern.assign_fmt("%s/*", clog_dir))) {
+    } else {
+      WIN32_FIND_DATAA entry;
+      HANDLE find = FindFirstFileA(pattern.ptr(), &entry);
+      if (INVALID_HANDLE_VALUE == find) {
+        if (ERROR_FILE_NOT_FOUND == GetLastError()) {
+          result = true;
+        } else {
+          ret = OB_IO_ERROR;
+        }
+      } else {
+        result = true;
+        do {
+          if (0 != strcmp(entry.cFileName, ".") && 0 != strcmp(entry.cFileName, "..")) {
+            result = false;
+          }
+        } while (FindNextFileA(find, &entry));
+        // Only the documented end-of-enumeration code proves a complete scan.
+        if (ERROR_NO_MORE_FILES != GetLastError()) {
+          result = false;
+          ret = OB_IO_ERROR;
+        }
+        if (!FindClose(find)) {
+          result = false;
+          ret = OB_IO_ERROR;
+        }
+      }
+    }
+  }
+#else
   DIR *dir = NULL;
   struct dirent *entry = NULL;
   result = false;
@@ -99,6 +140,7 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
   if (NULL != dir) {
     closedir(dir);
   }
+#endif
   return ret;
 }
 
