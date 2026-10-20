@@ -450,8 +450,12 @@ static int check_need_initialize(const char *base_dir, const char *data_dir, con
         "Please clear the directories and restart. ret=%d\n"
         "    base-dir: %s\n"
         "    data-dir: %s\n"
-        "    redo-dir: %s\n",
-        ret, base_dir, data_dir, redo_dir);
+        "    redo-dir: %s\n"
+        "    data-file-exists: %s\n"
+        "    redo-dir-empty: %s\n",
+        ret, base_dir, data_dir, redo_dir,
+        data_file_exists ? "true" : "false",
+        redo_empty ? "true" : "false");
     std::fflush(stderr);
   }
   return ret;
