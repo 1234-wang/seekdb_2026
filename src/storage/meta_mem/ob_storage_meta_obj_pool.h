@@ -175,7 +175,7 @@ public:
       const int64_t max_free_list_num,
       const lib::ObLabel &label,
       const uint64_t ctx_id,
-      common::MemoryQuota &memory_quota,
+      common::MemoryUsageTracker &memory_tracker,
       TryWashTabletFunc *wash_func = nullptr,
       const bool allow_over_max_free_num = true);
   virtual ~ObStorageMetaObjPool();
@@ -199,7 +199,8 @@ public:
 private:
   TryWashTabletFunc *wash_func_;
   common::ObFIFOAllocator allocator_;
-  common::TrackedAllocator overflow_node_allocator_;
+  // Track FIFO backing pages and overflow nodes without allocation admission.
+  common::TrackedAllocator tracked_allocator_;
   int64_t used_obj_cnt_;
   bool allow_over_max_free_num_;
 };
@@ -286,25 +287,25 @@ ObStorageMetaObjPool<T>::ObStorageMetaObjPool(
     const int64_t max_free_list_num,
     const lib::ObLabel &label,
     const uint64_t ctx_id,
-    common::MemoryQuota &memory_quota,
+    common::MemoryUsageTracker &memory_tracker,
     TryWashTabletFunc *wash_func,
     const bool allow_over_max_free_num)
   : ObBaseResourcePool<T, RPMetaObjLabel>(max_free_list_num, &allocator_,
-      lib::ObMemAttr(label, ctx_id), &memory_quota),
+      lib::ObMemAttr(label, ctx_id), &memory_tracker),
       wash_func_(wash_func),
       allocator_(),
-      overflow_node_allocator_(),
+      tracked_allocator_(),
       used_obj_cnt_(0),
       allow_over_max_free_num_(allow_over_max_free_num)
 {
   int ret = OB_SUCCESS;
   lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
   abort_unless(nullptr != malloc_allocator);
-  overflow_node_allocator_.configure(*malloc_allocator, nullptr, &memory_quota,
+  tracked_allocator_.configure(*malloc_allocator, &memory_tracker, nullptr,
       lib::ObMemAttr(label, ctx_id), true);
-  BasePool::set_overflow_allocator(&overflow_node_allocator_);
-  if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(), common::OB_MALLOC_MIDDLE_BLOCK_SIZE,
-      lib::ObMemAttr(label, ctx_id), memory_quota))) {
+  BasePool::set_overflow_allocator(&tracked_allocator_);
+  if (OB_FAIL(allocator_.init(&tracked_allocator_, common::OB_MALLOC_MIDDLE_BLOCK_SIZE,
+      lib::ObMemAttr(label, ctx_id)))) {
   }
   abort_unless(OB_SUCCESS == ret);
 }
@@ -319,7 +320,7 @@ template <class T>
 void ObStorageMetaObjPool<T>::destroy()
 {
   // Drain free nodes before releasing the FIFO pages that own them.  The
-  // manager invokes this while its quota is still alive; the destructor may
+  // manager invokes this while its tracker is still alive; the destructor may
   // call it again after both allocators have already been reset.
   ObBaseResourcePool<T, RPMetaObjLabel>::destroy();
   BasePool::free_list_.destroy();

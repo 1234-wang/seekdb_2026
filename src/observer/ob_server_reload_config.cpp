@@ -24,7 +24,6 @@
 #include "observer/ob_server_utils.h"
 #include "storage/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/compaction/ob_tablet_scheduler.h"
-#include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 
 #include <string>
@@ -87,11 +86,6 @@ int ObServerReloadConfig::operator()()
 
       reload_memstore_freezer_config_();
       reload_scheduler_config_();
-      storage::ObStorageMetaMemMgr *meta_memory_mgr =
-          share::server_service<storage::ObStorageMetaMemMgr>();
-      if (OB_NOT_NULL(meta_memory_mgr)) {
-        meta_memory_mgr->refresh_memory_quota_limit();
-      }
       if (OB_NOT_NULL(::oceanbase::share::server_service<::oceanbase::omt::ObServerRuntimeController>())) {
         ::oceanbase::share::server_service<::oceanbase::omt::ObServerRuntimeController>()->reload_request_queue_size();
       }

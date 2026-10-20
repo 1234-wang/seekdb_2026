@@ -87,6 +87,7 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   int64_t limit_value;
   bool is_scheduling_budget = false;
+  bool is_usage_only = false;
   row = nullptr;
   if (OB_ISNULL(allocator_) || OB_ISNULL(cur_row_.cells_)) {
     ret = OB_NOT_INIT;
@@ -108,6 +109,7 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
       } else {
         limit_value = sample.limit_bytes_;
         is_scheduling_budget = sample.is_scheduling_budget_;
+        is_usage_only = sample.is_usage_only_;
       }
     }
   }
@@ -124,13 +126,17 @@ int ObResourceLimitDetailTable::inner_get_next_row(ObNewRow *&row)
           break;
         }
         case LIMIT_TYPE:
-          cur_row_.cells_[i].set_varchar(is_scheduling_budget ? "scheduling"
+          cur_row_.cells_[i].set_varchar(is_usage_only ? "none" : is_scheduling_budget ? "scheduling"
               : get_constraint_type_name(logical_resources_finished_
                     ? MEMORY_CONSTRAINT : constraint_iter_.get_curr_type()));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case LIMIT_VALUE:
-          cur_row_.cells_[i].set_int(limit_value);
+          if (is_usage_only) {
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_int(limit_value);
+          }
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

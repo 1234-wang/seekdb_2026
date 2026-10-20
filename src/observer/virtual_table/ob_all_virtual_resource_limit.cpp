@@ -94,7 +94,8 @@ int ObResourceLimitTable::get_memory_resource_sample(
       if (OB_ISNULL(manager)) {
         ret = OB_NOT_INIT;
       } else {
-        quota_sample = manager->get_memory_quota_sample();
+        sample.used_bytes_ = manager->get_memory_used();
+        sample.is_usage_only_ = true;
       }
       break;
     }
@@ -102,7 +103,7 @@ int ObResourceLimitTable::get_memory_resource_sample(
       ret = OB_INVALID_ARGUMENT;
       break;
   }
-  if (OB_SUCC(ret) && !sample.is_scheduling_budget_) {
+  if (OB_SUCC(ret) && !sample.is_scheduling_budget_ && !sample.is_usage_only_) {
     sample.used_bytes_ = quota_sample.committed_bytes_;
     sample.reserved_bytes_ = quota_sample.reserved_bytes_;
     sample.limit_bytes_ = quota_sample.limit_bytes_;
@@ -177,19 +178,24 @@ int ObResourceLimitTable::inner_get_next_row(ObNewRow *&row)
           }
           break;
         case RSERVED_VALUE:
-          if (logical_resources_finished_ && sample.is_scheduling_budget_) {
+          if (logical_resources_finished_ && (sample.is_scheduling_budget_ || sample.is_usage_only_)) {
             cur_row_.cells_[i].set_null();
           } else {
             cur_row_.cells_[i].set_int(info.reserved_value_);
           }
           break;
         case LIMIT_VALUE:
-          cur_row_.cells_[i].set_int(info.min_constraint_value_);
+          if (logical_resources_finished_ && sample.is_usage_only_) {
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_int(info.min_constraint_value_);
+          }
           break;
         case EFFECTIVE_LIMIT_TYPE:
           cur_row_.cells_[i].set_varchar(
-              logical_resources_finished_ && sample.is_scheduling_budget_
-                  ? "scheduling" : get_constraint_type_name(info.min_constraint_type_));
+              logical_resources_finished_ && sample.is_usage_only_ ? "none"
+                  : logical_resources_finished_ && sample.is_scheduling_budget_
+                      ? "scheduling" : get_constraint_type_name(info.min_constraint_type_));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         default:

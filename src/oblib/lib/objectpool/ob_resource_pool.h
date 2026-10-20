@@ -92,7 +92,7 @@ public:
   ObBaseResourcePool(const int64_t max_free_list_num,
                      common::ObIAllocator *allocator,
                      const lib::ObMemAttr &mem_attr,
-                     common::MemoryQuota *memory_quota = nullptr)
+                     common::MemoryUsageTracker *memory_tracker = nullptr)
     : max_free_list_num_(max_free_list_num),
       mem_attr_(mem_attr),
       allocator_(allocator),
@@ -100,8 +100,7 @@ public:
       inner_allocated_num_(0),
       inner_used_num_(0),
       free_list_allocator_(ObMemAttr("PoolFreeList", mem_attr.ctx_id_),
-                           OB_MALLOC_NORMAL_BLOCK_SIZE,
-                           memory_quota),
+                           OB_MALLOC_NORMAL_BLOCK_SIZE),
       slice_max_used_num_(0),
       max_idle_num_(0),
       last_check_ts_(0),
@@ -111,6 +110,7 @@ public:
   {
     int ret = OB_SUCCESS;
     char *buf = NULL;
+    free_list_allocator_.set_memory_tracker(memory_tracker);
 
     if (OB_ISNULL(allocator_)) {
       ret = OB_ERR_UNEXPECTED;

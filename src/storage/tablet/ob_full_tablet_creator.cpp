@@ -27,6 +27,9 @@ namespace storage
 {
 ObFullTabletCreator::ObFullTabletCreator()
   : is_inited_(false),
+    memory_tracker_(),
+    page_allocator_(*lib::ObMallocAllocator::get_instance(), &memory_tracker_, nullptr,
+        ObMemAttr("TinyAllocator", ObCtxIds::META_OBJ_CTX_ID), true),
     tiny_allocator_(),
     wait_create_tablets_cnt_(0),
     created_tablets_cnt_(0),
@@ -34,7 +37,7 @@ ObFullTabletCreator::ObFullTabletCreator()
 {
 }
 
-int ObFullTabletCreator::init(common::MemoryQuota *memory_quota)
+int ObFullTabletCreator::init()
 {
   /* We use two fifo allocators to minimize the memory hole caused by tablets of different lifetime.
     1. MSTXAllocator is used to alloc tablets. To ensure that each tablet can occupy one whole page, we set the page_size = 8K.
@@ -43,12 +46,7 @@ int ObFullTabletCreator::init(common::MemoryQuota *memory_quota)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObStorageMetaMemMgr has been initialized", K(ret));
-  } else if (OB_FAIL(nullptr != memory_quota
-      ? tiny_allocator_.init(lib::ObMallocAllocator::get_instance(),
-          OB_MALLOC_NORMAL_BLOCK_SIZE/2,
-          ObMemAttr("TinyAllocator", ObCtxIds::META_OBJ_CTX_ID),
-          *memory_quota)
-      : tiny_allocator_.init(lib::ObMallocAllocator::get_instance(),
+  } else if (OB_FAIL(tiny_allocator_.init(&page_allocator_,
           OB_MALLOC_NORMAL_BLOCK_SIZE/2,
           ObMemAttr("TinyAllocator", ObCtxIds::META_OBJ_CTX_ID)))) {
   } else {

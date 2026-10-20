@@ -89,7 +89,7 @@ facade 推断租户归属。
 **ctx_id**
 
 ctx id 在 `alloc_struct.h` 中预定义。除非组件明确拥有 tracker 或 quota，否则应使用
-`DEFAULT_CTX_ID`。KVCache、Vector 和 Meta Object 分别拥有自己的
+`DEFAULT_CTX_ID`。KVCache 和 Vector 分别拥有自己的
 admission、wash/cleanup/GC 和错误策略；共享 quota 原语只负责原子的
 reserve/reconcile/rollback 记账。
 
@@ -110,7 +110,7 @@ SQL WorkArea 不使用底层共享 quota。SQL memory manager 根据
 
 `oceanbase.__all_virtual_resource_limit` 保留已有的 `tablet` 行，增加本地组件资源
 `kv_cache_memory`、`sql_workarea_memory`、`vector_memory`、`meta_object_memory` 四行。
-对 KVCache、Vector、Meta，`CURRENT_UTILIZATION` 表示 committed（已实际计费内存），
+对 KVCache、Vector，`CURRENT_UTILIZATION` 表示 committed（已实际计费内存），
 `RESERVED_VALUE` 表示尚未结算的预占额度，`LIMIT_VALUE` 表示当前组件额度，单位均为字节。
 这些值不是进程 RSS，也不只是 payload 大小。`MAX_UTILIZATION` 返回 `NULL`，
 不额外维护内存峰值计数；`EFFECTIVE_LIMIT_TYPE` 为 `memory`。
@@ -121,6 +121,18 @@ SQL WorkArea 不使用底层共享 quota。SQL memory manager 根据
 `scheduling`。不维护聚合 admission 预占或峰值，`RESERVED_VALUE` 和
 `MAX_UTILIZATION` 均返回 NULL。该资源行在 MANUAL 模式下也存在，不依赖仅在
 AUTO 模式输出行的信息表；缺失 SQL memory manager 时仍报错，不伪造零值。
+
+Meta Object 只统计、不设分配硬上限。`meta_object_memory.CURRENT_UTILIZATION`
+包含对象池 FIFO backing 页（含缓存普通节点）、overflow 分配、空闲队列 arena 页，
+以及 FullTabletCreator 的 backing 内存。对象池和 tiny FIFO 分配按含统计 header 的
+malloc usable bytes 计数，空闲队列按 arena 页大小计数，creator context 按 freeable
+backing bytes 计数。它不是 payload 总和、所有 META_OBJ_CTX_ID 分配总和或进程 RSS。
+不再预占额度，`LIMIT_VALUE`、`RESERVED_VALUE`、`MAX_UTILIZATION` 均为 NULL，
+`EFFECTIVE_LIMIT_TYPE` 为 `none`；detail 表保留对应的 `none` 行，limit 为 NULL。
+引用计数、GC/wash、池数量策略和 creator 独立创建节流保持不变。normal pool 仍允许
+overflow，取消 quota 不保证不会耗尽内存。`_storage_meta_memory_limit_percentage`
+继续用于 Tablet 容量估算，不再限制元数据分配。FIFO allocator 不再解析 context quota，
+组件统计由其所有者提供。
 
 `oceanbase.__all_virtual_resource_limit_detail` 为硬额度组件提供 `memory` 约束，
 为 SQL WorkArea 提供 `scheduling` 调度预算，单位均为字节。

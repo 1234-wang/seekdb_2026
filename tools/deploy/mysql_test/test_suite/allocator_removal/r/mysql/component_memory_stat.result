@@ -6,10 +6,9 @@ SELECT GROUP_CONCAT(resource_name ORDER BY resource_name SEPARATOR ',') AS resou
 FROM oceanbase.__all_virtual_resource_limit;
 resources
 kv_cache_memory,meta_object_memory,sql_workarea_memory,tablet,vector_memory
-SELECT COUNT(*) = 3 AS memory_rows_with_byte_counters
+SELECT COUNT(*) = 2 AS memory_rows_with_byte_counters
 FROM oceanbase.__all_virtual_resource_limit
-WHERE resource_name IN ('kv_cache_memory',
-'vector_memory', 'meta_object_memory')
+WHERE resource_name IN ('kv_cache_memory', 'vector_memory')
 AND current_utilization >= 0 AND reserved_value >= 0 AND limit_value >= 0
 AND max_utilization IS NULL AND effective_limit_type = 'memory';
 memory_rows_with_byte_counters
@@ -21,7 +20,7 @@ AND max_utilization IS NOT NULL AND reserved_value = 0
 AND effective_limit_type IN ('configuration', 'memory');
 tablet_semantics_preserved
 1
-SELECT COUNT(*) = 3 AS matching_memory_constraints
+SELECT COUNT(*) = 2 AS matching_memory_constraints
 FROM oceanbase.__all_virtual_resource_limit r
 JOIN oceanbase.__all_virtual_resource_limit_detail d
 ON r.resource_name = d.resource_name
@@ -64,6 +63,26 @@ FROM information_schema.columns
 WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_resource_limit'
   AND column_name = 'reserved_value' AND is_nullable = 'YES';
 nullable_reservation_schema
+1
+SELECT COUNT(*) = 1 AS meta_has_usage_without_limit
+FROM oceanbase.__all_virtual_resource_limit
+WHERE resource_name = 'meta_object_memory' AND current_utilization > 0
+AND reserved_value IS NULL AND limit_value IS NULL AND max_utilization IS NULL
+AND effective_limit_type = 'none';
+meta_has_usage_without_limit
+1
+SELECT COUNT(*) = 1 AS meta_has_no_allocation_constraint
+FROM oceanbase.__all_virtual_resource_limit_detail
+WHERE resource_name = 'meta_object_memory' AND limit_type = 'none'
+  AND limit_value IS NULL;
+meta_has_no_allocation_constraint
+1
+SELECT COUNT(*) = 2 AS nullable_limit_schemas
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase'
+  AND table_name IN ('__all_virtual_resource_limit', '__all_virtual_resource_limit_detail')
+AND column_name = 'limit_value' AND is_nullable = 'YES';
+nullable_limit_schemas
 1
 SELECT COUNT(*) = 1 AS workarea_profile_observation
 FROM oceanbase.__all_virtual_sql_workarea_memory_info

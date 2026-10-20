@@ -109,7 +109,7 @@ At the beginning, seekdb uses a predefined method to create memory labels for ea
 **ctx_id**
 
 Context IDs are predefined in `alloc_struct.h`. Use `DEFAULT_CTX_ID` unless a
-component explicitly owns a quota. KV cache, Vector, and Meta Object own
+component explicitly owns a quota. KV cache and Vector own
 their admission and reclaim policy; the shared quota
 primitive only provides atomic reserve/reconcile/rollback accounting.
 
@@ -135,7 +135,7 @@ the AUTO scheduler has initialized, and no row while that scheduler is disabled.
 `oceanbase.__all_virtual_resource_limit` preserves its existing `tablet` row
 and adds four local component resources: `kv_cache_memory`,
 `sql_workarea_memory`, `vector_memory`, and `meta_object_memory`.
-For KVCache, Vector and Meta, `CURRENT_UTILIZATION` is committed (physically charged)
+For KVCache and Vector, `CURRENT_UTILIZATION` is committed (physically charged)
 memory, `RESERVED_VALUE` is in-flight quota reservation, and `LIMIT_VALUE` is
 the current quota limit, all in bytes. These are not process RSS or payload-only
 sizes. `MAX_UTILIZATION` is `NULL` because no memory high-water counter is
@@ -149,6 +149,22 @@ are NULL because no aggregate admission reservation or peak is maintained.
 The row remains available in MANUAL mode; it does not depend on the AUTO-only
 information table's visibility. Missing SQL memory manager is an error, not a
 fabricated zero sample.
+
+Meta Object has usage accounting only: `meta_object_memory.CURRENT_UTILIZATION`
+includes pool FIFO backing pages (also when ordinary nodes are cached), overflow
+allocations, free-list arena pages and FullTabletCreator backing memory. Pool
+and tiny-FIFO allocations count malloc usable bytes including tracking headers;
+free-list arenas count their page sizes, and the creator's context reports its
+freeable backing bytes. This is not a payload total, every allocation tagged
+META_OBJ_CTX_ID, or process RSS. There is no Meta allocation quota or in-flight
+reservation. `LIMIT_VALUE`, `RESERVED_VALUE` and `MAX_UTILIZATION` are NULL;
+`EFFECTIVE_LIMIT_TYPE` is `none`. The detail table retains a matching `none` row
+with a NULL limit. Refcounting, GC/wash, pool-count policies and the creator's
+independent creation throttle remain unchanged. The normal pool can still
+allocate overflow nodes; removing the quota does not prevent memory exhaustion.
+`_storage_meta_memory_limit_percentage` remains an input to tablet-capacity
+estimation, not a hard limit on metadata allocations. FIFO allocators do not
+resolve context quotas; component accounting is supplied by their owner.
 
 `oceanbase.__all_virtual_resource_limit_detail` adds one `memory` constraint
 for each hard-quota component and one `scheduling` budget for SQL WorkArea,
@@ -165,7 +181,7 @@ wait for reclaim work, and then verify that no reservation is in flight.
 Reject and reclaim counters remain internal quota diagnostics and are not
 columns of these resource-limit tables. The reject counter counts each failed quota admission or reconcile attempt,
 including an attempt later recovered by a component retry. The reclaim counter
-counts successful wash, cleanup, or GC batches that physically reclaim
+counts successful wash or cleanup batches that physically reclaim
 at least one byte/object; failed attempts are logged but not counted.
 
 The obmalloc-specific `V$OB_MEMORY`, `__all_virtual_memory_info`,

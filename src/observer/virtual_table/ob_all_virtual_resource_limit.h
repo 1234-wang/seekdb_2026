@@ -32,12 +32,14 @@ namespace observer
 // Resource-table observation, not an allocation-admission quota snapshot.
 // For SQL WorkArea, usage is reported by profiles and the limit is a budget;
 // there is no reservation counter or physical-allocation hard cap.
+// Meta Object reports backing usage only, without a limit or reservations.
 struct MemoryResourceSample
 {
   int64_t used_bytes_ = 0;
   int64_t reserved_bytes_ = 0;
   int64_t limit_bytes_ = 0;
   bool is_scheduling_budget_ = false;
+  bool is_usage_only_ = false;
 };
 
 class ObResourceLimitTable : public common::ObVirtualTableScannerIterator

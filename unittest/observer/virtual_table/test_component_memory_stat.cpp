@@ -164,13 +164,12 @@ TEST(TestResourceLimitMemory, production_manager_routing)
                 false, 11 * 1024 * 1024, nullptr, false));
   services.shared_manager().vector_allocator().memory_quota().set_limit(
       12 * 1024 * 1024);
-  services.meta_manager().get_memory_quota().set_limit(13 * 1024 * 1024);
 
   static const int64_t EXPECTED_LIMITS[] = {
       5 * ComponentServiceBindings::BLOCK_SIZE,
       11 * 1024 * 1024,
       12 * 1024 * 1024,
-      13 * 1024 * 1024,
+      0, // Meta has usage accounting only, not a quota limit.
   };
   for (int64_t i = 0; i < ObResourceLimitTable::memory_resource_count(); ++i) {
     MemoryResourceSample sample;
@@ -178,6 +177,13 @@ TEST(TestResourceLimitMemory, production_manager_routing)
               ObResourceLimitTable::get_memory_resource_sample(i, sample));
     EXPECT_EQ(EXPECTED_LIMITS[i], sample.limit_bytes_);
     EXPECT_EQ(1 == i, sample.is_scheduling_budget_);
+    EXPECT_EQ(3 == i, sample.is_usage_only_);
+    if (3 == i) {
+      EXPECT_EQ(services.meta_manager().get_memory_used(), sample.used_bytes_);
+      EXPECT_GT(sample.used_bytes_, 0); // Pool free-list pages exist before init.
+      EXPECT_EQ(nullptr, oceanbase::common::resolve_memory_quota(
+          oceanbase::common::ObCtxIds::META_OBJ_CTX_ID));
+    }
   }
 
   // Distinguish physically committed bytes from an in-flight reservation.

@@ -25,7 +25,6 @@
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/queue/ob_link_queue.h"
-#include "lib/resource/ob_memory_quota.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_sstable.h"
@@ -122,9 +121,9 @@ public:
   int64_t last_access_time_;
 };
 
-// TODO: ObStorageMetaMemMgr is currently the only user of ObBaseResourcePool's
-// quota support. If this manager is removed, also remove the resource pool's
-// overflow allocator and its quota plumbing.
+// TODO: The resource pool's overflow allocator is now used only for Meta
+// accounting, not quota admission. Remove it if this manager no longer needs
+// resource pools or their overflow-allocation statistics.
 class ObStorageMetaMemMgr final
 {
 public:
@@ -194,13 +193,12 @@ public:
   void stop();
   void wait();
   void destroy();
-  static int64_t calculate_memory_quota_limit(
-      int64_t memory_budget, int64_t configured_percentage);
-  void refresh_memory_quota_limit();
-  common::MemoryQuota &get_memory_quota() { return memory_quota_; }
-  common::MemoryQuotaSample get_memory_quota_sample() const
+  int64_t get_memory_used() const
   {
-    return memory_quota_.sample();
+    // Pool backing pages (including cached nodes), overflow allocations and
+    // free-list pages, plus the FullTabletCreator's FIFO and context backing.
+    // Independent samples, not RSS or a hard allocation-admission budget.
+    return memory_tracker_.used() + full_tablet_creator_.get_memory_used();
   }
   int print_old_chain(
       const ObTabletMapKey &key,
@@ -492,7 +490,7 @@ private:
 private:
   common::SpinRWLock wash_lock_;
   TryWashTabletFunc wash_func_;
-  common::MemoryQuota memory_quota_;
+  common::MemoryUsageTracker memory_tracker_;
   ObBucketLock bucket_lock_;
   ObFullTabletCreator full_tablet_creator_;
   ObTabletPointerMap tablet_map_;

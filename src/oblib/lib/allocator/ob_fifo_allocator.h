@@ -98,19 +98,12 @@ public:
            const int64_t init_size=0,
            const int64_t idle_size=0,
            const int64_t max_size=INT64_MAX);
-  int init(ObIAllocator *allocator,
-           const int64_t page_size,
-           const ObMemAttr &attr,
-           MemoryQuota &quota,
-           const int64_t init_size=0,
-           const int64_t idle_size=0,
-           const int64_t max_size=INT64_MAX);
   void reset();
   void *alloc(const int64_t size);
   void *alloc(const int64_t size, const ObMemAttr &attr);
   void free(void *p);
-  void set_label(const lib::ObLabel &label) { attr_.label_ = label; page_allocator_.set_attr(attr_); }
-  void set_attr(const ObMemAttr &attr) { attr_ = attr; page_allocator_.set_attr(attr_); }
+  void set_label(const lib::ObLabel &label) { attr_.label_ = label; }
+  void set_attr(const ObMemAttr &attr) { attr_ = attr; }
   int set_idle(const int64_t idle_size, const bool sync=false);
   int set_max(const int64_t max_size, const bool sync=false);
   int64_t get_max() const { return max_size_; }
@@ -139,13 +132,6 @@ public:
   }
   
 private:
-  int init_(ObIAllocator *allocator,
-            const int64_t page_size,
-            const ObMemAttr &attr,
-            MemoryQuota *quota,
-            const int64_t init_size,
-            const int64_t idle_size,
-            const int64_t max_size);
   void *inner_alloc_align(const int64_t size, const int64_t align);
   BasePageHeader *get_page_header(void *p);
   bool check_param(const int64_t size, const int64_t align);
@@ -170,7 +156,6 @@ private:
   common::ObMalloc malloc_allocator_;
   int64_t page_size_;
   ObMemAttr attr_;
-  TrackedAllocator page_allocator_;
   int64_t idle_size_;
   int64_t max_size_;
   PageList free_page_list_;

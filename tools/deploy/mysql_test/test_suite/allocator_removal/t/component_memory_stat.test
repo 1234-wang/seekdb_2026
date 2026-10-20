@@ -8,10 +8,9 @@ FROM oceanbase.__all_virtual_resource_limit;
 SELECT GROUP_CONCAT(resource_name ORDER BY resource_name SEPARATOR ',') AS resources
 FROM oceanbase.__all_virtual_resource_limit;
 
-SELECT COUNT(*) = 3 AS memory_rows_with_byte_counters
+SELECT COUNT(*) = 2 AS memory_rows_with_byte_counters
 FROM oceanbase.__all_virtual_resource_limit
-WHERE resource_name IN ('kv_cache_memory',
-                        'vector_memory', 'meta_object_memory')
+WHERE resource_name IN ('kv_cache_memory', 'vector_memory')
   AND current_utilization >= 0 AND reserved_value >= 0 AND limit_value >= 0
   AND max_utilization IS NULL AND effective_limit_type = 'memory';
 
@@ -21,7 +20,7 @@ WHERE resource_name = 'tablet' AND current_utilization > 0
   AND max_utilization IS NOT NULL AND reserved_value = 0
   AND effective_limit_type IN ('configuration', 'memory');
 
-SELECT COUNT(*) = 3 AS matching_memory_constraints
+SELECT COUNT(*) = 2 AS matching_memory_constraints
 FROM oceanbase.__all_virtual_resource_limit r
 JOIN oceanbase.__all_virtual_resource_limit_detail d
   ON r.resource_name = d.resource_name
@@ -58,6 +57,23 @@ SELECT COUNT(*) = 1 AS nullable_reservation_schema
 FROM information_schema.columns
 WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_resource_limit'
   AND column_name = 'reserved_value' AND is_nullable = 'YES';
+
+SELECT COUNT(*) = 1 AS meta_has_usage_without_limit
+FROM oceanbase.__all_virtual_resource_limit
+WHERE resource_name = 'meta_object_memory' AND current_utilization > 0
+  AND reserved_value IS NULL AND limit_value IS NULL AND max_utilization IS NULL
+  AND effective_limit_type = 'none';
+
+SELECT COUNT(*) = 1 AS meta_has_no_allocation_constraint
+FROM oceanbase.__all_virtual_resource_limit_detail
+WHERE resource_name = 'meta_object_memory' AND limit_type = 'none'
+  AND limit_value IS NULL;
+
+SELECT COUNT(*) = 2 AS nullable_limit_schemas
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase'
+  AND table_name IN ('__all_virtual_resource_limit', '__all_virtual_resource_limit_detail')
+  AND column_name = 'limit_value' AND is_nullable = 'YES';
 
 # The AUTO scheduler is initialized by its background timer after startup.
 # Wait for its first snapshot instead of assuming readiness from a connection.

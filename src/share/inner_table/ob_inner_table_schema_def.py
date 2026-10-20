@@ -6080,7 +6080,7 @@ def_table_schema(
   ('current_utilization', 'bigint'),
   ('max_utilization', 'bigint', 'true'),
   ('reserved_value', 'bigint', 'true'),
-  ('limit_value', 'bigint'),
+  ('limit_value', 'bigint', 'true'),
   ('effective_limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN')
   ],  vtable_route_policy = 'local'
   )
@@ -6097,7 +6097,7 @@ def_table_schema(
   normal_columns = [
   ('resource_name', 'varchar:MAX_RESOURCE_NAME_LEN'),
   ('limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN'),
-  ('limit_value', 'bigint')
+  ('limit_value', 'bigint', 'true')
   ],  vtable_route_policy = 'local'
   )
 

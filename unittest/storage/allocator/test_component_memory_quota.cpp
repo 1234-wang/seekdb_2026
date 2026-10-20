@@ -13,6 +13,7 @@
 #include "storage/allocator/ob_vector_allocator.h"
 #include "storage/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/meta_mem/ob_storage_meta_mem_mgr.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -89,6 +90,29 @@ private:
 struct TestMetaPoolObject
 {
   void reset() {}
+};
+
+class TestMetaServiceGuard final
+{
+public:
+  TestMetaServiceGuard()
+      : previous_(server_service<ObStorageMetaMemMgr>()),
+        manager_(nullptr)
+  {
+    EXPECT_EQ(OB_SUCCESS, ObStorageMetaMemMgr::server_module_new(manager_));
+    bind_server_service<ObStorageMetaMemMgr>(manager_);
+  }
+  ~TestMetaServiceGuard()
+  {
+    bind_server_service<ObStorageMetaMemMgr>(previous_);
+    if (nullptr != manager_) {
+      OB_DELETE(ObStorageMetaMemMgr, ObMemAttr("MetaMemMgr"), manager_);
+    }
+  }
+  bool valid() const { return nullptr != manager_; }
+private:
+  ObStorageMetaMemMgr *previous_;
+  ObStorageMetaMemMgr *manager_;
 };
 
 } // namespace
@@ -199,93 +223,86 @@ TEST(TestVectorMemoryQuota, fifo_metadata_pages_do_not_use_vector_quota)
   }
 }
 
-TEST(TestMetaMemoryQuota, preserves_double_percentage_rule)
+TEST(TestMetaMemoryAccounting, inner_pages_overflow_and_free_list_are_counted)
 {
-  EXPECT_EQ(400, ObStorageMetaMemMgr::calculate_memory_quota_limit(1000, 20));
-  EXPECT_EQ(1000, ObStorageMetaMemMgr::calculate_memory_quota_limit(1000, 0));
-  EXPECT_EQ(0, ObStorageMetaMemMgr::calculate_memory_quota_limit(0, 20));
-}
-
-TEST(TestMetaMemoryQuota, zero_percentage_initialization_allows_allocation)
-{
-  static constexpr int64_t MEMORY_BUDGET = 16L << 20;
-  MemoryQuota quota(ObStorageMetaMemMgr::calculate_memory_quota_limit(
-      MEMORY_BUDGET, 0));
-  ObStorageMetaObjPool<TestMetaPoolObject> pool(
-      1, "MetaZeroInit", ObCtxIds::META_OBJ_CTX_ID, quota);
-
-  TestMetaPoolObject *object = nullptr;
-  ASSERT_EQ(OB_SUCCESS, pool.acquire(object));
-  ASSERT_NE(nullptr, object);
-  EXPECT_GT(quota.committed(), 0);
-
-  pool.release(object);
-  pool.destroy();
-  EXPECT_EQ(0, quota.committed());
-  EXPECT_EQ(0, quota.reserved());
-}
-
-TEST(TestMetaMemoryQuota, zero_percentage_reload_restores_allocation)
-{
-  static constexpr int64_t MEMORY_BUDGET = 16L << 20;
-  MemoryQuota quota(MEMORY_BUDGET);
-  ObStorageMetaObjPool<TestMetaPoolObject> pool(
-      1, "MetaZeroReload", ObCtxIds::META_OBJ_CTX_ID, quota);
-
-  const int64_t construction_charge = quota.committed();
-  ASSERT_GT(construction_charge, 0);
-  quota.set_limit(construction_charge);
-  TestMetaPoolObject *object = nullptr;
-  EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, pool.acquire(object));
-  EXPECT_EQ(nullptr, object);
-
-  quota.set_limit(ObStorageMetaMemMgr::calculate_memory_quota_limit(
-      MEMORY_BUDGET, 0));
-  ASSERT_EQ(OB_SUCCESS, pool.acquire(object));
-  ASSERT_NE(nullptr, object);
-  EXPECT_GT(quota.committed(), construction_charge);
-
-  pool.release(object);
-  pool.destroy();
-  EXPECT_EQ(0, quota.committed());
-  EXPECT_EQ(0, quota.reserved());
-}
-
-TEST(TestMetaMemoryQuota, production_order_charges_inner_and_overflow_allocations)
-{
-  // Production constructs all pools before installing the META_OBJECT
-  // resolver.  Explicit ownership must therefore work with no resolver.
-  set_memory_quota_resolver(ObCtxIds::META_OBJ_CTX_ID, nullptr);
-  MemoryQuota quota(16L << 20);
+  EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::META_OBJ_CTX_ID));
+  MemoryUsageTracker tracker;
   {
     ObStorageMetaObjPool<TestMetaPoolObject> pool(
-        1, "MetaQuotaTest", ObCtxIds::META_OBJ_CTX_ID, quota);
-    const int64_t construction_charge = quota.committed();
+        1, "MetaAccounting", ObCtxIds::META_OBJ_CTX_ID, tracker);
+    const int64_t construction_charge = tracker.used();
     EXPECT_GT(construction_charge, 0);
 
     TestMetaPoolObject *inner_object = nullptr;
     ASSERT_EQ(OB_SUCCESS, pool.acquire(inner_object));
     ASSERT_NE(nullptr, inner_object);
-    const int64_t inner_charge = quota.committed();
+    const int64_t inner_charge = tracker.used();
     EXPECT_GT(inner_charge, construction_charge);
 
     TestMetaPoolObject *overflow_object = nullptr;
     ASSERT_EQ(OB_SUCCESS, pool.acquire(overflow_object));
     ASSERT_NE(nullptr, overflow_object);
-    const int64_t overflow_charge = quota.committed();
+    const int64_t overflow_charge = tracker.used();
     EXPECT_GT(overflow_charge, inner_charge);
 
-    quota.set_limit(overflow_charge);
-    TestMetaPoolObject *rejected_object = nullptr;
-    EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, pool.acquire(rejected_object));
-    EXPECT_EQ(nullptr, rejected_object);
-    EXPECT_GT(quota.reject_count(), 0);
-
     pool.release(overflow_object);
+    EXPECT_EQ(inner_charge, tracker.used());
+    pool.release(inner_object);
+    EXPECT_EQ(inner_charge, tracker.used()); // Cached ordinary node stays charged.
+
+    ASSERT_EQ(OB_SUCCESS, pool.acquire(inner_object));
+    EXPECT_EQ(inner_charge, tracker.used()); // Reuse must not charge twice.
     pool.release(inner_object);
 
     pool.destroy();
-    EXPECT_EQ(0, quota.committed());
-    EXPECT_EQ(0, quota.reserved());
+    EXPECT_EQ(0, tracker.used());
+    pool.destroy();
+    EXPECT_EQ(0, tracker.used());
   }
+  EXPECT_EQ(0, tracker.used());
+}
+
+TEST(TestMetaMemoryAccounting, full_tablet_creator_counts_and_releases_backing)
+{
+  TestMetaServiceGuard service_guard;
+  ASSERT_TRUE(service_guard.valid());
+  ObFullTabletCreator creator;
+  ASSERT_EQ(OB_SUCCESS, creator.init());
+  EXPECT_EQ(nullptr, resolve_memory_quota(ObCtxIds::META_OBJ_CTX_ID));
+  EXPECT_EQ(0, creator.get_memory_used());
+
+  ObTabletHandle handle;
+  ASSERT_EQ(OB_SUCCESS, creator.create_tablet(handle));
+  ObTablet *tablet = handle.get_obj();
+  ASSERT_NE(nullptr, tablet);
+  EXPECT_GT(creator.get_memory_used(), 0);
+  // Keep a reference across handle reset, so this isolated creator test does
+  // not enqueue the tablet into the production T3M GC queue.
+  tablet->inc_ref();
+  handle.reset();
+  EXPECT_EQ(0, tablet->dec_ref());
+  creator.free_tablet(tablet);
+  EXPECT_GT(creator.get_memory_used(), 0); // Tiny FIFO retains its current page.
+  creator.reset();
+  EXPECT_EQ(0, creator.get_memory_used());
+}
+
+TEST(TestVectorMemoryQuota, fifo_does_not_resolve_context_quota)
+{
+  MemoryQuota quota(0);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  ObFIFOAllocator allocator;
+  ASSERT_EQ(OB_SUCCESS, allocator.init(
+      nullptr, OB_MALLOC_MIDDLE_BLOCK_SIZE, ObMemAttr("FifoNoQuota", ObCtxIds::VECTOR_CTX_ID)));
+  void *normal = allocator.alloc(128);
+  void *special = allocator.alloc(2 * OB_MALLOC_MIDDLE_BLOCK_SIZE);
+  ASSERT_NE(nullptr, normal);
+  ASSERT_NE(nullptr, special);
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, quota.reject_count());
+  allocator.free(normal);
+  allocator.free(special);
+  EXPECT_EQ(0, allocator.used());
+  allocator.reset();
+  EXPECT_EQ(0, allocator.total());
 }

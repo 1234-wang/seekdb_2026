@@ -781,7 +781,7 @@
   range: "[0, 50)"
   section: RUNTIME
   edit_level: DYNAMIC_EFFECTIVE
-  description: "maximum memory for storage metadata, as a percentage of total server runtime memory. Range: [0, 50), percentage, 0 means no limit to storage meta memory"
+  description: "storage metadata memory estimate for tablet capacity planning, as a percentage of total server runtime memory. Range: [0, 50). Does not enforce an allocation limit on metadata memory"
 
 - name: _max_tablet_cnt_per_gb
   type: INT
