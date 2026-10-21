@@ -20,6 +20,7 @@
 #include "sql/engine/graph/graph_binding_store.h"
 #include "sql/engine/graph/graph_expand_das_access.h"
 #include "sql/engine/graph/graph_cached_access.h"
+#include "sql/engine/graph/graph_shortest_row_admission.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -818,6 +819,9 @@ int GraphFeedbackLoopOp::inner_open()
   } else if (!use_native_runtime_
              && OB_FAIL(RecursivePumpOp::inner_open())) {
     LOG_WARN("failed to initialize recursive graph feedback runtime", K(ret));
+  } else if (!use_native_runtime_ && get_graph_spec().prune_duplicate_states()
+             && OB_FAIL(init_fallback_admission())) {
+    LOG_WARN("failed to initialize graph witness admission", K(ret));
   }
   if (OB_SUCC(ret) && use_native_runtime_) {
     init_native_monitor_info();
@@ -827,6 +831,7 @@ int GraphFeedbackLoopOp::inner_open()
 
 int GraphFeedbackLoopOp::inner_close()
 {
+  destroy_fallback_admission();
   update_native_monitor_info();
   reset_native_runtime();
   return use_native_runtime_ ? OB_SUCCESS : RecursivePumpOp::inner_close();
@@ -882,9 +887,13 @@ int GraphFeedbackLoopOp::get_next_native_row()
 
 int GraphFeedbackLoopOp::inner_get_next_row()
 {
-  return use_native_runtime_
+  const int ret = use_native_runtime_
       ? get_next_native_row()
       : RecursivePumpOp::inner_get_next_row();
+  if (ret != OB_SUCCESS && ret != OB_ITER_END && fallback_admission_ != nullptr) {
+    fallback_admission_->reset();
+  }
+  return ret;
 }
 
 int GraphFeedbackLoopOp::inner_get_next_batch(int64_t max_row_cnt)
@@ -892,6 +901,9 @@ int GraphFeedbackLoopOp::inner_get_next_batch(int64_t max_row_cnt)
   int ret = OB_SUCCESS;
   if (!use_native_runtime_) {
     ret = RecursivePumpOp::inner_get_next_batch(max_row_cnt);
+    if (ret != OB_SUCCESS && ret != OB_ITER_END && fallback_admission_ != nullptr) {
+      fallback_admission_->reset();
+    }
   } else {
     ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
     guard.set_batch_size(1);
@@ -934,11 +946,40 @@ int GraphFeedbackLoopOp::inner_get_next_batch(int64_t max_row_cnt)
 
 int GraphFeedbackLoopOp::inner_rescan()
 {
+  if (fallback_admission_ != nullptr) { fallback_admission_->reset(); }
   update_native_monitor_info();
   reset_native_runtime(true);
   return use_native_runtime_
       ? ObOperator::inner_rescan()
       : RecursivePumpOp::inner_rescan();
+}
+
+int GraphFeedbackLoopOp::init_fallback_admission()
+{
+  int ret = OB_SUCCESS;
+  int64_t limit = 0;
+  if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
+          ObSqlWorkAreaType::HASH_WORK_AREA, &ctx_, limit))) {
+  } else if (OB_ISNULL(fallback_admission_ = OB_NEWx(
+          GraphShortestRowAdmission, &ctx_.get_allocator()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(fallback_admission_->init(limit, get_graph_spec().get_path_desc(),
+                                              get_graph_spec().get_output_row_desc()))) {
+  } else {
+    inner_data_.set_row_admission(fallback_admission_);
+  }
+  if (OB_SUCCESS != ret) { destroy_fallback_admission(); }
+  return ret;
+}
+
+void GraphFeedbackLoopOp::destroy_fallback_admission()
+{
+  inner_data_.set_row_admission(nullptr);
+  if (fallback_admission_ != nullptr) {
+    fallback_admission_->~GraphShortestRowAdmission();
+    ctx_.get_allocator().free(fallback_admission_);
+    fallback_admission_ = nullptr;
+  }
 }
 
 int GraphFeedbackLoopOp::init_native_runtime()
@@ -1043,6 +1084,7 @@ void GraphFeedbackLoopOp::destroy_native_runtime()
 
 void GraphFeedbackLoopOp::destroy()
 {
+  destroy_fallback_admission();
   destroy_native_runtime();
   RecursivePumpOp::destroy();
 }

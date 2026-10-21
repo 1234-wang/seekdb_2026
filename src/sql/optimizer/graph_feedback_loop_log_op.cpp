@@ -788,12 +788,72 @@ int GraphFeedbackLoopLogOp::can_prune_duplicate_states(bool &can_prune)
   int ret = OB_SUCCESS;
   can_prune = false;
   const bool shortest = path_desc_.any_shortest_ && path_desc_.shortest_single_segment_;
-  bool safe = can_use_basic_native_runtime()
+  const bool fallback_shortest = shortest
+      && path_desc_.direction_ == GraphPathDirection::BOTH
+      && path_desc_.source_element_id_ == path_desc_.target_element_id_;
+  bool safe = (can_use_basic_native_runtime() || fallback_shortest)
       && path_desc_.path_mode_ == GraphPathMode::WALK
       && (shortest || (path_desc_.row_shape_ == GraphPathRowShape::PER_MATCH
                       && !path_desc_.need_path_ && path_payload_exprs_.empty()));
   ObArray<ObRawExpr *> keys;
-  if (safe && OB_FAIL(get_seed_key_exprs(keys))) {
+  // The relational fallback retains its full step. Reject volatile or
+  // subquery-dependent expressions anywhere in that step before admitting
+  // interchangeable witnesses. Ordinary CTEs never enable this graph policy.
+  ObArray<ObLogicalOperator *> step_nodes;
+  if (safe && fallback_shortest && OB_FAIL(step_nodes.push_back(get_child(second_child)))) {
+  } else if (safe && fallback_shortest && OB_FAIL(step_nodes.push_back(get_child(first_child)))) {
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && safe && i < step_nodes.count(); ++i) {
+    ObLogicalOperator *node = step_nodes.at(i);
+    ObArray<ObRawExpr *> exprs;
+    if (OB_ISNULL(node)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      switch (node->get_type()) {
+        case LOG_JOIN:
+          safe = static_cast<ObLogJoin *>(node)->get_join_type() == INNER_JOIN;
+          break;
+        case LOG_SUBPLAN_SCAN:
+        case LOG_MATERIAL:
+          break;
+        case LOG_SORT: {
+          ObLogSort *sort = static_cast<ObLogSort *>(node);
+          safe = sort->get_topn_expr() == nullptr && sort->get_topk_limit_expr() == nullptr
+              && sort->get_pushdown_topn_filter_expr() == nullptr;
+          if (OB_FAIL(sort->get_sort_exprs(exprs))) {
+          }
+          break;
+        }
+        case LOG_TABLE_SCAN: {
+          ObLogTableScan *scan = static_cast<ObLogTableScan *>(node);
+          safe = scan->get_limit_expr() == nullptr && !scan->is_sample_scan()
+              && !scan->is_vec_idx_scan() && !scan->is_text_retrieval_scan()
+              && !scan->has_es_match() && !scan->has_merge_fts_index()
+              && !scan->has_func_lookup();
+          break;
+        }
+        default:
+          safe = false;
+      }
+      if (OB_SUCC(ret) && safe) {
+        if (node->get_type() == LOG_SORT) {
+          ret = node->ObLogicalOperator::get_op_exprs(exprs);
+        } else {
+          ret = node->get_op_exprs(exprs);
+        }
+      }
+      if (OB_SUCC(ret) && safe && OB_FAIL(append(exprs, node->get_output_exprs()))) {
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && safe && j < exprs.count(); ++j) {
+      safe = exprs.at(j) != nullptr && exprs.at(j)->is_deterministic()
+          && !exprs.at(j)->has_flag(CNT_SUB_QUERY);
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && safe && j < node->get_num_of_child(); ++j) {
+      ret = step_nodes.push_back(node->get_child(j));
+    }
+  }
+  if (OB_SUCC(ret) && safe && OB_FAIL(get_seed_key_exprs(keys))) {
   }
   for (int64_t i = 0; OB_SUCC(ret) && safe && i < keys.count(); ++i) {
     // Tolerance equality is not an equivalence relation suitable for pruning
