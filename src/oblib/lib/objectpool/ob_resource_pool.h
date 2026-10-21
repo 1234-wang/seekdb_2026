@@ -96,7 +96,7 @@ public:
     : max_free_list_num_(max_free_list_num),
       mem_attr_(mem_attr),
       allocator_(allocator),
-      overflow_allocator_(nullptr),
+      overflow_allocator_(lib::ObMallocAllocator::get_instance()),
       inner_allocated_num_(0),
       inner_used_num_(0),
       free_list_allocator_(ObMemAttr("PoolFreeList", mem_attr.ctx_id_),
@@ -148,7 +148,7 @@ protected:
       }
       allocator_ = NULL;
     }
-    overflow_allocator_ = NULL;
+    set_overflow_allocator(nullptr);
   }
 public:
   T *alloc()
@@ -208,17 +208,16 @@ public:
 protected:
   void set_overflow_allocator(common::ObIAllocator *allocator)
   {
-    overflow_allocator_ = allocator;
+    // Configure before allocation, or after all overflow nodes are released:
+    // the allocator also determines their allocation layout and free policy.
+    overflow_allocator_ = nullptr != allocator
+        ? allocator : lib::ObMallocAllocator::get_instance();
   }
 
   void free_overflow_node_(Node *ptr)
   {
     ptr->~Node();
-    if (OB_NOT_NULL(overflow_allocator_)) {
-      overflow_allocator_->free(ptr);
-    } else {
-      common::ob_free(ptr);
-    }
+    overflow_allocator_->free(ptr);
   }
 
   Node *alloc_node_()
@@ -239,9 +238,7 @@ protected:
         }
       } else {
         flag = ALLOC_BY_OVERFLOW_ALLOCATOR;
-        buffer = OB_NOT_NULL(overflow_allocator_)
-            ? overflow_allocator_->alloc(sizeof(Node), mem_attr_)
-            : common::ob_malloc(sizeof(Node), mem_attr_);
+        buffer = overflow_allocator_->alloc(sizeof(Node), mem_attr_);
         (void)ATOMIC_AAF(&inner_allocated_num_, -1);
       }
       if (NULL != buffer) {

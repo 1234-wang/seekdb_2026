@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
+#include "lib/objectpool/ob_resource_pool.h"
 #include "lib/rc/context.h"
 #if defined(OB_HAVE_BUNDLED_JEMALLOC) && defined(__linux__)
 #include <sys/wait.h>
@@ -132,6 +133,22 @@ private:
   void *freed_;
 };
 
+struct ResourcePoolObject
+{
+  int64_t value_ = 0;
+  void reset() { value_ = 0; }
+};
+
+class TestResourcePool final : public ObBaseResourcePool<ResourcePoolObject, RPStrLabel<>>
+{
+  using Base = ObBaseResourcePool<ResourcePoolObject, RPStrLabel<>>;
+public:
+  explicit TestResourcePool(ObIAllocator &allocator)
+      : Base(1, &allocator, ObMemAttr("PoolOverflow"))
+  {}
+  using Base::set_overflow_allocator;
+};
+
 // A test-only quota checks freeable release without restoring SQL's retired
 // global tracker. Arena lifetime is checked with explicit usage tracking.
 class ContextTestQuota final : public MemoryQuota
@@ -160,6 +177,50 @@ public:
 };
 
 } // namespace
+
+TEST(TestResourcePoolAllocator, default_explicit_and_null_overflow_allocators)
+{
+  CountingAllocator inner;
+  ObMalloc backing;
+  MemoryUsageTracker tracker;
+  TrackedAllocator tracked(backing, &tracker, nullptr, ObMemAttr("PoolOverflow"), true);
+  {
+    TestResourcePool pool(inner);
+    ResourcePoolObject *ordinary = pool.alloc();
+    ASSERT_NE(nullptr, ordinary);
+    EXPECT_EQ(1, inner.live_allocations());
+
+    // Occupying the sole ordinary slot forces all subsequent allocations
+    // through the overflow path, which defaults to the process allocator.
+    ResourcePoolObject *default_node = pool.alloc();
+    ASSERT_NE(nullptr, default_node);
+    EXPECT_EQ(0, default_node->value_);
+    EXPECT_EQ(1, inner.live_allocations());
+    pool.free(default_node);
+
+    // A supplied allocator still owns overflow layout and accounting, as in
+    // Meta pools. Its header must be released through that same allocator.
+    pool.set_overflow_allocator(&tracked);
+    ResourcePoolObject *tracked_node = pool.alloc();
+    ASSERT_NE(nullptr, tracked_node);
+    EXPECT_GT(tracker.used(), 0);
+    pool.free(tracked_node);
+    EXPECT_EQ(0, tracker.used());
+
+    // Reset only after freeing the custom allocation. nullptr restores the
+    // default rather than disabling overflow or retaining the custom owner.
+    pool.set_overflow_allocator(nullptr);
+    ResourcePoolObject *reset_node = pool.alloc();
+    ASSERT_NE(nullptr, reset_node);
+    EXPECT_EQ(0, reset_node->value_);
+    EXPECT_EQ(0, tracker.used());
+    EXPECT_EQ(1, inner.live_allocations());
+    pool.free(reset_node);
+    pool.free(ordinary);
+  }
+  EXPECT_EQ(0, inner.live_allocations());
+  EXPECT_EQ(0, tracker.used());
+}
 
 TEST(TestMallocBackend, allocate_reallocate_free)
 {
