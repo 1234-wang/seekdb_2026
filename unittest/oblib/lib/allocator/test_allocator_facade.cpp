@@ -325,6 +325,31 @@ TEST(TestMallocBackend, module_page_allocator_preserves_explicit_owner_layout)
   EXPECT_EQ(0, tracker.used());
 }
 
+TEST(TestMallocBackend, module_page_allocator_null_restores_default)
+{
+  CountingAllocator custom;
+  ModulePageAllocator allocator(custom, "PageDefault");
+  void *ptr = allocator.alloc(128);
+  ASSERT_NE(nullptr, ptr);
+  EXPECT_EQ(1, custom.live_allocations());
+  allocator.free(ptr);
+  EXPECT_EQ(0, custom.live_allocations());
+
+  allocator.set_allocator(nullptr);
+  ModulePageAllocator copy(allocator);
+  ModulePageAllocator assigned;
+  assigned = copy;
+  ptr = allocator.alloc(128);
+  ASSERT_NE(nullptr, ptr);
+  EXPECT_GE(ob_malloc_usable_size(ptr), 128);
+  allocator.free(ptr);
+  ptr = assigned.alloc(256, ObMemAttr("PageDefault"));
+  ASSERT_NE(nullptr, ptr);
+  EXPECT_GE(ob_malloc_usable_size(ptr), 256);
+  assigned.free(ptr);
+  EXPECT_EQ(0, custom.live_allocations());
+}
+
 TEST(TestMallocBackend, untracked_adapter_preserves_backing_layout)
 {
   ArenaLikeAllocator arena;

@@ -95,7 +95,7 @@ struct ModulePageAllocator: public ObIAllocator
                       int64_t ctx_id = 0)
     : ModulePageAllocator(ObMemAttr(label, ctx_id)) {}
   ModulePageAllocator(const lib::ObMemAttr &attr)
-    : allocator_(NULL), attr_(attr) {}
+    : allocator_(lib::ObMallocAllocator::get_instance()), attr_(attr) {}
   ModulePageAllocator(const ModulePageAllocator &that)
     : allocator_(that.allocator_), attr_(that.attr_) {}
   explicit ModulePageAllocator(ObIAllocator &allocator,
@@ -115,42 +115,29 @@ struct ModulePageAllocator: public ObIAllocator
   lib::ObLabel get_label() const { return attr_.label_; }
   void *alloc(const int64_t sz)
   {
-    void *ptr = nullptr;
-    if (nullptr != allocator_) {
-      // An explicitly supplied allocator owns both the allocation layout and
-      // its release policy.  In particular, arena allocators intentionally
-      // make individual free() calls no-ops and release their pages in bulk.
-      // Adding a per-object tracking header here would be double accounting
-      // and would make a later container destructor inspect an arena page
-      // that may already have been released.
-      ptr = !attr_.label_.is_valid() && 0 == attr_.ctx_id_
-          ? allocator_->alloc(sz) : allocator_->alloc(sz, attr_);
-    } else {
-      ptr = ob_malloc(sz, attr_);
-    }
-    return ptr;
+    // An explicitly supplied allocator owns both the allocation layout and
+    // its release policy.  In particular, arena allocators intentionally
+    // make individual free() calls no-ops and release their pages in bulk.
+    // Adding a per-object tracking header here would be double accounting
+    // and would make a later container destructor inspect an arena page
+    // that may already have been released.
+    return !attr_.label_.is_valid() && 0 == attr_.ctx_id_
+        ? allocator_->alloc(sz) : allocator_->alloc(sz, attr_);
   }
   void *alloc(const int64_t size, const ObMemAttr &attr)
   {
-    void *ptr = nullptr;
-    if (nullptr != allocator_) {
-      ptr = allocator_->alloc(size, attr);
-    } else {
-      ptr = ob_malloc(size, attr);
-    }
-    return ptr;
+    return allocator_->alloc(size, attr);
   }
   void free(void *p)
   {
-    if (nullptr != allocator_) {
-      allocator_->free(p);
-    } else {
-      ob_free(p);
-    }
-    p = NULL;
+    allocator_->free(p);
   }
   void freed(const int64_t sz) {UNUSED(sz); /* mostly for effcient bulk stat reporting */ }
-  void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
+  void set_allocator(ObIAllocator *allocator)
+  {
+    // Change only before allocation or after releasing all outstanding pages.
+    allocator_ = nullptr != allocator ? allocator : lib::ObMallocAllocator::get_instance();
+  }
   ModulePageAllocator &operator=(const ModulePageAllocator &that) {
     if (this != &that) {
       allocator_ = that.allocator_;
