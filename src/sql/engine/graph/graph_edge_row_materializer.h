@@ -42,8 +42,10 @@ class GraphEdgeRowMaterializer final
 {
 public:
   GraphEdgeRowMaterializer(ObEvalCtx &eval_ctx, common::ObArenaAllocator &allocator,
+                           common::ObArenaAllocator &scratch_allocator,
                            const GraphPathDesc &path_desc)
-      : eval_ctx_(eval_ctx), allocator_(allocator), path_desc_(path_desc)
+      : eval_ctx_(eval_ctx), allocator_(allocator), scratch_allocator_(scratch_allocator),
+        path_desc_(path_desc)
   {}
   int materialize_edge(const GraphIdentityExprBinding &source,
                        const GraphIdentityExprBinding &edge_binding,
@@ -58,6 +60,7 @@ private:
                             const GraphIdentityExprBinding &target, bool &has_null) const;
   ObEvalCtx &eval_ctx_;
   common::ObArenaAllocator &allocator_;
+  common::ObArenaAllocator &scratch_allocator_;
   const GraphPathDesc &path_desc_;
 };
 

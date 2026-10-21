@@ -108,6 +108,8 @@ private:
   // Materialized edge identities are page-local views. The caller stabilizes
   // them before the next scan_edges() call, when this arena can be reused.
   common::ObArenaAllocator identity_page_allocator_;
+  // Reusable JSON conversion scratch; never backs returned edge payloads.
+  common::ObArenaAllocator payload_scratch_allocator_;
   // The scan cursor must outlive page identities and the vertex lookup between
   // two edge pages, so it owns a separate deep copy of the last edge rowkey.
   common::ObArenaAllocator edge_cursor_allocator_;

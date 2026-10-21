@@ -178,7 +178,7 @@ int GraphEdgeRowMaterializer::materialize_payload(
   int ret = OB_SUCCESS;
   const GraphExpandScanDesc *desc = &scan_desc;
   if (!desc->payload_exprs_.empty()) {
-    MultimodeAlloctor json_allocator(allocator_);
+    MultimodeAlloctor json_allocator(scratch_allocator_);
     const int64_t count = desc->payload_exprs_.count();
     ObObj *cells = static_cast<ObObj *>(allocator_.alloc(sizeof(ObObj) * count));
     if (OB_ISNULL(cells)) {
@@ -187,6 +187,9 @@ int GraphEdgeRowMaterializer::materialize_payload(
       new(cells) ObObj[count];
       payload.values_.assign(cells, count);
       for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+        // JSON trees and serialization buffers are temporary for one value.
+        // Only its final bytes belong to the edge page, which survives lookup.
+        scratch_allocator_.reuse();
         ObExpr *append_expr = desc->payload_exprs_.at(i);
         ObIJsonBase *value = nullptr;
         ObString binary;
@@ -197,7 +200,8 @@ int GraphEdgeRowMaterializer::materialize_payload(
         } else if (OB_FAIL(ObJsonExprHelper::get_json_val(
                        *append_expr, eval_ctx_, &json_allocator, 2, value))) {
         } else if (OB_FAIL(share::ObJsonWrapper::get_raw_binary(
-                       value, binary, &allocator_))) {
+                       value, binary, &scratch_allocator_))) {
+        } else if (OB_FAIL(ob_write_string(allocator_, binary, binary))) {
         } else {
           // This is one encoded JSON value, including SQL NULL as JSON null.
           // It is not a serialized identity used for graph equality.
