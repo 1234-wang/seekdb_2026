@@ -20,13 +20,9 @@ AND max_utilization IS NOT NULL AND reserved_value = 0
 AND effective_limit_type IN ('configuration', 'memory');
 tablet_semantics_preserved
 1
-SELECT COUNT(*) = 2 AS matching_memory_constraints
-FROM oceanbase.__all_virtual_resource_limit r
-JOIN oceanbase.__all_virtual_resource_limit_detail d
-ON r.resource_name = d.resource_name
-WHERE r.effective_limit_type = 'memory' AND r.max_utilization IS NULL
-AND d.limit_type = 'memory' AND r.limit_value = d.limit_value;
-matching_memory_constraints
+SELECT COUNT(*) = 6 AND SUM(resource_name = 'tablet') = 6 AS detail_only_tablet_constraints
+FROM oceanbase.__all_virtual_resource_limit_detail;
+detail_only_tablet_constraints
 1
 SELECT COUNT(*) = 6 AS tablet_constraints_preserved
 FROM oceanbase.__all_virtual_resource_limit_detail
@@ -52,11 +48,11 @@ AND reserved_value IS NULL AND max_utilization IS NULL
 AND effective_limit_type = 'scheduling';
 workarea_has_profile_reports
 1
-SELECT COUNT(*) = 1 AS workarea_has_scheduling_budget
-FROM oceanbase.__all_virtual_resource_limit_detail
-WHERE resource_name = 'sql_workarea_memory' AND limit_type = 'scheduling'
-  AND limit_value >= 0;
-workarea_has_scheduling_budget
+SELECT COUNT(*) = 1 AS detail_limit_schema_nonnullable
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_resource_limit_detail'
+AND column_name = 'limit_value' AND is_nullable = 'NO';
+detail_limit_schema_nonnullable
 1
 SELECT COUNT(*) = 1 AS nullable_reservation_schema
 FROM information_schema.columns
@@ -71,18 +67,12 @@ AND reserved_value IS NULL AND limit_value IS NULL AND max_utilization IS NULL
 AND effective_limit_type = 'none';
 meta_has_usage_without_limit
 1
-SELECT COUNT(*) = 1 AS meta_has_no_allocation_constraint
-FROM oceanbase.__all_virtual_resource_limit_detail
-WHERE resource_name = 'meta_object_memory' AND limit_type = 'none'
-  AND limit_value IS NULL;
-meta_has_no_allocation_constraint
-1
-SELECT COUNT(*) = 2 AS nullable_limit_schemas
+SELECT COUNT(*) = 1 AS nullable_main_limit_schema
 FROM information_schema.columns
 WHERE table_schema = 'oceanbase'
-  AND table_name IN ('__all_virtual_resource_limit', '__all_virtual_resource_limit_detail')
-AND column_name = 'limit_value' AND is_nullable = 'YES';
-nullable_limit_schemas
+  AND table_name = '__all_virtual_resource_limit'
+  AND column_name = 'limit_value' AND is_nullable = 'YES';
+nullable_main_limit_schema
 1
 SELECT COUNT(*) = 1 AS workarea_profile_observation
 FROM oceanbase.__all_virtual_sql_workarea_memory_info

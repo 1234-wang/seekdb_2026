@@ -20,12 +20,8 @@ WHERE resource_name = 'tablet' AND current_utilization > 0
   AND max_utilization IS NOT NULL AND reserved_value = 0
   AND effective_limit_type IN ('configuration', 'memory');
 
-SELECT COUNT(*) = 2 AS matching_memory_constraints
-FROM oceanbase.__all_virtual_resource_limit r
-JOIN oceanbase.__all_virtual_resource_limit_detail d
-  ON r.resource_name = d.resource_name
-WHERE r.effective_limit_type = 'memory' AND r.max_utilization IS NULL
-  AND d.limit_type = 'memory' AND r.limit_value = d.limit_value;
+SELECT COUNT(*) = 6 AND SUM(resource_name = 'tablet') = 6 AS detail_only_tablet_constraints
+FROM oceanbase.__all_virtual_resource_limit_detail;
 
 SELECT COUNT(*) = 6 AS tablet_constraints_preserved
 FROM oceanbase.__all_virtual_resource_limit_detail
@@ -48,10 +44,10 @@ WHERE resource_name = 'sql_workarea_memory'
   AND reserved_value IS NULL AND max_utilization IS NULL
   AND effective_limit_type = 'scheduling';
 
-SELECT COUNT(*) = 1 AS workarea_has_scheduling_budget
-FROM oceanbase.__all_virtual_resource_limit_detail
-WHERE resource_name = 'sql_workarea_memory' AND limit_type = 'scheduling'
-  AND limit_value >= 0;
+SELECT COUNT(*) = 1 AS detail_limit_schema_nonnullable
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_resource_limit_detail'
+AND column_name = 'limit_value' AND is_nullable = 'NO';
 
 SELECT COUNT(*) = 1 AS nullable_reservation_schema
 FROM information_schema.columns
@@ -64,15 +60,10 @@ WHERE resource_name = 'meta_object_memory' AND current_utilization > 0
   AND reserved_value IS NULL AND limit_value IS NULL AND max_utilization IS NULL
   AND effective_limit_type = 'none';
 
-SELECT COUNT(*) = 1 AS meta_has_no_allocation_constraint
-FROM oceanbase.__all_virtual_resource_limit_detail
-WHERE resource_name = 'meta_object_memory' AND limit_type = 'none'
-  AND limit_value IS NULL;
-
-SELECT COUNT(*) = 2 AS nullable_limit_schemas
+SELECT COUNT(*) = 1 AS nullable_main_limit_schema
 FROM information_schema.columns
 WHERE table_schema = 'oceanbase'
-  AND table_name IN ('__all_virtual_resource_limit', '__all_virtual_resource_limit_detail')
+  AND table_name = '__all_virtual_resource_limit'
   AND column_name = 'limit_value' AND is_nullable = 'YES';
 
 # The AUTO scheduler is initialized by its background timer after startup.

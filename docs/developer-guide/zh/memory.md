@@ -128,7 +128,7 @@ Meta Object 只统计、不设分配硬上限。`meta_object_memory.CURRENT_UTIL
 malloc usable bytes 计数，空闲队列按 arena 页大小计数，creator context 按 freeable
 backing bytes 计数。它不是 payload 总和、所有 META_OBJ_CTX_ID 分配总和或进程 RSS。
 不再预占额度，`LIMIT_VALUE`、`RESERVED_VALUE`、`MAX_UTILIZATION` 均为 NULL，
-`EFFECTIVE_LIMIT_TYPE` 为 `none`；detail 表保留对应的 `none` 行，limit 为 NULL。
+`EFFECTIVE_LIMIT_TYPE` 为 `none`。
 引用计数、GC/wash、池数量策略和 creator 独立创建节流保持不变。normal pool 仍允许
 overflow，取消 quota 不保证不会耗尽内存。`_storage_meta_memory_limit_percentage`
 继续用于 Tablet 容量估算，不再限制元数据分配。FIFO allocator 不再解析 context quota，
@@ -142,8 +142,8 @@ Vector 限额继续在该路径和 bitmap allocator 中执行。直接使用 Vec
 arena 分配不计入该 quota，不能将其局部 hold 视为 quota committed bytes。
 当前生产 Vector 分配路径不依赖 arena 页的额度门禁。
 
-`oceanbase.__all_virtual_resource_limit_detail` 为硬额度组件提供 `memory` 约束，
-为 SQL WorkArea 提供 `scheduling` 调度预算，单位均为字节。
+组件内存只在 `oceanbase.__all_virtual_resource_limit` 中展示。
+`oceanbase.__all_virtual_resource_limit_detail` 保留原有 tablet 约束，不增加组件内存行。
 两表原有的 tablet 行仍以个数为单位，容量计算不变。
 不新增组件内存表或视图。
 

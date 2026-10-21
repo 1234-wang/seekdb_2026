@@ -158,9 +158,8 @@ free-list arenas count their page sizes, and the creator's context reports its
 freeable backing bytes. This is not a payload total, every allocation tagged
 META_OBJ_CTX_ID, or process RSS. There is no Meta allocation quota or in-flight
 reservation. `LIMIT_VALUE`, `RESERVED_VALUE` and `MAX_UTILIZATION` are NULL;
-`EFFECTIVE_LIMIT_TYPE` is `none`. The detail table retains a matching `none` row
-with a NULL limit. Refcounting, GC/wash, pool-count policies and the creator's
-independent creation throttle remain unchanged. The normal pool can still
+`EFFECTIVE_LIMIT_TYPE` is `none`. Refcounting, GC/wash, pool-count policies and
+the creator's independent creation throttle remain unchanged. The normal pool can still
 allocate overflow nodes; removing the quota does not prevent memory exhaustion.
 `_storage_meta_memory_limit_percentage` remains an input to tablet-capacity
 estimation, not a hard limit on metadata allocations. FIFO allocators do not
@@ -176,11 +175,12 @@ context's arena is not part of that quota, and its local hold must not be read
 as quota committed bytes. No current production Vector allocation path relies
 on arena-page admission.
 
-`oceanbase.__all_virtual_resource_limit_detail` adds one `memory` constraint
-for each hard-quota component and one `scheduling` budget for SQL WorkArea,
-all in bytes. Existing tablet rows in both tables
-remain counts, not bytes; their capacity calculation is unchanged. No new
-component table or view is introduced.
+Component memory observations are available only in
+`oceanbase.__all_virtual_resource_limit`. The detail table
+`oceanbase.__all_virtual_resource_limit_detail` retains its existing tablet
+constraints and does not add component memory rows. Tablet values in both
+tables remain counts, not bytes; their capacity calculation is unchanged.
+No new component table or view is introduced.
 
 The numeric fields are independent samples. A row has no joint
 linearization point and must not be treated as a transactionally consistent
