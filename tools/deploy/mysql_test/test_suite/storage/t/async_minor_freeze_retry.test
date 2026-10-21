@@ -31,5 +31,20 @@ ALTER SYSTEM SET_TP tp_name='ERRSIM_FREEZER_FREEZE_FAILURE',error_code=0,frequen
 --enable_query_log
 SELECT * FROM async_minor_freeze_retry ORDER BY id;
 --disable_query_log
+
+# Exhausting the admission retry budget must also release the pending flag.
+--let $previous_scn = `SELECT MAX(end_log_scn) FROM oceanbase.__all_virtual_table_mgr WHERE tablet_id=$tablet_id AND table_type IN (11,12,19)`
+UPDATE async_minor_freeze_retry SET v=v+1;
+ALTER SYSTEM SET_TP tp_name='ERRSIM_FREEZER_FREEZE_FAILURE',error_code=4263,frequency=1;
+ALTER SYSTEM MINOR FREEZE;
+--real_sleep 12
+ALTER SYSTEM SET_TP tp_name='ERRSIM_FREEZER_FREEZE_FAILURE',error_code=0,frequency=0;
+ALTER SYSTEM MINOR FREEZE;
+--let $wait_timeout = 60
+--let $wait_condition = SELECT COUNT(*) > 0 FROM oceanbase.__all_virtual_table_mgr WHERE tablet_id=$tablet_id AND table_type IN (11,12,19) AND size>0 AND end_log_scn>$previous_scn
+--source mysql_test/include/wait_condition.inc
+--enable_query_log
+SELECT * FROM async_minor_freeze_retry ORDER BY id;
+--disable_query_log
 DROP TABLE async_minor_freeze_retry;
 --enable_query_log

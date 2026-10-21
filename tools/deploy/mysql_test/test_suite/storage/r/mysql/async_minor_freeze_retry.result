@@ -6,3 +6,7 @@ SELECT * FROM async_minor_freeze_retry ORDER BY id;
 id	v
 1	12
 2	23
+SELECT * FROM async_minor_freeze_retry ORDER BY id;
+id	v
+1	13
+2	24
