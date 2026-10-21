@@ -359,9 +359,8 @@ private:
                          bool &get_next);
   int try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
                         ObPhysicalPlan *&plan);
-  int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
-                        ObPlanCacheCtx &pc_ctx,
-                        ObIArray<ObCandiTableLoc> &candi_table_locs);
+  int build_table_locations(const ObIArray<ObTableLocation> &table_locations,
+                            ObPlanCacheCtx &pc_ctx);
 
   int get_phy_locations(const ObTablePartitionInfoArray &partition_infos,
                         ObIArray<ObCandiTableLoc> &candi_table_locs);
@@ -369,7 +368,6 @@ private:
   int get_plan_type(const ObIArray<ObTableLocation> &table_locations,
                     const bool is_contain_uncertain_op,
                     ObPlanCacheCtx &pc_ctx,
-                    ObIArray<ObCandiTableLoc> &candi_table_locs,
                     ObPhyPlanType &plan_type);
   ObPhysicalPlan* get_local_plan();
   int add_local_plan(ObPhysicalPlan &plan);

@@ -1,0 +1,96 @@
+# Cached non-partitioned plans must retain per-alias and related-index targets.
+--disable_warnings
+DROP TABLE IF EXISTS pc_loc_child, pc_loc_aux, pc_loc_parent, pc_loc_part, pc_loc_sub;
+--enable_warnings
+CREATE TABLE pc_loc_parent(id INT PRIMARY KEY, name VARCHAR(32), payload VARCHAR(64), KEY k_name(name));
+CREATE TABLE pc_loc_aux(id INT PRIMARY KEY, v INT);
+CREATE TABLE pc_loc_child(id INT PRIMARY KEY, parent_id INT, FOREIGN KEY(parent_id) REFERENCES pc_loc_parent(id));
+INSERT INTO pc_loc_parent VALUES(1,'alpha','one'),(2,'beta','two'),(3,'alpha','three');
+INSERT INTO pc_loc_aux VALUES(1,10),(2,20),(3,30);
+INSERT INTO pc_loc_child VALUES(1,1),(2,3);
+
+PREPARE loc_get FROM 'SELECT /*+ INDEX(pc_loc_parent k_name) */ id,payload FROM pc_loc_parent WHERE name=? ORDER BY id';
+SET @name='alpha';
+EXECUTE loc_get USING @name;
+EXECUTE loc_get USING @name;
+SET @name='beta';
+EXECUTE loc_get USING @name;
+SET @name='absent';
+EXECUTE loc_get USING @name;
+SET @name='alpha';
+EXECUTE loc_get USING @name;
+
+SELECT a.id,b.id FROM pc_loc_parent a JOIN pc_loc_parent b ON a.name=b.name WHERE a.id=1 ORDER BY b.id;
+SELECT a.id,b.id FROM pc_loc_parent a JOIN pc_loc_parent b ON a.name=b.name WHERE a.id=1 ORDER BY b.id;
+SELECT p.id,p.payload,a.v FROM pc_loc_parent p JOIN pc_loc_aux a ON p.id=a.id WHERE p.name='alpha' ORDER BY p.id;
+SELECT p.id,p.payload,a.v FROM pc_loc_parent p JOIN pc_loc_aux a ON p.id=a.id WHERE p.name='alpha' ORDER BY p.id;
+
+PREPARE loc_upd FROM 'UPDATE pc_loc_parent SET payload=? WHERE id=?';
+SET @payload='changed',@id=1;
+EXECUTE loc_upd USING @payload,@id;
+SET @payload='updated',@id=3;
+EXECUTE loc_upd USING @payload,@id;
+EXECUTE loc_get USING @name;
+PREPARE loc_ins FROM 'INSERT INTO pc_loc_parent VALUES(?,?,?)';
+SET @id=4,@name='gamma',@payload='four';
+EXECUTE loc_ins USING @id,@name,@payload;
+SET @id=5,@name='delta',@payload='five';
+EXECUTE loc_ins USING @id,@name,@payload;
+--error ER_DUP_ENTRY
+EXECUTE loc_ins USING @id,@name,@payload;
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO pc_loc_child VALUES(3,99);
+--error ER_ROW_IS_REFERENCED_2
+DELETE FROM pc_loc_parent WHERE id=1;
+SELECT id,name,payload FROM pc_loc_parent ORDER BY id;
+SELECT id,parent_id FROM pc_loc_child ORDER BY id;
+PREPARE loc_del FROM 'DELETE FROM pc_loc_parent WHERE id=?';
+SET @id=4;
+EXECUTE loc_del USING @id;
+SET @id=5;
+EXECUTE loc_del USING @id;
+SELECT id FROM pc_loc_parent ORDER BY id;
+DEALLOCATE PREPARE loc_del;
+
+# A cached statement must rebind after schema invalidation.
+ALTER TABLE pc_loc_parent ADD COLUMN extra INT DEFAULT 7;
+SET @name='alpha';
+EXECUTE loc_get USING @name;
+EXECUTE loc_get USING @name;
+DEALLOCATE PREPARE loc_get;
+DEALLOCATE PREPARE loc_upd;
+DEALLOCATE PREPARE loc_ins;
+
+# Partitioned and multi-tablet plans retain their existing routing path.
+CREATE TABLE pc_loc_part(id INT PRIMARY KEY,v INT) PARTITION BY RANGE(id)
+(PARTITION p0 VALUES LESS THAN(10),PARTITION p1 VALUES LESS THAN(20),PARTITION p2 VALUES LESS THAN MAXVALUE);
+INSERT INTO pc_loc_part VALUES(1,10),(11,20),(21,30);
+PREPARE loc_part FROM 'SELECT id,v FROM pc_loc_part WHERE id=?';
+SET @id=1;
+EXECUTE loc_part USING @id;
+EXECUTE loc_part USING @id;
+SET @id=11;
+EXECUTE loc_part USING @id;
+SET @id=21;
+EXECUTE loc_part USING @id;
+SET @id=31;
+EXECUTE loc_part USING @id;
+SELECT /*+ PARALLEL(2) */ COUNT(*),SUM(v) FROM pc_loc_part;
+SELECT /*+ PARALLEL(2) */ COUNT(*),SUM(v) FROM pc_loc_part;
+SELECT id,v FROM pc_loc_part PARTITION(p1) ORDER BY id;
+DEALLOCATE PREPARE loc_part;
+
+CREATE TABLE pc_loc_sub(id INT,p INT,v INT,PRIMARY KEY(id,p))
+PARTITION BY RANGE(id) SUBPARTITION BY HASH(p) SUBPARTITIONS 2
+(PARTITION p0 VALUES LESS THAN(10),PARTITION p1 VALUES LESS THAN MAXVALUE);
+INSERT INTO pc_loc_sub VALUES(1,1,10),(1,2,20),(11,1,30);
+PREPARE loc_sub FROM 'SELECT v FROM pc_loc_sub WHERE id=? AND p=?';
+SET @id=1,@p=1;
+EXECUTE loc_sub USING @id,@p;
+EXECUTE loc_sub USING @id,@p;
+SET @id=11;
+EXECUTE loc_sub USING @id,@p;
+SET @p=2;
+EXECUTE loc_sub USING @id,@p;
+DEALLOCATE PREPARE loc_sub;
+DROP TABLE pc_loc_child,pc_loc_aux,pc_loc_parent,pc_loc_part,pc_loc_sub;

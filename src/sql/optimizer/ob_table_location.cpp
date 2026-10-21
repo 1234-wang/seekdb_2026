@@ -1298,13 +1298,16 @@ int ObTableLocation::calculate_single_tablet_partition(ObExecContext &exec_ctx,
   ObDASTabletMapper tablet_mapper;
   ObDASCtx &das_ctx = exec_ctx.get_das_ctx();
   tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
-  if (OB_FAIL(das_ctx.get_das_tablet_mapper(loc_meta_.ref_table_id_,
+  if (OB_UNLIKELY(!tablet_id_.is_valid() || object_id_ == OB_INVALID_ID)) {
+    ret = OB_LOCATION_NOT_EXIST;
+  } else if (OB_FAIL(das_ctx.get_das_tablet_mapper(loc_meta_.ref_table_id_,
                                             tablet_mapper,
                                             &loc_meta_.related_table_ids_))) {
   } else {
     DASRelatedTabletMap *map =
         static_cast<DASRelatedTabletMap*>(tablet_mapper.get_related_table_info().related_map_);
-    if (OB_NOT_NULL(map) && !related_list_.empty() && OB_FAIL(map->assign(related_list_))) {
+    // Match get_non_partition_tablet_id(), including clearing an earlier table's map.
+    if (OB_NOT_NULL(map) && OB_FAIL(map->assign(related_list_))) {
     }
   }
   NG_TRACE(tl_calc_part_id_end);
