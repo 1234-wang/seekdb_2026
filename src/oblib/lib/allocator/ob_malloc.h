@@ -42,11 +42,7 @@ bool configure_darwin_malloc_zone();
 
 inline void *ob_malloc(const int64_t nbyte, const ObMemAttr &attr)
 {
-  void *ptr = NULL;
-  auto *allocator = lib::ObMallocAllocator::get_instance();
-  if (OB_NOT_NULL(allocator)) {
-    ptr = allocator->alloc(nbyte, attr);
-  }
+  void *ptr = lib::ObMallocAllocator::get_instance()->alloc(nbyte, attr);
   if (OB_ISNULL(ptr)) {
     LIB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED,
                 "allocate memory fail", K(attr), K(nbyte));
@@ -56,18 +52,12 @@ inline void *ob_malloc(const int64_t nbyte, const ObMemAttr &attr)
 
 inline void ob_free(void *ptr)
 {
-  auto *allocator = lib::ObMallocAllocator::get_instance();
-  abort_unless(OB_NOT_NULL(allocator));
-  allocator->free(ptr);
+  lib::ObMallocAllocator::get_instance()->free(ptr);
 }
 
 inline void *ob_realloc(void *ptr, const int64_t nbyte, const ObMemAttr &attr)
 {
-  void *nptr = NULL;
-  auto *allocator = lib::ObMallocAllocator::get_instance();
-  if (OB_NOT_NULL(allocator)) {
-    nptr = allocator->realloc(ptr, nbyte, attr);
-  }
+  void *nptr = lib::ObMallocAllocator::get_instance()->realloc(ptr, nbyte, attr);
   if (OB_ISNULL(nptr) && nbyte > 0) {
     LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED,
                 "allocate memory fail", K(attr), K(nbyte));
