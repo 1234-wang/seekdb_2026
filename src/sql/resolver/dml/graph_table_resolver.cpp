@@ -879,8 +879,22 @@ private:
           ret = OB_ERR_UNEXPECTED;
         } else if (OB_FAIL(key_arguments.push_back(
                        GraphParseNode{builder_.string(column->get_column_name_str())}))) {
-        } else if (OB_FAIL(key_arguments.push_back(GraphParseNode{
-                       builder_.column(binding, binding.element_->key_columns_[i])}))) {
+        } else {
+          ParseNode *key_value = builder_.column(binding, binding.element_->key_columns_[i]);
+          if (ob_is_string_type(column->get_data_type())
+              && CS_TYPE_BINARY == column->get_collation_type()) {
+            // JSON identities are text: encode binary keys losslessly instead of
+            // interpreting their bytes as UTF-8. Internal identity comparisons
+            // still use the original typed key, not this presentation value.
+            ObSEArray<GraphParseNode, 1> arguments;
+            if (OB_FAIL(arguments.push_back(GraphParseNode{key_value}))) {
+            } else {
+              key_value = builder_.function("hex", arguments);
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ret = key_arguments.push_back(GraphParseNode{key_value});
+          }
         }
       }
       ParseNode *key_object = nullptr;
