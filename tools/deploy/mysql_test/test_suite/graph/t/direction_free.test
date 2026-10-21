@@ -49,6 +49,19 @@ SELECT COUNT(*) AS mismatch_groups FROM (
  ) combined GROUP BY seed,endpoint,hops,edges HAVING balance<>0
 ) differences;
 SELECT seed,hops,COUNT(*) AS paths FROM direction_expected GROUP BY seed,hops ORDER BY seed,hops;
+--disable_query_log
+--source mysql_test/include/create_plan_table.inc
+--disable_result_log
+EXPLAIN INTO plan_table SET statement_id='undirected_adjacency'
+SELECT * FROM GRAPH_TABLE(graph_social MATCH ANY SHORTEST
+ (a IS person WHERE a.id=1)-[e IS knows]-{0,3}(b IS person)
+ COLUMNS(b.id AS endpoint,COUNT(e.id) AS hops)) g;
+--enable_result_log
+--echo undirected_step_filters_adjacency_before_vertex_join
+SELECT COUNT(*)=0 AS no_cartesian_step FROM plan_table
+ WHERE statement_id='undirected_adjacency' AND operator LIKE '%CARTESIAN%';
+DROP TABLE plan_table;
+--enable_query_log
 DROP TABLE direction_expected;
 DROP PROPERTY GRAPH graph_social;
 DROP TABLE graph_works,graph_knows,graph_company,graph_person;
