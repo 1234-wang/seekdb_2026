@@ -170,6 +170,7 @@ SQL_UNITY_GROUPS = [
             "src/sql/engine/graph/graph_hop_stats_collector.cpp",
             "src/sql/engine/graph/graph_expand.cpp",
             "src/sql/engine/graph/graph_identity_index.cpp",
+            "src/sql/engine/graph/graph_shortest_row_admission.cpp",
             "src/sql/engine/graph/graph_expand_input_bindings.cpp",
             "src/sql/engine/graph/graph_expand_edge_page.cpp",
             "src/sql/engine/graph/graph_expand_access_desc.cpp",

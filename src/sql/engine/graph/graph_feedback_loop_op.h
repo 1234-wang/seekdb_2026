@@ -28,6 +28,7 @@ namespace sql
 {
 
 class GraphFeedbackRuntime;
+class GraphShortestRowAdmission;
 
 // The graph operator has its own semantic spec while temporarily sharing the
 // recursive row-pump mechanics used by recursive CTE.  A later increment can
@@ -145,6 +146,8 @@ private:
   void update_native_monitor_info();
   void reset_native_runtime(bool keep_adjacency = false);
   void destroy_native_runtime();
+  int init_fallback_admission();
+  void destroy_fallback_admission();
   const GraphFeedbackLoopSpec &get_graph_spec() const
   { return static_cast<const GraphFeedbackLoopSpec &>(spec_); }
 
@@ -152,6 +155,7 @@ private:
   // Query-local owner of the native one-hop access and BFS state. Plans outside
   // the basic native capability continue to use RecursivePumpOp unchanged.
   GraphFeedbackRuntime *native_runtime_{nullptr};
+  GraphShortestRowAdmission *fallback_admission_{nullptr};
   bool use_native_runtime_{false};
 };
 
