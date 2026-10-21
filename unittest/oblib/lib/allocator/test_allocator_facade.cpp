@@ -20,6 +20,7 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/objectpool/ob_resource_pool.h"
+#include "lib/queue/ob_fixed_queue.h"
 #include "lib/rc/context.h"
 #if defined(OB_HAVE_BUNDLED_JEMALLOC) && defined(__linux__)
 #include <sys/wait.h>
@@ -220,6 +221,17 @@ TEST(TestResourcePoolAllocator, default_explicit_and_null_overflow_allocators)
   }
   EXPECT_EQ(0, inner.live_allocations());
   EXPECT_EQ(0, tracker.used());
+}
+
+TEST(TestMallocBackend, default_queue_allocator_is_ready_at_startup)
+{
+  ObFixedQueue<int> queue;
+  ASSERT_EQ(OB_SUCCESS, queue.init(4));
+  int value = 42;
+  ASSERT_EQ(OB_SUCCESS, queue.push(&value));
+  int *popped = nullptr;
+  ASSERT_EQ(OB_SUCCESS, queue.pop(popped));
+  EXPECT_EQ(&value, popped);
 }
 
 TEST(TestMallocBackend, allocate_reallocate_free)

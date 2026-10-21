@@ -29,8 +29,6 @@
 #ifdef __OB_MTRACE__
 #include <execinfo.h>
 #endif
-#include "lib/alloc/malloc_hook.h"
-#include "lib/utility/ob_tracepoint.h"
 
 #if defined(ENABLE_SANITY) || (defined(OB_HAVE_BUNDLED_JEMALLOC) && defined(__APPLE__) && TARGET_OS_IPHONE)
 // The iOS jemalloc build has no background-thread support; enabling it leaves bootstrap incomplete.
@@ -115,12 +113,9 @@ bool promote_malloc_zone(malloc_zone_t *target)
 
 } // namespace
 
-void __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool()
+void __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_default_allocator()
 {
-  static_cast<void>(EventTable::instance());
-  in_hook() = true;
   global_default_allocator = lib::ObMallocAllocator::get_instance();
-  in_hook() = false;
 }
 
 bool restore_allocator_after_fork()
