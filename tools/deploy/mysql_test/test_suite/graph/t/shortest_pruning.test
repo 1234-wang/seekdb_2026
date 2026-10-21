@@ -37,7 +37,8 @@ LATERAL (SELECT * FROM GRAPH_TABLE(gsp MATCH ANY SHORTEST
  (a IS v WHERE a.id=s.binding-s.binding+1)-[e IS e]-{2,8}(b IS v)
  COLUMNS(b.id AS endpoint,COUNT(e.id) AS hops)) p) g ORDER BY s.binding,g.endpoint;
 --echo ordinary_recursive_cte_keeps_bag
-WITH RECURSIVE r(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM r WHERE n<5)
+WITH RECURSIVE r(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM r,
+ (SELECT 1 AS copy UNION ALL SELECT 1) d WHERE n<3)
 SELECT COUNT(*) AS rows_count FROM r;
 --echo prepared_execution_resets_witness_keys
 PREPARE gsp_stmt FROM 'SELECT endpoint,hops FROM GRAPH_TABLE(gsp MATCH ANY SHORTEST (a IS v WHERE a.id=?)-[e IS e]-{2,8}(b IS v) COLUMNS(b.id AS endpoint,COUNT(e.id) AS hops)) g ORDER BY endpoint';
@@ -49,3 +50,15 @@ DEALLOCATE PREPARE gsp_stmt;
 DROP TABLE plan_table;
 DROP PROPERTY GRAPH gsp;
 DROP TABLE gsp_e,gsp_v;
+--echo composite_typed_keys_preserve_distinct_states
+CREATE TABLE gsp_cv(t VARBINARY(4),k DECIMAL(8,2),PRIMARY KEY(t,k));
+CREATE TABLE gsp_ce(id INT PRIMARY KEY,st VARBINARY(4),sk DECIMAL(8,2),dt VARBINARY(4),dk DECIMAL(8,2));
+INSERT INTO gsp_cv VALUES(X'FF00',1.25),(X'FF00',2.50),(X'FF00',3.75);
+INSERT INTO gsp_ce VALUES(1,X'FF00',1.25,X'FF00',2.50),(2,X'FF00',2.50,X'FF00',3.75);
+CREATE PROPERTY GRAPH gsp_c VERTEX TABLES(gsp_cv KEY(t,k) LABEL v PROPERTIES(k))
+EDGE TABLES(gsp_ce KEY(id) SOURCE KEY(st,sk) REFERENCES gsp_cv(t,k)
+ DESTINATION KEY(dt,dk) REFERENCES gsp_cv(t,k) LABEL e PROPERTIES(id));
+SELECT * FROM GRAPH_TABLE(gsp_c MATCH ANY SHORTEST (a IS v)-[e IS e]-{2,8}(b IS v)
+ COLUMNS(a.k AS seed,b.k AS endpoint,COUNT(e.id) AS hops)) g ORDER BY seed,endpoint;
+DROP PROPERTY GRAPH gsp_c;
+DROP TABLE gsp_ce,gsp_cv;

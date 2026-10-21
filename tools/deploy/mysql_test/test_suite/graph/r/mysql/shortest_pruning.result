@@ -21,7 +21,7 @@ binding	endpoint	hops
 2	3	2
 ordinary_recursive_cte_keeps_bag
 rows_count
-6
+15
 prepared_execution_resets_witness_keys
 endpoint	hops
 1	2
@@ -31,3 +31,14 @@ endpoint	hops
 1	2
 2	3
 3	2
+composite_typed_keys_preserve_distinct_states
+seed	endpoint	hops
+1.25	1.25	2
+1.25	2.50	3
+1.25	3.75	2
+2.50	1.25	3
+2.50	2.50	2
+2.50	3.75	3
+3.75	1.25	2
+3.75	2.50	3
+3.75	3.75	2
