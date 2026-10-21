@@ -71,6 +71,7 @@ GraphEdgeScanCursor::GraphEdgeScanCursor(ObExecContext &exec_ctx,
       eval_ctx_(eval_ctx),
       edge_das_ref_(eval_ctx, exec_ctx),
       identity_page_allocator_(exec_ctx.get_allocator()),
+      payload_scratch_allocator_(work_area_allocator),
       edge_cursor_allocator_(exec_ctx.get_allocator()),
       edge_source_index_(work_area_allocator)
 {
@@ -113,6 +114,7 @@ int GraphEdgeScanCursor::release()
 {
   const int ret = reset_edge_scan(OB_SUCCESS, false);
   identity_page_allocator_.reset();
+  payload_scratch_allocator_.reset();
   edge_cursor_allocator_.reset();
   return ret;
 }
@@ -136,7 +138,7 @@ int64_t GraphEdgeScanCursor::used_memory() const
   const int64_t source_index_bytes = edge_source_index_.used_memory();
   int64_t used = page_bytes;
   const int64_t memory_parts[] = {
-      cursor_bytes, edge_das_bytes, source_index_bytes};
+      cursor_bytes, edge_das_bytes, source_index_bytes, payload_scratch_allocator_.total()};
   for (int64_t i = 0; i < ARRAYSIZEOF(memory_parts); ++i) {
     if (used > INT64_MAX - memory_parts[i]) {
       used = INT64_MAX;
@@ -621,7 +623,8 @@ int GraphEdgeScanCursor::get_edge_page(
 {
   int ret = OB_SUCCESS;
   bool finished = false;
-  GraphEdgeRowMaterializer materializer(eval_ctx_, identity_page_allocator_, path_desc_);
+  GraphEdgeRowMaterializer materializer(eval_ctx_, identity_page_allocator_,
+                                        payload_scratch_allocator_, path_desc_);
   const GraphExpandScanDesc *scan_desc = edge_binding_.scan_desc_;
   if (OB_UNLIKELY(!edge_scan_active_ || edge_scan_rtdef_ == nullptr
                   || scan_desc == nullptr)) {
