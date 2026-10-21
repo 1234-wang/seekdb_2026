@@ -107,6 +107,9 @@ seed	hops	paths
 4	2	1
 4	3	1
 5	0	1
+undirected_step_filters_adjacency_before_vertex_join
+no_cartesian_step
+1
 DROP TABLE direction_expected;
 DROP PROPERTY GRAPH graph_social;
 DROP TABLE graph_works,graph_knows,graph_company,graph_person;

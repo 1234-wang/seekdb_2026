@@ -2493,6 +2493,7 @@ int build_recursive_graph_match(GraphRelationBuilder &builder,
       builder.append_condition(builder.binary(T_OP_OR, at_primary, at_other), recursive_where);
     } else if (OB_SUCC(ret) && path_desc.direction_ == GraphPathDirection::BOTH) {
       ParseNode *directions[2] = {nullptr, nullptr};
+      ParseNode *current_matches[2] = {nullptr, nullptr};
       ParseNode *forward_source = nullptr;
       for (int64_t orientation = 0; orientation < 2; ++orientation) {
         const uint64_t *current_columns = orientation == 0
@@ -2502,6 +2503,7 @@ int build_recursive_graph_match(GraphRelationBuilder &builder,
         if (edge.element_->source_id_ != source_pattern.element_->id_
             || edge.element_->destination_id_ != target_pattern.element_->id_) {
           directions[orientation] = builder.false_value();
+          current_matches[orientation] = builder.false_value();
         } else {
           for (int64_t i = 0; i < source_pattern.element_->key_count_; ++i) {
             builder.append_condition(builder.binary(T_OP_EQ,
@@ -2509,6 +2511,8 @@ int build_recursive_graph_match(GraphRelationBuilder &builder,
                 make_internal_column(builder, frontier_alias, CURRENT_KEY_PREFIX, i)),
                 directions[orientation]);
           }
+          current_matches[orientation] = directions[orientation] == nullptr
+              ? nullptr : builder.clone(*directions[orientation]);
           if (orientation == 0) { forward_source = directions[0]; }
           for (int64_t i = 0; i < target_pattern.element_->key_count_; ++i) {
             builder.append_condition(builder.binary(T_OP_EQ,
@@ -2518,6 +2522,12 @@ int build_recursive_graph_match(GraphRelationBuilder &builder,
           }
         }
       }
+      // Expose the frontier/edge predicate separately from the three-relation
+      // orientation predicate. Otherwise the recursive step can form an
+      // edge/vertex Cartesian product before testing adjacency. Keep the full
+      // orientation predicate below, including its one-row self-loop semantics.
+      builder.append_condition(builder.binary(T_OP_OR, current_matches[0], current_matches[1]),
+                               recursive_where);
       // OR matches a physical self-loop once, not twice as UNION ALL would.
       builder.append_condition(builder.binary(T_OP_OR, directions[0], directions[1]), recursive_where);
       if (keep_orientation) {
