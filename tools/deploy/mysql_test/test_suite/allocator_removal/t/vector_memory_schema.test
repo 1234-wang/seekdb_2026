@@ -1,0 +1,24 @@
+# owner: wangyunlai.wyl
+# owner group: storage
+# tags: allocator
+
+SELECT COUNT(*) = 0 AS raw_malloc_size_removed
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_vector_mem_info'
+  AND column_name = 'raw_malloc_size';
+
+SELECT GROUP_CONCAT(column_name ORDER BY ordinal_position) AS vector_memory_columns
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_vector_mem_info';
+
+SELECT COUNT(*) = 1 AS remaining_vector_fields_readable
+FROM oceanbase.__all_virtual_vector_mem_info
+WHERE index_metadata_size >= 0 AND vector_mem_hold >= 0 AND vector_mem_used >= 0
+  AND vector_mem_limit >= 0 AND tx_share_limit >= 0 AND vector_mem_detail_info IS NOT NULL;
+
+SELECT COUNT(*) = 1 AS vector_memory_view_readable
+FROM oceanbase.V$OB_VECTOR_MEMORY
+WHERE vector_mem_hold >= 0 AND vector_mem_used >= 0 AND vector_mem_limit >= 0;
+
+--error ER_BAD_FIELD_ERROR
+SELECT raw_malloc_size FROM oceanbase.__all_virtual_vector_mem_info;

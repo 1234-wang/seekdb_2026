@@ -197,8 +197,8 @@ at least one byte/object; failed attempts are logged but not counted.
 The obmalloc-specific `V$OB_MEMORY`, `__all_virtual_memory_info`,
 `__all_virtual_ctx_memory_info`, and `__all_virtual_malloc_sample_info` tables,
 and the `DUMP ENTITY`, `DUMP CHUNK`, and `ALTER SYSTEM REFRESH MEMORY STAT`
-commands, are removed. The Vector `RAW_MALLOC_SIZE` compatibility column is
-deprecated and returns `NULL`; Vector totals use the component tracker.
+commands, are removed. The Vector `RAW_MALLOC_SIZE` column is also removed;
+queries referencing it must be updated. Vector totals use the component tracker.
 
 The following configuration parameters remain loadable and persistent
 compatibility no-ops:

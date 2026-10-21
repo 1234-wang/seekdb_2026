@@ -82,12 +82,6 @@ int ObAllVirtualVectorMemInfo::inner_get_next_row(ObNewRow *&row)
           for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
             uint64_t col_id = output_column_ids_.at(i);
             switch (col_id) {
-              case RAW_MALLOC_SIZE:
-                // The legacy malloc sampler was part of obmalloc. Keep the
-                // column for one compatibility cycle, but do not fabricate a
-                // value from unrelated component counters.
-                cells[i].set_null();
-                break;
               case INDEX_METADATA_SIZE:
                 cells[i].set_int(manage_used);
                 break;

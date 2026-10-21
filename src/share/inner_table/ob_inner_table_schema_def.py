@@ -6278,7 +6278,6 @@ def_table_schema(
   rowkey_columns = [],
 
   normal_columns = [
-  ('raw_malloc_size', 'int', 'true'),
   ('index_metadata_size', 'int'),
   ('vector_mem_hold', 'int'),
   ('vector_mem_used', 'int'),

@@ -159,8 +159,8 @@ wash/cleanup/GC 批次；失败尝试只记录日志，不计入该字段。
 obmalloc 专用的 `V$OB_MEMORY`、`__all_virtual_memory_info`、
 `__all_virtual_ctx_memory_info`、`__all_virtual_malloc_sample_info`，以及
 `DUMP ENTITY`、`DUMP CHUNK`、`ALTER SYSTEM REFRESH MEMORY STAT` 命令已删除。
-Vector 的 `RAW_MALLOC_SIZE` 兼容列保留为 deprecated，并返回 `NULL`；Vector
-汇总改读组件 tracker。
+Vector 虚拟表中的 `RAW_MALLOC_SIZE` 列也已删除；引用该列的查询需要移除或迁移。
+Vector 汇总改读组件 tracker。
 
 以下参数继续支持加载和持久化，但为无效果的兼容项：
 `cache_wash_threshold`、`memory_chunk_cache_size`、

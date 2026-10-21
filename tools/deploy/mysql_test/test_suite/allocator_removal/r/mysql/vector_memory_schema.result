@@ -1,0 +1,24 @@
+SELECT COUNT(*) = 0 AS raw_malloc_size_removed
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_vector_mem_info'
+  AND column_name = 'raw_malloc_size';
+raw_malloc_size_removed
+1
+SELECT GROUP_CONCAT(column_name ORDER BY ordinal_position) AS vector_memory_columns
+FROM information_schema.columns
+WHERE table_schema = 'oceanbase' AND table_name = '__all_virtual_vector_mem_info';
+vector_memory_columns
+index_metadata_size,vector_mem_hold,vector_mem_used,vector_mem_limit,tx_share_limit,vector_mem_detail_info
+SELECT COUNT(*) = 1 AS remaining_vector_fields_readable
+FROM oceanbase.__all_virtual_vector_mem_info
+WHERE index_metadata_size >= 0 AND vector_mem_hold >= 0 AND vector_mem_used >= 0
+AND vector_mem_limit >= 0 AND tx_share_limit >= 0 AND vector_mem_detail_info IS NOT NULL;
+remaining_vector_fields_readable
+1
+SELECT COUNT(*) = 1 AS vector_memory_view_readable
+FROM oceanbase.V$OB_VECTOR_MEMORY
+WHERE vector_mem_hold >= 0 AND vector_mem_used >= 0 AND vector_mem_limit >= 0;
+vector_memory_view_readable
+1
+SELECT raw_malloc_size FROM oceanbase.__all_virtual_vector_mem_info;
+ERROR 42S22: Unknown column 'raw_malloc_size' in 'field list'

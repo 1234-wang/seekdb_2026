@@ -29,8 +29,7 @@ class ObAllVirtualVectorMemInfo : public common::ObVirtualTableScannerIterator
 public:
   enum COLUMN_ID_LIST
   {
-    RAW_MALLOC_SIZE = common::OB_APP_MIN_COLUMN_ID,
-    INDEX_METADATA_SIZE,
+    INDEX_METADATA_SIZE = common::OB_APP_MIN_COLUMN_ID,
     VECTOR_MEM_HOLD,
     VECTOR_MEM_USED,
     VECTOR_MEM_LIMIT,
