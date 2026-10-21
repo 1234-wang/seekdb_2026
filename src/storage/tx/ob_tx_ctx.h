@@ -162,6 +162,8 @@ public:
   int get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr);
 
   int check_tx_status();
+  // Called only after replay is drained and local log append is enabled.
+  int takeover_from_replay();
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int check_with_tx_data(ObITxDataCheckFunctor &fn);
   const share::SCN get_rec_log_ts() const;
