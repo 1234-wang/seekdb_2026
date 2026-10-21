@@ -108,6 +108,11 @@ int GraphExpand::lookup_source_vertices()
 {
   int ret = OB_SUCCESS;
   existing_sources_.reuse();
+  if (sources_verified_) {
+    // Borrow the stable input keys until this batch closes. Do not conflate
+    // this proof with an adjacency-cache hit or with an unchecked caller key.
+    return existing_sources_.assign(input_bindings_.sources());
+  }
   for (int64_t start = 0;
        OB_SUCC(ret) && start < input_bindings_.sources().count();) {
     source_lookup_batch_.reuse();
@@ -248,16 +253,6 @@ bool GraphExpand::contains(const ObIArray<GraphElementIdentity> &identities,
   return found;
 }
 
-int GraphExpand::push_unique(ObIArray<GraphElementIdentity> &identities,
-                             const GraphElementIdentity &identity)
-{
-  int ret = OB_SUCCESS;
-  if (!contains(identities, identity)) {
-    ret = identities.push_back(identity);
-  }
-  return ret;
-}
-
 int GraphExpand::validate_lookup_result(
     const ObIArray<GraphElementIdentity> &requested,
     const ObIArray<GraphElementIdentity> &existing) const
@@ -295,7 +290,7 @@ int GraphExpand::validate_and_account(const ObIArray<GraphExpandInput> &inputs)
     // Reserve the worst case of one distinct source per input: one identity
     // index entry/bucket, one group descriptor and one next-input link.
     const int64_t source_index_entry_bytes =
-        sizeof(GraphElementIdentity) + 2 * sizeof(int64_t);
+        GraphIdentityIndex::entry_size();
     const int64_t source_index_bucket_bytes = sizeof(int64_t);
     const int64_t existing_source_index_bytes =
         source_index_entry_bytes + source_index_bucket_bytes;
@@ -308,6 +303,7 @@ int GraphExpand::validate_and_account(const ObIArray<GraphExpandInput> &inputs)
         + source_input_group_bytes
         + GRAPH_EXPAND_INPUT_MEMORY_RESERVE_BYTES;
     const int64_t per_edge = sizeof(GraphExpandEdge) + 2 * sizeof(GraphElementIdentity)
+        + 2 * (source_index_entry_bytes + source_index_bucket_bytes) + sizeof(uint8_t)
         + GRAPH_EXPAND_EDGE_MEMORY_RESERVE_BYTES;
     const int64_t lookup_batch_count = std::min(
         inputs.count(), GRAPH_EXPAND_VERTEX_LOOKUP_BATCH_SIZE);
@@ -427,17 +423,15 @@ int GraphExpand::load_next_page()
                 && edge.edge_identity_ == *edge_page_.continuation()))) {
       ret = OB_ERR_UNEXPECTED;
     }
-    for (int64_t j = 0; OB_SUCC(ret) && j < i; ++j) {
-      if (edge.edge_identity_ == edge_page_.edges().at(j).edge_identity_) {
-        ret = OB_ERR_UNEXPECTED;
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(push_unique(edge_page_.targets(), edge.target_identity_))) {
-    }
   }
   if (OB_SUCC(ret)) {
     stats_.scanned_edges_ = saturated_nonnegative_add(
         stats_.scanned_edges_, scanned_edges);
+  }
+  if (OB_SUCC(ret) && !edge_page_.edges().empty()) {
+    if (OB_FAIL(edge_page_.prepare_targets())) {
+    } else if (OB_FAIL(check_memory_limit())) {
+    }
   }
   if (OB_SUCC(ret) && !edge_page_.edges().empty()) {
     stats_.looked_up_vertices_ += edge_page_.targets().count();
@@ -447,10 +441,11 @@ int GraphExpand::load_next_page()
     } else if (OB_FAIL(access_.check_status())) {
     } else if (OB_FAIL(edge_page_.stabilize_targets())) {
     } else if (OB_FAIL(check_memory_limit())) {
-    } else if (OB_FAIL(validate_lookup_result(edge_page_.targets(), edge_page_.existing_targets()))) {
+    } else if (OB_FAIL(edge_page_.validate_targets())) {
+    } else if (OB_FAIL(check_memory_limit())) {
     } else {
       for (int64_t i = 0; i < edge_page_.edges().count(); ++i) {
-        if (!contains(edge_page_.existing_targets(), edge_page_.edges().at(i).target_identity_)) {
+        if (!edge_page_.target_exists(i)) {
           ++stats_.orphan_edges_;
         }
       }
@@ -482,7 +477,7 @@ int GraphExpand::get_next_row(GraphExpandOutput &output)
     }
     if (OB_SUCC(ret)) {
       const GraphExpandEdge &edge = edge_page_.edges().at(edge_index_);
-      if (contains(edge_page_.existing_targets(), edge.target_identity_)) {
+      if (edge_page_.target_exists(edge_index_)) {
         const GraphExpandInput *input = nullptr;
         if (!input_group_started_) {
           if (OB_FAIL(input_bindings_.begin_edge(edge.source_identity_))) {

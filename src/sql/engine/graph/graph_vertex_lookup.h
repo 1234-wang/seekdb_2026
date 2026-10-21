@@ -28,7 +28,8 @@ namespace sql
 class ObTableLocation;
 
 // Owns vertex multi-get and its reusable source/target partition routers.
-// DAS tasks are call-local; release() drops transient results, not routers.
+// Tasks are closed after each call; the DAS arena is reused between batches.
+// release() drops all transient allocations, not the partition routers.
 class GraphVertexLookup final
 {
 public:
@@ -88,6 +89,7 @@ private:
                            GraphElementIdentity &identity);
   ObExecContext &exec_ctx_;
   ObEvalCtx &eval_ctx_;
+  ObDASRef das_ref_;
   common::ObIAllocator &work_area_allocator_;
   // Destroy both routers before reclaiming their shared arena.
   common::ObArenaAllocator vertex_router_allocator_{work_area_allocator_};

@@ -46,6 +46,7 @@ public:
            int64_t binding_id = 0) const;
   void reset();
   int64_t count() const { return entries_.count(); }
+  static int64_t entry_size() { return sizeof(Entry); }
   int64_t used_memory() const
   {
     return bucket_heads_.get_data_size()
@@ -61,14 +62,16 @@ private:
     // Optional correlation domain; adjacency-only users keep the default zero.
     int64_t binding_id_{0};
     int64_t next_entry_{-1};
+    uint64_t hash_{0};
     TO_STRING_KV(K_(identity), K_(next_entry));
   };
 
   int calc_compatible_hash(const GraphElementIdentity &identity,
                            uint64_t &hash) const;
-  int get_bucket(const GraphElementIdentity &identity,
-                 int64_t &bucket,
-                 int64_t binding_id) const;
+  int get_hash(const GraphElementIdentity &identity,
+               uint64_t &hash, int64_t binding_id) const;
+  int find_in_bucket(const GraphElementIdentity &identity, uint64_t hash,
+                     int64_t binding_id, int64_t &entry_index, bool &found) const;
   int grow_buckets();
 
 private:

@@ -44,7 +44,10 @@ public:
 
   // GraphExpandOutput::path_state_id_ names the parent prefix. This method
   // validates that association, inherits its binding and creates the child.
-  int add_child(const GraphExpandOutput &extension, int64_t &path_state_id);
+  int add_child(const GraphExpandOutput &extension, int64_t &path_state_id,
+                bool retain_history = true);
+  int build_endpoints(int64_t leaf_path_state_id,
+                       common::ObIArray<GraphPathState> &endpoints) const;
 
   // Returned identities are shallow copies backed by this store's arena and
   // therefore remain valid until reset(). The copy itself is stable across a

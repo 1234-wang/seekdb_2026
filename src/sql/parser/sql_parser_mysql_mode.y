@@ -7487,6 +7487,8 @@ opt_graph_search:
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 1;
+  /* This is a syntax marker, not a literal present in the SQL text. */
+  $$->is_hidden_const_ = 1;
 }
 ;
 
@@ -7588,29 +7590,27 @@ opt_graph_quantifier:
 graph_quantifier:
 '{' INTNUM '}'
 {
-  $2->is_forbid_parameter_ = 1;
+  /* Count bounds as fast-parser literals but retain their values when
+   * parameterizing the tree. Forbidding them altogether loses the literal
+   * count and prevents text-protocol graph queries from entering plan cache. */
   malloc_non_terminal_node($$, result->malloc_pool_, T_GRAPH_QUANTIFIER, 2, $2, NULL);
   $$->value_ = 0;
   $$->is_tree_not_param_ = 1;
 }
 | '{' INTNUM ',' INTNUM '}'
 {
-  $2->is_forbid_parameter_ = 1;
-  $4->is_forbid_parameter_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_GRAPH_QUANTIFIER, 2, $2, $4);
   $$->value_ = 1;
   $$->is_tree_not_param_ = 1;
 }
 | '{' ',' INTNUM '}'
 {
-  $3->is_forbid_parameter_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_GRAPH_QUANTIFIER, 2, NULL, $3);
   $$->value_ = 1;
   $$->is_tree_not_param_ = 1;
 }
 | '{' INTNUM ',' '}'
 {
-  $2->is_forbid_parameter_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_GRAPH_QUANTIFIER, 2, $2, NULL);
   $$->value_ = 1;
   $$->is_tree_not_param_ = 1;

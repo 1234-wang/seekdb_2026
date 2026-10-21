@@ -19,6 +19,7 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_array.h"
 #include "sql/engine/graph/graph_path_spec.h"
+#include "sql/engine/graph/graph_identity_index.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,9 @@ public:
   void reset();
   int stabilize_edge_page();
   int stabilize_targets() { return stabilize_identities(existing_targets_); }
+  int prepare_targets();
+  int validate_targets();
+  bool target_exists(int64_t edge_index) const { return target_exists_.at(edge_index) != 0; }
   int save_continuation();
   int64_t used_memory() const;
   common::ObIArray<GraphExpandEdge> &edges() { return edge_page_; }
@@ -49,6 +53,12 @@ private:
   common::ObArray<GraphExpandEdge> edge_page_;
   common::ObArray<GraphElementIdentity> target_identities_;
   common::ObArray<GraphElementIdentity> existing_targets_;
+  // Shallow indexes borrow identities from this page's arena. The scratch
+  // index checks edge uniqueness first, then validates returned vertices.
+  GraphIdentityIndex target_index_;
+  GraphIdentityIndex validation_index_;
+  // One flag per physical edge, not per distinct target or output binding.
+  common::ObArray<uint8_t> target_exists_;
   GraphElementIdentity after_edge_{};
   bool has_after_edge_{false};
   DISALLOW_COPY_AND_ASSIGN(GraphExpandEdgePage);

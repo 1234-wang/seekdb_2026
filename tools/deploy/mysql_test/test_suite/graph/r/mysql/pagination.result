@@ -236,5 +236,47 @@ uses_local_adjacency_index
 1
 DROP PROPERTY GRAPH graph_page_partition;
 DROP TABLE graph_page_partition_e;
+distinct_target_pages_preserve_one_and_two_hop_bags
+uses_native_target_pages
+1
+SELECT COUNT(*) AS mismatched_endpoint_bags FROM (
+SELECT endpoint,hops,SUM(delta) AS net_delta FROM (
+SELECT g.endpoint,g.hops,1 AS delta FROM GRAPH_TABLE(graph_page MATCH
+(a IS node WHERE a.id=1)-[e IS link]->{1,2}(b IS node)
+COLUMNS(b.id AS endpoint,COUNT(e.id) AS hops)) g
+UNION ALL
+SELECT b.id,1,-1 FROM graph_page_vertex a
+JOIN graph_page_edge e ON e.src=a.id JOIN graph_page_vertex b ON b.id=e.dst WHERE a.id=1
+UNION ALL
+SELECT c.id,2,-1 FROM graph_page_vertex a
+JOIN graph_page_edge e ON e.src=a.id JOIN graph_page_vertex b ON b.id=e.dst
+JOIN graph_page_edge f ON f.src=b.id JOIN graph_page_vertex c ON c.id=f.dst WHERE a.id=1
+) paths GROUP BY endpoint,hops HAVING SUM(delta)<>0
+) mismatches;
+mismatched_endpoint_bags
+0
+DROP INDEX graph_page_out ON graph_page_edge;
+uses_native_target_pages
+1
+SELECT COUNT(*) AS mismatched_endpoint_bags FROM (
+SELECT endpoint,hops,SUM(delta) AS net_delta FROM (
+SELECT g.endpoint,g.hops,1 AS delta FROM GRAPH_TABLE(graph_page MATCH
+(a IS node WHERE a.id=1)-[e IS link]->{1,2}(b IS node)
+COLUMNS(b.id AS endpoint,COUNT(e.id) AS hops)) g
+UNION ALL
+SELECT b.id,1,-1 FROM graph_page_vertex a
+JOIN graph_page_edge e ON e.src=a.id JOIN graph_page_vertex b ON b.id=e.dst WHERE a.id=1
+UNION ALL
+SELECT c.id,2,-1 FROM graph_page_vertex a
+JOIN graph_page_edge e ON e.src=a.id JOIN graph_page_vertex b ON b.id=e.dst
+JOIN graph_page_edge f ON f.src=b.id JOIN graph_page_vertex c ON c.id=f.dst WHERE a.id=1
+) paths GROUP BY endpoint,hops HAVING SUM(delta)<>0
+) mismatches;
+mismatched_endpoint_bags
+0
+endpoint_only_states_keep_seed_and_depth_across_output_batches
+mismatched_compact_state_bags
+0
+DROP PROPERTY GRAPH graph_page;
 DROP TABLE plan_table;
 DROP TABLE graph_page_edge,graph_page_vertex,graph_page_digit;

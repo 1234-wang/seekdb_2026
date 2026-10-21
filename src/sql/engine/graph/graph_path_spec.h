@@ -179,7 +179,9 @@ struct GraphEdgePayload
 // Represents one node in a query-local, parent-linked path-state store.
 // path_state_id_ is a store key, not an encoded path: following
 // parent_path_state_id_ back to the root and reversing the nodes reconstructs
-// the full path. All descendants of one anchor/outer row retain its opaque
+// the full path when history is retained. Endpoint-only WALK states instead
+// store the root ID, current vertex and hop count without an ancestry chain.
+// All descendants of one anchor/outer row retain its opaque
 // binding_id_; that row may remain in the outer operator or be materialized in
 // a separate row store. The frontier owner allocates these IDs and nodes;
 // GraphExpand only preserves their association.
@@ -193,18 +195,24 @@ struct GraphPathState
         && hop_ <= GRAPH_PATH_MAX_HOPS
         && current_identity_.is_valid()
         && ((hop_ == 0 && parent_path_state_id_ == GRAPH_INVALID_PATH_STATE_ID)
-            || (hop_ > 0 && parent_path_state_id_ >= 0
-                && incoming_edge_identity_.is_valid()));
+            || (hop_ > 0 && root_path_state_id_ >= 0
+                && (retains_history_
+                    ? parent_path_state_id_ >= 0 && incoming_edge_identity_.is_valid()
+                    : parent_path_state_id_ == GRAPH_INVALID_PATH_STATE_ID)));
   }
   int64_t binding_id_ = 0;
   int64_t path_state_id_ = GRAPH_INVALID_PATH_STATE_ID;
   int64_t parent_path_state_id_ = GRAPH_INVALID_PATH_STATE_ID;
+  // Endpoint-only WALK states retain their seed but no ancestry/edge values.
+  int64_t root_path_state_id_ = GRAPH_INVALID_PATH_STATE_ID;
+  bool retains_history_ = true;
   int64_t hop_ = 0;
   GraphElementIdentity current_identity_{};
   GraphElementIdentity incoming_edge_identity_{};
   GraphEdgePayload incoming_edge_payload_{};
   TO_STRING_KV(K_(binding_id), K_(path_state_id), K_(parent_path_state_id),
-               K_(hop), K_(current_identity), K_(incoming_edge_identity));
+               K_(root_path_state_id), K_(retains_history), K_(hop),
+               K_(current_identity), K_(incoming_edge_identity));
 };
 
 // One current frontier path. binding_id_ is the owner's correlation handle for

@@ -36,6 +36,7 @@ public:
                         int64_t input_batch_size,
                         int64_t memory_limit);
   ~GraphFeedbackFrontier() = default;
+  void set_retain_path_history(bool retain) { retain_path_history_ = retain; }
 
   // Seeds may only be added to the zero-hop frontier. Duplicate seed rows are
   // intentionally assigned independent path states to preserve bag semantics.
@@ -56,10 +57,11 @@ public:
              bool prune_duplicate_states = false);
 
   int get_frontier_state(int64_t index, GraphPathState &state) const;
-  // Reconstructs one current frontier entry from its zero-hop root through
-  // the current vertex. The returned query-local view is reused by the next
-  // call and remains valid only until then or reset().
-  int get_frontier_path(
+  // Returns the root-to-leaf history when retained, otherwise only the root
+  // and leaf (one state for zero hops). Endpoint-only consumers use leaf.hop_,
+  // not the array length, as the path length. The view expires on the next call
+  // or reset().
+  int get_frontier_output_states(
       int64_t index,
       const common::ObIArray<GraphPathState> *&path);
   // Visible output belongs to the next hop while expansion is in progress.
@@ -124,6 +126,7 @@ private:
   bool active_prune_duplicate_states_{false};
   bool expanding_{false};
   bool batch_open_{false};
+  bool retain_path_history_{true};
 
   DISALLOW_COPY_AND_ASSIGN(GraphFeedbackFrontier);
 };

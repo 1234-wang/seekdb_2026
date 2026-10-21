@@ -129,7 +129,10 @@ int GraphFeedbackFrontier::begin_hop(
   int ret = OB_SUCCESS;
   next_state_ids_->reuse();
   next_state_index_.reset();
-  if (OB_FAIL(input_batcher_.begin_level(*current_state_ids_, hop_, batch_memory_budget()))) {
+  if (OB_UNLIKELY(!retain_path_history_ && path_mode != GraphPathMode::WALK)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("graph path mode requires retained history", K(ret), K(path_mode));
+  } else if (OB_FAIL(input_batcher_.begin_level(*current_state_ids_, hop_, batch_memory_budget()))) {
     LOG_WARN("failed to group graph frontier sources", K(ret), K_(hop));
   } else {
     hop_stats_.begin(current_state_ids_->count(), input_batcher_.has_source_index()
@@ -200,7 +203,7 @@ int GraphFeedbackFrontier::save_extension(
   int64_t child_state_id = GRAPH_INVALID_PATH_STATE_ID;
   GraphPathState child;
   bool inserted = false;
-  if (OB_FAIL(state_store_.add_child(extension, child_state_id))) {
+  if (OB_FAIL(state_store_.add_child(extension, child_state_id, retain_path_history_))) {
     LOG_WARN("failed to add graph frontier child", K(ret), K(extension));
   } else if (OB_FAIL(next_state_ids_->push_back(child_state_id))) {
     LOG_WARN("failed to append next graph frontier state", K(ret),
@@ -342,7 +345,7 @@ int GraphFeedbackFrontier::get_frontier_state(
   return ret;
 }
 
-int GraphFeedbackFrontier::get_frontier_path(
+int GraphFeedbackFrontier::get_frontier_output_states(
     int64_t index,
     const ObIArray<GraphPathState> *&path)
 {
@@ -350,8 +353,9 @@ int GraphFeedbackFrontier::get_frontier_path(
   GraphPathState leaf;
   path = nullptr;
   if (OB_FAIL(get_frontier_state(index, leaf))) {
-  } else if (OB_FAIL(state_store_.build_path(leaf.path_state_id_,
-                                             path_buffer_))) {
+  } else if (OB_FAIL(retain_path_history_
+      ? state_store_.build_path(leaf.path_state_id_, path_buffer_)
+      : state_store_.build_endpoints(leaf.path_state_id_, path_buffer_))) {
     LOG_WARN("failed to reconstruct graph frontier path", K(ret), K(index),
              K(leaf));
   } else if (OB_FAIL(check_memory_limit())) {

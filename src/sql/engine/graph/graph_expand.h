@@ -114,6 +114,9 @@ public:
   bool can_partition_sources() const
   { return access_.can_partition_sources(); }
   int check_status() { return access_.check_status(); }
+  // Only the native frontier may assert this: roots came from the anchor
+  // table, and every child passed target existence under the same snapshot.
+  void set_sources_verified(bool verified) { sources_verified_ = verified; }
 
 private:
   int load_next_page();
@@ -128,12 +131,11 @@ private:
   int deep_copy_identity(const GraphElementIdentity &source,
                          GraphElementIdentity &destination);
   int check_memory_limit();
-  int push_unique(common::ObIArray<GraphElementIdentity> &identities,
-                  const GraphElementIdentity &identity);
   int fail(int error);
 
 private:
   IGraphExpandAccess &access_;
+  bool sources_verified_{false};
   // Source-existence identities live for the input batch, independently of edge pages.
   common::ObArenaAllocator identity_allocator_;
   GraphExpandInputBindings input_bindings_;

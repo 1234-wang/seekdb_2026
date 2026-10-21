@@ -70,6 +70,7 @@ GraphVertexLookup::GraphVertexLookup(ObExecContext &exec_ctx,
                                      ObIAllocator &work_area_allocator)
     : exec_ctx_(exec_ctx),
       eval_ctx_(eval_ctx),
+      das_ref_(eval_ctx, exec_ctx),
       work_area_allocator_(work_area_allocator),
       identity_page_allocator_(exec_ctx.get_allocator())
 {
@@ -118,6 +119,8 @@ int GraphVertexLookup::init(const GraphPathDesc &path_desc,
 
 void GraphVertexLookup::release()
 {
+  // No live tasks survive lookup_vertices(), including its failure paths.
+  das_ref_.reuse(false);
   identity_page_allocator_.reset();
   clear_lookup_memory();
 }
@@ -125,7 +128,7 @@ void GraphVertexLookup::release()
 int64_t GraphVertexLookup::used_memory() const
 {
   const int64_t page_bytes = identity_page_allocator_.total();
-  const int64_t lookup_bytes = MAX(vertex_lookup_memory_bytes_, 0);
+  const int64_t lookup_bytes = MAX(vertex_lookup_memory_bytes_, das_ref_.get_reuse_alloc_total());
   return page_bytes > INT64_MAX - lookup_bytes ? INT64_MAX : page_bytes + lookup_bytes;
 }
 
@@ -384,7 +387,10 @@ int GraphVertexLookup::lookup_vertices(
     GraphVertexLookupPhase phase)
 {
   int ret = OB_SUCCESS;
-  ObDASRef das_ref(eval_ctx_, exec_ctx_);
+  // The prior call closed every task. Reuse only allocator backing; rebuild
+  // ranges and runtime definitions so no old rescan parameter can survive.
+  ObDASRef &das_ref = das_ref_;
+  das_ref.reuse();
   ObDASScanRtDef scan_rtdef;
   GraphIdentityIndex requested_index(das_ref.get_das_alloc());
   GraphIdentityIndex existing_index(das_ref.get_das_alloc());

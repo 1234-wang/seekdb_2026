@@ -27,11 +27,16 @@ GraphExpandEdgePage::GraphExpandEdgePage(ObIAllocator &allocator)
     : identity_allocator_(allocator), cursor_allocator_(allocator),
       edge_page_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "GraphExpand")),
       target_identities_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "GraphExpand")),
-      existing_targets_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "GraphExpand"))
+      existing_targets_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "GraphExpand")),
+      target_index_(allocator), validation_index_(allocator),
+      target_exists_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "GraphExpand"))
 {}
 
 void GraphExpandEdgePage::reuse()
 {
+  target_index_.reset();
+  validation_index_.reset();
+  target_exists_.reuse();
   edge_page_.reuse();
   target_identities_.reuse();
   existing_targets_.reuse();
@@ -40,6 +45,9 @@ void GraphExpandEdgePage::reuse()
 
 void GraphExpandEdgePage::reset()
 {
+  target_index_.reset();
+  validation_index_.reset();
+  target_exists_.reset();
   edge_page_.reset();
   target_identities_.reset();
   existing_targets_.reset();
@@ -71,13 +79,67 @@ int64_t GraphExpandEdgePage::used_memory() const
 {
   const int64_t parts[] = {identity_allocator_.total(), cursor_allocator_.total(),
       edge_page_.get_data_size(), target_identities_.get_data_size(),
-      existing_targets_.get_data_size()};
+      existing_targets_.get_data_size(), target_index_.used_memory(),
+      validation_index_.used_memory(), target_exists_.get_data_size()};
   int64_t total = 0;
   for (int64_t part : parts) {
     if (part < 0 || total > INT64_MAX - part) { return INT64_MAX; }
     total += part;
   }
   return total;
+}
+
+int GraphExpandEdgePage::prepare_targets()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(validation_index_.init(edge_page_.count()))) {
+  } else if (OB_FAIL(target_index_.init(edge_page_.count()))) {
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < edge_page_.count(); ++i) {
+    const GraphExpandEdge &edge = edge_page_.at(i);
+    int64_t position = -1;
+    bool inserted = false;
+    if (OB_FAIL(validation_index_.get_or_insert(edge.edge_identity_, position, inserted))) {
+    } else if (!inserted) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(target_index_.get_or_insert(edge.target_identity_, position, inserted))) {
+    } else if (inserted && OB_FAIL(target_identities_.push_back(edge.target_identity_))) {
+    }
+  }
+  return ret;
+}
+
+int GraphExpandEdgePage::validate_targets()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(validation_index_.init(existing_targets_.count()))) {
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < existing_targets_.count(); ++i) {
+    int64_t position = -1;
+    bool found = false;
+    bool inserted = false;
+    const GraphElementIdentity &identity = existing_targets_.at(i);
+    if (!identity.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(target_index_.find(identity, position, found))) {
+    } else if (!found) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(validation_index_.get_or_insert(identity, position, inserted))) {
+    } else if (!inserted) {
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < edge_page_.count(); ++i) {
+    int64_t position = -1;
+    bool found = false;
+    // Compare each edge with the returned vertex identities, not merely its
+    // deduplicated request representative. Fixed-scale DOUBLE equality is
+    // tolerance based and is not transitive; preserve the original matching.
+    if (OB_FAIL(validation_index_.find(edge_page_.at(i).target_identity_, position, found))) {
+    } else if (OB_FAIL(target_exists_.push_back(found ? 1 : 0))) {
+    }
+  }
+  return ret;
 }
 
 int GraphExpandEdgePage::deep_copy_identity(const GraphElementIdentity &source,

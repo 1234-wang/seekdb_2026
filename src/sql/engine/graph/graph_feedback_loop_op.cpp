@@ -70,6 +70,9 @@ public:
         frontier_(binding_store_.get_work_area_allocator(), expand_,
                   GRAPH_EXPAND_MAX_SOURCE_BATCH_SIZE, memory_limit),
         payload_allocator_(binding_store_.get_work_area_allocator()),
+        output_batch_allocator_(binding_store_.get_work_area_allocator()),
+        output_batch_rows_(OB_MALLOC_NORMAL_BLOCK_SIZE,
+            ModulePageAllocator(binding_store_.get_work_area_allocator(), "GraphOutBatch")),
         memory_limit_(memory_limit)
   {}
   ~GraphFeedbackRuntime() = default;
@@ -88,6 +91,16 @@ public:
     }
     if (OB_SUCC(ret)) {
       const ObPhysicalPlanCtx *plan_ctx = eval_ctx_.exec_ctx_.get_physical_plan_ctx();
+      const GraphFeedbackRowDesc &row = spec.get_output_row_desc();
+      frontier_.set_retain_path_history(spec.get_path_mode() != GraphPathMode::WALK
+          || spec.get_path_desc().row_shape_ != GraphPathRowShape::PER_MATCH
+          || row.payload_expr_count_ != 0 || row.trail_key_expr_count_ != 0);
+      const bool ordinary_select = plan_ctx != nullptr && plan_ctx->get_phy_plan() != nullptr
+          && plan_ctx->get_phy_plan()->is_plain_select();
+      expand_.set_sources_verified(ordinary_select
+          && spec.get_path_desc().source_element_id_ == spec.get_path_desc().target_element_id_
+          && spec.get_source_scan_desc().get_tsc_ctdef().snapshot_item_.snapshot_query_type_ == TableItem::NOT_USING
+          && spec.get_target_scan_desc().get_tsc_ctdef().snapshot_item_.snapshot_query_type_ == TableItem::NOT_USING);
       // Also check the complete physical statement: a SELECT subplan may
       // belong to DML or a statement with locking/side-effecting PL functions.
       cached_access_.set_enabled(spec.reuse_adjacency()
@@ -199,7 +212,7 @@ public:
     path = nullptr;
     if (!has_output_frontier(spec)) {
       ret = OB_ITER_END;
-    } else if (OB_FAIL(frontier_.get_frontier_path(index, path))) {
+    } else if (OB_FAIL(frontier_.get_frontier_output_states(index, path))) {
       ret = normalize_work_area_error(ret);
       LOG_WARN("failed to reconstruct graph feedback output path", K(ret),
                K(index));
@@ -318,6 +331,42 @@ public:
 
   bool is_resuming_output() const
   { return frontier_.is_expanding() && next_output_index_ == 1; }
+  void begin_output_batch()
+  {
+    output_batch_rows_.reuse();
+    output_batch_allocator_.reuse();
+  }
+
+  int save_output_row(const GraphFeedbackLoopSpec &spec)
+  {
+    int ret = OB_SUCCESS;
+    ObChunkDatumStore::StoredRow *row = nullptr;
+    if (OB_FAIL(ObChunkDatumStore::StoredRow::build(
+            row, spec.output_union_exprs_, eval_ctx_, output_batch_allocator_))) {
+    } else if (OB_FAIL(output_batch_rows_.push_back(row))) {
+    }
+    cumulative_stats_.peak_path_memory_ = std::max(
+        cumulative_stats_.peak_path_memory_, binding_store_.used_memory());
+    return normalize_work_area_error(ret);
+  }
+
+  int restore_output_batch(const GraphFeedbackLoopSpec &spec)
+  {
+    int ret = OB_SUCCESS;
+    ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+    guard.set_batch_size(output_batch_rows_.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < output_batch_rows_.count(); ++i) {
+      guard.set_batch_idx(i);
+      ret = output_batch_rows_.at(i)->to_expr(spec.output_union_exprs_, eval_ctx_);
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < spec.output_union_exprs_.count(); ++i) {
+      ObExpr *expr = spec.output_union_exprs_.at(i);
+      expr->set_evaluated_projected(eval_ctx_);
+      expr->get_eval_info(eval_ctx_).notnull_ = false;
+      expr->get_eval_info(eval_ctx_).point_to_frame_ = false;
+    }
+    return ret;
+  }
   bool has_live_edge_scan_resources() const
   { return access_.has_live_edge_scan_resources(); }
   bool resources_released() const
@@ -334,6 +383,8 @@ public:
       expanded_hop_count_ = saturated_stat_add(expanded_hop_count_, 1);
     }
     payload_allocator_.reset();
+    output_batch_rows_.reset();
+    output_batch_allocator_.reset();
     frontier_.reset();
     if (!keep_adjacency) { cached_access_.clear(); }
     binding_store_.reset();
@@ -591,6 +642,10 @@ private:
   GraphExpand expand_;
   GraphFeedbackFrontier frontier_;
   common::ObArenaAllocator payload_allocator_;
+  // DAS and scalar expression evaluation may overwrite output frames. Stage
+  // deep-copied rows, then publish the whole batch only after all access ends.
+  common::ObArenaAllocator output_batch_allocator_;
+  common::ObArray<ObChunkDatumStore::StoredRow *> output_batch_rows_;
   int64_t memory_limit_{0};
   int64_t next_output_index_{0};
   GraphExpandStats cumulative_stats_{};
@@ -841,17 +896,37 @@ int GraphFeedbackLoopOp::inner_get_next_batch(int64_t max_row_cnt)
     ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
     guard.set_batch_size(1);
     guard.set_batch_idx(0);
-    if (OB_FAIL(get_next_native_row())) {
-      if (ret == OB_ITER_END) {
-        ret = OB_SUCCESS;
-        brs_.size_ = 0;
-        brs_.end_ = true;
-      }
+    int64_t limit = std::min(max_row_cnt, get_graph_spec().max_batch_size_);
+    for (int64_t i = 0; i < get_graph_spec().output_union_exprs_.count(); ++i) {
+      if (!get_graph_spec().output_union_exprs_.at(i)->is_batch_result()) { limit = 1; }
+    }
+    // The recursive child and DAS scans share expression frames. Stage owned
+    // row copies before advancing them, then populate the final batch slots.
+    brs_.size_ = 0;
+    brs_.end_ = false;
+    if (native_runtime_ == nullptr || limit <= 0) {
+      ret = OB_ERR_UNEXPECTED;
     } else {
-      brs_.skip_->reset(1);
-      brs_.size_ = 1;
-      brs_.end_ = false;
+      native_runtime_->begin_output_batch();
+    }
+    while (OB_SUCC(ret) && brs_.size_ < limit && !brs_.end_) {
+      if (OB_FAIL(get_next_native_row())) {
+        if (ret == OB_ITER_END) {
+          ret = OB_SUCCESS;
+          brs_.end_ = true;
+        }
+      } else if (OB_FAIL(native_runtime_->save_output_row(get_graph_spec()))) {
+      } else {
+        ++brs_.size_;
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(native_runtime_->restore_output_batch(get_graph_spec()))) {
+    }
+    if (OB_SUCC(ret)) {
+      brs_.skip_->reset(brs_.size_);
       brs_.all_rows_active_ = true;
+    } else {
+      reset_native_runtime();
     }
   }
   return ret;

@@ -95,6 +95,7 @@ int GraphPathStateStore::append_state(GraphPathState &state,
     LOG_WARN("too many graph path states", K(ret), "count", states_.count());
   } else {
     state.path_state_id_ = states_.count();
+    if (state.hop_ == 0) { state.root_path_state_id_ = state.path_state_id_; }
     if (OB_UNLIKELY(!state.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid graph path state", K(ret), K(state));
@@ -135,7 +136,7 @@ int GraphPathStateStore::add_root(int64_t binding_id,
 }
 
 int GraphPathStateStore::add_child(const GraphExpandOutput &extension,
-                                   int64_t &path_state_id)
+                                   int64_t &path_state_id, bool retain_history)
 {
   int ret = OB_SUCCESS;
   GraphPathState parent;
@@ -149,6 +150,7 @@ int GraphPathStateStore::add_child(const GraphExpandOutput &extension,
   } else if (OB_FAIL(get_state(extension.path_state_id_, parent))) {
     LOG_WARN("failed to find graph path parent", K(ret), K(extension));
   } else if (OB_UNLIKELY(extension.binding_id_ != parent.binding_id_
+                         || (retain_history && !parent.retains_history_)
                          || parent.hop_ >= GRAPH_PATH_MAX_HOPS
                          || parent.current_identity_.graph_id_
                                 != extension.edge_identity_.graph_id_
@@ -159,13 +161,15 @@ int GraphPathStateStore::add_child(const GraphExpandOutput &extension,
              K(ret), K(parent), K(extension));
   } else {
     child.binding_id_ = parent.binding_id_;
-    child.parent_path_state_id_ = parent.path_state_id_;
+    child.retains_history_ = retain_history;
+    child.root_path_state_id_ = parent.root_path_state_id_;
+    child.parent_path_state_id_ = retain_history ? parent.path_state_id_ : GRAPH_INVALID_PATH_STATE_ID;
     child.hop_ = parent.hop_ + 1;
     if (OB_FAIL(deep_copy_identity(extension.target_identity_,
                                    child.current_identity_))) {
-    } else if (OB_FAIL(deep_copy_identity(extension.edge_identity_,
+    } else if (retain_history && OB_FAIL(deep_copy_identity(extension.edge_identity_,
                                           child.incoming_edge_identity_))) {
-    } else if (OB_FAIL(child.incoming_edge_payload_.deep_copy(
+    } else if (retain_history && OB_FAIL(child.incoming_edge_payload_.deep_copy(
                    extension.edge_payload_, identity_allocator_))) {
     } else if (OB_FAIL(append_state(child, path_state_id))) {
     }
@@ -211,6 +215,23 @@ int GraphPathStateStore::make_expand_input(int64_t path_state_id,
   return ret;
 }
 
+int GraphPathStateStore::build_endpoints(int64_t leaf_path_state_id,
+                                         ObIArray<GraphPathState> &endpoints) const
+{
+  int ret = OB_SUCCESS;
+  GraphPathState leaf;
+  GraphPathState root;
+  endpoints.reuse();
+  if (OB_FAIL(get_state(leaf_path_state_id, leaf))) {
+  } else if (OB_FAIL(get_state(leaf.root_path_state_id_, root))) {
+  } else if (root.hop_ != 0 || root.binding_id_ != leaf.binding_id_) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(endpoints.push_back(root))) {
+  } else if (leaf.hop_ > 0 && OB_FAIL(endpoints.push_back(leaf))) {
+  }
+  return ret;
+}
+
 int GraphPathStateStore::build_path(
     int64_t leaf_path_state_id,
     ObIArray<GraphPathState> &path) const
@@ -226,6 +247,7 @@ int GraphPathStateStore::build_path(
   } else {
     leaf_hop = state.hop_;
     binding_id = state.binding_id_;
+    if (!state.retains_history_) { ret = OB_ERR_UNEXPECTED; }
   }
   for (int64_t visited = 0; OB_SUCC(ret); ++visited) {
     if (OB_UNLIKELY(visited > GRAPH_PATH_MAX_HOPS

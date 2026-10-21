@@ -100,20 +100,21 @@ int GraphIdentityIndex::calc_compatible_hash(
   return ret;
 }
 
-int GraphIdentityIndex::get_bucket(
+int GraphIdentityIndex::get_hash(
     const GraphElementIdentity &identity,
-    int64_t &bucket,
+    uint64_t &hash,
     int64_t binding_id) const
 {
   int ret = OB_SUCCESS;
-  uint64_t hash = 0;
-  bucket = -1;
+  hash = 0;
   if (bucket_heads_.empty()) {
     ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!identity.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(calc_compatible_hash(identity, hash))) {
     LOG_WARN("failed to hash graph identity", K(ret), K(identity));
   } else {
-    bucket = static_cast<int64_t>(do_hash(binding_id, hash) % bucket_heads_.count());
+    hash = do_hash(binding_id, hash);
   }
   return ret;
 }
@@ -124,34 +125,43 @@ int GraphIdentityIndex::find(const GraphElementIdentity &identity,
                              int64_t binding_id) const
 {
   int ret = OB_SUCCESS;
+  uint64_t hash = 0;
+  entry_index = -1;
+  found = false;
+  if (OB_FAIL(get_hash(identity, hash, binding_id))) {
+    LOG_WARN("failed to locate graph identity bucket", K(ret), K(identity));
+  } else {
+    ret = find_in_bucket(identity, hash, binding_id, entry_index, found);
+  }
+  return ret;
+}
+
+int GraphIdentityIndex::find_in_bucket(const GraphElementIdentity &identity,
+                                      uint64_t hash, int64_t binding_id,
+                                      int64_t &entry_index, bool &found) const
+{
+  int ret = OB_SUCCESS;
   int64_t visited = 0;
   entry_index = -1;
   found = false;
-  int64_t bucket = -1;
-  if (OB_UNLIKELY(!identity.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid graph identity lookup", K(ret), K(identity));
-  } else if (OB_FAIL(get_bucket(identity, bucket, binding_id))) {
-    LOG_WARN("failed to locate graph identity bucket", K(ret), K(identity));
+  if (OB_UNLIKELY(bucket_heads_.empty())) {
+    ret = OB_NOT_INIT;
   } else {
-    if (OB_UNLIKELY(bucket < 0 || bucket >= bucket_heads_.count())) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("graph identity index is not initialized", K(ret), K(bucket));
-    } else {
-      int64_t current = bucket_heads_.at(bucket);
-      while (OB_SUCC(ret) && !found && current >= 0) {
-        if (OB_UNLIKELY(current >= entries_.count()
-                        || visited++ >= entries_.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("corrupted graph identity hash chain", K(ret), K(current),
-                   K(visited), "entry_count", entries_.count());
-        } else if (entries_.at(current).binding_id_ == binding_id
-                   && entries_.at(current).identity_ == identity) {
-          entry_index = current;
-          found = true;
-        } else {
-          current = entries_.at(current).next_entry_;
-        }
+    const int64_t bucket = hash % bucket_heads_.count();
+    int64_t current = bucket_heads_.at(bucket);
+    while (OB_SUCC(ret) && !found && current >= 0) {
+      if (OB_UNLIKELY(current >= entries_.count()
+                      || visited++ >= entries_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("corrupted graph identity hash chain", K(ret), K(current),
+                 K(visited), "entry_count", entries_.count());
+      } else if (entries_.at(current).hash_ == hash
+                 && entries_.at(current).binding_id_ == binding_id
+                 && entries_.at(current).identity_ == identity) {
+        entry_index = current;
+        found = true;
+      } else {
+        current = entries_.at(current).next_entry_;
       }
     }
   }
@@ -166,26 +176,26 @@ int GraphIdentityIndex::get_or_insert(
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  uint64_t hash = 0;
+  entry_index = -1;
   inserted = false;
-  if (OB_FAIL(find(identity, entry_index, found, binding_id))) {
+  if (OB_FAIL(get_hash(identity, hash, binding_id))) {
+  } else if (OB_FAIL(find_in_bucket(identity, hash, binding_id, entry_index, found))) {
   } else if (found) {
   } else if (OB_FAIL(grow_buckets())) {
   } else {
-    int64_t bucket = -1;
-    if (OB_FAIL(get_bucket(identity, bucket, binding_id))) {
-      LOG_WARN("failed to locate graph identity bucket", K(ret), K(identity));
+    const int64_t bucket = hash % bucket_heads_.count();
+    Entry entry;
+    entry.identity_ = identity;
+    entry.binding_id_ = binding_id;
+    entry.hash_ = hash;
+    entry.next_entry_ = bucket_heads_.at(bucket);
+    if (OB_FAIL(entries_.push_back(entry))) {
+      LOG_WARN("failed to append graph identity entry", K(ret), K(identity));
     } else {
-      Entry entry;
-      entry.identity_ = identity;
-      entry.binding_id_ = binding_id;
-      entry.next_entry_ = bucket_heads_.at(bucket);
-      if (OB_FAIL(entries_.push_back(entry))) {
-        LOG_WARN("failed to append graph identity entry", K(ret), K(identity));
-      } else {
-        entry_index = entries_.count() - 1;
-        bucket_heads_.at(bucket) = entry_index;
-        inserted = true;
-      }
+      entry_index = entries_.count() - 1;
+      bucket_heads_.at(bucket) = entry_index;
+      inserted = true;
     }
   }
   return ret;
@@ -207,12 +217,11 @@ int GraphIdentityIndex::grow_buckets()
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < entries_.count(); ++i) {
         Entry &entry = entries_.at(i);
-        int64_t bucket = -1;
-        if (OB_FAIL(get_bucket(entry.identity_, bucket, entry.binding_id_))) {
-        } else {
-          entry.next_entry_ = bucket_heads_.at(bucket);
-          bucket_heads_.at(bucket) = i;
-        }
+        // Identity backing is immutable while indexed. Rehash only the saved
+        // compatible hash; do not renormalize decimal/string keys on growth.
+        const int64_t bucket = entry.hash_ % bucket_heads_.count();
+        entry.next_entry_ = bucket_heads_.at(bucket);
+        bucket_heads_.at(bucket) = i;
       }
     }
   }
