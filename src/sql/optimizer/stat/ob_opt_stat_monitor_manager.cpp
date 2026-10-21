@@ -22,7 +22,7 @@
 #include "share/ob_server_struct.h"
 #include "sql/ob_sql_init.h"
 #include "share/ob_sql_client_decorator.h"
-#include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
+#include "query/scheduler/ob_scheduler_service.h"
 #include "sql/optimizer/stat/ob_dbms_stats_maintenance_window.h"
 #include "sql/optimizer/stat/ob_dbms_stats_utils.h"
 #include "sql/optimizer/stat/ob_opt_stat_manager.h"
@@ -417,13 +417,12 @@ int ObOptStatMonitorManager::schedule_async_gather_stats_()
 int ObOptStatMonitorManager::run_timer_driven_async_gather_stats_()
 {
   int ret = OB_SUCCESS;
-  dbms_scheduler::ObDBMSSchedJobExecutor executor;
-  if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy or schema service is null", K(ret));
-  } else if (OB_FAIL(executor.init(GCTX.sql_proxy_, GCTX.schema_service_))) {
-    LOG_WARN("failed to initialize timer-driven job executor", K(ret));
-  } else if (OB_FAIL(executor.run_timer_driven_dbms_sched_job(
+  query::ObISchedulerService *scheduler =
+      share::server_service<query::ObISchedulerService>();
+  if (OB_ISNULL(scheduler)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("scheduler service is not initialized", K(ret));
+  } else if (OB_FAIL(scheduler->run_timer_driven_job(
       ObString("ASYNC_GATHER_STATS_JOB_PROC")))) {
     LOG_WARN("failed to execute timer-driven async gather stats", K(ret));
   }

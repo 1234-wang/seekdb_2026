@@ -15,6 +15,7 @@
  */
 
 #define USING_LOG_PREFIX TABLELOCK
+#include "config_bridge.h"
 #include "data_plane/tablelock/ob_table_lock.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "share/rc/ob_server_runtime.h"
@@ -64,7 +65,7 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx() :
   is_for_replace_(false)
 {
   is_enable_lock_priority_ = false;
-  is_enable_lock_priority_ = GCONF.enable_lock_priority;
+  is_enable_lock_priority_ = config::enable_lock_priority();
 }
 
 void ObTableLockService::ObRetryCtx::reuse()
@@ -1329,7 +1330,6 @@ int ObTableLockService::pack_and_execute_task_(LocalExecutor &executor,
   } else if (OB_FAIL(executor.execute(request))) {
   } else {
     retry_ctx.task_executed_ = true;
-    ALLOW_NEXT_LOG();
     LOG_INFO("execute table lock task", KR(ret), K(retry_ctx), "request", request);
   }
   return ret;
@@ -1349,7 +1349,6 @@ int ObTableLockService::pack_and_execute_task_(ObLocalBatchLockExecutor<ObLockTa
   } else if (OB_FAIL(executor.execute(request))) {
   } else {
     retry_ctx.task_executed_ = true;
-    ALLOW_NEXT_LOG();
     LOG_INFO("execute table lock task", KR(ret), K(retry_ctx), "request", request);
   }
   return ret;

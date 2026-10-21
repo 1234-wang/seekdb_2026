@@ -15,6 +15,8 @@
  */
 #define USING_LOG_PREFIX SHARE
 
+#include "config_bridge.h"
+#include <inttypes.h>
 #include "share/rc/ob_server_runtime.h"
 #include "share/ob_server_struct.h"
 #include "share/ob_share_util.h"
@@ -295,7 +297,7 @@ int ObDDLTaskUtil::generate_order_by_str(
     for (int64_t i = 0; OB_SUCC(ret) && i < order_column_ids.count(); ++i) {
       for (int64_t j = 0; OB_SUCC(ret) && j < select_column_ids.count(); ++j) {
         if (select_column_ids.at(j) == order_column_ids.at(i)) {
-          if (OB_FAIL(sql_string.append_fmt("%s %ld", append_comma ? "," : "", j + 1))) {
+          if (OB_FAIL(sql_string.append_fmt("%s %" PRId64, append_comma ? "," : "", j + 1))) {
           } else if (!append_comma) {
             append_comma = true;
           }
@@ -533,7 +535,7 @@ int ObDDLTaskUtil::generate_build_replica_sql(const int64_t data_table_id,
         }
         if (OB_FAIL(ret)) {
         } else {
-          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') %.*s use_px */INTO `%.*s`.`%.*s` %.*s(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` %.*s as of snapshot %ld %.*s",
+          if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ enable_parallel_dml parallel(%" PRId64 ") opt_param('ddl_execution_id', %" PRId64 ") opt_param('ddl_task_id', %" PRId64 ") opt_param('enable_newsort', 'false') %.*s use_px */INTO `%.*s`.`%.*s` %.*s(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` %.*s as of snapshot %" PRId64 " %.*s",
               real_parallelism, execution_id, task_id,
               static_cast<int>(strlen(io_read_hint)), io_read_hint,
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
@@ -791,7 +793,7 @@ int ObDDLTaskUtil::write_defensive_and_obtain_snapshot(
     HEAP_VAR(ObTableSchema, tmp_table_schema) {
       common::ObArray<ObTabletID> tablet_ids;
       const int64_t abs_timeout_us = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_ts()
-                                                                  : ObTimeUtility::current_time() + GCONF.rpc_timeout;
+                                                                  : ObTimeUtility::current_time() + config::rpc_timeout();
       ObRefreshSchemaStatus schema_status;
 
       if (OB_FAIL(schema_service->get_table_schema_from_inner_table(schema_status,
@@ -1101,7 +1103,7 @@ int ObDDLTaskUtil::check_table_empty(
                          table_name,
                          new_table_name))) {
       } else if (OB_FAIL(session_param.ddl_info_.init(ddl_info, table_schema.get_session_id()))) {
-      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
+      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, config::internal_sql_execute_timeout()))) {
       } else if (OB_FAIL(connection->set_ddl_info(&session_param.ddl_info_))) {
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema.get_schema_version(), ddl_schema_hint_str))) {
       } else if (OB_FAIL(sql_string.assign_fmt(

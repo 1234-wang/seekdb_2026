@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 
+#include "config_bridge.h"
 #include "ob_storage_meta_cache.h"
 #include "share/rc/ob_server_runtime.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
@@ -121,7 +122,7 @@ bool ObStorageMetaValue::is_valid() const
 int64_t ObStorageMetaValue::size() const
 {
   int64_t len = sizeof(*this);
-#if __aarch64__
+#if defined(__aarch64__) || defined(__EMSCRIPTEN__)
   len += ObSSTable::AARCH64_CP_BUF_ALIGN;
 #endif
   len +=  obj_->get_deep_copy_size();
@@ -139,7 +140,7 @@ int ObStorageMetaValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheVa
   } else {
     char *new_buf = buf + sizeof(ObStorageMetaValue);
     int64_t pos = sizeof(ObStorageMetaValue);
-#if __aarch64__
+#if defined(__aarch64__) || defined(__EMSCRIPTEN__)
     new_buf = reinterpret_cast<char *>(common::upper_align(
         reinterpret_cast<int64_t>(new_buf), ObSSTable::AARCH64_CP_BUF_ALIGN));
     pos = reinterpret_cast<int64_t>(new_buf) - reinterpret_cast<int64_t>(buf);
@@ -601,7 +602,7 @@ int ObStorageMetaCache::read_io(
     read_info.io_callback_ = &callback;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+    read_info.io_timeout_ms_ = config::_data_storage_io_timeout() / 1000L;
     handle.phy_addr_ = meta_addr;
     if (OB_FAIL(ObObjectReaderWriter::async_read(read_info, handle.io_handle_))) {
     }

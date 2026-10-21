@@ -16,8 +16,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
+#include "config_bridge.h"
 #include "lib/compress/ob_compress_util.h"
 #include "ob_ddl_common.h"
+#include <inttypes.h>
 #include "common/datum/ob_datum.h"  // ObDatum complete type(previously hidden behind the block_sstable_struct include chain)
 #include "share/ob_rpc_struct.h"
 #include "share/system_variable/ob_system_variable_alias.h"
@@ -582,7 +584,7 @@ int ObDDLUtil::generate_ddl_schema_hint_str(
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sql_string.append_fmt("ob_ddl_schema_version(`%.*s`, %ld)",
+  if (OB_FAIL(sql_string.append_fmt("ob_ddl_schema_version(`%.*s`, %" PRId64 ")",
       static_cast<int>(table_name.length()), table_name.ptr(), schema_version))) {
   }
   return ret;
@@ -856,7 +858,7 @@ int ObDDLUtil::get_index_table_batch_partition_names(
 }
 
 int ObDDLUtil::get_tablet_data_size(
-    ObSQLiteConnectionPool &meta_db_pool,
+    LocalStore &store,
     const common::ObTabletID &tablet_id,
     int64_t &data_size)
 {
@@ -866,7 +868,7 @@ int ObDDLUtil::get_tablet_data_size(
     ret = OB_INVALID_ARGUMENT;
   } else {
     ObTabletMetaTableStorage storage;
-    if (OB_FAIL(storage.init(&meta_db_pool))) {
+    if (OB_FAIL(storage.init(&store))) {
     } else if (OB_FAIL(storage.get_data_size(tablet_id, data_size))) {
     }
   }
@@ -874,7 +876,7 @@ int ObDDLUtil::get_tablet_data_size(
 }
 
 int ObDDLUtil::get_tablet_data_row_cnt(
-    ObSQLiteConnectionPool &meta_db_pool,
+    LocalStore &store,
     const common::ObTabletID &tablet_id,
     int64_t &data_row_cnt)
 {
@@ -884,7 +886,7 @@ int ObDDLUtil::get_tablet_data_row_cnt(
     ret = OB_INVALID_ARGUMENT;
   } else {
     ObTabletLocalChecksumTableStorage storage;
-    if (OB_FAIL(storage.init(&meta_db_pool))) {
+    if (OB_FAIL(storage.init(&store))) {
     } else if (OB_FAIL(storage.get_row_count(tablet_id, data_row_cnt))) {
     }
   }
@@ -944,7 +946,7 @@ int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tablet_count, int64_t &ddl_rpc_
   const int64_t cost_per_tablet = 20L * 60L * 100L; // 10000 tablets use 20 minutes, so 1 tablet use 20 * 60 * 100 us
   ddl_rpc_timeout_us = tablet_count * cost_per_tablet;
   ddl_rpc_timeout_us = min(ddl_rpc_timeout_us, rpc_timeout_upper);
-  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF._ob_ddl_timeout);
+  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, config::_ob_ddl_timeout());
   return ret;
 }
 
@@ -988,7 +990,7 @@ void ObDDLUtil::get_ddl_rpc_timeout_for_database(ObMultiVersionSchemaService &sc
     ddl_rpc_timeout_us += tablet_count * cost_per_tablet;
   }
   ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, get_default_ddl_rpc_timeout());
-  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF._ob_ddl_timeout);
+  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, config::_ob_ddl_timeout());
   return;
 }
 
@@ -1002,7 +1004,7 @@ int ObDDLUtil::get_ddl_tx_timeout(const int64_t tablet_count, int64_t &ddl_tx_ti
 
 int64_t ObDDLUtil::get_default_ddl_rpc_timeout()
 {
-  return min(static_cast<int64_t>(20L * 60L * 1000L * 1000L), max(GCONF.rpc_timeout, static_cast<int64_t>(9 * 1000 * 1000L)));
+  return min(static_cast<int64_t>(20L * 60L * 1000L * 1000L), max(config::rpc_timeout(), static_cast<int64_t>(9 * 1000 * 1000L)));
 }
 
 
@@ -1046,7 +1048,7 @@ int ObDDLUtil::get_data_information(
       if (OB_FAIL(query_string.assign_fmt(
           "SELECT snapshot_version, ddl_type, UNHEX(message) AS message_unhex, "
           "status, schema_version, target_object_id "
-          "FROM %s WHERE task_id = %lu",
+          "FROM %s WHERE task_id = %" PRIu64,
           OB_ALL_DDL_TASK_STATUS_TNAME,
           task_id))) {
       } else if (OB_FAIL(sql_client.read(res, query_string.ptr()))) {
@@ -1185,11 +1187,13 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
   int ret = OB_SUCCESS;
   compr_type = NONE_COMPRESSOR;
   {
-    if (0 == GCONF._ob_ddl_temp_file_compress_func.get_value_string().case_compare("NONE")) {
+    const rust::String config_value = config::_ob_ddl_temp_file_compress_func();
+    const ObString config_text(static_cast<int32_t>(config_value.size()), config_value.data());
+    if (0 == config_text.case_compare("NONE")) {
       compr_type = NONE_COMPRESSOR;
-    } else if (0 == GCONF._ob_ddl_temp_file_compress_func.get_value_string().case_compare("ZSTD")) {
+    } else if (0 == config_text.case_compare("ZSTD")) {
       compr_type = ZSTD_1_3_8_COMPRESSOR;
-    } else if (0 == GCONF._ob_ddl_temp_file_compress_func.get_value_string().case_compare("AUTO")) {
+    } else if (0 == config_text.case_compare("AUTO")) {
       UNUSED(parallel);
       if (schema_compr_type > INVALID_COMPRESSOR && schema_compr_type < MAX_COMPRESSOR) {
         compr_type = schema_compr_type;
@@ -1204,12 +1208,9 @@ int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_
   return ret;
 }
 
-int ObDDLUtil::check_table_compaction_checksum_error(ObMultiVersionSchemaService &schema_service,
-                                                     common::ObISQLClient &sql_client,
-                                                     ObSQLiteConnectionPool &meta_db_pool,
+int ObDDLUtil::check_table_compaction_checksum_error(common::ObISQLClient &sql_client,
                                                      const uint64_t table_id)
 {
-  UNUSEDx(schema_service, meta_db_pool);
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == table_id) {
     ret = OB_INVALID_ARGUMENT;
@@ -1230,9 +1231,9 @@ int ObDDLUtil::check_table_column_checksum_error(common::ObISQLClient &sql_clien
     ObTimeoutCtx timeout_ctx;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       if OB_FAIL(ret) {
-      } else if (OB_FAIL(query_string.append_fmt("SELECT data_table_id FROM %s WHERE data_table_id = %lu LIMIT 1",
+      } else if (OB_FAIL(query_string.append_fmt("SELECT data_table_id FROM %s WHERE data_table_id = %" PRId64 " LIMIT 1",
           OB_ALL_VIRTUAL_COLUMN_CHECKSUM_ERROR_INFO_TNAME, table_id))) {
-      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
+      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, config::internal_sql_execute_timeout()))) {
       } else if (OB_FAIL(sql_client.read(res, query_string.ptr()))) {
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1342,7 +1343,7 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
       } else if (OB_ISNULL(trace_id_like = ObString(trace_id_str).find('-'))) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
-            " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+            " and info like \"%cINSERT%c('ddl_task_id', %" PRId64 ")%cINTO%cSELECT%c%" PRId64 "%c\" ",
           OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
           charater,
           trace_id_like,
@@ -1458,7 +1459,7 @@ int ObCheckTabletDataComplementOp::check_finish_report_checksum(
   bool is_checksums_all_report = false;
   ObArray<ObTabletID> dest_tablet_ids;
 #ifdef ERRSIM
-  if (GCONF.errsim_ddl_major_delay_time.get() > 0) {
+  if (::oceanbase::common::errsim_config().errsim_ddl_major_delay_time.load() > 0) {
     return OB_SUCCESS;
   }
 #endif

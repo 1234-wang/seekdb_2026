@@ -16,6 +16,8 @@
 
 #define USING_LOG_PREFIX RS_COMPACTION
 
+#include "share/ob_server_struct.h"
+#include "config_bridge.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
@@ -263,7 +265,7 @@ int ObMajorMergeProgressChecker::check_table_merge_progress(
         if (OB_TMP_FAIL(finish_tablet_ids_.push_back(cur_tablet_ids))) {
         } else if (finish_tablet_ids_.count() < MAX_BATCH_INSERT_COUNT) {
         } else if (OB_TMP_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
-              GCTX.meta_db_pool_,
+              GCTX.local_store_,
               get_compaction_scn_val(), finish_tablet_ids_,
               ObTabletRuntimeInfo::ScnStatus::SCN_STATUS_ERROR /*except_status*/))) {
         } else {
@@ -585,7 +587,7 @@ int ObMajorMergeProgressChecker::prepare_check_progress(
     progress_.clear_before_each_loop();
     reset_uncompacted_tablets();
     if (is_extra_check_round()) {
-      batch_size_mgr_.set_tablet_batch_size(GCONF.compaction_schedule_tablet_batch_cnt);
+      batch_size_mgr_.set_tablet_batch_size(config::compaction_schedule_tablet_batch_cnt());
     }
   }
   return ret;
@@ -667,7 +669,7 @@ int ObMajorMergeProgressChecker::check_progress()
             MANAGEMENT_EVENT_ADD("daily_merge", "verification",
                                   "check verification fail", ret,
                                   "global_broadcast_scn", get_compaction_scn().get_val_for_inner_table_field(),
-                                  "service_addr", GCONF.self_addr_);
+                                  "service_addr", GCTX.self_addr());
           }
         }
         if (OB_FAIL(ret) && last_errno_ == ret) {
@@ -976,10 +978,10 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
   int ret = OB_SUCCESS;
   ObTabletRuntimeInfo tablet_info;
   ObCompactionTabletMetaIterator iter(!is_extra_check_round(), get_compaction_scn_val());
-  if (OB_ISNULL(GCTX.meta_db_pool_)) {
+  if (OB_ISNULL(GCTX.local_store_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(iter.init(
-      *GCTX.meta_db_pool_,
+      *GCTX.local_store_,
       batch_size_mgr_.get_inner_table_scan_batch_size()))) {
   }
   while (OB_SUCC(ret) && !stop_) {

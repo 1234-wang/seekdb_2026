@@ -16,11 +16,12 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "config_bridge.h"
 #include "storage/meta_store/ob_local_storage_meta_service.h"
 #include "share/rc/ob_server_runtime.h"
 #include "storage/tablet/ob_tablet_persister.h"
 #include "src/storage/ls/ob_ls.h"
-#include "storage/slog_ckpt/ob_linked_macro_block_writer.h"
+#include "storage/blockstore/ob_linked_macro_block_writer.h"
 #include "storage/tablet/ob_tablet_block_aggregated_info.h"
 #include "storage/tablet/ob_tablet_block_header.h"
 #include "storage/tablet/ob_tablet_common.h"
@@ -128,7 +129,7 @@ int64_t ObSSTablePersistWrapper::get_serialize_size() const
 
 bool ObTabletPersisterParam::is_valid() const
 {
-  return tablet_id_.is_valid() && ls_epoch_ >= 0;
+  return tablet_id_.is_valid();
 }
 
 //==================================== ObMultiTimeStats====================================//
@@ -333,7 +334,7 @@ int ObTabletPersister::inner_persist_and_transform_tablet(
   } else if (OB_UNLIKELY(!old_tablet.hold_ref_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(persister.multi_stats_.acquire_stats("persist_and_transform_only_tablet_meta", time_stats))) {
-  } else if (OB_FAIL(old_tablet.load_macro_info(param.ls_epoch_, persister.allocator_, macro_info, in_memory))) {
+  } else if (OB_FAIL(old_tablet.load_macro_info(persister.allocator_, macro_info, in_memory))) {
   } else if (FALSE_IT(time_stats->click("load_macro_info"))) {
   } else if (OB_FAIL(persister.modify_and_fill_tablet(old_tablet, modifier, new_tablet))) {
   } else {
@@ -1401,7 +1402,7 @@ int ObTabletPersister::load_table_store(
     read_info.addr_ = addr;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
+    read_info.io_timeout_ms_ = config::_data_storage_io_timeout() / 1000;
     if (OB_FAIL(multi_stats_.acquire_stats("load_table_store", time_stats))) {
     } else if (OB_FAIL(ObObjectReaderWriter::async_read(read_info, io_handle))) {
     } else if (OB_FAIL(io_handle.wait())) {

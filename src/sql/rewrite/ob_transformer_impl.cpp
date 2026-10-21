@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX SQL_REWRITE
 
+#include "config_bridge.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "sql/rewrite/ob_transform_view_merge.h"
 #include "sql/rewrite/ob_transform_min_max.h"
@@ -114,9 +115,9 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
   if (OB_SUCC(ret)) {
     
 
-    ctx_->complex_cbqt_table_num_ = GCONF._complex_cbqt_table_num;
-    ctx_->force_subquery_unnest_ = GCONF._force_subquery_unnest;
-    ctx_->nested_loop_join_enabled_ = GCONF._nested_loop_join_enabled;
+    ctx_->complex_cbqt_table_num_ = config::_complex_cbqt_table_num();
+    ctx_->force_subquery_unnest_ = config::_force_subquery_unnest();
+    ctx_->nested_loop_join_enabled_ = config::_nested_loop_join_enabled();
     if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED, 
                                                                             ctx_->nested_loop_join_enabled_))) {
     }
@@ -374,7 +375,7 @@ int ObTransformerImpl::init_enable_types_cnt_array(uint64_t needed_types,
   } else {
     for (int64_t idx = 0; OB_SUCC(ret) && idx < enable_cnt_array.count(); ++idx) {
       int32_t init_cnt = 0;
-      if (0 != (needed_types & (1L << idx))) {
+      if (0 != (needed_types & (1ULL << idx))) {
         // For most rules, enable count starts from 1 (enabled).
         // For PREDICATE_MOVE_AROUND, we start from 2 so it can happen at most twice
         // before being temporarily disabled (see update_enable_types()).
@@ -394,7 +395,7 @@ void ObTransformerImpl::enable_cnt_array_to_bitset(const ObIArray<int32_t> &arr,
   const int64_t cnt = arr.count();
   for (int64_t idx = 0; idx < cnt; ++idx) {
     if (arr.at(idx) > 0) {
-      bitset |= (1L << idx);
+      bitset |= (1ULL << idx);
     }
   }
 }
@@ -418,7 +419,7 @@ int ObTransformerImpl::update_enable_types(TRANSFORM_TYPE type,
       // we temporarily disable it until it is reset by other rewrite rules.
       cnt--;
       if (cnt <= 0) {
-        enable_types &= ~(1L << type);
+        enable_types &= ~(1ULL << type);
       }
     } else if (CONST_PROPAGATE == type || SIMPLIFY_EXPR == type) {
       // These rules are considered part of the "oscillation group" with predicate

@@ -18,7 +18,7 @@
 
 // Asynchronous persistence for local tablet runtime metadata.
 
-
+#include "share/ob_server_struct.h"
 #include "ob_tablet_runtime_meta_updater.h"
 #include "data_plane/report/ob_tablet_report.h"
 #include "observer/omt/ob_server_runtime_controller.h"
@@ -27,7 +27,7 @@
 #include "observer/ob_service.h"                    // for is_mini_mode
 #include "share/ob_tablet_local_checksum_operator.h" // for ObTabletLocalChecksumItem
 #include "storage/compaction/ob_compaction_diagnose.h"
-#include "share/storage/ob_sqlite_connection.h"
+#include "share/storage/local_store.h"
 
 namespace oceanbase
 {
@@ -539,7 +539,7 @@ int ObTabletRuntimeMetaUpdater::batch_process_tasks(
   ObArray<ObTabletLocalChecksumItem> update_tablet_checksums;
   UpdateTaskList update_tablet_tasks;
   RemoveTaskList remove_tablet_tasks;
-  ObCurTraceId::init(GCONF.self_addr_);
+  ObCurTraceId::init(GCTX.self_addr());
   int64_t succ_cnt = 0;
   int64_t update_task_cnt = 0;
   int64_t remove_task_cnt = 0;
@@ -621,31 +621,18 @@ int ObTabletRuntimeMetaUpdater::do_batch_remove_(
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(tasks_count != tablet_infos.count() || OB_ISNULL(GCTX.tablet_operator_))) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(GCTX.meta_db_pool_)) {
+  } else if (OB_ISNULL(GCTX.local_store_)) {
     ret = OB_NOT_INIT;
   } else {
-    // Use SQLite transaction for multi-table operations
-    share::ObSQLiteConnectionGuard guard(GCTX.meta_db_pool_);
-    if (!guard) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(guard->begin_transaction())) {
-    } else if (OB_FAIL(GCTX.tablet_operator_->batch_remove(guard.get_connection(), tablet_infos))) {
-    } else if (OB_FAIL(ObTabletLocalChecksumOperator::batch_remove_with_trans(guard.get_connection(), tablet_infos))) {
-    }
-
-    if (guard && guard->is_in_transaction()) {
-      if (OB_FAIL(ret)) {
-        int rollback_ret = guard->rollback();
-        if (OB_SUCCESS != rollback_ret) {
-        }
-      } else {
-        int commit_ret = guard->commit();
-        if (OB_SUCCESS != commit_ret) {
-          LOG_ERROR("fail to commit transaction", KR(commit_ret));
-          ret = commit_ret;
-        }
+    // Use local transaction for multi-table operations
+    ret = GCTX.local_store_->write([&](share::LocalTransaction &tx) -> int {
+      int ret = GCTX.tablet_operator_->batch_remove(tx, tablet_infos);
+      if (OB_SUCCESS == ret) {
+        ret = ObTabletLocalChecksumOperator::batch_remove_with_trans(tx, tablet_infos);
       }
-    }
+      return ret;
+    });
+
     if (OB_FAIL(ret)) {
       (void) throttle_(ret, ObTimeUtility::current_time() - start_time);
       if (OB_SUCCESS != (tmp_ret = reput_to_queue_(tasks))) {
@@ -676,31 +663,18 @@ int ObTabletRuntimeMetaUpdater::do_batch_update_(
     LOG_WARN("tasks num not match or invalid tablet_operator", KR(ret), "task_cnt", tasks.count(),
              "tablet_info_cnt", tablet_infos.count(), "checksum_cnt", checksums.count(), K(GCTX.tablet_operator_));
   } else {
-    if (OB_ISNULL(GCTX.meta_db_pool_)) {
+    if (OB_ISNULL(GCTX.local_store_)) {
       ret = OB_NOT_INIT;
     } else {
-      // Use SQLite transaction for multi-table operations
-      share::ObSQLiteConnectionGuard guard(GCTX.meta_db_pool_);
-      if (!guard) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(guard->begin_transaction())) {
-      } else if (OB_FAIL(GCTX.tablet_operator_->batch_update(guard.get_connection(), tablet_infos))) {
-      } else if (OB_FAIL(ObTabletLocalChecksumOperator::batch_update_with_trans(guard.get_connection(), checksums))) {
-      }
-
-      if (guard && guard->is_in_transaction()) {
-        if (OB_FAIL(ret)) {
-          int rollback_ret = guard->rollback();
-          if (OB_SUCCESS != rollback_ret) {
-          }
-        } else {
-          int commit_ret = guard->commit();
-          if (OB_SUCCESS != commit_ret) {
-            LOG_ERROR("fail to commit transaction", KR(commit_ret));
-            ret = commit_ret;
-          }
+      // Use local transaction for multi-table operations
+      ret = GCTX.local_store_->write([&](share::LocalTransaction &tx) -> int {
+        int ret = GCTX.tablet_operator_->batch_update(tx, tablet_infos);
+        if (OB_SUCCESS == ret) {
+          ret = ObTabletLocalChecksumOperator::batch_update_with_trans(tx, checksums);
         }
-      }
+        return ret;
+      });
+
     }
     if (OB_FAIL(ret)) {
       (void) throttle_(ret, ObTimeUtility::current_time() - start_time);

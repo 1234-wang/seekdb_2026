@@ -15,6 +15,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
+#include "config_bridge.h"
 #include "ob_ddl_resolver.h"
 #include "data_plane/blocksstable/ob_index_block_util.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
@@ -1808,7 +1809,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
     ObDataType data_type;
     // session_info_ NPE check is done in up layer caller
     bool convert_real_to_decimal =
-        (GCONF._enable_convert_real_to_decimal);
+        (config::_enable_convert_real_to_decimal());
     bool enable_decimalint_type = false;
     bool enable_mysql_compatible_dates = false;
     if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info_, enable_decimalint_type))) {
@@ -5071,7 +5072,7 @@ int ObDDLResolver::generate_global_index_schema(
     LOG_WARN("table not exist", K(ret),
              "database_name", crt_idx_stmt->get_create_index_arg().database_name_,
              "table_name", crt_idx_stmt->get_create_index_arg().table_name_);
-  } else if (!GCONF.enable_sys_table_ddl && !table_schema->is_user_table() && !table_schema->is_tmp_table()) {
+  } else if (!config::enable_sys_table_ddl() && !table_schema->is_user_table() && !table_schema->is_tmp_table()) {
     ret = OB_ERR_WRONG_OBJECT;
     ObCStringHelper helper;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
@@ -5887,7 +5888,7 @@ int ObDDLResolver::create_fk_cons_name_automatically(ObString &foreign_key_name)
   }
   if (OB_SUCC(ret)) {
     // The purpose of using a timestamp is to ensure the uniqueness of the foreign key name while avoiding conflicts between user-declared foreign key constraint names and system-generated constraint names
-    if (snprintf(temp_str_buf, sizeof(temp_str_buf), "%.*s_OBFK_%ld", tmp_table_name.length(), tmp_table_name.ptr(),
+    if (snprintf(temp_str_buf, sizeof(temp_str_buf), "%.*s_OBFK_%" PRId64, tmp_table_name.length(), tmp_table_name.ptr(),
                  ObTimeUtility::current_time()) < 0) {
       ret = OB_SIZE_OVERFLOW;
       SQL_RESV_LOG(WARN, "failed to generate buffer for temp_str_buf", K(ret));

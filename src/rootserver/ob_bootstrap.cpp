@@ -16,6 +16,9 @@
 
 #define USING_LOG_PREFIX BOOTSTRAP
 
+#if defined(__EMSCRIPTEN__)
+#include "common/ob_timeout_ctx.h"
+#endif
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "rootserver/ob_bootstrap.h"
 #include "rootserver/ob_runtime_ddl_service.h"
@@ -45,10 +48,8 @@ using namespace storage;
 namespace rootserver
 {
 
-ObBaseBootstrap::ObBaseBootstrap(
-                                 common::ObServerConfig &config)
-    : step_id_(0),
-      config_(config)
+ObBaseBootstrap::ObBaseBootstrap()
+    : step_id_(0)
 {
 }
 
@@ -58,8 +59,8 @@ int ObBaseBootstrap::check_inner_stat() const
   return ret;
 }
 
-ObPreBootstrap::ObPreBootstrap(common::ObServerConfig &config)
-  : ObBaseBootstrap(config),
+ObPreBootstrap::ObPreBootstrap()
+  : ObBaseBootstrap(),
     stop_(false),
     begin_ts_(0)
 {
@@ -159,9 +160,8 @@ bool ObBootstrap::TableIdCompare::operator() (const ObSimpleTableSchemaV2* left,
 
 ObBootstrap::ObBootstrap(
     ObDDLService &ddl_service,
-    ObRuntimeDDLService &runtime_ddl_service,
-    ObServerConfig &config)
-  : ObBaseBootstrap(config),
+    ObRuntimeDDLService &runtime_ddl_service)
+  : ObBaseBootstrap(),
     ddl_service_(ddl_service),
     runtime_ddl_service_(runtime_ddl_service),
     begin_ts_(0)
@@ -459,6 +459,13 @@ int ObBootstrap::get_core_related_table_ids(common::hash::ObHashSet<uint64_t> &t
 int ObBootstrap::create_sys_table_partitions(const common::ObIArray<share::schema::ObTableSchema> &table_schemas)
 {
   int ret = OB_SUCCESS;
+#if defined(__EMSCRIPTEN__)
+  ObTimeoutCtx startup_timeout;
+  if (!startup_timeout.is_timeout_set()
+      && OB_FAIL(startup_timeout.set_timeout(5LL * 60 * 1000000))) {
+    return ret;
+  }
+#endif
   if (OB_FAIL(check_inner_stat())) {
   } else {
     ObMySQLTransaction trans;

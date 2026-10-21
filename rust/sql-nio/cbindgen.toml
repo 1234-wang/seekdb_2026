@@ -32,3 +32,7 @@ header = """/*
  * Rust side instead, then rebuild.
  */"""
 
+[export]
+# The memory transport exists only in the WebAssembly build (feature
+# memory-transport) and is declared in nio_memory.h.
+exclude = ["MemoryClient", "nio_memory_connect", "nio_memory_write", "nio_memory_read", "nio_memory_close"]

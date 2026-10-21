@@ -15,7 +15,9 @@
  */
 
 #define USING_LOG_PREFIX SHARE
+#include <inttypes.h>
 
+#include "config_bridge.h"
 #include "ob_vector_index_async_task_util.h"
 #include "share/rc/ob_server_runtime.h"
 #include "observer/vector_index/ob_vector_index_async_task.h"
@@ -265,7 +267,8 @@ int ObVecIndexAsyncTaskUtil::in_active_time(
   is_active_time = false;
   ObDutyDuration duration;
 
-  if (OB_FAIL(ObDutyDurationUtil::parse(GCONF.vector_index_optimize_duty_time, duration))) {
+  rust::String duty_time = config::vector_index_optimize_duty_time();
+  if (OB_FAIL(ObDutyDurationUtil::parse(duty_time.c_str(), duration))) {
   } else if (ObDutyDurationUtil::current_in_duration(duration)) {
     is_active_time = true;
   }
@@ -346,7 +349,7 @@ int ObVecIndexAsyncTaskUtil::clear_history_expire_task_record(const int64_t batc
   clear_rows = 0;
   ObSqlString sql;
 
-  if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE gmt_modified < usec_to_time(%ld) LIMIT %ld ",
+  if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE gmt_modified < usec_to_time(%" PRId64 ") LIMIT %" PRId64 " ",
                               share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
                               delete_timestamp,
                               batch_size))) {

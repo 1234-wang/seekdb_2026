@@ -37,7 +37,6 @@ ObServerSchemaService::ObServerSchemaService()
     : schema_manager_rwlock_(common::ObLatchIds::SCHEMA_MGR_CACHE_LOCK),
       schema_service_(NULL),
       sql_proxy_(NULL),
-      config_(NULL),
       schema_status_proxy_(NULL),
       service_status_(NULL),
       in_bootstrap_(NULL)
@@ -112,7 +111,6 @@ int ObServerSchemaService::init_runtime_basic_schema()
 }
 
 int ObServerSchemaService::init(ObMySQLProxy *sql_proxy,
-                                const ObCommonConfig *config,
                                 ObSchemaStatusProxy &schema_status_proxy,
                                 const ObServiceStatus &service_status,
                                 bool &in_bootstrap,
@@ -122,20 +120,16 @@ int ObServerSchemaService::init(ObMySQLProxy *sql_proxy,
   auto attr = lib::ObMemAttr(ObModIds::OB_SCHEMA_ID_VERSIONS, ObCtxIds::SCHEMA_SERVICE);
   if (OB_ISNULL(sql_proxy)
      || NULL != schema_service_
-     || !sql_proxy->is_inited()
-     || OB_ISNULL(config)) {
+     || !sql_proxy->is_inited()) {
     ret = OB_INIT_FAIL;
   } else if (OB_FAIL(ObSysTableChecker::instance().init())) {
   } else if (FALSE_IT(schema_service_ = &schema_backend)) {
   } else if (OB_FAIL(schema_service_->init(sql_proxy, this))) {
-  } else if (FALSE_IT(schema_service_->set_common_config(config))) {
-    // will not reach here
   } else if (OB_FAIL(version_his_map_.create(
       common::calculate_scaled_value_by_memory(VERSION_HIS_MAP_BUCKET_NUM_MIN, VERSION_HIS_MAP_BUCKET_NUM_MAX),
       attr))) {
   } else {
     sql_proxy_ = sql_proxy;
-    config_ = config;
     schema_status_proxy_ = &schema_status_proxy;
     service_status_ = &service_status;
     in_bootstrap_ = &in_bootstrap;
@@ -166,8 +160,7 @@ bool ObServerSchemaService::check_inner_stat() const
 {
   bool ret = true;
   if (NULL == schema_service_
-      || NULL == sql_proxy_
-      || NULL == config_) {
+      || NULL == sql_proxy_) {
     ret = false;
   }
   return ret;
@@ -1596,7 +1589,6 @@ int ObServerSchemaService::fetch_increment_schemas(
         schema_version, schema_keys, simple_schemas))) {                                  \
       LOG_WARN("get batch "#SCHEMA"s failed", KR(ret), K(schema_keys));                   \
     } else {                                                                              \
-      ALLOW_NEXT_LOG();                                                                   \
       LOG_INFO("get batch "#SCHEMA"s success", K(schema_keys));                           \
       if (schema_keys.size() != simple_schemas.size()) {                                  \
         ret = OB_ERR_UNEXPECTED;                                                          \
@@ -1617,7 +1609,6 @@ int ObServerSchemaService::fetch_increment_schemas(
       simple_incre_schemas.allocator_, schema_version, schema_keys, simple_schemas))) {   \
       LOG_WARN("get batch "#SCHEMA"s failed", KR(ret), K(schema_keys));                   \
     } else {                                                                              \
-      ALLOW_NEXT_LOG();                                                                   \
       LOG_INFO("get batch "#SCHEMA"s success", K(schema_keys));                           \
       if (schema_keys.size() != simple_schemas.size()) {                                  \
         ret = OB_ERR_UNEXPECTED;                                                          \
@@ -1638,7 +1629,6 @@ int ObServerSchemaService::fetch_increment_schemas(
         schema_version, schema_keys, simple_schemas))) {                                  \
       LOG_WARN("get batch "#SCHEMA"s failed", K(ret), K(schema_keys));                    \
     } else {                                                                              \
-      ALLOW_NEXT_LOG();                                                                   \
       LOG_INFO("get batch "#SCHEMA"s success", K(schema_keys));                           \
       if (schema_keys.size() != simple_schemas.size()) {                                  \
         ret = OB_ERR_UNEXPECTED;                                                          \
@@ -1738,7 +1728,6 @@ int ObServerSchemaService::apply_runtime_schema_to_cache(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(schema_mgr.add_runtime_schemas(simple_incre_schemas.simple_runtime_schemas_))) {
     }
-    ALLOW_NEXT_LOG();
     LOG_INFO("add runtime schema finish",
              "schemas", simple_incre_schemas.simple_runtime_schemas_, K(ret));
   }
@@ -1763,7 +1752,6 @@ int ObServerSchemaService::apply_##SCHEMA##_schema_to_cache( \
                   #SCHEMA"_key", schema_key->get_##SCHEMA##_key());       \
       }                                                                  \
     }                                                                    \
-    ALLOW_NEXT_LOG();                                                    \
     LOG_INFO("del "#SCHEMA"s finish", K(schema_keys), K(ret));           \
   }                                            \
   if (OB_SUCC(ret)) {                          \
@@ -1772,7 +1760,6 @@ int ObServerSchemaService::apply_##SCHEMA##_schema_to_cache( \
       LOG_WARN("add "#SCHEMA"s failed", K(ret),                           \
                #SCHEMA" schemas", schemas);                               \
     }                                                                     \
-    ALLOW_NEXT_LOG();                                                     \
     LOG_INFO("add "#SCHEMA"s finish", K(schemas), K(ret));  \
   }                                                         \
   return ret; \

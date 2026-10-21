@@ -16,6 +16,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
+#include "config_bridge.h"
 #include "observer/ob_server_runtime_access.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "observer/mysql/obmp_query.h"
@@ -64,7 +65,7 @@ int ObMPQuery::process()
   bool need_disconnect = true;
   bool async_resp_used = false; // Asynchronously reply to the client by the transaction commit thread
   int64_t query_timeout = 0;
-  ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
+  const ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
   ObSMConnection *conn = get_conn();
   bool do_ins_batch_opt = false;
   if (OB_ISNULL(req_) || OB_ISNULL(conn) || OB_ISNULL(cur_trace_id)) {
@@ -118,7 +119,7 @@ int ObMPQuery::process()
         //For performance optimization, reduce the array length to lower the construction and destruction overhead of unused elements
         ObSEArray<ObString, 1> queries;
         ObMPParseStat parse_stat;
-        if (GCONF.enable_record_trace_id) {
+        if (config::enable_record_trace_id()) {
           PreParseResult pre_parse_result;
           if (OB_FAIL(ObParser::pre_parse(sql_, pre_parse_result))) {
           } else {
@@ -424,7 +425,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
       } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
     }
     ObThreadLogLevelUtils::clear();
-    const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
+    const int64_t debug_sync_timeout = config::debug_sync_timeout();
     if (debug_sync_timeout > 0) {
       // ignore thread local debug sync actions to session actions failed
       int tmp_ret = OB_SUCCESS;
@@ -736,7 +737,7 @@ int ObMPQuery::process_trans_ctrl_cmd(ObSQLSessionInfo &session,
     bool need_trans_cb  = need_end_trans_callback && (!force_sync_resp);
     if (need_trans_cb) {
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
-      ObCurTraceId::TraceId *cur_trace_id = NULL;
+      const ObCurTraceId::TraceId *cur_trace_id = NULL;
       if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("current trace id is NULL", K(ret));
