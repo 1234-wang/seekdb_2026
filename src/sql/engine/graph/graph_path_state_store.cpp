@@ -135,6 +135,30 @@ int GraphPathStateStore::add_root(int64_t binding_id,
   return ret;
 }
 
+int GraphPathStateStore::retain_payload(const GraphEdgePayload &source,
+                                        GraphEdgePayload &destination)
+{
+  // Expand emits all bindings of one physical edge consecutively. Reuse only
+  // byte-identical encoded values, never merely equal edge IDs: expression
+  // values may differ between bindings or rescans. The previous payload is
+  // immutable and arena-backed until reset(), independently of states_ growth.
+  const GraphEdgePayload *previous = states_.empty()
+      ? nullptr : &states_.at(states_.count() - 1).incoming_edge_payload_;
+  bool same = previous != nullptr && source.values_.count_ > 0
+      && source.values_.is_valid() && previous->values_.is_valid()
+      && source.values_.count_ == previous->values_.count_;
+  for (int64_t i = 0; same && i < source.values_.count_; ++i) {
+    const ObObj &a = source.values_.cells_[i];
+    const ObObj &b = previous->values_.cells_[i];
+    same = a.is_varbinary() && b.is_varbinary() && a.get_string() == b.get_string();
+  }
+  if (same) {
+    destination = *previous;
+    return OB_SUCCESS;
+  }
+  return destination.deep_copy(source, identity_allocator_);
+}
+
 int GraphPathStateStore::add_child(const GraphExpandOutput &extension,
                                    int64_t &path_state_id, bool retain_history)
 {
@@ -169,8 +193,8 @@ int GraphPathStateStore::add_child(const GraphExpandOutput &extension,
                                    child.current_identity_))) {
     } else if (retain_history && OB_FAIL(deep_copy_identity(extension.edge_identity_,
                                           child.incoming_edge_identity_))) {
-    } else if (retain_history && OB_FAIL(child.incoming_edge_payload_.deep_copy(
-                   extension.edge_payload_, identity_allocator_))) {
+    } else if (retain_history && OB_FAIL(retain_payload(
+                   extension.edge_payload_, child.incoming_edge_payload_))) {
     } else if (OB_FAIL(append_state(child, path_state_id))) {
     }
   }
