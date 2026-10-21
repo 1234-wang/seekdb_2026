@@ -75,6 +75,7 @@ public:
 private:
   int deep_copy_identity(const GraphElementIdentity &source,
                          GraphElementIdentity &destination);
+  int retain_payload(const GraphEdgePayload &source, GraphEdgePayload &destination);
   int append_state(GraphPathState &state, int64_t &path_state_id);
   int check_memory_limit();
   bool is_valid_state_id(int64_t path_state_id) const;
