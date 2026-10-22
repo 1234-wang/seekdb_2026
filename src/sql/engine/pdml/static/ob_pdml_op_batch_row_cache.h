@@ -64,7 +64,7 @@ public:
   int init(int64_t part_cnt, bool with_barrier, const ObTableModifySpec &spec);
   // ObBatchRowCache does not need to support disk persistence, once memory is insufficient, add_row will fail, the caller will
   // Responsible for inserting all cached data into the storage layer and releasing the memory of the cache.
-  // @desc part_id indicates the offset of the partition where the row is located in the location structure
+  // @desc part_id indicates the offset of the partition containing the row in the tablet access array
   // @return If the cache is full, return OB_SIZE_OVERFLOW; if the cache is successful, return OB_SUCCESS; otherwise, return other types of errors
   int add_row(const ObExprPtrIArray &row, common::ObTabletID tablet_id);
   // @desc get all part_id from current cache

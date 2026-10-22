@@ -1052,7 +1052,7 @@ int ObAccessAllGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
     }
     LOG_TRACE("access all granule split a task_array",
-      K(op_id), K(tsc->get_loc_ref_table_id()), K(tsc->get_ref_table_id()),
+      K(op_id), K(tsc->get_scan_source_table_id()), K(tsc->get_ref_table_id()),
       K(taskset_array), K(ret), K(scan_ops.count()));
   }
   return ret;
@@ -1181,7 +1181,7 @@ int ObNormalAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
     }
     LOG_TRACE("normal affinitize granule split a task_array",
-      K(op_id), K(tsc->get_loc_ref_table_id()), K(taskset_array), K(ret), K(scan_ops.count()),
+      K(op_id), K(tsc->get_scan_source_table_id()), K(taskset_array), K(ret), K(scan_ops.count()),
       K(idx), K(task_idx), K(total_task_set));
   }
   return ret;
@@ -1363,7 +1363,7 @@ int ObPartitionWiseGranuleSplitter::split_tsc_gi_task(ObGranulePumpArgs &args,
       gi_task_array_result.at(task_array_idx).tsc_op_id_ = op_id;
     }
     LOG_TRACE("partition wise tsc granule split a task_array",
-      K(op_id), K(tsc->get_loc_ref_table_id()), K(taskset_array), K(ret), K(scan_ops.count()));
+      K(op_id), K(tsc->get_scan_source_table_id()), K(taskset_array), K(ret), K(scan_ops.count()));
   }
   return ret;
 }
@@ -1411,7 +1411,7 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     } else if (OB_FAIL(split_tasks_affinity(*args.ctx_, total_task_set, args.parallelism_,
         taskset_array))) {
     } else if (OB_FAIL(adjust_task_order(asc_gi_task_order, taskset_array,
-                                         op_id, args.locations_order_))) {
+                                         op_id, args.tablet_access_order_))) {
     } else {
       gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
     }
@@ -1423,7 +1423,7 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
 
 int ObPWAffinitizeGranuleSplitter::adjust_task_order(bool asc, ObGITaskArray &taskset_array,
                                           int64_t tsc_op_id,
-                                          const ObIArray<std::pair<int64_t, bool>> &locations_order)
+                                          const ObIArray<std::pair<int64_t, bool>> &tablet_access_order)
 {
   // In same pw affi task group, worker has there own task order,
   // we must adjust task order to get right join result, just see issue/22963231.
@@ -1431,17 +1431,17 @@ int ObPWAffinitizeGranuleSplitter::adjust_task_order(bool asc, ObGITaskArray &ta
   bool no_need_reverse = false;
   bool force_reverse = false;
   bool found = false;
-  for (int64_t i = 0; i < locations_order.count() && !found; i++) {
-    if (locations_order.at(i).first == tsc_op_id) {
+  for (int64_t i = 0; i < tablet_access_order.count() && !found; i++) {
+    if (tablet_access_order.at(i).first == tsc_op_id) {
       found = true;
-      if (locations_order.at(i).second == asc) {
+      if (tablet_access_order.at(i).second == asc) {
         no_need_reverse = true;
       } else {
         force_reverse = true;
       }
     }
   }
-  if (OB_UNLIKELY(!found && locations_order.count() > 0)) {
+  if (OB_UNLIKELY(!found && tablet_access_order.count() > 0)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (no_need_reverse) {
     // no need reverse
@@ -1481,7 +1481,7 @@ int ObGranulePump::init_pump_args(ObExecContext *ctx, ObPxSqcMeta &sqc,
   uint64_t gi_attri_flag = gi_op->get_gi_flags();
   int64_t parallelism = sqc.get_task_count();
   int64_t tablet_size = gi_op->get_tablet_size();
-  const ObIArray<std::pair<int64_t, bool>> &locations_order = sqc.get_locations_order();
+  const ObIArray<std::pair<int64_t, bool>> &tablet_access_order = sqc.get_tablet_access_order();
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -1489,7 +1489,7 @@ int ObGranulePump::init_pump_args(ObExecContext *ctx, ObPxSqcMeta &sqc,
     if (OB_FAIL(pump_args_.push_back(new_arg))) {
     } else if (OB_FAIL(init_arg(pump_args_.at(pump_args_.count() - 1), ctx, gi_op, scan_ops, tablet_arrays,
                                 partitions_info, modify_op, parallelism,
-                                tablet_size, gi_attri_flag, locations_order))) {
+                                tablet_size, gi_attri_flag, tablet_access_order))) {
     } else if (OB_FAIL(add_new_gi_task(pump_args_.at(pump_args_.count() - 1), false))) {
     }
   }
@@ -1507,7 +1507,7 @@ int ObGranulePump::init_arg(
     int64_t parallelism,
     int64_t tablet_size,
     uint64_t gi_attri_flag,
-    const ObIArray<std::pair<int64_t, bool>> &locations_order)
+    const ObIArray<std::pair<int64_t, bool>> &tablet_access_order)
 {
   int ret = OB_SUCCESS;
   arg.op_info_.reset();
@@ -1522,7 +1522,7 @@ int ObGranulePump::init_arg(
   for (int i = 0; OB_SUCC(ret) && i < partitions_info.count(); ++i) {
     OZ(arg.partitions_info_.push_back(partitions_info.at(i)));
   }
-  OZ(arg.locations_order_.assign(locations_order));
+  OZ(arg.tablet_access_order_.assign(tablet_access_order));
   if (OB_SUCC(ret)) {
     arg.ctx_ = ctx;
     arg.op_info_.init_modify_op(modify_op);

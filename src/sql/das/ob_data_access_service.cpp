@@ -188,13 +188,7 @@ int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op
 {
   int ret = OB_SUCCESS;
 
-  ObDasAggregatedTask das_task_wrapper;
-  if (scan_op.is_local_task()) {
-    if (OB_FAIL(scan_op.rescan())) {
-    }
-  } else if (OB_FAIL(das_task_wrapper.push_back_task(&scan_op))) {
-  } else if (OB_FAIL(execute_local_das_task(das_task_wrapper))) {
-    scan_op.errcode_ = ret;
+  if (OB_FAIL(scan_op.rescan())) {
   }
   OB_ASSERT(scan_op.errcode_ == ret);
   if (OB_FAIL(ret) && config::_enable_partition_level_retry() && scan_op.can_part_retry()) {

@@ -2004,18 +2004,18 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
   int ret = OB_SUCCESS;
   if ((config::_enable_defensive_check() == 2)) {
     //only strict defensive check need to check tablet validity, otherwise ignore it
-    TableAccessPlan *tmp_location = nullptr;
+    TableAccessPlan *access_plan = nullptr;
     ObSEArray<ObTabletID, 1> tablet_ids;
     ObSEArray<ObObjectID, 1> partition_ids;
     uint64_t table_id = tablet_access.access_meta_->ref_table_id_;
     ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
-    if (OB_ISNULL(dml_rtdef.check_location_)) {
-      void *location_buf = allocator.alloc(sizeof(TableAccessPlan));
-      if (OB_ISNULL(location_buf)) {
+    if (OB_ISNULL(dml_rtdef.check_access_plan_)) {
+      void *access_buf = allocator.alloc(sizeof(TableAccessPlan));
+      if (OB_ISNULL(access_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        dml_rtdef.check_location_ = new(location_buf) TableAccessPlan(allocator);
-        tmp_location = dml_rtdef.check_location_;
+        dml_rtdef.check_access_plan_ = new(access_buf) TableAccessPlan(allocator);
+        access_plan = dml_rtdef.check_access_plan_;
         ObSchemaGetterGuard *schema_guard = dml_rtctx.get_exec_ctx().get_sql_ctx()->schema_guard_;
         ObSQLSessionInfo *session = dml_rtctx.get_exec_ctx().get_my_session();
         ObSqlSchemaGuard sql_schema_guard;
@@ -2024,12 +2024,12 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
         // If the table-level schema_version is not equal, directly report an error schema_again
         if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
           ret = OB_ERR_UNEXPECTED;
-        } else if (OB_FAIL(tmp_location->init_table_location_with_column_ids(
+        } else if (OB_FAIL(access_plan->init_access_plan_with_column_ids(
             sql_schema_guard, table_id, dml_ctdef.column_ids_, dml_rtctx.get_exec_ctx()))) {
         }
       }
     } else {
-      tmp_location = dml_rtdef.check_location_;
+      access_plan = dml_rtdef.check_access_plan_;
     }
 
     if (OB_SUCC(ret)) {
@@ -2037,7 +2037,7 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
                                        dml_rtctx.get_eval_ctx(),
                                        dml_rtdef,
                                        dml_rtctx.get_exec_ctx().get_allocator()))) {
-      } else if (OB_FAIL(tmp_location->calculate_tablet_id_by_row(dml_rtctx.get_exec_ctx(),
+      } else if (OB_FAIL(access_plan->calculate_tablet_id_by_row(dml_rtctx.get_exec_ctx(),
                                                                   table_id,
                                                                   dml_ctdef.column_ids_,
                                                                   *dml_rtdef.check_row_,
@@ -2064,9 +2064,9 @@ int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
           LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
           LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret),
                     K(tablet_access), K(tablet_ids),
-                    KPC(dml_rtdef.check_row_), KPC(dml_rtdef.check_location_));
+                    KPC(dml_rtdef.check_row_), KPC(dml_rtdef.check_access_plan_));
           LOG_ERROR("Fatal Error!!! Catch a defensive error!", K(ret), K(table_schema->get_schema_version()), K(dml_ctdef.das_base_ctdef_.schema_version_),
-                    KPC(tmp_location), KPC(table_schema));
+                    KPC(access_plan), KPC(table_schema));
         }
       }
     }

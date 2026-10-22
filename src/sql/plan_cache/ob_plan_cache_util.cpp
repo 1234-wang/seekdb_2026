@@ -85,13 +85,13 @@ int TableAccessTargetBuilder::collect_access_targets(const ObIArray<TableAccessP
       for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
         const TableAccessPlan &table_access_plan = table_access_plans.at(i);
         TableAccessTargets &targets = table_targets.at(i);
-        NG_TRACE(calc_partition_location_begin);
+        NG_TRACE(calculate_partition_targets_begin);
         if (OB_FAIL(table_access_plan.calculate_tablet_targets(exec_ctx,
                                                           params,
                                                           targets.get_tablets_for_update(),
                                                           dtc_params))) {
         } else {
-          NG_TRACE(calc_partition_location_end);
+          NG_TRACE(calculate_partition_targets_end);
           targets.set_table_identity(
               table_access_plan.get_table_id(), table_access_plan.get_ref_table_id());
         }

@@ -95,7 +95,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
       ret = OB_ERR_UNEXPECTED;
     } else if (info->get_table_access_plan().use_das()
                && info->get_table_access_plan().get_has_dynamic_exec_param()) {
-      if (OB_FAIL(tsc_ctdef.allocate_dppr_table_loc())) {
+      if (OB_FAIL(tsc_ctdef.allocate_dppr_access_plan())) {
       } else if (OB_FAIL(tsc_ctdef.das_dppr_tbl_->assign(info->get_table_access_plan()))) {
       } else if (OB_FAIL(schema_guard->get_table_schema(op.get_table_id(),
                                                         scan_ctdef.ref_table_id_,

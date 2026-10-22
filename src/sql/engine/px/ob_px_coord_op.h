@@ -81,11 +81,11 @@ public:
   bool enable_px_batch_rescan() { return coord_info_.enable_px_batch_rescan(); }
   int64_t get_rescan_param_count()
   {  return coord_info_.get_rescan_param_count(); }
-  const common::ObIArray<TableAccessPlan> *get_pruning_table_locations()
-  {  return coord_info_.pruning_table_location_; }
-  void set_pruning_table_locations(const common::ObIArray<TableAccessPlan> *pruning_table_locations)
+  const common::ObIArray<TableAccessPlan> *get_pruning_access_plans()
+  {  return coord_info_.pruning_access_plan_; }
+  void set_pruning_access_plans(const common::ObIArray<TableAccessPlan> *pruning_access_plans)
   {
-    coord_info_.pruning_table_location_ = pruning_table_locations;
+    coord_info_.pruning_access_plan_ = pruning_access_plans;
   }
   virtual int receive_channel_root_dfo(ObExecContext &ctx, ObDfo &parent, ObPxTaskChSets &parent_ch_sets) override;
   virtual int receive_channel_root_dfo(

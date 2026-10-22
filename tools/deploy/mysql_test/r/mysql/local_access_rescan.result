@@ -1,0 +1,54 @@
+DROP TABLE IF EXISTS local_rescan_outer, local_rescan_inner;
+CREATE TABLE local_rescan_outer(seq INT PRIMARY KEY,k INT);
+CREATE TABLE local_rescan_inner(id INT PRIMARY KEY,k INT,v VARCHAR(8),KEY k_idx(k) LOCAL)
+PARTITION BY RANGE(id)
+(PARTITION p0 VALUES LESS THAN(10),PARTITION p1 VALUES LESS THAN(20),PARTITION p2 VALUES LESS THAN MAXVALUE);
+INSERT INTO local_rescan_inner VALUES(1,1,'a'),(2,2,'b'),(11,1,'c'),(21,2,'d');
+INSERT INTO local_rescan_outer VALUES(1,99),(2,1),(3,2),(4,99),(5,1);
+SELECT /*+ LEADING(o i) USE_NL(i) INDEX(i k_idx) NO_PARALLEL OPT_PARAM('nlj_batching_enabled' 'false') */ o.seq,i.id,i.v
+FROM local_rescan_outer o LEFT JOIN local_rescan_inner i ON i.k=o.k ORDER BY o.seq,i.id;
+seq	id	v
+1	NULL	NULL
+2	1	a
+2	11	c
+3	2	b
+3	21	d
+4	NULL	NULL
+5	1	a
+5	11	c
+SELECT /*+ LEADING(o i) USE_NL(i) INDEX(i k_idx) NO_PARALLEL OPT_PARAM('nlj_batching_enabled' 'true') */ o.seq,i.id,i.v
+FROM local_rescan_outer o LEFT JOIN local_rescan_inner i ON i.k=o.k ORDER BY o.seq,i.id;
+seq	id	v
+1	NULL	NULL
+2	1	a
+2	11	c
+3	2	b
+3	21	d
+4	NULL	NULL
+5	1	a
+5	11	c
+PREPARE local_lookup FROM 'SELECT /*+ INDEX(local_rescan_inner k_idx) */ id,v FROM local_rescan_inner WHERE k=? ORDER BY id';
+SET @lookup_key=99;
+EXECUTE local_lookup USING @lookup_key;
+id	v
+SET @lookup_key=1;
+EXECUTE local_lookup USING @lookup_key;
+id	v
+1	a
+11	c
+SET @lookup_key=99;
+EXECUTE local_lookup USING @lookup_key;
+id	v
+SET @lookup_key=2;
+EXECUTE local_lookup USING @lookup_key;
+id	v
+2	b
+21	d
+DEALLOCATE PREPARE local_lookup;
+SELECT /*+ INDEX(local_rescan_inner k_idx) NO_PARALLEL */ k,id,v FROM local_rescan_inner WHERE k>=1 ORDER BY k,id;
+k	id	v
+1	1	a
+1	11	c
+2	2	b
+2	21	d
+DROP TABLE local_rescan_outer, local_rescan_inner;

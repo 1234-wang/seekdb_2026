@@ -84,10 +84,10 @@ int ObLobRetryUtil::prepare_retry(ObLobAccessParam &param,
     // Locators without retry metadata require no retry preparation.
   } else if (OB_FAIL(data_plane::ObDataAccessRetry::wait(retry_cnt))) {
   } else {
-    ObMemLobLocationInfo *location_info = nullptr;
+    LobAccessInfo *access_info = nullptr;
     if (last_err == OB_TABLET_NOT_EXIST && OB_FAIL(check_tablet_exists(param, extern_header->table_id_))) {
-    } else if (OB_FAIL(lob_locator->get_location_info(location_info))) {
-    } else if (location_info->tablet_id_ != param.tablet_id_.id()) {
+    } else if (OB_FAIL(lob_locator->get_access_info(access_info))) {
+    } else if (access_info->tablet_id_ != param.tablet_id_.id()) {
       ret = OB_ERR_UNEXPECTED;
     }
   }

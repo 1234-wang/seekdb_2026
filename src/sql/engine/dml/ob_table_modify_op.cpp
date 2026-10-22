@@ -639,7 +639,7 @@ int ObTableModifyOp::inner_open()
   ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
   if (OB_FAIL(init_foreign_key_operation())) {
   } else if (MY_SPEC.plan_->has_nested_sql() && OB_FAIL(open_inner_conn())) {
-  } else if (OB_FAIL(calc_single_table_loc())) {
+  } else if (OB_FAIL(resolve_single_table_access())) {
   } else if (OB_FAIL(check_need_exec_single_row())) {
   } else {
     init_das_dml_ctx();
@@ -844,7 +844,7 @@ int ObTableModifyOp::inner_rescan()
   }
   if (OB_SUCC(ret)) {
     dml_modify_rows_.clear();
-    if (OB_FAIL(calc_single_table_loc())) {
+    if (OB_FAIL(resolve_single_table_access())) {
     }
   }
   return ret;
@@ -889,7 +889,7 @@ int ObTableModifyOp::get_gi_task()
   return ret;
 }
 
-int ObTableModifyOp::calc_single_table_loc()
+int ObTableModifyOp::resolve_single_table_access()
 {
   int ret = OB_SUCCESS;
   if (!MY_SPEC.use_dist_das_) {

@@ -47,7 +47,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     expr_op_factory_(allocator_),
     literal_stmt_type_(stmt::T_NONE),
     plan_type_(OB_PHY_PLAN_UNINITIALIZED),
-    location_type_(OB_PHY_PLAN_UNINITIALIZED),
+    access_shape_(OB_PHY_PLAN_UNINITIALIZED),
     require_local_execution_(false),
     use_px_(false),
     px_dop_(0),
@@ -70,7 +70,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     das_table_access_plans_(allocator_),
     row_param_map_(allocator_),
     is_update_uniq_index_(false),
-    contain_index_location_(false),
+    has_index_access_plan_(false),
     base_constraints_(allocator_),
     strict_constrinats_(allocator_),
     non_strict_constrinats_(allocator_),
@@ -136,7 +136,7 @@ void ObPhysicalPlan::reset()
   expr_op_factory_.destroy();
   literal_stmt_type_ = stmt::T_NONE;
   plan_type_ = OB_PHY_PLAN_UNINITIALIZED;
-  location_type_ = OB_PHY_PLAN_UNINITIALIZED;
+  access_shape_ = OB_PHY_PLAN_UNINITIALIZED;
   require_local_execution_ = false;
   use_px_ = false;
   px_dop_ = 0;
@@ -157,7 +157,7 @@ void ObPhysicalPlan::reset()
   has_nested_sql_ = false;
   session_id_ = 0;
   is_update_uniq_index_ = false;
-  contain_index_location_ = false;
+  has_index_access_plan_ = false;
   ObPlanCacheObject::reset();
   is_late_materialized_ = false;
   is_plain_insert_ = false;
@@ -620,7 +620,7 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     stat_.sql_id_,
                     is_contain_inner_table_,
                     is_update_uniq_index_,
-                    location_type_,
+                    access_shape_,
                     use_px_,
                     vars_,
                     px_dop_,
@@ -671,19 +671,19 @@ int ObPhysicalPlan::set_table_access_plans(const ObTablePartitionInfoArray &info
     } else if (OB_FAIL(table_access_plans_.push_back(tl))) {
     } else if (OB_FAIL(schema_guard.get_table_schema( tl.get_ref_table_id(), table_schema))) {
     } else {
-      contain_index_location_ |= table_schema->is_index_table();
+      has_index_access_plan_ |= table_schema->is_index_table();
     }
-    LOG_DEBUG("set table location", K(tl), K(tl.use_das()));
+    LOG_DEBUG("set table access", K(tl), K(tl.use_das()));
   }
 
   return ret;
 }
 
-int ObPhysicalPlan::set_location_constraints(const ObIArray<TableAccessConstraint> &base_constraints,
+int ObPhysicalPlan::set_access_constraints(const ObIArray<TableAccessConstraint> &base_constraints,
                                              const ObIArray<ObPwjConstraint *> &strict_constraints,
                                              const ObIArray<ObPwjConstraint *> &non_strict_constraints)
 {
-  // deep copy location constraints
+  // deep copy access constraints
   int ret = OB_SUCCESS;
   if (base_constraints.count() > 0) {
     base_constraints_.reset();
@@ -758,7 +758,7 @@ int ObPhysicalPlan::set_location_constraints(const ObIArray<TableAccessConstrain
   return ret;
 }
 
-bool ObPhysicalPlan::has_same_location_constraints(const ObPhysicalPlan &r) const
+bool ObPhysicalPlan::has_same_access_constraints(const ObPhysicalPlan &r) const
 {
   bool is_same = true;
   const ObIArray<TableAccessConstraint>& l_base_cons = get_base_constraints();

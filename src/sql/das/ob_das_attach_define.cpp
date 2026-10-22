@@ -230,13 +230,13 @@ int ObDASAttachSpec::deserialize_ctdef_tree(const char *buf,
   return ret;
 }
 
-const DASTableAccessMeta *ObDASAttachSpec::get_attach_access_meta(int64_t table_location_id,
+const DASTableAccessMeta *ObDASAttachSpec::get_attach_access_meta(int64_t table_ref_id,
                                                               int64_t ref_table_id) const
 {
   const DASTableAccessMeta *access_meta = nullptr;
   FOREACH_X(it, attach_access_metas_, nullptr == access_meta) {
     const DASTableAccessMeta *tmp_access_meta = *it;
-    if (tmp_access_meta->table_ref_id_ == table_location_id &&
+    if (tmp_access_meta->table_ref_id_ == table_ref_id &&
         tmp_access_meta->ref_table_id_ == ref_table_id) {
       access_meta = tmp_access_meta;
     }

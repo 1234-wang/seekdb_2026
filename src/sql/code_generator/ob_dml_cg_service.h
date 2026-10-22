@@ -361,7 +361,7 @@ private:
                              ObDASScanCtDef &scan_ctdef);
   
   
-  int generate_fk_table_loc_info(uint64_t index_table_id,
+  int generate_fk_access_meta(uint64_t index_table_id,
                                  DASTableAccessMeta &access_meta,
                                  ObTabletID &tablet_id,
                                  bool &is_part_table_);

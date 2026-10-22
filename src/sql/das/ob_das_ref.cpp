@@ -115,7 +115,6 @@ ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
     exec_ctx_(exec_ctx),
     eval_ctx_(eval_ctx),
     expr_frame_info_(nullptr),
-    wild_datum_info_(eval_ctx),
     del_aggregated_tasks_(das_alloc_),
     aggregated_tasks_(das_alloc_),
     lookup_cnt_(0),
@@ -130,7 +129,7 @@ ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
 
 DASOpResultIter ObDASRef::begin_result_iter()
 {
-  return DASOpResultIter(batched_tasks_.begin(), wild_datum_info_);
+  return DASOpResultIter(batched_tasks_.begin());
 }
 
 ObIDASTaskOp* ObDASRef::find_das_task(const DASRuntimeTabletAccess *tablet_access, ObDASOpType op_type)
@@ -260,20 +259,6 @@ int ObDASRef::pick_del_task_to_first()
   print_all_das_task();
 #endif
   return ret;
-}
-
-bool ObDASRef::is_all_local_task() const
-{
-  bool bret = false;
-  if (has_task()) {
-    bret = true;
-    DLIST_FOREACH_X(curr, batched_tasks_.get_obj_list(), bret) {
-      if (!curr->get_obj()->is_local_task()) {
-        bret = false;
-      }
-    }
-  }
-  return bret;
 }
 
 // The worker copy of a DAS task serializes tx_desc while the SQL thread can still modify it.
@@ -443,9 +428,6 @@ void ObDASRef::clear_task_map()
     task_map_.clear();
   }
 }
-
-
-
 
 int ObDASRef::close_all_task()
 {

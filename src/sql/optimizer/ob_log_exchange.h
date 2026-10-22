@@ -161,9 +161,9 @@ public:
     return wf_hybrid_pby_exprs_cnt_array_;
   }
 
-  common::ObIArray<TableAccessPlan> &get_pruning_table_locations() { return table_access_plans_; }
+  common::ObIArray<TableAccessPlan> &get_pruning_access_plans() { return table_access_plans_; }
   common::ObIArray<int64_t> &get_bloom_filter_ids() { return filter_id_array_; }
-  int gen_px_pruning_table_locations();
+  int gen_px_pruning_access_plans();
   int allocate_startup_expr_post()override;
   void set_partition_id_expr(ObOpPseudoColumnRawExpr *expr) { partition_id_expr_ = expr; }
   ObOpPseudoColumnRawExpr *get_partition_id_expr() { return partition_id_expr_; }
@@ -195,7 +195,7 @@ public:
 private:
   int prepare_px_pruning_param(ObLogicalOperator *op, int64_t &count,
       common::ObIArray<const ObDMLStmt *> &stmts, common::ObIArray<int64_t> &drop_expr_idxs);
-  int add_px_table_location(ObLogicalOperator *op,
+  int add_px_access_plan(ObLogicalOperator *op,
       common::ObIArray<TableAccessPlan> &table_access_plans,
       common::ObIArray<int64_t> &drop_expr_idxs,
       const common::ObIArray<const ObDMLStmt *> &stmts,
@@ -203,7 +203,7 @@ private:
   int find_need_drop_expr_idxs(ObLogicalOperator *op,
       common::ObIArray<int64_t> &drop_expr_idxs,
       log_op_def::ObLogOpType type);
-  int find_table_location_exprs(const common::ObIArray<int64_t> &drop_expr_idxs,
+  int find_partition_access_exprs(const common::ObIArray<int64_t> &drop_expr_idxs,
       const common::ObIArray<ObRawExpr *> &filters,
       common::ObIArray<ObRawExpr *> &exprs, bool &has_exec_param);
   int check_expr_is_need(const ObRawExpr *expr,

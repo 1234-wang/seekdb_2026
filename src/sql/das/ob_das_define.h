@@ -175,7 +175,7 @@ public:
   common::ObTabletID tablet_id_; //the data_object_id corresponding to partition_id
   const DASTableAccessMeta *access_meta_; // References access metadata; not serialized.
   DASRuntimeTabletAccess *next_; // Links related base-table and local-index tablet accesses.
-  // Retain the reserved V1 wire slot; no per-tablet location-refresh state.
+  // Retain the reserved V1 wire slot; no per-tablet access-refresh state.
   uint64_t reserved_flags_;
   // partition id of this tablet
   uint64_t partition_id_;
@@ -185,9 +185,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(DASRuntimeTabletAccess);
 };
 
-static const int64_t DAS_TABLET_LOC_LOOKUP_THRESHOLD = 1000;
-static const int64_t DAS_TABLET_LOC_SIZE_THRESHOLD = 10;
-static const int64_t DAS_TABLET_LOC_MAP_BUCKET_SIZE = 5000;
+static const int64_t DAS_TABLET_ACCESS_LOOKUP_THRESHOLD = 1000;
+static const int64_t DAS_TABLET_ACCESS_SIZE_THRESHOLD = 10;
+static const int64_t DAS_TABLET_ACCESS_MAP_BUCKET_SIZE = 5000;
 
 typedef common::ObList<DASRuntimeTabletAccess*, common::ObIAllocator> DASRuntimeTabletList;
 typedef common::ObList<DASRuntimeTabletAccess*, common::ObIAllocator>::iterator DASRuntimeTabletListIter;

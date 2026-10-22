@@ -146,7 +146,7 @@ int ObLogForUpdate::generate_multi_part_partition_id_expr()
     ObRawExpr *part_expr = NULL;
     if (OB_ISNULL(index_dml_info_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(get_plan()->gen_calc_part_id_expr(index_dml_info_.at(i)->loc_table_id_,
+    } else if (OB_FAIL(get_plan()->gen_calc_part_id_expr(index_dml_info_.at(i)->target_table_ref_id_,
                                                          index_dml_info_.at(i)->ref_table_id_,
                                                          CALC_PARTITION_TABLET_ID,
                                                          part_expr))) {

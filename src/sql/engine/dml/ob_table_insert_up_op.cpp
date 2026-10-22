@@ -1178,7 +1178,7 @@ int ObTableInsertUpOp::do_update_with_ignore()
   } else if (OB_FAIL(resolve_update_tablet_access(*upd_ctdef, upd_rtdef, old_tablet_access, new_tablet_access))) {
   } else if (old_tablet_access != new_tablet_access) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Do update with ignore under inconsistent tablet loc");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Do update with ignore under inconsistent tablet access");
   } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_access, new_tablet_access, upd_rtctx_,
                                              modify_row.old_row_, modify_row.new_row_, modify_row.full_row_))) {
   } else if (need_after_row_process(*upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {

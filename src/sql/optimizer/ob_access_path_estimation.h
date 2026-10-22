@@ -135,7 +135,7 @@ public:
                                           uint64_t ref_table_id,
                                           bool &can_use);
   static int storage_estimate_range_rowcount(ObOptimizerContext &ctx,
-                                             const TabletAccessTargetIArray &part_loc_infos,
+                                             const TabletAccessTargetIArray &tablet_accesses,
                                              bool estimate_whole_range,
                                              const ObRangesArray *ranges,
                                              ObTableMetaInfo &meta);
@@ -314,7 +314,7 @@ private:
 
 
   static int storage_estimate_full_table_rowcount(ObOptimizerContext &ctx,
-                                                  const TabletAccessTarget &part_loc_info,
+                                                  const TabletAccessTarget &tablet_access,
                                                   ObTableMetaInfo &meta);
 
   static int estimate_full_table_rowcount_by_meta_table(ObOptimizerContext &ctx,

@@ -640,19 +640,19 @@ int ObPLGatherStatNode::add_part_calc_node(common::ObIArray<PartitionCalcNode*> 
 }
 
 
-TableAccessShape TableAccessPlan::get_location_type(
-    const TabletAccessTargetIArray &phy_part_loc_info_list) const
+TableAccessShape TableAccessPlan::get_access_shape(
+    const TabletAccessTargetIArray &tablet_targets) const
 {
   // All tablets are routed locally in seekdb.  DISTRIBUTED only describes a
   // multi-tablet sharding shape so local PX can retain its partition/exchange
   // planning; it does not imply remote replica selection or transport.
-  return phy_part_loc_info_list.count() <= 1
-             ? OB_TBL_LOCATION_LOCAL
-             : OB_TBL_LOCATION_DISTRIBUTED;
+  return tablet_targets.count() <= 1
+             ? TABLE_ACCESS_SINGLE_TABLET
+             : TABLE_ACCESS_MULTI_TABLET;
 }
 
 TableAccessPlan::TableAccessPlan(const TableAccessPlan &other) :
-    inner_allocator_(ObModIds::OB_SQL_TABLE_LOCATION),
+    inner_allocator_(ObModIds::OB_SQL_TABLE_ACCESS_PLAN),
     allocator_(inner_allocator_),
     access_meta_(inner_allocator_),
     calc_node_(NULL),
@@ -843,7 +843,7 @@ int TableAccessPlan::init(ObSqlSchemaGuard &schema_guard,
   }
   return ret;
 }
-int TableAccessPlan::init_location(ObSqlSchemaGuard *schema_guard,
+int TableAccessPlan::init_access_plan(ObSqlSchemaGuard *schema_guard,
           const ObDMLStmt &stmt,
           ObExecContext *exec_ctx,
           const common::ObIArray<ObRawExpr*> &filter_exprs,
@@ -862,7 +862,7 @@ int TableAccessPlan::init_location(ObSqlSchemaGuard *schema_guard,
   }
   return ret;
 }
-int TableAccessPlan::init_table_location(ObExecContext &exec_ctx,
+int TableAccessPlan::init_access_plan(ObExecContext &exec_ctx,
                                          ObSqlSchemaGuard &schema_guard,
                                          uint64_t table_id,
                                          uint64_t ref_table_id,
@@ -875,7 +875,7 @@ int TableAccessPlan::init_table_location(ObExecContext &exec_ctx,
   UNUSED(direction);
   const ObTableSchema *table_schema = NULL;
   const ObRawExpr *part_raw_expr = NULL;
-  RowDesc loc_row_desc;
+  RowDesc partition_row_desc;
   access_meta_.table_ref_id_ = table_id;
   access_meta_.ref_table_id_ = ref_table_id;
   stmt_type_ = stmt.get_stmt_type();
@@ -901,8 +901,8 @@ int TableAccessPlan::init_table_location(ObExecContext &exec_ctx,
   } else if (OB_UNLIKELY(PARTITION_FUNC_TYPE_MAX <=
       (subpart_type_ = table_schema->get_sub_part_option().get_part_func_type()))) {
     ret = OB_SCHEMA_ERROR;
-  } else if (OB_FAIL(loc_row_desc.init())) {
-  } else if (OB_FAIL(loc_row_desc.assign(row_desc))) {
+  } else if (OB_FAIL(partition_row_desc.init())) {
+  } else if (OB_FAIL(partition_row_desc.assign(row_desc))) {
   } else {
     if (stmt.is_insert_stmt()) {
        ret = OB_INVALID_ARGUMENT;
@@ -915,7 +915,7 @@ int TableAccessPlan::init_table_location(ObExecContext &exec_ctx,
     }
     if (OB_SUCC(ret)) {
       ObTempExpr *se_temp_expr = NULL;
-      OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(part_raw_expr, loc_row_desc,
+      OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(part_raw_expr, partition_row_desc,
                                                       exec_ctx.get_allocator(),
                                                       exec_ctx.get_my_session(),
                                                       schema_guard.get_schema_guard(),
@@ -927,7 +927,7 @@ int TableAccessPlan::init_table_location(ObExecContext &exec_ctx,
     } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type_
         || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type_) {
       if (OB_FAIL(part_projector_.init_part_projector(&exec_ctx,
-                                                      part_raw_expr, loc_row_desc))) {
+                                                      part_raw_expr, partition_row_desc))) {
       }
     }
   }
@@ -958,7 +958,7 @@ int TableAccessPlan::init_table_location(ObExecContext &exec_ctx,
     }
     if (OB_SUCC(ret)) {
       ObTempExpr *se_temp_expr = NULL;
-      OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(subpart_raw_expr, loc_row_desc,
+      OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(subpart_raw_expr, partition_row_desc,
                                                       exec_ctx.get_allocator(),
                                                       exec_ctx.get_my_session(),
                                                       schema_guard.get_schema_guard(),
@@ -973,18 +973,18 @@ int TableAccessPlan::init_table_location(ObExecContext &exec_ctx,
           part_projector_.init_subpart_projector(
               &exec_ctx,
               subpart_raw_expr,
-              loc_row_desc))) {
+              partition_row_desc))) {
       }
     }
   }
   if (OB_SUCC(ret)) {
-    part_projector_.set_column_cnt(loc_row_desc.get_column_num());
+    part_projector_.set_column_cnt(partition_row_desc.get_column_num());
     inited_ = true;
   }
   return ret;
 }
 
-int TableAccessPlan::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_guard,
+int TableAccessPlan::init_access_plan_with_rowkey(ObSqlSchemaGuard &schema_guard,
                                                      uint64_t table_id,
                                                      ObExecContext &exec_ctx,
                                                      const bool is_dml_table /*= true*/)
@@ -1020,7 +1020,7 @@ int TableAccessPlan::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_gu
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(init_table_location_with_column_ids(schema_guard,
+    if (OB_FAIL(init_access_plan_with_column_ids(schema_guard,
                                                            table_id,
                                                            column_ids,
                                                            exec_ctx,
@@ -1030,7 +1030,7 @@ int TableAccessPlan::init_table_location_with_rowkey(ObSqlSchemaGuard &schema_gu
   return ret;
 }
 
-int TableAccessPlan::init_table_location_with_column_ids(ObSqlSchemaGuard &schema_guard,
+int TableAccessPlan::init_access_plan_with_column_ids(ObSqlSchemaGuard &schema_guard,
                                                          uint64_t table_id,
                                                          const ObIArray<uint64_t> &column_ids,
                                                          ObExecContext &exec_ctx,
@@ -1089,7 +1089,7 @@ int TableAccessPlan::init_table_location_with_column_ids(ObSqlSchemaGuard &schem
                                               real_table_id,
                                               expr_factory,
                                               row_desc))) {
-      } else if (OB_FAIL(init_table_location(exec_ctx,
+      } else if (OB_FAIL(init_access_plan(exec_ctx,
                                             schema_guard,
                                             real_table_id,
                                             real_table_id,
@@ -1150,7 +1150,7 @@ int TableAccessPlan::init(
   is_partitioned_ = true;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_ERROR("table location init twice", K(ret));
+    LOG_ERROR("table access init twice", K(ret));
   } else if (OB_INVALID_ID == table_id
              || OB_INVALID_ID == ref_table_id
              || OB_ISNULL(table_schema)
@@ -1298,7 +1298,7 @@ int TableAccessPlan::calculate_single_tablet_partition(ObExecContext &exec_ctx,
   ObDASCtx &das_ctx = exec_ctx.get_das_ctx();
   tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
   if (OB_UNLIKELY(!tablet_id_.is_valid() || object_id_ == OB_INVALID_ID)) {
-    ret = OB_LOCATION_NOT_EXIST;
+    ret = OB_ACCESS_TARGET_NOT_EXIST;
   } else if (OB_FAIL(das_ctx.get_das_tablet_mapper(access_meta_.ref_table_id_,
                                             tablet_mapper,
                                             &access_meta_.related_table_ids_))) {
@@ -1325,7 +1325,7 @@ int TableAccessPlan::calculate_single_tablet_partition(ObExecContext &exec_ctx,
   return ret;
 }
 
-int TableAccessPlan::calculate_final_tablet_locations(ObExecContext &exec_ctx,
+int TableAccessPlan::calculate_final_tablet_accesses(ObExecContext &exec_ctx,
                                                       const ParamStore &params,
                                                       const ObDataTypeCastParams &dtc_params) const
 {
@@ -1346,7 +1346,7 @@ int TableAccessPlan::calculate_final_tablet_locations(ObExecContext &exec_ctx,
                                      partition_ids,
                                      first_level_part_ids,
                                      dtc_params))) {
-    } else if (OB_FAIL(add_final_tablet_locations(exec_ctx.get_das_ctx(),
+    } else if (OB_FAIL(add_final_tablet_accesses(exec_ctx.get_das_ctx(),
                                                   tablet_ids,
                                                   partition_ids,
                                                   first_level_part_ids))) {
@@ -1368,7 +1368,7 @@ int TableAccessPlan::init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
   if (OB_UNLIKELY(is_virtual_table(table_id))) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Calculate virtual table partition id with rowkey");
-  } else if (OB_FAIL(init_table_location_with_rowkey(sql_schema_guard, table_id, exec_ctx))) {
+  } else if (OB_FAIL(init_access_plan_with_rowkey(sql_schema_guard, table_id, exec_ctx))) {
   }
   return ret;
 }
@@ -1382,7 +1382,7 @@ int TableAccessPlan::calculate_partition_ids_by_rows2(ObSQLSessionInfo &session_
                                                        ObIArray<ObObjectID> &part_ids) const
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(ObModIds::OB_SQL_TABLE_LOCATION);
+  ObArenaAllocator allocator(ObModIds::OB_SQL_TABLE_ACCESS_PLAN);
   SMART_VAR(ObExecContext, exec_ctx, allocator) {
     ObSqlSchemaGuard sql_schema_guard;
     ObSqlCtx sql_ctx;
@@ -1469,7 +1469,7 @@ int TableAccessPlan::calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session
                                                        ObIArray<ObObjectID> &partition_ids)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(ObModIds::OB_SQL_TABLE_LOCATION);
+  ObArenaAllocator allocator(ObModIds::OB_SQL_TABLE_ACCESS_PLAN);
   SMART_VAR(ObExecContext, exec_ctx, allocator) {
     ObSqlSchemaGuard sql_schema_guard;
     ObSqlCtx sql_ctx;
@@ -1503,7 +1503,7 @@ int TableAccessPlan::calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session
       } else {
         ret = OB_ERR_UNEXPECTED;
       }
-    } else if (OB_FAIL(init_table_location_with_rowkey(sql_schema_guard, table_id, exec_ctx))) {
+    } else if (OB_FAIL(init_access_plan_with_rowkey(sql_schema_guard, table_id, exec_ctx))) {
     } else if (OB_FAIL(calc_partition_ids_by_rowkey(exec_ctx,
                                                     tablet_mapper,
                                                     rowkeys,
@@ -1687,7 +1687,7 @@ int TableAccessPlan::get_tablet_targets(const ObIArray<ObTabletID> &tablet_ids,
                                       TabletAccessTargetIArray &tablet_targets) const
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(get_location_cache_begin);
+  NG_TRACE(build_tablet_targets_begin);
   tablet_targets.reset();
   const int64_t tablet_cnt = tablet_ids.count();
   if (OB_UNLIKELY(partition_ids.count() != tablet_cnt
@@ -1704,11 +1704,11 @@ int TableAccessPlan::get_tablet_targets(const ObIArray<ObTabletID> &tablet_ids,
                                          first_level_part_id);
     }
   }
-  NG_TRACE(get_location_cache_end);
+  NG_TRACE(build_tablet_targets_end);
   return ret;
 }
 
-int TableAccessPlan::add_final_tablet_locations(ObDASCtx &das_ctx,
+int TableAccessPlan::add_final_tablet_accesses(ObDASCtx &das_ctx,
                                                 const ObIArray<ObTabletID> &tablet_ids,
                                                 const ObIArray<ObObjectID> &partition_ids,
                                                 const ObIArray<ObObjectID> &first_level_part_ids) const
@@ -1883,7 +1883,7 @@ int TableAccessPlan::calc_partition_ids_by_in_expr(ObExecContext &exec_ctx,
   return ret;
 }
 
-int TableAccessPlan::set_location_calc_node(const ObDMLStmt &stmt,
+int TableAccessPlan::set_partition_calc_node(const ObDMLStmt &stmt,
                                             const ObIArray<ObRawExpr*> &filter_exprs,
                                             const ObPartitionLevel part_level,
                                             const ObDataTypeCastParams &dtc_params,
@@ -1919,7 +1919,7 @@ int TableAccessPlan::set_location_calc_node(const ObDMLStmt &stmt,
                                                se_part_expr,
                                                se_gen_col_expr,
                                                exec_ctx))) {
-  } else if (OB_FAIL(get_location_calc_node(part_level,
+  } else if (OB_FAIL(get_partition_calc_node(part_level,
                                             part_columns,
                                             part_raw_expr,
                                             filter_exprs,
@@ -2213,7 +2213,7 @@ int TableAccessPlan::record_not_insert_dml_partition_info(
     const bool is_in_range_optimization_enabled)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(set_location_calc_node(stmt,
+  if (OB_FAIL(set_partition_calc_node(stmt,
                                      filter_exprs,
                                      PARTITION_LEVEL_ONE,
                                      dtc_params,
@@ -2227,7 +2227,7 @@ int TableAccessPlan::record_not_insert_dml_partition_info(
                                      is_part_range_precise_get_,
                                      is_in_range_optimization_enabled))) {
   } else if (PARTITION_LEVEL_TWO == part_level_
-             && OB_FAIL(set_location_calc_node(stmt,
+             && OB_FAIL(set_partition_calc_node(stmt,
                                                filter_exprs,
                                                part_level_,
                                                dtc_params,
@@ -2307,7 +2307,7 @@ int TableAccessPlan::get_not_insert_dml_part_sort_expr(const ObDMLStmt &stmt,
   return ret;
 }
 
-int TableAccessPlan::get_location_calc_node(const ObPartitionLevel part_level,
+int TableAccessPlan::get_partition_calc_node(const ObPartitionLevel part_level,
                                             ObIArray<ColumnItem> &partition_columns,
                                             const ObRawExpr *partition_expr,
                                             const ObIArray<ObRawExpr*> &filter_exprs,
@@ -2373,7 +2373,7 @@ int TableAccessPlan::get_location_calc_node(const ObPartitionLevel part_level,
         LOG_WARN("get null expr", K(ret));
       } else if (filter_expr->has_flag(CNT_PL_UDF)) {
         // PL UDFs may contain DML side effects even when declared deterministic.
-        // Do not evaluate them while deriving partition locations.
+        // Do not evaluate them while deriving partition accesses.
       } else if (OB_FAIL(analyze_filter(partition_columns, partition_expr, column_id, filter_expr,
                                  always_true, calc_node, cnt_func_expr, dtc_params, exec_ctx))) {
       } else if (!cnt_func_expr || NULL == calc_node) {

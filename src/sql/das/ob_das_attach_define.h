@@ -275,7 +275,7 @@ public:
   common::ObIAllocator &allocator_;
   ObDASBaseCtDef *attach_ctdef_; //The attach_ctdef represents the task information that is bound to and executed on the DAS Task.
 
-  const DASTableAccessMeta *get_attach_access_meta(int64_t table_location_id, int64_t ref_table_id) const;
+  const DASTableAccessMeta *get_attach_access_meta(int64_t table_ref_id, int64_t ref_table_id) const;
   int set_calc_exprs(const ExprFixedArray &calc_exprs, const int64_t max_batch_size);
   const ExprFixedArray &get_result_output() const
   {

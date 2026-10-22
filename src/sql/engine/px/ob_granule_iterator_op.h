@@ -112,7 +112,7 @@ public:
   virtual ~ObGIOpInput() {}
   virtual void reset() override
   {
-    table_location_keys_.reset();
+    table_ref_ids_.reset();
   }
   virtual void set_deserialize_allocator(common::ObIAllocator *allocator) override;
   inline int64_t get_parallelism() { return parallelism_; }
@@ -138,7 +138,7 @@ public:
 
   ObGranulePump *pump_;
   //for partition pruning
-  common::ObSEArray<uint64_t, 2> table_location_keys_;
+  common::ObSEArray<uint64_t, 2> table_ref_ids_;
   int64_t px_sequence_id_;
   int64_t rf_max_wait_time_;
 
@@ -355,7 +355,7 @@ private:
   // For GI rescan use
   common::ObSEArray<ObGranuleTaskInfo, 2> pwj_rescan_task_infos_;
   // for px batch rescan and dynamic partition pruning
-  common::ObSEArray<uint64_t, 2> table_location_keys_;
+  common::ObSEArray<uint64_t, 2> table_ref_ids_;
   common::ObSEArray<ObTabletID, 16> pruning_tablet_ids_;
    //for partition pruning
   int64_t filter_count_; // filtered part count when part pruning activated

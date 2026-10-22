@@ -433,16 +433,16 @@ int ObSqlCtx::set_related_user_var_names(const ObIArray<ObString> &user_var_name
   return ret;
 }
 
-int ObSqlCtx::set_location_constraints(const TableAccessConstraintContext &location_constraint,
+int ObSqlCtx::set_access_constraints(const TableAccessConstraintContext &access_constraint,
                                        ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   base_constraints_.reset();
   strict_constraints_.reset();
   non_strict_constraints_.reset();
-  const ObIArray<TableAccessConstraint> &base_constraints = location_constraint.base_table_constraints_;
-  const ObIArray<ObPwjConstraint *> &strict_constraints = location_constraint.strict_constraints_;
-  const ObIArray<ObPwjConstraint *> &non_strict_constraints = location_constraint.non_strict_constraints_;
+  const ObIArray<TableAccessConstraint> &base_constraints = access_constraint.base_table_constraints_;
+  const ObIArray<ObPwjConstraint *> &strict_constraints = access_constraint.strict_constraints_;
+  const ObIArray<ObPwjConstraint *> &non_strict_constraints = access_constraint.non_strict_constraints_;
   if (base_constraints.count() > 0) {
     base_constraints_.set_allocator(&allocator);
     if (OB_FAIL(base_constraints_.init(base_constraints.count()))) {

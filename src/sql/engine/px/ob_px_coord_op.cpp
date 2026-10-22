@@ -310,7 +310,7 @@ int ObPxCoordOp::post_init_op_ctx()
     int64_t plan_dop = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan()->get_px_dop();
     int64_t adaptive_dop = get_adaptive_px_dop(plan_dop);
     use_serial_scheduler_ = ((1 == plan_dop && 1 == adaptive_dop) ? true : false);
-    set_pruning_table_locations(&(static_cast<const ObPxCoordSpec&>(get_spec()).table_access_plans_));
+    set_pruning_access_plans(&(static_cast<const ObPxCoordSpec&>(get_spec()).table_access_plans_));
   }
 
   return ret;

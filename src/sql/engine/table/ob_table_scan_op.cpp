@@ -187,7 +187,7 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
   bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
   OB_UNIS_DECODE(has_dppr_tbl);
   if (OB_SUCC(ret) && has_dppr_tbl) {
-    OZ(allocate_dppr_table_loc());
+    OZ(allocate_dppr_access_plan());
     OB_UNIS_DECODE(*das_dppr_tbl_);
   }
   OB_UNIS_DECODE(calc_part_id_expr_);
@@ -322,7 +322,7 @@ const ObDASScanCtDef *ObTableScanCtDef::get_lookup_ctdef() const
 
 
 
-int ObTableScanCtDef::allocate_dppr_table_loc()
+int ObTableScanCtDef::allocate_dppr_access_plan()
 {
   int ret = OB_SUCCESS;
   void *buf = allocator_.alloc(sizeof(TableAccessPlan));
@@ -877,11 +877,11 @@ int ObTableScanOp::prepare_das_task()
     // dynamic partitions
     ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
     ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session());
-    const TableAccessPlan &das_location = *MY_CTDEF.das_dppr_tbl_;
+    const TableAccessPlan &das_access = *MY_CTDEF.das_dppr_tbl_;
     ObSEArray<ObTabletID, 1> tablet_ids;
     ObSEArray<ObObjectID, 1> partition_ids;
     ObSEArray<ObObjectID, 1> first_level_part_ids;
-    if (OB_FAIL(das_location.calculate_tablet_ids(ctx_,
+    if (OB_FAIL(das_access.calculate_tablet_ids(ctx_,
                                                   plan_ctx->get_param_store(),
                                                   tablet_ids,
                                                   partition_ids,
@@ -1145,7 +1145,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
     if (OB_ISNULL(das_rtdef.table_access_)) {
       if (OB_ISNULL(access_meta)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get table loc by id failed", K(ret), K(table_ref_id), K(das_ctdef.ref_table_id_),
+        LOG_WARN("find table access by ID failed", K(ret), K(table_ref_id), K(das_ctdef.ref_table_id_),
                  K(DAS_CTX(ctx_).get_table_accesses()));
       } else if (OB_FAIL(DAS_CTX(ctx_).ensure_table_access(*access_meta, das_rtdef.table_access_))) {
       }
@@ -1429,7 +1429,7 @@ int ObTableScanOp::set_need_check_outrow_lob()
 int ObTableScanOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  DASRuntimeTableList &table_locs = ctx_.get_das_ctx().get_table_accesses();
+  DASRuntimeTableList &table_accesses = ctx_.get_das_ctx().get_table_accesses();
   ObSQLSessionInfo *my_session = NULL;
   cur_trace_id_ = ObCurTraceId::get();
   init_scan_monitor_info();
@@ -1678,7 +1678,7 @@ int ObTableScanOp::inner_rescan_for_tsc()
     LOG_TRACE("[group rescan] need perform real rescan", K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()),
               K(group_id_), K(ctx_.get_das_ctx().get_current_group_id()), K(spec_.id_));
     if (is_virtual_table(MY_SPEC.ref_table_id_)
-        || (OB_NOT_NULL(scan_iter_) && !scan_iter_->is_all_local_task())
+        || (OB_NOT_NULL(scan_iter_) && !scan_iter_->has_task())
         || nullptr != MY_CTDEF.das_dppr_tbl_) {
       ret = close_and_reopen();
     } else {
@@ -2178,8 +2178,8 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
       fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
       LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_),
                                                     K(MY_SPEC.should_scan_index()), K(MY_SPEC.is_index_back()), K(MY_SPEC.is_index_global_),
-                                                    K(scan_op->is_local_task()), K(table_scan_stat));
-      if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_ && scan_op->is_local_task()) {
+                                                    K(table_scan_stat));
+      if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_) {
         ObTableScanParam *lookup_param = scan_op->get_local_lookup_param();
         if (OB_NOT_NULL(lookup_param)) {
           fill_table_scan_stat(lookup_param->main_table_scan_stat_, table_scan_stat);
@@ -2286,8 +2286,8 @@ int ObTableScanOp::inner_get_next_batch_for_tsc(const int64_t max_row_cnt)
     fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
     LOG_DEBUG("[ROW_CACHE_ADJUST] fill cache stat for main table", K(&scan_param), K(scan_param.main_table_scan_stat_),
                                                     K(MY_SPEC.should_scan_index()), K(MY_SPEC.is_index_back()), K(MY_SPEC.is_index_global_),
-                                                    K(scan_op->is_local_task()), K(table_scan_stat));
-    if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_ && scan_op->is_local_task()) {
+                                                    K(table_scan_stat));
+    if (MY_SPEC.is_index_back() && !MY_SPEC.is_index_global_) {
       ObTableScanParam *lookup_param = scan_op->get_local_lookup_param();
       if (OB_NOT_NULL(lookup_param)) {
         fill_table_scan_stat(lookup_param->main_table_scan_stat_, table_scan_stat);

@@ -29,7 +29,7 @@ class ObTablePartitionInfo
 {
 public:
   ObTablePartitionInfo() :
-  inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
+  inner_allocator_(common::ObModIds::OB_SQL_TABLE_ACCESS_PLAN),
   allocator_(inner_allocator_)
   {}
   ObTablePartitionInfo(common::ObIAllocator &allocator)
@@ -40,7 +40,7 @@ public:
 
   int assign(const ObTablePartitionInfo &other);
 
-  int init_table_location(ObSqlSchemaGuard &schema_guard,
+  int init_access_plan(ObSqlSchemaGuard &schema_guard,
                           const ObDMLStmt &stmt,
                           ObExecContext *exec_ctx,
                           const common::ObIArray<ObRawExpr*> &filter_exprs,
@@ -55,15 +55,13 @@ public:
   int get_not_insert_dml_part_sort_expr(const ObDMLStmt &stmt,
                                         common::ObIArray<ObRawExpr *> *sort_exprs) const;
 
-  int calculate_phy_table_location_info(ObExecContext &exec_ctx,
+  int calculate_access_targets(ObExecContext &exec_ctx,
                                         const ParamStore &params,
                                         const common::ObDataTypeCastParams &dtc_params);
 
-  int replace_final_location_key(ObExecContext &exec_ctx, uint64_t ref_table_id, bool is_local_index);
+  int replace_access_source(ObExecContext &exec_ctx, uint64_t ref_table_id, bool is_local_index);
 
-  int set_table_location_direction(const ObOrderDirection &direction);
-  int fill_phy_tbl_loc_info_direction();
-  TableAccessShape get_location_type() const;
+  TableAccessShape get_access_shape() const;
 
   TableAccessPlan &get_table_access_plan()
   {

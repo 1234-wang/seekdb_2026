@@ -128,9 +128,9 @@ public:
                            const ObPhyOperatorType type, const int64_t child_cnt, ObOpSpec *&spec,
                            const uint64_t op_id);
 
-  void set_location_type(ObPhyPlanType type) { location_type_ = type; }
-  bool has_uncertain_local_operator() const { return OB_PHY_PLAN_UNCERTAIN == location_type_; }
-  inline ObPhyPlanType get_location_type() const;
+  void set_access_shape(ObPhyPlanType type) { access_shape_ = type; }
+  bool has_uncertain_local_operator() const { return OB_PHY_PLAN_UNCERTAIN == access_shape_; }
+  inline ObPhyPlanType get_access_shape() const;
   void set_plan_type(ObPhyPlanType type) { plan_type_ = type; }
   ObPhyPlanType get_plan_type() const { return plan_type_; }
   void set_require_local_execution(bool v) { require_local_execution_ = v; }
@@ -283,8 +283,8 @@ public:
   void set_das_dop(int64_t v) { das_dop_ = v; }
 public:
   bool is_sample_time() { return 0 == stat_.execute_times_ % SAMPLE_TIMES; }
-  void set_contain_index_location(bool exist) { contain_index_location_ = exist; }
-  bool contain_index_location() const { return contain_index_location_; }
+  void set_has_index_access_plan(bool exist) { has_index_access_plan_ = exist; }
+  bool has_index_access_plan() const { return has_index_access_plan_; }
 
   virtual int64_t get_pre_expr_ref_count() const override;
   virtual void inc_pre_expr_ref_count() override;
@@ -304,10 +304,10 @@ public:
   const ObIArray<ObPlanPwjConstraint>& get_strict_constraints() const { return strict_constrinats_; }
   ObIArray<ObPlanPwjConstraint>& get_non_strict_constraints() { return non_strict_constrinats_; }
   const ObIArray<ObPlanPwjConstraint>& get_non_strict_constraints() const { return non_strict_constrinats_; }
-  int set_location_constraints(const ObIArray<TableAccessConstraint> &base_constraints,
+  int set_access_constraints(const ObIArray<TableAccessConstraint> &base_constraints,
                                const ObIArray<ObPwjConstraint *> &strict_constraints,
                                const ObIArray<ObPwjConstraint *> &non_strict_constraints);
-  bool has_same_location_constraints(const ObPhysicalPlan &r) const;
+  bool has_same_access_constraints(const ObPhysicalPlan &r) const;
   inline bool get_is_late_materialized() const
   {
     return is_late_materialized_;
@@ -392,17 +392,17 @@ private:
   // Runtime read-only data structure
   /**
    * This is stored in order to accelerate the plan cache searching.
-   * During the plan cache searching, we need to calculate the table location based
-   * on the given user params, for which, we need to do the following if pre_table_locations
+   * During the plan cache searching, we need to calculate the table access based
+   * on the given user params, for which, we need to do the following if previous_access_plans
    * is not saved:
    *  1. resolve the statement to get the partition columns
    *  2. extract the range of the partition columns using query range and given predicates
    *  3. get the ObRawExpr of the partition expr and convert it to a postfix expression
    *  4. calculate the partition ids using the postfix expression
-   *  5. inquire the location cache service to get a list of partition locations given
+   *  5. inquire the access cache service to get a list of partition accesses given
    *     the partition ids
    *
-   *  However, with the pre table location saved, we can readily skip steps 1, 2(partially),
+   *  However, with the pre table access saved, we can readily skip steps 1, 2(partially),
    *  and 3, which is good for the performance.
    */
 
@@ -421,7 +421,7 @@ private:
   // Indicate the distributed executor with which scheduling method to execute this plan
   ObPhyPlanType plan_type_;
   // For transactions, indicating the distribution of data involved in this plan
-  ObPhyPlanType location_type_;
+  ObPhyPlanType access_shape_;
   // Indicates whether the plan must be executed locally.
   bool require_local_execution_; // not need serialize
   bool use_px_;
@@ -450,15 +450,15 @@ private:
   uint64_t  session_id_; // When the plan includes temporary tables, record table_schema->session_id, used to determine if the plan can be reused
 
   //for plan cache, not need serialize
-  TableAccessPlanArray table_access_plans_; // ordinary table's table location, participate in plan cache plan selection
-  TableAccessPlanArray das_table_access_plans_; // DAS table's table location, used for calculating DAS partition information
+  TableAccessPlanArray table_access_plans_; // ordinary table's table access, participate in plan cache plan selection
+  TableAccessPlanArray das_table_access_plans_; // DAS table's table access, used for calculating DAS partition information
 
   PhyRowParamMap row_param_map_;
   bool is_update_uniq_index_;
   // Determine whether the base tables involved in this plan contain a global index
-  bool contain_index_location_;
+  bool has_index_access_plan_;
   // Used for distributed plan comparison
-  // Base table location constraint, including base tables on TABLE_SCAN operator and base tables on INSERT operator
+  // Base table access constraint, including base tables on TABLE_SCAN operator and base tables on INSERT operator
   PlanTableAccessConstraints base_constraints_;
   // Strict partition-wise join constraint, requires that the base table partitions within the same group are logically and physically equal.
   // Each group is an array, saving the offset of the corresponding base table in base_table_constraints_
@@ -543,9 +543,9 @@ inline int32_t *ObPhysicalPlan::alloc_projector(int64_t projector_size)
   return static_cast<int32_t*>(allocator_.alloc(sizeof(int32_t)*projector_size));
 }
 
-inline ObPhyPlanType ObPhysicalPlan::get_location_type() const
+inline ObPhyPlanType ObPhysicalPlan::get_access_shape() const
 {
-  return location_type_;
+  return access_shape_;
 }
 
 } //namespace sql

@@ -170,7 +170,7 @@ OB_INLINE int ObTableDeleteOp::open_table_for_each()
     if (OB_SUCC(ret) && !rtdefs.empty()) {
       ObDelRtDef &primary_del_rtdef = rtdefs.at(0);
       if (OB_SUCC(ret)) {
-        //this table is being accessed by dml operator, mark its table location as writing
+        //this table is being accessed by dml operator, mark its table access as writing
         primary_del_rtdef.das_rtdef_.table_access_->is_writing_ = true;
       }
     }

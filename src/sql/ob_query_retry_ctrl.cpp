@@ -554,7 +554,7 @@ void ObQueryRetryCtrl::try_lock_row_conflict_proc(ObRetryParam &v)
 }
 
 
-void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
+void ObQueryRetryCtrl::access_error_proc(ObRetryParam &v)
 {
   ObRetryObject retry_obj(v);
   ObCommonRetryIndexLongWaitPolicy retry_long_wait;
@@ -563,14 +563,11 @@ void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
   retry_obj.test(record_error);
 }
 
-void ObQueryRetryCtrl::location_error_nothing_readable_proc(ObRetryParam &v)
+void ObQueryRetryCtrl::unreadable_access_error_proc(ObRetryParam &v)
 {
-  // Strong consistency read scenario, the leader is not readable, it might be that invalid servers have filtered out the leader.
-  // The case of weak consistency read, where no replicas are available to choose from, possibly because invalid servers have filtered out all replicas.
-  // To better handle the situation where the leader is briefly offline, clear the retry info (mainly clearing invalid servers,
-  // But we still need to keep the inited state for defensive checks, so we cannot call reset, but should call clear), and then retry.
+  // Clear the previous RPC-timeout flag before retrying an unreadable access.
   v.session_.get_retry_info_for_update().clear();
-  location_error_proc(v);
+  access_error_proc(v);
 }
 
 void ObQueryRetryCtrl::peer_server_status_uncertain_proc(ObRetryParam &v)
@@ -661,7 +658,7 @@ void ObQueryRetryCtrl::inner_try_lock_row_conflict_proc(ObRetryParam &v)
   retry_obj.test(lock_conflict);
 }
 
-void ObQueryRetryCtrl::inner_table_location_error_proc(ObRetryParam &v)
+void ObQueryRetryCtrl::inner_access_timeout_proc(ObRetryParam &v)
 {
   // Internal table access failures retain their existing statement retry delay.
   ObRetryObject retry_obj(v);
@@ -669,7 +666,7 @@ void ObQueryRetryCtrl::inner_table_location_error_proc(ObRetryParam &v)
   retry_obj.test(retry_long_wait);
 }
 
-void ObQueryRetryCtrl::inner_location_error_proc(ObRetryParam &v)
+void ObQueryRetryCtrl::inner_access_error_proc(ObRetryParam &v)
 {
   const uint64_t *trace_id = ObCurTraceId::get();
   bool sql_trigger_by_user_req = (NULL != trace_id && 0 != trace_id[0] && 0 != trace_id[1]);
@@ -689,14 +686,11 @@ void ObQueryRetryCtrl::inner_location_error_proc(ObRetryParam &v)
   }
 }
 
-void ObQueryRetryCtrl::inner_location_error_nothing_readable_proc(ObRetryParam &v)
+void ObQueryRetryCtrl::inner_unreadable_access_error_proc(ObRetryParam &v)
 {
-  // Strong consistency read scenario, the leader is not readable, it might be that invalid servers have filtered out the leader.
-  // Weak consistency read scenario, no replicas are available to choose from, possibly because invalid servers filtered out all replicas.
-  // To better handle the situation where the leader is briefly offline, clear the retry info (mainly clearing invalid servers,
-  // But we still need to keep the inited state for defensive checks, so we cannot call reset, but should call clear), and then retry.
+  // Clear the previous RPC-timeout flag before retrying an unreadable access.
   v.session_.get_retry_info_for_update().clear();
-  inner_location_error_proc(v);
+  inner_access_error_proc(v);
 }
 
 void ObQueryRetryCtrl::inner_schema_error_proc(ObRetryParam &v)
@@ -820,30 +814,30 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_AUTOINC_CACHE_NOT_EQUAL,         autoinc_cache_not_equal_retry_proc, autoinc_cache_not_equal_retry_proc, nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, schema_error_proc,  empty_proc,                                           nullptr);
 
-  /* location */
-  ERR_RETRY_FUNC("LOCATION", OB_LOCATION_LEADER_NOT_EXIST,       location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_LS_LOCATION_LEADER_NOT_EXIST,    location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_NO_READABLE_REPLICA,             location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_NOT_MASTER,                      location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_RS_NOT_MASTER,                   location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_RS_SHUTDOWN,                     location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_PARTITION_NOT_EXIST,             location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_LOCATION_NOT_EXIST,              location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_PARTITION_IS_STOPPED,            location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_SERVER_IS_INIT,                  location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_SERVER_IS_STOPPING,              location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_SERVER_RUNTIME_NOT_READY,            location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_TRANS_RPC_TIMEOUT,               location_error_proc,        inner_location_error_proc,                            nullptr);
-  ERR_RETRY_FUNC("LOCATION", OB_TRANS_STMT_NEED_RETRY,           location_error_proc,        inner_location_error_proc,                            nullptr);
-  ERR_RETRY_FUNC("LOCATION", OB_LS_NOT_EXIST,                    location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  // OB_TABLET_NOT_EXIST may be caused by old version schema or incorrect location.
-  // Just use location_error_proc to retry sql and a new schema guard will be obtained during the retry process.
-  ERR_RETRY_FUNC("LOCATION", OB_TABLET_NOT_EXIST,                location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_LS_LOCATION_NOT_EXIST,           location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_PARTITION_IS_BLOCKED,            location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("LOCATION", OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST, location_error_proc,inner_location_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  /* tablet access */
+  ERR_RETRY_FUNC("ACCESS", OB_ACCESS_SOURCE_UNAVAILABLE,       unreadable_access_error_proc, inner_unreadable_access_error_proc, ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_LOG_STREAM_ACCESS_NOT_READY,    unreadable_access_error_proc, inner_unreadable_access_error_proc, ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_NO_READABLE_REPLICA,             unreadable_access_error_proc, inner_unreadable_access_error_proc, ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_NOT_MASTER,                      access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_RS_NOT_MASTER,                   access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_RS_SHUTDOWN,                     access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_PARTITION_NOT_EXIST,             access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_ACCESS_TARGET_NOT_EXIST,              access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_PARTITION_IS_STOPPED,            access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_SERVER_IS_INIT,                  access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_SERVER_IS_STOPPING,              access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_SERVER_RUNTIME_NOT_READY,            access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_TRANS_RPC_TIMEOUT,               access_error_proc,        inner_access_error_proc,                            nullptr);
+  ERR_RETRY_FUNC("ACCESS", OB_TRANS_STMT_NEED_RETRY,           access_error_proc,        inner_access_error_proc,                            nullptr);
+  ERR_RETRY_FUNC("ACCESS", OB_LS_NOT_EXIST,                    access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  // OB_TABLET_NOT_EXIST may be caused by old version schema or an outdated tablet target.
+  // Just use access_error_proc to retry sql and a new schema guard will be obtained during the retry process.
+  ERR_RETRY_FUNC("ACCESS", OB_TABLET_NOT_EXIST,                access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_LOG_STREAM_ACCESS_NOT_EXIST,           access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_PARTITION_IS_BLOCKED,            access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST, access_error_proc,inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
 
-  ERR_RETRY_FUNC("LOCATION", OB_GET_LOCATION_TIME_OUT,           location_error_proc,        inner_table_location_error_proc,                      ObDASRetryCtrl::tablet_access_retry_proc);
+  ERR_RETRY_FUNC("ACCESS", OB_ACCESS_TARGET_TIMEOUT,           access_error_proc,        inner_access_timeout_proc,                      ObDASRetryCtrl::tablet_access_retry_proc);
 
 
 
@@ -856,7 +850,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("STORAGE",  OB_SNAPSHOT_DISCARDED,              snapshot_discard_proc,         short_wait_retry_proc,                             nullptr);
   ERR_RETRY_FUNC("STORAGE",  OB_DATA_NOT_UPTODATE,               long_wait_retry_proc,          short_wait_retry_proc,                             nullptr);
   ERR_RETRY_FUNC("STORAGE",  OB_REPLICA_NOT_READABLE,            long_wait_retry_proc,          short_wait_retry_proc,                             ObDASRetryCtrl::tablet_nothing_readable_proc);
-  ERR_RETRY_FUNC("STORAGE",  OB_DISK_HUNG,                       location_error_proc,  empty_proc,                                        nullptr);
+  ERR_RETRY_FUNC("STORAGE",  OB_DISK_HUNG,                       access_error_proc,  empty_proc,                                        nullptr);
 
   /* trx */
   ERR_RETRY_FUNC("TRX",      OB_TRY_LOCK_ROW_CONFLICT,           try_lock_row_conflict_proc, inner_try_lock_row_conflict_proc,                     nullptr);

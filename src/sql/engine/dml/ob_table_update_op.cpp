@@ -222,7 +222,7 @@ OB_INLINE int ObTableUpdateOp::open_table_for_each()
     if (OB_SUCC(ret) && !rtdefs.empty()) {
       ObUpdRtDef &primary_upd_rtdef = rtdefs.at(0);
       if (OB_SUCC(ret)) {
-        //this table is being accessed by dml operator, mark its table location as writing
+        //this table is being accessed by dml operator, mark its table access as writing
         primary_upd_rtdef.dupd_rtdef_.table_access_->is_writing_ = true;
       }
     }

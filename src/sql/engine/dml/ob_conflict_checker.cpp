@@ -754,7 +754,7 @@ int ObConflictChecker::get_das_scan_op(DASRuntimeTabletAccess *tablet_access, Ob
     } else {
       das_scan_op->set_scan_ctdef(&checker_ctdef_.das_scan_ctdef_);
       das_scan_op->set_scan_rtdef(&das_scan_rtdef_);
-      table_access_->is_reading_ = true; //mark the table location with reading action
+      table_access_->is_reading_ = true; //mark the table access with reading action
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(attach_rtinfo_)) {
       if (OB_FAIL(das_scan_op->reserve_related_buffer(attach_rtinfo_->related_scan_cnt_))) {
@@ -1004,7 +1004,7 @@ int ObConflictChecker::init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef
       } else if (OB_ISNULL(attach_scan_rtdef->table_access_)) {
         if (OB_ISNULL(attach_access_meta)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get table loc by id failed", K(ret), K(table_access_->get_table_ref_id()),
+          LOG_WARN("find table access by ID failed", K(ret), K(table_access_->get_table_ref_id()),
               K(attach_scan_ctdef->ref_table_id_),K(DAS_CTX(ctx).get_table_accesses()));
         } else if (OB_FAIL(DAS_CTX(ctx).ensure_table_access(*attach_access_meta, attach_scan_rtdef->table_access_))) {
         }

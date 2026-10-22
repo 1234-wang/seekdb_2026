@@ -147,9 +147,9 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
       const ObInsCtDef &primary_ins_ctdef = *ctdefs.at(0);
       ObInsRtDef &primary_ins_rtdef = rtdefs.at(0);
       if (OB_SUCC(ret)) {
-        // This table is being accessed by DML operator, mark its table location as writing.
+        // This table is being accessed by DML operator, mark its table access as writing.
         // For single value insert, nested SQL may modify its insert table, so
-        // clear the writing flag in table location before the trigger execution.
+        // clear the writing flag in table access before the trigger execution.
         //see it:
         primary_ins_rtdef.das_rtdef_.table_access_->is_writing_ = !(primary_ins_ctdef.is_single_value_);
       }
@@ -339,7 +339,7 @@ int ObTableInsertOp::inner_open()
   int ret = OB_SUCCESS;
   NG_TRACE(insert_open);
   //execute insert with das
-  //calc partition by table location info
+  //calc partition by table access info
   if (OB_FAIL(ObTableModifyOp::inner_open())) {
   } else if (OB_UNLIKELY(MY_SPEC.ins_ctdefs_.empty())) {
     ret = OB_ERR_UNEXPECTED;

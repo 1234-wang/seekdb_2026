@@ -109,7 +109,7 @@ private:
 public:
   ObEvalCtx &eval_ctx_; // used for expression evaluation
   ObDASScanRtDef das_scan_rtdef_;
-  // Store calculation table loc and the partition key, primary key expr, etc., needed for constructing das-task
+  // Store the table access plan and the partition key, primary key expr, etc., needed for constructing das-task
   const ObForeignKeyCheckerCtdef  &checker_ctdef_;
   // Foreign key check back-table construction for das-task use
   ObDASRef das_ref_;

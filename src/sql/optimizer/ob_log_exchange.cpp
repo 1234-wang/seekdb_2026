@@ -485,7 +485,7 @@ int ObLogExchange::compute_plan_type()
     ret = OB_ERR_UNEXPECTED;
   } else {
     exchange_allocated_ = true;
-    location_type_ = child->get_location_type();
+    access_shape_ = child->get_access_shape();
     phy_plan_type_ = ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED;
   }
   return ret;
@@ -678,7 +678,7 @@ uint64_t ObLogExchange::hash(uint64_t seed) const
    return seed;
 }
 
-int ObLogExchange::gen_px_pruning_table_locations()
+int ObLogExchange::gen_px_pruning_access_plans()
 {
   int ret = OB_SUCCESS;
   int64_t count = 0;
@@ -691,7 +691,7 @@ int ObLogExchange::gen_px_pruning_table_locations()
   } else if (OB_FAIL(prepare_px_pruning_param(get_child(0), count, stmts, drop_expr_idxs))) {
   } else if (count <= 0) {
     /*do nothing*/
-  } else if (OB_FAIL(add_px_table_location(get_child(0), table_access_plans, drop_expr_idxs, stmts, cur_idx))) {
+  } else if (OB_FAIL(add_px_access_plan(get_child(0), table_access_plans, drop_expr_idxs, stmts, cur_idx))) {
   } else if (!table_access_plans.empty()) {
     if (OB_FAIL(table_access_plans_.prepare_allocate(table_access_plans.count(),
         get_plan()->get_optimizer_context().get_allocator()))) {
@@ -742,7 +742,7 @@ int ObLogExchange::prepare_px_pruning_param(ObLogicalOperator *op,
   return ret;
 }
 
-int ObLogExchange::add_px_table_location(ObLogicalOperator *op,
+int ObLogExchange::add_px_access_plan(ObLogicalOperator *op,
     ObIArray<TableAccessPlan> &table_access_plans,
     common::ObIArray<int64_t> &drop_expr_idxs,
     const common::ObIArray<const ObDMLStmt *> &stmts,
@@ -757,8 +757,8 @@ int ObLogExchange::add_px_table_location(ObLogicalOperator *op,
     ObLogTableScan *table_scan = static_cast<ObLogTableScan* >(op);
     ObSEArray<ObRawExpr *, 8>exprs;
     bool has_exec_param = false;
-    OZ(find_table_location_exprs(drop_expr_idxs, table_scan->get_range_conditions(), exprs, has_exec_param));
-    OZ(find_table_location_exprs(drop_expr_idxs, table_scan->get_filter_exprs(), exprs, has_exec_param));
+    OZ(find_partition_access_exprs(drop_expr_idxs, table_scan->get_range_conditions(), exprs, has_exec_param));
+    OZ(find_partition_access_exprs(drop_expr_idxs, table_scan->get_filter_exprs(), exprs, has_exec_param));
     if (OB_SUCC(ret) && !exprs.empty() && has_exec_param) {
       SMART_VAR(TableAccessPlan, table_access_plan) {
         const ObDMLStmt *cur_stmt = NULL;
@@ -791,7 +791,7 @@ int ObLogExchange::add_px_table_location(ObLogicalOperator *op,
     }
   } else {
     for (int i = 0; i < op->get_num_of_child() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(SMART_CALL(add_px_table_location(op->get_child(i),
+      if (OB_FAIL(SMART_CALL(add_px_access_plan(op->get_child(i),
           table_access_plans, drop_expr_idxs, stmts, cur_idx)))) {
       }
     }
@@ -863,7 +863,7 @@ int ObLogExchange::check_expr_is_need(const ObRawExpr *expr,
   return ret;
 }
 
-int ObLogExchange::find_table_location_exprs(const common::ObIArray<int64_t> &drop_exprs_idxs,
+int ObLogExchange::find_partition_access_exprs(const common::ObIArray<int64_t> &drop_exprs_idxs,
     const common::ObIArray<ObRawExpr *> &filters,
     common::ObIArray<ObRawExpr *> &exprs,
     bool &has_exec_param)

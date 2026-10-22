@@ -75,8 +75,8 @@ private:
                              const ObCostTableScanSimpleInfo &cost_tsc_info, int64_t part_cnt,
                              int64_t &table_dop);
   int choose_storage_estimation_partitions(const int64_t partition_limit,
-                                           const DASRuntimeTabletSEArray &tablet_locs,
-                                           DASRuntimeTabletSEArray &chosen_tablet_locs);
+                                           const DASRuntimeTabletSEArray &tablet_accesses,
+                                           DASRuntimeTabletSEArray &chosen_tablet_accesses);
 
 private:
   ObExecContext &ctx_;

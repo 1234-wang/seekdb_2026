@@ -156,8 +156,8 @@ int DASRuntimeTableAccess::find_tablet_access(const ObTabletID &tablet_id,
   }
   if (OB_FAIL(ret) || tablet_accesses_map_.created()) {
     // do nothing
-  } else if (lookup_cnt_ > DAS_TABLET_LOC_LOOKUP_THRESHOLD
-             && tablet_accesses_.size() > DAS_TABLET_LOC_SIZE_THRESHOLD
+  } else if (lookup_cnt_ > DAS_TABLET_ACCESS_LOOKUP_THRESHOLD
+             && tablet_accesses_.size() > DAS_TABLET_ACCESS_SIZE_THRESHOLD
              && OB_FAIL(create_tablet_accesses_map())) {
   }
   return ret;
@@ -272,7 +272,7 @@ int DASRuntimeTableAccess::create_tablet_accesses_map()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tablet_accesses_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(tablet_accesses_map_.create(DAS_TABLET_LOC_MAP_BUCKET_SIZE))) {
+  } else if (OB_FAIL(tablet_accesses_map_.create(DAS_TABLET_ACCESS_MAP_BUCKET_SIZE))) {
   } else {
     for (DASRuntimeTabletListIter tablet_node = tablet_accesses_begin();
          OB_SUCC(ret) && tablet_node != tablet_accesses_end(); ++tablet_node) {

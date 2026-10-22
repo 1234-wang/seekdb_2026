@@ -28,7 +28,7 @@
 #include "sql/ob_sql_temp_table.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/monitor/ob_sql_stat_record.h"
-#include "query/optimizer/ob_optimizer_location_defs.h"
+#include "query/optimizer/table_access_defs.h"
 #include "query/optimizer/stat/ob_opt_ds_stat.h"
 
 namespace oceanbase
@@ -55,8 +55,8 @@ namespace sql
 {
 class ObTablePartitionInfo;
 typedef common::ObIArray<ObTablePartitionInfo *> ObTablePartitionInfoArray;
-//TableAccessConstraints if there is only one item, then only need to constrain whether the location type is consistent;
-//                    If there are multiple items, then it is necessary to verify whether the physical distribution corresponding to each location is the same
+// Base constraints match each table's access shape. Grouped constraints retain
+// the partition relationships required by partition-wise joins.
 struct TableAccessConstraint;
 typedef common::ObSEArray<TableAccessConstraint, 1, common::ModulePageAllocator, true> TableAccessConstraints;
 typedef common::ObFixedArray<TableAccessConstraint, common::ObIAllocator> PlanTableAccessConstraints;
@@ -99,7 +99,7 @@ struct TableAccessConstraint
 
   bool operator==(const TableAccessConstraint &other) const;
 
-  // calculate the inclusion relationship between ObLocationConstraints
+  // calculate the inclusion relationship between TableAccessConstraints
 
   TO_STRING_KV(K_(key), K_(access_shape), K_(constraint_flags));
 };
@@ -128,7 +128,7 @@ struct TableAccessConstraintContext
   TO_STRING_KV(K_(base_table_constraints),
                K_(strict_constraints),
                K_(non_strict_constraints));
-  // Base table location constraint, including base tables on TABLE_SCAN operator and base tables on INSERT operator
+  // Base table access constraint, including base tables on TABLE_SCAN operator and base tables on INSERT operator
   TableAccessConstraints base_table_constraints_;
   // Strict partition-wise join constraint, requires that the base table partitions within the same group are logically and physically equal.
   // Each group is an array, saving the offset of the corresponding base table in base_table_constraints_
@@ -285,7 +285,7 @@ public:
   void clear_state_before_each_retry()
   {
     is_rpc_timeout_ = false;
-    // Here cannot clear the accumulated members from each retry, such as: invalid_servers_, last_query_retry_err_
+    // Here cannot clear the accumulated members from each retry, such as last_query_retry_err_
   }
 
   bool is_inited() const { return inited_; }
@@ -408,7 +408,7 @@ public:
   const ObTablePartitionInfoArray &get_partition_infos() const;
   int64_t get_partition_info_count() const;
   int set_related_user_var_names(const common::ObIArray<common::ObString> &user_var_names, common::ObIAllocator &allocator);
-  int set_location_constraints(const TableAccessConstraintContext &location_constraint,
+  int set_access_constraints(const TableAccessConstraintContext &access_constraint,
                                ObIAllocator &allocator);
   int set_multi_stmt_rowkey_pos(const common::ObIArray<int64_t> &multi_stmt_rowkey_pos,
                                 common::ObIAllocator &alloctor);
@@ -493,7 +493,7 @@ public:
   bool is_restore_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> related_user_var_names_;
   //use for plan cache support dist plan
-  // Base table location constraint, including base tables on TABLE_SCAN operator and base tables on INSERT operator
+  // Base table access constraint, including base tables on TABLE_SCAN operator and base tables on INSERT operator
   common::ObFixedArray<TableAccessConstraint, common::ObIAllocator> base_constraints_;
   // Strict partition-wise join constraint, requires that base table partitions within the same group are logically and physically equal.
   // Each group is an array, saving the offset of the corresponding base table in base_table_constraints_

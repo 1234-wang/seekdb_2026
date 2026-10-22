@@ -1716,7 +1716,7 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
                                            ObDASDMLBaseCtDef &das_dml_ctdef)
 {
   int ret = OB_SUCCESS;
-  das_dml_ctdef.table_id_ = index_dml_info.loc_table_id_;
+  das_dml_ctdef.table_id_ = index_dml_info.target_table_ref_id_;
   das_dml_ctdef.index_tid_ = index_tid;
   das_dml_ctdef.is_ignore_ = op.is_ignore();
   das_dml_ctdef.is_batch_stmt_ = op.get_plan()->get_optimizer_context().is_batched_multi_stmt();
@@ -1951,7 +1951,7 @@ int ObDmlCgService::generate_das_lock_ctdef(ObLogicalOperator &op,
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> empty_new_row;
   ObArray<uint64_t> dml_column_ids;
-  das_lock_ctdef.table_id_ = index_dml_info.loc_table_id_;
+  das_lock_ctdef.table_id_ = index_dml_info.target_table_ref_id_;
   das_lock_ctdef.index_tid_ = index_dml_info.ref_table_id_;
   ObSQLSessionInfo *session = nullptr;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
@@ -2613,7 +2613,7 @@ int ObDmlCgService::generate_table_access_meta(const IndexDMLInfo &index_dml_inf
   if (OB_ISNULL(cg_.opt_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    access_meta.table_ref_id_ = index_dml_info.loc_table_id_;
+    access_meta.table_ref_id_ = index_dml_info.target_table_ref_id_;
     access_meta.ref_table_id_ = index_dml_info.ref_table_id_;
     // Related local index tablet_id pruning can only be used in a local plan (all operators
     //use the same das context),
@@ -2626,7 +2626,7 @@ int ObDmlCgService::generate_table_access_meta(const IndexDMLInfo &index_dml_inf
   }
   if (OB_SUCC(ret) && index_dml_info.is_primary_index_) {
     RelatedTableAccessInfo *rel_info = nullptr;
-    rel_info = cg_.opt_ctx_->get_access_relation_by_id(index_dml_info.loc_table_id_,
+    rel_info = cg_.opt_ctx_->get_access_relation_by_id(index_dml_info.target_table_ref_id_,
                                                     index_dml_info.ref_table_id_);
     if (nullptr == rel_info || rel_info->related_ids_.count() <= 1) {
       //the first table id is the source table, <=1 mean no dependency table
@@ -2819,7 +2819,7 @@ int ObDmlCgService::generate_fk_check_ctdef(const ObLogDelUpd &op,
   } else if (OB_INVALID_ID == index_tid) {
     ret = OB_ERR_CANNOT_ADD_FOREIGN;
   } else if (OB_FAIL(generate_fk_scan_ctdef(schema_guard, index_tid, fk_ctdef.das_scan_ctdef_))) {
-  } else if (OB_FAIL(generate_fk_table_loc_info(index_tid, fk_ctdef.access_meta_, fk_ctdef.tablet_id_, fk_ctdef.is_part_table_))) {
+  } else if (OB_FAIL(generate_fk_access_meta(index_tid, fk_ctdef.access_meta_, fk_ctdef.tablet_id_, fk_ctdef.is_part_table_))) {
   } else {
     
     const ObTableSchema *table_schema = nullptr;
@@ -2875,7 +2875,7 @@ int ObDmlCgService::generate_rowkey_idx_for_foreign_key(const ObIArray<uint64_t>
   return ret;
 }
 
-int ObDmlCgService::generate_fk_table_loc_info(uint64_t index_table_id,
+int ObDmlCgService::generate_fk_access_meta(uint64_t index_table_id,
                                                DASTableAccessMeta &access_meta,
                                                ObTabletID &tablet_id,
                                                bool &is_part_table)
@@ -3216,7 +3216,7 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
       ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     scan_ctdef->ref_table_id_ = rowkey_domain_tid;
-    access_meta->table_ref_id_ = index_dml_info.loc_table_id_;
+    access_meta->table_ref_id_ = index_dml_info.target_table_ref_id_;
     access_meta->ref_table_id_ = rowkey_domain_tid;
     access_meta->unuse_related_pruning_ = (OB_PHY_PLAN_DISTRIBUTED == cg_.opt_ctx_->get_phy_plan_type()
                                        && !cg_.opt_ctx_->get_root_stmt()->is_insert_stmt());

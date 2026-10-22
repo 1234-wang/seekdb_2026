@@ -563,7 +563,7 @@ public:
   static bool is_table_lock_retry_ret_code(int ret)
   {
     return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
-           || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_TRANS_CTX_NOT_EXIST == ret;
+           || OB_EAGAIN == ret || OB_LOG_STREAM_ACCESS_NOT_READY == ret || OB_TRANS_CTX_NOT_EXIST == ret;
   }
 
   static int check_can_convert_character(const ObObjMeta &obj_meta, const bool is_domain_index, const bool is_string_lob)

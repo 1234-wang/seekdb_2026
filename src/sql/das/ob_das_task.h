@@ -204,7 +204,6 @@ public:
   transaction::ObTxReadSnapshot *get_snapshot() { return snapshot_; }
   int16_t get_write_branch_id() const { return write_branch_id_; }
   void set_write_branch_id(const int16_t branch_id) { write_branch_id_ = branch_id; }
-  bool is_local_task() const { return true; }
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
   bool is_in_retry() const { return in_part_retry_ || in_stmt_retry_; }
@@ -302,41 +301,14 @@ typedef DasTaskList::Iterator DASTaskIter;
 class DASOpResultIter
 {
 public:
-  struct WildDatumPtrInfo
-  {
-    WildDatumPtrInfo(ObEvalCtx &eval_ctx)
-      : exprs_(nullptr),
-        eval_ctx_(eval_ctx),
-        max_output_rows_(0),
-        lookup_iter_(nullptr)
-    { }
-    const ObExprPtrIArray *exprs_;
-    ObEvalCtx &eval_ctx_;
-    int64_t max_output_rows_;
-    // A global index scan and its lookup can share expressions. Associate the
-    // two iterators so resetting either side also restores the shared datums.
-    DASOpResultIter *lookup_iter_;
-  };
-public:
-  DASOpResultIter()
-    : task_iter_(),
-      wild_datum_info_(nullptr)
-  { }
-  DASOpResultIter(const DASTaskIter &task_iter,
-                  WildDatumPtrInfo &wild_datum_info)
-    : task_iter_(task_iter),
-      wild_datum_info_(&wild_datum_info)
-  {
-  }
+  DASOpResultIter() : task_iter_() {}
+  explicit DASOpResultIter(const DASTaskIter &task_iter) : task_iter_(task_iter) {}
   int get_next_row();
   int next_result();
   const DASRuntimeTabletAccess *get_tablet_access() const { return (*task_iter_)->get_tablet_access(); }
   bool is_end() const { return task_iter_.is_end(); }
 private:
-  int reset_wild_datums_ptr();
-private:
   DASTaskIter task_iter_;
-  WildDatumPtrInfo *wild_datum_info_;
 };
 
 template <typename T>

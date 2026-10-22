@@ -127,8 +127,8 @@ public:
     UNUSED(dml_ctdef);
     return common::OB_NOT_IMPLEMENT;
   }
-  void set_table_location_uncertain(bool v) { table_location_uncertain_ = v; }
-  bool is_table_location_uncertain() const { return table_location_uncertain_; }
+  void set_has_dynamic_tablets(bool v) { has_dynamic_tablets_ = v; }
+  bool has_dynamic_tablets() const { return has_dynamic_tablets_; }
   inline bool use_dist_das() const { return use_dist_das_; }
 public:
   // Expr frame info for partial expr serialization. (serialize is not need for it self)
@@ -141,7 +141,7 @@ public:
       uint64_t gi_above_                        : 1;
       uint64_t is_returning_                    : 1;
       uint64_t is_pdml_index_maintain_          : 1; // indicates whether the current dml operator is the operator used for index maintenance in pdml (index maintain)
-      uint64_t table_location_uncertain_        : 1; // Target access partition location uncertain, need full table scan
+      uint64_t has_dynamic_tablets_        : 1; // Target access partition access uncertain, need full table scan
       uint64_t use_dist_das_                    : 1;
       uint64_t is_pdml_update_split_            : 1; // Mark whether delete, insert op is split from update
       uint64_t check_fk_batch_                  : 1; // mark if the foreign key constraint can be checked in batch    
@@ -261,8 +261,8 @@ protected:
   int get_gi_task();
   //It is used for the execution without routing through DAS.
   //In this case, the DML operator only allows to modify a single table,
-  //and the table location is specified by the scheduling framework.
-  int calc_single_table_loc();
+  //and the table access is specified by the scheduling framework.
+  int resolve_single_table_access();
 
   virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;

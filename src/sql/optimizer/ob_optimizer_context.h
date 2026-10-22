@@ -245,10 +245,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     temp_table_infos_(),
     exchange_allocated_(false),
     phy_plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
-    location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
-    local_sharding_(TableAccessShape::OB_TBL_LOCATION_LOCAL),
-    distributed_sharding_(TableAccessShape::OB_TBL_LOCATION_DISTRIBUTED),
-    match_all_sharding_(TableAccessShape::OB_TBL_LOCATION_ALL),
+    access_shape_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
+    local_sharding_(TableAccessShape::TABLE_ACCESS_SINGLE_TABLET),
+    distributed_sharding_(TableAccessShape::TABLE_ACCESS_MULTI_TABLET),
+    match_all_sharding_(TableAccessShape::TABLE_ACCESS_ANY),
     is_packed_(false),
     is_ps_protocol_(is_ps_protocol),
     expected_worker_count_(0),
@@ -556,16 +556,16 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   {
     return phy_plan_type_;
   }
-  inline void set_location_type(ObPhyPlanType location_type)
+  inline void set_access_shape(ObPhyPlanType access_shape)
   {
-    location_type_ = location_type;
+    access_shape_ = access_shape;
   }
-  inline ObPhyPlanType get_location_type() const
+  inline ObPhyPlanType get_access_shape() const
   {
-    return location_type_;
+    return access_shape_;
   }
   inline void set_plan_type(ObPhyPlanType phy_plan_type,
-                            ObPhyPlanType location_type,
+                            ObPhyPlanType access_shape,
                             bool exchange_allocated)
   {
     exchange_allocated_ = exchange_allocated;
@@ -574,10 +574,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     } else {
       phy_plan_type_ = ObPhyPlanType::OB_PHY_PLAN_LOCAL;
     }
-    if (location_type == ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
-      location_type_ = ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN;
+    if (access_shape == ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
+      access_shape_ = ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN;
     } else {
-      location_type_ = phy_plan_type_;
+      access_shape_ = phy_plan_type_;
     }
   }
   ObIArray<ColumnUsageArg> &get_column_usage_infos() { return column_usage_infos_; }
@@ -771,7 +771,7 @@ private:
   common::ObSEArray<ObSqlTempTableInfo*, 1, common::ModulePageAllocator, true> temp_table_infos_;
   bool exchange_allocated_;
   ObPhyPlanType phy_plan_type_;
-  ObPhyPlanType location_type_;
+  ObPhyPlanType access_shape_;
   ObShardingInfo local_sharding_;
   ObShardingInfo distributed_sharding_;
   ObShardingInfo match_all_sharding_;
@@ -785,7 +785,7 @@ private:
   uint64_t aggregation_optimization_settings_; // for adaptive groupby/distinct
   ObQueryCtx *query_ctx_;
   //to record the related info about data table and local index id,
-  //because the locations of data table and local index table are always bound together
+  //because the accesses of data table and local index table are always bound together
   common::ObSEArray<RelatedTableAccessInfo, 1, common::ModulePageAllocator, true> access_relations_;
   common::ObArray<DeducedExprInfo, common::ModulePageAllocator, true> deduced_exprs_info_;
   union {

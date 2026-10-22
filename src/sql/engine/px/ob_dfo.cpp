@@ -48,7 +48,7 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     recieve_use_interm_result_,
                     serial_receive_channels_,
                     rescan_batch_params_,
-                    partition_pruning_table_locations_,
+                    partition_pruning_access_plans_,
                     ignore_vtable_error_,
                     temp_table_ctx_,
                     tablet_access_keys_,
@@ -58,7 +58,7 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     monitoring_info_,
                     branch_id_base_,
                     partition_random_affinitize_,
-                    locations_order_);
+                    tablet_access_order_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -117,12 +117,12 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
   } else if (OB_FAIL(receive_channel_.assign(other.receive_channel_))) {
   } else if (OB_FAIL(serial_receive_channels_.assign(other.serial_receive_channels_))) {
   } else if (OB_FAIL(rescan_batch_params_.assign(other.rescan_batch_params_))) {
-  } else if (OB_FAIL(partition_pruning_table_locations_.assign(other.partition_pruning_table_locations_))) {
+  } else if (OB_FAIL(partition_pruning_access_plans_.assign(other.partition_pruning_access_plans_))) {
   } else if (OB_FAIL(temp_table_ctx_.assign(other.temp_table_ctx_))) {
   } else if (OB_FAIL(tablet_access_keys_.assign(other.tablet_access_keys_))) {
   } else if (OB_FAIL(table_access_ranges_.assign(other.table_access_ranges_))) {
   } else if (OB_FAIL(monitoring_info_.assign(other.monitoring_info_))) {
-  } else if (OB_FAIL(locations_order_.assign(other.locations_order_))) {
+  } else if (OB_FAIL(tablet_access_order_.assign(other.tablet_access_order_))) {
   } else {
     execution_id_ = other.execution_id_;
     qc_id_ = other.qc_id_;

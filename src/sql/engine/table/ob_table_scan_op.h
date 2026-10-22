@@ -158,7 +158,7 @@ public:
   {
     return static_cast<const ObQueryRangeProvider&>(pre_range_graph_);
   }
-  int allocate_dppr_table_loc();
+  int allocate_dppr_access_plan();
   ObDASScanCtDef *get_lookup_ctdef();
   const ObDASScanCtDef *get_lookup_ctdef() const;
   TO_STRING_KV(K_(snapshot_item),
@@ -188,7 +188,7 @@ public:
   //which is used only when accessing index table and lookup the main table,
   //it means to the lookup parameter required by the main table
   ObDASScanCtDef *lookup_ctdef_;
-  //lookup_access_meta_ used to calc the main table tablet location
+  //lookup_access_meta_ used to calc the main table tablet access
   //when query access the global index and lookup the main table
   DASTableAccessMeta *lookup_access_meta_;
   //used for dynamic partition pruning
@@ -281,7 +281,7 @@ class ObTableScanSpec : public ObOpSpec
 public:
   ObTableScanSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
-  uint64_t get_loc_ref_table_id() const { return tsc_ctdef_.scan_ctdef_.ref_table_id_; }
+  uint64_t get_scan_source_table_id() const { return tsc_ctdef_.scan_ctdef_.ref_table_id_; }
   common::ObTableID get_ref_table_id() const { return ref_table_id_; }
   bool should_scan_index() const { return tsc_ctdef_.scan_ctdef_.ref_table_id_ != ref_table_id_; }
   bool is_index_back() const { return tsc_ctdef_.lookup_ctdef_ != nullptr; }
@@ -338,7 +338,7 @@ public:
   // and serialized plans do not use those fields. Therefore, those fields need not be serialized.
   common::ObString table_name_; // table name of the table to scan
   common::ObString index_name_; // name of the index to be used
-  common::ObTableID table_ref_id_; //table location id
+  common::ObTableID table_ref_id_; //table access id
   common::ObTableID ref_table_id_; //main table ref table id
   ObExpr *limit_;
   ObExpr *offset_;
@@ -495,7 +495,7 @@ public:
   int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip) override;
 
 protected:
-  // Get GI task then update location_idx and $cur_access_tablet_
+  // Get GI task then update tablet_access_idx and $cur_access_tablet_
   // NOTE: set $iter_end_ if no task found.
   int get_access_tablet_access(ObGranuleTaskInfo &info);
   // Assign GI task ranges to INPUT

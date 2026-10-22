@@ -29,7 +29,6 @@ class ObNewRow;
 }  // namespace common
 namespace sql
 {
-enum ObRoutePolicyType : int;
 struct DASTableAccessMeta;
 struct DASRuntimeTabletAccess;
 class ObDASCtx;

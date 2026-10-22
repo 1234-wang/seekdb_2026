@@ -795,7 +795,7 @@ public:
                             const ObLoadDataStmt &load_stmt,
                             ObSQLSessionInfo &session);
   int init_from_load_stmt(const ObLoadDataStmt &load_stmt);
-  int init_table_location_via_fake_insert_stmt(ObExecContext &ctx,
+  int init_access_plan_via_fake_insert(ObExecContext &ctx,
                                                ObPhysicalPlanCtx &plan_ctx,
                                                ObSQLSessionInfo &session_info);
   int init_separator_detectors(common::ObIAllocator &allocator);

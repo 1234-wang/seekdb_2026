@@ -231,7 +231,7 @@ int ObForeignKeyChecker::init_foreign_key_checker(int64_t estimate_row,
     ret = OB_ERR_UNEXPECTED;
   } else {
     allocator_ = allocator;
-    table_access_->is_fk_check_ = true; //mark the table location with fk checking action
+    table_access_->is_fk_check_ = true; //mark the table access with fk checking action
   }
 
   if (OB_SUCC(ret) && !fk_ctdef.is_part_table_) {

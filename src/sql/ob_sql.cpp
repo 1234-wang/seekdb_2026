@@ -2767,7 +2767,7 @@ int ObSql::code_generate(
   }
   NG_TRACE(cg_end);
 
-  // set phy table location in task_exec_ctx, query_timeout in exec_context
+  // set tablet accesses in the execution context, query_timeout in exec_context
   if (OB_SUCC(ret)) {
     const ObPlanCachePolicy plan_cache_policy = phy_plan->get_phy_plan_hint().plan_cache_policy_;
     ObPhyPlanHint phy_hint(logical_plan->get_optimizer_context().get_global_hint());
@@ -2827,7 +2827,7 @@ int ObSql::code_generate(
         }
       }
     }
-    // set table location for phy_plan
+    // set table access plans for the physical plan
     if (OB_SUCC(ret)) {
       if (OB_FAIL(phy_plan->set_table_access_plans(tbl_part_infos, *sql_ctx.schema_guard_))) {
       }

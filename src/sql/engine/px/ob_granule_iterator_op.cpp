@@ -251,7 +251,7 @@ int ObGIOpInput::add_tablet_access_keys(common::ObIArray<const ObTableScanSpec*>
   for (int i = 0; i < tscs.count() && OB_SUCC(ret); ++i) {
     if (OB_ISNULL(tscs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(table_location_keys_.push_back(tscs.at(i)->get_table_ref_id()))) {
+    } else if (OB_FAIL(table_ref_ids_.push_back(tscs.at(i)->get_table_ref_id()))) {
     }
   }
   return ret;
@@ -273,7 +273,7 @@ OB_DEF_SERIALIZE(ObGIOpInput)
       //LOG_TRACE("muhang(pump)SE", K(pump_));
     }
   }
-  OB_UNIS_ENCODE(table_location_keys_);
+  OB_UNIS_ENCODE(table_ref_ids_);
   OB_UNIS_ENCODE(ser_task_balancer_);
   return ret;
 }
@@ -289,7 +289,7 @@ OB_DEF_DESERIALIZE(ObGIOpInput)
     MEMCPY(&pump_, str, sizeof(pump_));
     pos = pos + sizeof(pump_);
   }
-  OB_UNIS_DECODE(table_location_keys_);
+  OB_UNIS_DECODE(table_ref_ids_);
   OB_UNIS_DECODE(ser_task_balancer_);
   return ret;
 }
@@ -300,7 +300,7 @@ OB_DEF_SERIALIZE_SIZE(ObGIOpInput)
   BASE_ADD_LEN(ObGIOpInput);
   LST_DO_CODE(OB_UNIS_ADD_LEN, parallelism_, worker_id_);
   len += sizeof(pump_);
-  OB_UNIS_ADD_LEN(table_location_keys_);
+  OB_UNIS_ADD_LEN(table_ref_ids_);
   OB_UNIS_ADD_LEN(ser_task_balancer_);
   return len;
 }
@@ -392,7 +392,7 @@ void ObGranuleIteratorOp::destroy()
 {
   rescan_tasks_info_.destroy();
   pwj_rescan_task_infos_.reset();
-  table_location_keys_.reset();
+  table_ref_ids_.reset();
   pruning_tablet_ids_.reset();
   tablet2part_id_map_.destroy();
   scan_resume_point_.destroy();
@@ -407,7 +407,7 @@ int ObGranuleIteratorOp::parameters_init()
   } else if (nullptr == input->pump_) {
     ret = OB_ERR_UNEXPECTED;
   } else if (FALSE_IT(pump_ = input->pump_)){
-  } else if (OB_FAIL(table_location_keys_.assign(input->table_location_keys_))) {
+  } else if (OB_FAIL(table_ref_ids_.assign(input->table_ref_ids_))) {
   } else if (OB_ISNULL(pump_arg_ = pump_->get_granule_pump_arg(spec_.id_))) {
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -807,7 +807,7 @@ int ObGranuleIteratorOp::gi_task_pause_process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("too many remain ranges", K(ranges.count()), K(old_gi_task_info->ranges_.count()));
     } else if (OB_LIKELY(GIRealReSplit == OB_SUCCESS)) {
-      // one gi task only has one tablet location at most, delver it to the split interface
+      // one gi task only has one tablet access at most, delver it to the split interface
       tablet_access = old_gi_task_info->tablet_access_;
       // table_id_ in remain range is null, replace it from old range
       uint64_t table_id = old_gi_task_info->ranges_.at(0).table_id_;
@@ -1326,15 +1326,15 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const ObGranuleTaskInfo &g
     int64_t tablet_id =  gi_task_info.tablet_access_->tablet_id_.id();
     if (pruning_tablet_ids_.empty()) {
       uint64_t table_ref_id = OB_INVALID_ID;
-      if (pump_->get_pruning_table_location()->empty()) {
+      if (pump_->get_pruning_access_plan()->empty()) {
         ret = OB_ERR_UNEXPECTED;
       } else {
-        common::ObIArray<TableAccessPlan> *locations = pump_->get_pruning_table_location();
-        for (int i = 0; i < table_location_keys_.count() && OB_SUCC(ret) && !partition_pruning; ++i) {
-          table_ref_id = table_location_keys_.at(i);
-          for (int j = 0; j < locations->count() && OB_SUCC(ret) && !partition_pruning; ++j) {
-            if (table_ref_id == locations->at(j).get_table_id()) {
-              OZ(locations->at(j).pruning_single_partition(tablet_id, ctx_,
+        common::ObIArray<TableAccessPlan> *accesses = pump_->get_pruning_access_plan();
+        for (int i = 0; i < table_ref_ids_.count() && OB_SUCC(ret) && !partition_pruning; ++i) {
+          table_ref_id = table_ref_ids_.at(i);
+          for (int j = 0; j < accesses->count() && OB_SUCC(ret) && !partition_pruning; ++j) {
+            if (table_ref_id == accesses->at(j).get_table_id()) {
+              OZ(accesses->at(j).pruning_single_partition(tablet_id, ctx_,
                   partition_pruning, pruning_tablet_ids_));
             }
           }
@@ -1363,10 +1363,10 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
   } else if (pump_->need_partition_pruning()) {
     int64_t tablet_id = OB_INVALID_ID;
     uint64_t table_ref_id = OB_INVALID_ID;
-    if (table_location_keys_.count() != gi_task_infos.count()) {
+    if (table_ref_ids_.count() != gi_task_infos.count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("count of table location is unexpected",
-          K(gi_task_infos.count()), K(table_location_keys_.count()));
+      LOG_WARN("count of table access is unexpected",
+          K(gi_task_infos.count()), K(table_ref_ids_.count()));
     } else {
       /*
        * In the previous dynamic partition pruning logic
@@ -1382,14 +1382,14 @@ int ObGranuleIteratorOp::do_dynamic_partition_pruning(const common::ObIArray<ObG
       for (int i = 0; i < gi_task_infos.count() && OB_SUCC(ret); ++i) {
         tablet_id =  gi_task_infos.at(i).tablet_access_->tablet_id_.id();
         single_table_partition_pruning = false;
-        if (pump_->get_pruning_table_location()->empty()) {
+        if (pump_->get_pruning_access_plan()->empty()) {
           ret = OB_ERR_UNEXPECTED;
         } else {
-          table_ref_id = table_location_keys_.at(i);
-          common::ObIArray<TableAccessPlan> *locations = pump_->get_pruning_table_location();
-          for (int j = 0; j < locations->count()  && OB_SUCC(ret); ++j) {
-            if (table_ref_id == locations->at(j).get_table_id()) {
-              OZ(locations->at(j).pruning_single_partition(tablet_id, ctx_,
+          table_ref_id = table_ref_ids_.at(i);
+          common::ObIArray<TableAccessPlan> *accesses = pump_->get_pruning_access_plan();
+          for (int j = 0; j < accesses->count()  && OB_SUCC(ret); ++j) {
+            if (table_ref_id == accesses->at(j).get_table_id()) {
+              OZ(accesses->at(j).pruning_single_partition(tablet_id, ctx_,
                   single_table_partition_pruning, pruning_tablet_ids_));
             }
           }

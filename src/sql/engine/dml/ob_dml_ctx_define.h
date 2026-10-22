@@ -468,7 +468,7 @@ struct ObDMLBaseRtDef
                        K_(cur_row_num));
   ObTrigDMLRtDef trig_rtdef_;
   int64_t cur_row_num_;
-  TableAccessPlan *check_location_;
+  TableAccessPlan *check_access_plan_;
   ObNewRow *check_row_; //only used for tablet defensive check
   //reference the das base ctdef to facilitate
   //some modules to access the das rtdef
@@ -478,7 +478,7 @@ protected:
   ObDMLBaseRtDef(ObDASDMLBaseRtDef &das_base_rtdef)
     : trig_rtdef_(),
       cur_row_num_(0),
-      check_location_(nullptr),
+      check_access_plan_(nullptr),
       check_row_(nullptr),
       das_base_rtdef_(das_base_rtdef)
   { }

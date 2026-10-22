@@ -16,6 +16,8 @@
 
 #include "storage/lob/ob_lob_retry.h"
 #include <gtest/gtest.h>
+#include <cstddef>
+#include <cstring>
 
 namespace oceanbase
 {
@@ -53,12 +55,12 @@ TEST(LobRetry, locator_tablet_identity_is_validated_before_retry)
   ObLobLocatorV2 locator;
   locator.assign_buffer(buffer, sizeof(buffer));
   ObMemLobExternFlags flags(false);
-  flags.has_location_info_ = true;
+  flags.has_access_info_ = true;
   flags.has_retry_info_ = true;
   ObLobCommon disk_locator;
   ASSERT_EQ(OB_SUCCESS, locator.fill(PERSISTENT_LOB, flags, ObString(), &disk_locator,
                                     sizeof(disk_locator), sizeof(disk_locator), 0, false));
-  ASSERT_EQ(OB_SUCCESS, locator.set_location_info(ObMemLobLocationInfo(200001, CS_TYPE_UTF8MB4_BIN)));
+  ASSERT_EQ(OB_SUCCESS, locator.set_access_info(LobAccessInfo(200001, CS_TYPE_UTF8MB4_BIN)));
   ObLobAccessParam param;
   param.timeout_ = ObTimeUtility::current_time() + 10000000;
   param.lob_locator_ = &locator;
@@ -75,6 +77,43 @@ TEST(LobRetry, locator_tablet_identity_is_validated_before_retry)
   header->flags_.has_retry_info_ = false;
   EXPECT_EQ(OB_SUCCESS, ObLobRetryUtil::check_need_retry(param, OB_NOT_MASTER, 0, need_retry));
   EXPECT_TRUE(need_retry);
+}
+
+struct LegacyLobAccessInfo
+{
+  int64_t tablet_id_;
+  ObCollationType cid_;
+};
+
+struct LegacyLobRetryInfo
+{
+  int64_t is_select_leader_ : 1;
+  int64_t read_latest_ : 1;
+  int64_t reserved_ : 62;
+  ObAddr addr_;
+  uint64_t timeout_;
+};
+
+TEST(LobRetry, retained_payload_layout_reads_legacy_retry_metadata)
+{
+  EXPECT_EQ(sizeof(LegacyLobAccessInfo), sizeof(LobAccessInfo));
+  EXPECT_EQ(alignof(LegacyLobAccessInfo), alignof(LobAccessInfo));
+  EXPECT_EQ(offsetof(LegacyLobAccessInfo, tablet_id_), offsetof(LobAccessInfo, tablet_id_));
+  EXPECT_EQ(offsetof(LegacyLobAccessInfo, cid_), offsetof(LobAccessInfo, cid_));
+  ASSERT_EQ(sizeof(LegacyLobRetryInfo), sizeof(ObMemLobRetryInfo));
+  EXPECT_EQ(offsetof(LegacyLobRetryInfo, addr_), offsetof(ObMemLobRetryInfo, reserved_addr_));
+  EXPECT_EQ(offsetof(LegacyLobRetryInfo, timeout_), offsetof(ObMemLobRetryInfo, reserved_timeout_));
+  LegacyLobRetryInfo legacy;
+  legacy.is_select_leader_ = false;
+  legacy.read_latest_ = true;
+  legacy.reserved_ = 0;
+  ASSERT_TRUE(legacy.addr_.set_ip_addr("127.0.0.1", 2881));
+  legacy.timeout_ = 123456789;
+  ObMemLobRetryInfo restored;
+  std::memcpy(&restored, &legacy, sizeof(restored));
+  EXPECT_TRUE(restored.read_latest_);
+  EXPECT_EQ(legacy.addr_, restored.reserved_addr_);
+  EXPECT_EQ(legacy.timeout_, restored.reserved_timeout_);
 }
 
 } // namespace storage

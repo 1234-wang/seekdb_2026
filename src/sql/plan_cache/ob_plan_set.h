@@ -359,7 +359,7 @@ private:
                          bool &get_next);
   int try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
                         ObPhysicalPlan *&plan);
-  int build_table_locations(const ObIArray<TableAccessPlan> &table_access_plans,
+  int build_access_plans(const ObIArray<TableAccessPlan> &table_access_plans,
                             ObPlanCacheCtx &pc_ctx);
 
   int collect_access_targets(const ObTablePartitionInfoArray &partition_infos,
@@ -383,8 +383,8 @@ private:
   ObPhysicalPlan *direct_local_plan_;
   ObDistPlans dist_plans_;
   // Used for handling OR expansion, late materialization, global index, etc., special scenarios
-  // The common characteristic of the above special scenarios is that the table location in the plan_set cache is inconsistent with the table location within the plan,
-  // Must get table location from the plan to calculate physical partition address
+  // The common characteristic of the above special scenarios is that the table access in the plan_set cache is inconsistent with the table access within the plan,
+  // Must get table access from the plan to calculate physical partition address
   int64_t need_try_plan_;
   ObSEArray<int64_t, 4> part_param_idxs_;
   // Whether it contains a virtual table, if it contains a virtual table, do not perform the optimization of directly obtaining the local plan

@@ -253,7 +253,6 @@ public:
   int execute_all_task(DasAggregatedTaskList &agg_task_list);
   int retry_all_fail_tasks(common::ObIArray<ObIDASTaskOp *> &failed_tasks);
   int close_all_task();
-  bool is_all_local_task() const;
   bool is_snapshot_opt_enabled() const { return use_snapshot_opt_; }
   void set_use_snapshot_opt(bool v) { use_snapshot_opt_ = v; }
   common::ObIAllocator &get_das_alloc() { return das_alloc_; }
@@ -266,7 +265,6 @@ public:
   ObEvalCtx &get_eval_ctx() { return eval_ctx_; };
   void reset();
   void reuse();
-  void set_lookup_iter(DASOpResultIter *lookup_iter) { wild_datum_info_.lookup_iter_ = lookup_iter; }
   DASRefCountContext &get_das_ref_count_ctx() { return das_ref_count_ctx_; }
   void clear_task_map();
 private:
@@ -289,7 +287,6 @@ private:
   ObExecContext &exec_ctx_;
   ObEvalCtx &eval_ctx_;
   const ObExprFrameInfo *expr_frame_info_;
-  DASOpResultIter::WildDatumPtrInfo wild_datum_info_;
   DasAggregatedTaskList del_aggregated_tasks_; // we must execute all delete tasks firstly
 
   DasAggregatedTaskList aggregated_tasks_;

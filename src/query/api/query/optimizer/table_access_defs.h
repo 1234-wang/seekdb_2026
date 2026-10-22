@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef OCEANBASE_QUERY_OPTIMIZER_LOCATION_DEFS_H_
-#define OCEANBASE_QUERY_OPTIMIZER_LOCATION_DEFS_H_
+#pragma once
 
 #include "common/row/ob_row.h"
 #include "lib/container/ob_se_array.h"
@@ -28,7 +27,7 @@ namespace oceanbase
 namespace sql
 {
 
-// Runtime location data shared by SQL planning, plan cache, and execution.
+// Runtime access data shared by SQL planning, plan cache, and execution.
 // These value types intentionally live outside the Optimizer implementation
 // target so consumers do not need an Optimizer header just to hold its output.
 class ObPartIdRowMapManager
@@ -104,5 +103,3 @@ typedef common::hash::ObHashMap<uint64_t,
 
 } // namespace sql
 } // namespace oceanbase
-
-#endif // OCEANBASE_QUERY_OPTIMIZER_LOCATION_DEFS_H_

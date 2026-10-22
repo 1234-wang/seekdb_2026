@@ -17,7 +17,7 @@
 #pragma once
 
 #include "lib/hash/ob_pointer_hashmap.h"
-#include "query/optimizer/ob_optimizer_location_defs.h"
+#include "query/optimizer/table_access_defs.h"
 #include "sql/rewrite/ob_query_range_define.h"
 #include "sql/das/ob_das_define.h"
 #include "sql/das/ob_das_tablet_mapper.h"
@@ -421,8 +421,8 @@ public:
     common::ObIAllocator &allocator_;
   };
 
-  TableAccessShape get_location_type(
-      const TabletAccessTargetIArray &phy_part_loc_info_list) const;
+  TableAccessShape get_access_shape(
+      const TabletAccessTargetIArray &tablet_targets) const;
 
   //get virtual talbe partition ids or fake id. ref_table_id should be partitioned virtual table
   //@param [in] ref_table_id partitioned virtual table
@@ -448,7 +448,7 @@ public:
     is_col_part_expr_(false),
     is_col_subpart_expr_(false),
     table_type_(share::schema::MAX_TABLE_TYPE),
-    inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
+    inner_allocator_(common::ObModIds::OB_SQL_TABLE_ACCESS_PLAN),
     allocator_(inner_allocator_),
     access_meta_(inner_allocator_),
     calc_node_(NULL),
@@ -539,7 +539,7 @@ public:
   void reset();
   inline bool is_inited() const { return inited_; }
   //get preliminary_query_range and partition_expr. For sql with filters.
-  int init_location(ObSqlSchemaGuard *schema_guard,
+  int init_access_plan(ObSqlSchemaGuard *schema_guard,
            const ObDMLStmt &stmt,
            ObExecContext *exec_ctx,
            const common::ObIArray<ObRawExpr*> &filter_exprs,
@@ -577,7 +577,7 @@ public:
                               bool &is_weak_read);
 
   /**
-   * Calculate the table's partition location list from the input parameters.
+   * Calculate the table's partition access list from the input parameters.
    *
    * This function is used after TableAccessPlan inited.
    * The function assumes that:
@@ -596,7 +596,7 @@ public:
                                         const ParamStore &params,
                                         const ObDataTypeCastParams &dtc_params) const;
 
-  int calculate_final_tablet_locations(ObExecContext &exec_ctx,
+  int calculate_final_tablet_accesses(ObExecContext &exec_ctx,
                                        const ParamStore &params,
                                        const common::ObDataTypeCastParams &dtc_params) const;
 
@@ -646,7 +646,7 @@ public:
                            const ObIArray<ObObjectID> &first_level_part_ids,
                            TabletAccessTargetIArray &tablet_targets) const;
 
-  int add_final_tablet_locations(ObDASCtx &das_ctx,
+  int add_final_tablet_accesses(ObDASCtx &das_ctx,
                                  const ObIArray<ObTabletID> &tablet_ids,
                                  const ObIArray<ObObjectID> &partition_ids,
                                  const ObIArray<ObObjectID> &first_level_part_ids) const;
@@ -734,7 +734,7 @@ public:
       ObExecContext &exec_ctx, bool &pruning,
       common::ObIArray<ObTabletID> &tablet_ids);
 
-  int init_table_location_with_column_ids(ObSqlSchemaGuard &schema_guard,
+  int init_access_plan_with_column_ids(ObSqlSchemaGuard &schema_guard,
                                           uint64_t table_id,
                                           const common::ObIArray<uint64_t> &column_ids,
                                           ObExecContext &exec_ctx,
@@ -751,7 +751,7 @@ public:
                K_(part_hint_ids),
                K_(related_list));
 private:
-  int init_table_location(ObExecContext &exec_ctx,
+  int init_access_plan(ObExecContext &exec_ctx,
                           ObSqlSchemaGuard &schema_guard,
                           uint64_t table_id,
                           uint64_t ref_table_id,
@@ -760,7 +760,7 @@ private:
                           const bool is_dml_table,
                           const ObOrderDirection &direction = default_asc_direction());
 
-  int init_table_location_with_rowkey(ObSqlSchemaGuard &schema_guard,
+  int init_access_plan_with_rowkey(ObSqlSchemaGuard &schema_guard,
                                       uint64_t table_id,
                                       ObExecContext &exec_ctx,
                                       const bool is_dml_table = true);
@@ -920,7 +920,7 @@ private:
   int deal_partition_selection(common::ObIArray<common::ObTabletID> &tablet_ids,
                                common::ObIArray<common::ObObjectID> &part_ids) const;
 
-  int get_location_calc_node(const ObPartitionLevel part_level,
+  int get_partition_calc_node(const ObPartitionLevel part_level,
                              common::ObIArray<ColumnItem> &partition_columns,
                              const ObRawExpr *partition_expr,
                              const common::ObIArray<ObRawExpr*> &filter_exprs,
@@ -1024,7 +1024,7 @@ private:
                              common::ObNewRow &input_row,
                              common::ObNewRow &output_row) const;
 
-  int set_location_calc_node(const ObDMLStmt &stmt,
+  int set_partition_calc_node(const ObDMLStmt &stmt,
                              const common::ObIArray<ObRawExpr*> &filter_exprs,
                              const share::schema::ObPartitionLevel part_level,
                              const common::ObDataTypeCastParams &dtc_params,
@@ -1125,11 +1125,11 @@ private:
   bool is_col_subpart_expr_;
   share::schema::ObTableType table_type_;
   common::ObArenaAllocator inner_allocator_;
-  common::ObIAllocator &allocator_; //used for deep copy other table location
+  common::ObIAllocator &allocator_; //used for deep copy other table access
   DASTableAccessMeta access_meta_;
-  PartitionCalcNode *calc_node_;//first-level partition location calculation node
+  PartitionCalcNode *calc_node_;//first-level partition access calculation node
   PartitionCalcNode *gen_col_node_;//query range node of columns dependented by generated column
-  PartitionCalcNode *subcalc_node_;//secondary partition location calculation Node
+  PartitionCalcNode *subcalc_node_;//secondary partition access calculation Node
   PartitionCalcNode *sub_gen_col_node_;//query range node of column dependented by sub partition generated column
 
   common::ObSEArray<PartitionCalcNode *, 5, common::ModulePageAllocator, false> calc_nodes_;

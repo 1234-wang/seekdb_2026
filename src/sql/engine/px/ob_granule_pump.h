@@ -100,7 +100,7 @@ public :
     tablet_arrays_.reset();
     run_time_pruning_flags_.reset();
     query_range_by_runtime_filter_.reset();
-    locations_order_.reset();
+    tablet_access_order_.reset();
   }
 
   int assign(const ObGranulePumpArgs &rhs);
@@ -132,7 +132,7 @@ public :
   bool lucky_one_; // atomic, indicatee which thread is luckly to do extract query range
   ObSEArray<ObNewRange, 16> query_range_by_runtime_filter_;
   bool extract_finished_;
-  ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
+  ObSEArray<std::pair<int64_t, bool>, 18> tablet_access_order_;
   int64_t gi_op_id_;
   // %task_version_ is increased when task regenerated.
   // Used to help detecting taskset change in GI.
@@ -363,7 +363,7 @@ public:
                     ObGITaskSet::ObGIRandomType random_type,
                     bool partition_granule = true);
   int adjust_task_order(bool asc, ObGITaskArray &taskset_array, int64_t tsc_op_id,
-                        const ObIArray<std::pair<int64_t, bool>> &locations_order);
+                        const ObIArray<std::pair<int64_t, bool>> &tablet_access_order);
 };
 
 //A task will be send to many DFO and we use many threads to execute the DFO.
@@ -385,7 +385,7 @@ public:
   gi_task_array_map_(),
   pump_args_(),
   need_partition_pruning_(false),
-  pruning_table_locations_(),
+  pruning_access_plans_(),
   is_taskset_reset_(false),
   fetch_task_ret_(OB_SUCCESS),
   finished_cnt_(0)
@@ -445,9 +445,9 @@ public:
 
   inline void set_need_partition_pruning(bool flag) { need_partition_pruning_ = flag; };
   inline bool need_partition_pruning() { return need_partition_pruning_; }
-  int set_pruning_table_location(common::ObIArray<TableAccessPlan> &table_access_plans)
-  { return pruning_table_locations_.assign(table_access_plans); }
-  common::ObIArray<TableAccessPlan> *get_pruning_table_location() { return &pruning_table_locations_; }
+  int set_pruning_access_plan(common::ObIArray<TableAccessPlan> &table_access_plans)
+  { return pruning_access_plans_.assign(table_access_plans); }
+  common::ObIArray<TableAccessPlan> *get_pruning_access_plan() { return &pruning_access_plans_; }
   int get_first_tsc_range_cnt(int64_t &cnt);
   const GITaskArrayMap &get_task_array_map() const { return gi_task_array_map_; }
   static int find_task_array_item(GITaskArrayMap &gi_task_map,
@@ -489,7 +489,7 @@ private:
                int64_t parallelism,
                int64_t tablet_size,
                uint64_t gi_attri_flag,
-               const ObIArray<std::pair<int64_t, bool>> &locations_order);
+               const ObIArray<std::pair<int64_t, bool>> &tablet_access_order);
 
   int check_can_randomize(ObGranulePumpArgs &args, bool &can_randomize);
 
@@ -504,7 +504,7 @@ private:
   GITaskArrayMap gi_task_array_map_;
   common::ObArray<ObGranulePumpArgs> pump_args_;
   bool need_partition_pruning_;
-  common::ObArray<TableAccessPlan> pruning_table_locations_;
+  common::ObArray<TableAccessPlan> pruning_access_plans_;
 
 
   bool is_taskset_reset_;

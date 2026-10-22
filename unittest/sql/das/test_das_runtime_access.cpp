@@ -34,8 +34,8 @@ TEST(DASRuntimeAccess, preserve_retry_error_until_explicit_reset)
   ctx.record_access_error(OB_SUCCESS);
   ctx.record_access_error(OB_ERR_UNEXPECTED);
   EXPECT_EQ(OB_TABLET_NOT_EXIST, ctx.get_retry_error());
-  ctx.record_access_error(OB_LOCATION_NOT_EXIST);
-  EXPECT_EQ(OB_LOCATION_NOT_EXIST, ctx.get_retry_error());
+  ctx.record_access_error(OB_ACCESS_TARGET_NOT_EXIST);
+  EXPECT_EQ(OB_ACCESS_TARGET_NOT_EXIST, ctx.get_retry_error());
   ctx.record_retry_error(OB_SUCCESS);
   EXPECT_EQ(OB_SUCCESS, ctx.get_retry_error());
 }
@@ -48,10 +48,10 @@ TEST(DASRuntimeAccess, virtual_table_validation_retains_retry_error)
   ASSERT_TRUE(is_virtual_table(virtual_id));
   EXPECT_EQ(OB_SUCCESS, ctx.validate_tablet_access(virtual_id, ObTabletID(1)));
   EXPECT_EQ(OB_SUCCESS, ctx.validate_tablet_access(virtual_id, ObTabletID(EMPTY_VIRTUAL_TABLE_TABLET_ID)));
-  EXPECT_EQ(OB_LOCATION_NOT_EXIST, ctx.validate_tablet_access(virtual_id, ObTabletID(200001)));
-  EXPECT_EQ(OB_LOCATION_NOT_EXIST, ctx.get_retry_error());
+  EXPECT_EQ(OB_ACCESS_TARGET_NOT_EXIST, ctx.validate_tablet_access(virtual_id, ObTabletID(200001)));
+  EXPECT_EQ(OB_ACCESS_TARGET_NOT_EXIST, ctx.get_retry_error());
   EXPECT_EQ(OB_SUCCESS, ctx.validate_tablet_access(500001, ObTabletID(200001)));
-  EXPECT_EQ(OB_LOCATION_NOT_EXIST, ctx.get_retry_error());
+  EXPECT_EQ(OB_ACCESS_TARGET_NOT_EXIST, ctx.get_retry_error());
 }
 
 TEST(DASRuntimeAccess, aliases_related_tablets_and_px_roundtrip)
@@ -157,31 +157,31 @@ struct LegacySqcKeyV1
 {
   OB_UNIS_VERSION(1);
 public:
-  int64_t table_location_key_;
+  int64_t table_ref_id_;
   int64_t ref_table_id_;
   ObTabletID tablet_id_;
   bool is_dml_;
-  bool is_loc_uncertain_;
+  bool has_dynamic_tablets_;
 };
-OB_SERIALIZE_MEMBER(LegacySqcKeyV1, table_location_key_, ref_table_id_, tablet_id_,
-                    is_dml_, is_loc_uncertain_);
+OB_SERIALIZE_MEMBER(LegacySqcKeyV1, table_ref_id_, ref_table_id_, tablet_id_,
+                    is_dml_, has_dynamic_tablets_);
 
 TEST(DASRuntimeAccess, px_key_v1_wire_compatibility)
 {
   for (bool dynamic : {false, true}) {
     LegacySqcKeyV1 legacy;
-    legacy.table_location_key_ = 600001;
+    legacy.table_ref_id_ = 600001;
     legacy.ref_table_id_ = 500001;
     legacy.tablet_id_ = ObTabletID(200001);
     legacy.is_dml_ = true;
-    legacy.is_loc_uncertain_ = dynamic;
+    legacy.has_dynamic_tablets_ = dynamic;
     std::vector<char> bytes(legacy.get_serialize_size());
     int64_t pos = 0;
     ASSERT_EQ(OB_SUCCESS, legacy.serialize(bytes.data(), bytes.size(), pos));
     SqcTabletAccessKey key;
     pos = 0;
     ASSERT_EQ(OB_SUCCESS, key.deserialize(bytes.data(), bytes.size(), pos));
-    EXPECT_EQ(legacy.table_location_key_, key.table_ref_id_);
+    EXPECT_EQ(legacy.table_ref_id_, key.table_ref_id_);
     EXPECT_EQ(legacy.ref_table_id_, key.ref_table_id_);
     EXPECT_EQ(legacy.tablet_id_, key.tablet_id_);
     EXPECT_TRUE(key.is_dml_);
@@ -191,6 +191,19 @@ TEST(DASRuntimeAccess, px_key_v1_wire_compatibility)
     ASSERT_EQ(OB_SUCCESS, key.serialize(roundtrip.data(), roundtrip.size(), pos));
     EXPECT_EQ(bytes, roundtrip);
   }
+}
+
+TEST(DASRuntimeAccess, access_error_numbers_remain_stable)
+{
+  EXPECT_EQ(0, TABLE_ACCESS_UNINITIALIZED);
+  EXPECT_EQ(1, TABLE_ACCESS_SINGLE_TABLET);
+  EXPECT_EQ(2, TABLE_ACCESS_MULTI_TABLET);
+  EXPECT_EQ(3, TABLE_ACCESS_ANY);
+  EXPECT_EQ(-4653, OB_ACCESS_TARGET_NOT_EXIST);
+  EXPECT_EQ(-4654, OB_ACCESS_SOURCE_UNAVAILABLE);
+  EXPECT_EQ(-4664, OB_ACCESS_TARGET_TIMEOUT);
+  EXPECT_EQ(-4721, OB_LOG_STREAM_ACCESS_NOT_EXIST);
+  EXPECT_EQ(-4722, OB_LOG_STREAM_ACCESS_NOT_READY);
 }
 
 } // namespace sql

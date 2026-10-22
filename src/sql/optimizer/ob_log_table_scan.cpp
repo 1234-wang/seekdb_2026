@@ -2219,7 +2219,7 @@ bool ObLogTableScan::is_need_feedback() const
   return ret;
 }
 
-int ObLogTableScan::get_phy_location_type(TableAccessShape &location_type)
+int ObLogTableScan::get_physical_access_shape(TableAccessShape &access_shape)
 {
   int ret = OB_SUCCESS;
   ObShardingInfo *sharding = get_sharding();
@@ -2227,9 +2227,9 @@ int ObLogTableScan::get_phy_location_type(TableAccessShape &location_type)
     ret = OB_ERR_UNEXPECTED;
   } else if (NULL == table_partition_info_) {
     // fake_cte_table, function_table, ...
-    location_type = sharding->get_location_type();
+    access_shape = sharding->get_access_shape();
   } else {
-    location_type = table_partition_info_->get_location_type();
+    access_shape = table_partition_info_->get_access_shape();
   }
   return ret;
 }

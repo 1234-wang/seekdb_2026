@@ -148,7 +148,7 @@ public:
               recieve_use_interm_result_(false),
               serial_receive_channels_(),
               rescan_batch_params_(),
-              partition_pruning_table_locations_(),
+              partition_pruning_access_plans_(),
               temp_table_ctx_(),
               ignore_vtable_error_(false),
               tablet_access_keys_(),
@@ -157,7 +157,7 @@ public:
               is_single_tsc_leaf_dfo_(false),
               allocator_("PxSqcMetaInner"),
               sqc_order_gi_tasks_(false),
-              locations_order_()
+              tablet_access_order_()
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -230,7 +230,7 @@ public:
     receive_channel_.reset();
     serial_receive_channels_.reset();
     rescan_batch_params_.reset();
-    partition_pruning_table_locations_.reset();
+    partition_pruning_access_plans_.reset();
     allocator_.reset();
     monitoring_info_.reset();
   }
@@ -253,8 +253,8 @@ public:
   int add_serial_recieve_channel(const ObPxReceiveDataChannelMsg &channel);
   int set_rescan_batch_params(ObBatchRescanParams &params) { return rescan_batch_params_.assign(params); }
   ObBatchRescanParams &get_rescan_batch_params() { return rescan_batch_params_; }
-  common::ObIArray<TableAccessPlan> &get_pruning_table_locations()
-  { return partition_pruning_table_locations_; }
+  common::ObIArray<TableAccessPlan> &get_pruning_access_plans()
+  { return partition_pruning_access_plans_; }
   void set_adjoining_root_dfo(bool flag)
   { adjoining_root_dfo_ = flag; }
   bool adjoining_root_dfo() const { return adjoining_root_dfo_; }
@@ -276,7 +276,7 @@ public:
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   void set_branch_id_base(const int16_t branch_id_base) { branch_id_base_ = branch_id_base; }
   int16_t get_branch_id_base() const { return branch_id_base_; }
-  ObIArray<std::pair<int64_t, bool>> &get_locations_order() { return locations_order_; }
+  ObIArray<std::pair<int64_t, bool>> &get_tablet_access_order() { return tablet_access_order_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id),
                K_(branch_id_base), K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
@@ -293,11 +293,11 @@ private:
   // for replace and insert update operator, they need branch_id to rollback writes by one px-worker
   int16_t branch_id_base_;
   ObQCMonitoringInfo monitoring_info_;
-  // The partition location information of the all table_scan op and dml op
+  // The partition access information of the all table_scan op and dml op
   // used for px worker execution
   // no need serialize
   DASRuntimeTabletSEArray tablet_accesses_;
-  // Additional tablet locations not scanned directly by this DFO, used by
+  // Additional tablet accesses not scanned directly by this DFO, used by
   // PDML operations that also maintain global indexes.
   DASRuntimeTabletSEArray extra_tablet_accesses_;
 
@@ -332,7 +332,7 @@ private:
   // Used to store parameters for NLJ condition pushdown
   ObBatchRescanParams rescan_batch_params_;
   // for partition pruning
-  common::ObSEArray<TableAccessPlan, 2> partition_pruning_table_locations_;
+  common::ObSEArray<TableAccessPlan, 2> partition_pruning_access_plans_;
   // sqc needs an array of data block IDs to be written to the intermediate result file
   ObSEArray<ObSqlTempTableCtx, 2> temp_table_ctx_;
   // all child is virtual table, need ignore error.
@@ -348,8 +348,8 @@ private:
   int64_t sqc_count_;
   bool sqc_order_gi_tasks_;
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
-  // record ordering of locations. first is operator id of table scan and second is asc.
-  ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
+  // record ordering of accesses. first is operator id of table scan and second is asc.
+  ObSEArray<std::pair<int64_t, bool>, 18> tablet_access_order_;
 };
 
 class ObDfo

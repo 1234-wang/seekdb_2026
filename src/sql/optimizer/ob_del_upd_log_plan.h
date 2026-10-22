@@ -45,9 +45,9 @@ public:
 
   int do_check_fullfill_safe_update_mode(ObLogicalOperator *top, bool &is_not_fullfill);
 
-  int calculate_insert_table_location_and_sharding(ObTablePartitionInfo *&insert_table_part,
+  int calculate_insert_access_targets_and_sharding(ObTablePartitionInfo *&insert_table_part,
                                                    ObShardingInfo *&insert_sharding);
-  int calculate_table_location_and_sharding(const ObDelUpdStmt &stmt,
+  int calculate_access_targets_and_sharding(const ObDelUpdStmt &stmt,
                                             const ObIArray<ObRawExpr*> &filters,
                                             const uint64_t table_id,
                                             const uint64_t ref_table_id,
@@ -55,7 +55,7 @@ public:
                                             ObShardingInfo *&sharding_info,
                                             ObTablePartitionInfo *&table_partition_info);
 
-  int calculate_table_location(const ObDelUpdStmt &stmt,
+  int calculate_access_targets(const ObDelUpdStmt &stmt,
                                const ObIArray<ObRawExpr*> &filters,
                                const uint64_t table_id,
                                const uint64_t ref_table_id,

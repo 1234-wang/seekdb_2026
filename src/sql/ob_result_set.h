@@ -554,7 +554,7 @@ inline void ObResultSet::set_message(const char *message)
 inline void ObResultSet::set_errcode(int code)
 {
   errcode_ = code;
-  //Save the current execution state to determine whether to refresh location
+  //Save the current execution state to determine whether to refresh access
   //and perform other necessary cleanup operations when the statement exits.
   DAS_CTX(get_exec_context()).record_access_error(code);
 }

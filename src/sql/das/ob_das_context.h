@@ -119,7 +119,7 @@ public:
                           const common::ObObjectID &first_level_part_id = OB_INVALID_ID);
   int ensure_tablet_access(DASRuntimeTableAccess &table_access,
                           const TabletAccessTarget &tablet_target,
-                          DASRuntimeTabletAccess *&talet_loc);
+                          DASRuntimeTabletAccess *&tablet_access);
   int ensure_table_access(const DASTableAccessMeta &access_meta, DASRuntimeTableAccess *&table_access);
   int add_table_access_targets(const DASTableAccessMeta &access_meta, const TableAccessTargets &table_targets);
   int add_final_table_access(const DASTableAccessMeta &access_meta,
