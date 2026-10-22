@@ -272,13 +272,12 @@ For a higher-level JavaScript Collection API, see [seekdb-js](https://github.com
 <details open>
 <summary><b>🐹 Go</b></summary>
 
-Use [seekdb-go](https://github.com/oceanbase/seekdb-go) to start a local seekdb database, then execute SQL with `go-sql-driver/mysql`. Requires Go 1.22 or newer, `CGO_ENABLED=1`, and a C compiler.
+Use [seekdb-go](https://github.com/oceanbase/seekdb-go) to start a local seekdb database, then execute SQL with `go-sql-driver/mysql`. This example requires Go 1.24 or newer, `CGO_ENABLED=1`, and a C compiler.
 
 ```bash
 mkdir seekdb-go-example
 cd seekdb-go-example
 go mod init example.com/seekdb-demo
-go get github.com/go-sql-driver/mysql@v1.9.3
 ```
 
 Save the following as `main.go`. It uses the endpoint returned by `ConnectionOptions` and closes the SQL connections before releasing the runtime handle:
@@ -338,13 +337,13 @@ func run() error {
 }
 ```
 
-Run it; Go resolves seekdb-go and downloads the native bundle for your current platform. The result is `1`:
+Run it; Go resolves the dependencies and downloads the native bundle for your current platform. The result is `1`:
 
 ```bash
 go run -mod=mod .
 ```
 
-This quickstart installs the SQL driver before adding the example source, then resolves the SDK during the build. A regular `go get` for seekdb-go or `go mod tidy` may download bundles for all supported platforms.
+A regular `go get` for seekdb-go or `go mod tidy` may download bundles for all supported platforms.
 
 [Full usage guide](https://github.com/oceanbase/seekdb-go#install) · [Supported platforms and requirements](https://github.com/oceanbase/seekdb-go/blob/main/docs/support.md)
 

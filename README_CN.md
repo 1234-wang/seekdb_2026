@@ -258,13 +258,12 @@ node example.mjs
 <details open>
 <summary><b>🐹 Go</b></summary>
 
-使用 [seekdb-go](https://github.com/oceanbase/seekdb-go) 启动本地 seekdb，再通过 `go-sql-driver/mysql` 执行 SQL。需要 Go 1.22 或更高版本、`CGO_ENABLED=1` 和 C 编译器。
+使用 [seekdb-go](https://github.com/oceanbase/seekdb-go) 启动本地 seekdb，再通过 `go-sql-driver/mysql` 执行 SQL。本示例需要 Go 1.24 或更高版本、`CGO_ENABLED=1` 和 C 编译器。
 
 ```bash
 mkdir seekdb-go-example
 cd seekdb-go-example
 go mod init example.com/seekdb-demo
-go get github.com/go-sql-driver/mysql@v1.9.3
 ```
 
 将下面的示例保存为 `main.go`。示例使用 `ConnectionOptions` 返回的端点，并在释放运行时句柄前关闭 SQL 连接：
@@ -324,13 +323,13 @@ func run() error {
 }
 ```
 
-运行时 Go 会解析 seekdb-go，并下载当前平台的原生包，输出 `1`：
+运行时 Go 会自动解析依赖，并下载当前平台的原生包，输出 `1`：
 
 ```bash
 go run -mod=mod .
 ```
 
-本示例先安装 SQL 驱动，再保存示例源码，运行时按需解析 SDK。常规的 seekdb-go `go get` 或 `go mod tidy` 仍可能下载所有支持平台的原生包。
+常规的 seekdb-go `go get` 或 `go mod tidy` 可能下载所有支持平台的原生包。
 
 [完整使用指南](https://github.com/oceanbase/seekdb-go#install) · [支持平台与环境要求](https://github.com/oceanbase/seekdb-go/blob/main/docs/support.md)
 
