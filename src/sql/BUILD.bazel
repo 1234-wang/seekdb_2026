@@ -183,15 +183,6 @@ cc_library(
 )
 
 # Private means private to the SQL module, not private to one Unity action.
-# Test-only access to the existing SQL header interface.
-cc_library(
-    name = "das_runtime_test_headers",
-    testonly = True,
-    deps = [":sql_runtime_interface"] + _SQL_INTERFACE_OBLIB_DEPS + _SQL_INTERFACE_SHARE_DEPS,
-    tags = ["manual"],
-    visibility = ["//unittest/sql/das:__pkg__"],
-)
-
 # Submodule header owners are visible only through this SQL-internal seam.
 cc_library(
     name = "sql_runtime_internal_headers",
