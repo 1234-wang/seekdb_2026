@@ -222,8 +222,8 @@ def build_icu(source, build, prefix, sdk, options, environment):
     host_env["SDKROOT"] = subprocess.check_output(
         ["xcrun", "--sdk", "macosx", "--show-sdk-path"], env=host_env, text=True).strip()
     common = ["--enable-static", "--disable-shared", "--disable-tests", "--disable-samples",
-              "--disable-extras", "--disable-icuio", "--with-data-packaging=static"]
-    run([source / "configure", *common], host_build, host_env)
+              "--disable-extras", "--disable-icuio"]
+    run([source / "configure", *common, "--with-data-packaging=static"], host_build, host_env)
     run(["make", "-j" + str(options.jobs)], host_build, host_env)
     cross_env = dict(environment)
     triple = "arm64-apple-ios" + options.deployment_target
@@ -231,11 +231,12 @@ def build_icu(source, build, prefix, sdk, options, environment):
         triple += "-simulator"
     cross_env["CFLAGS"] = "-O2 -target " + triple + " -isysroot " + shlex.quote(sdk)
     cross_env["CXXFLAGS"] = cross_env["CFLAGS"]
-    run([source / "configure", *common, "--disable-tools", "--host=aarch64-apple-darwin",
-         "--with-cross-build=" + str(host_build), "--prefix=" + str(prefix)], build, cross_env)
+    run([source / "configure", *common, "--with-data-packaging=archive", "--disable-tools",
+         "--host=aarch64-apple-darwin", "--with-cross-build=" + str(host_build),
+         "--prefix=" + str(prefix)], build, cross_env)
     run(["make", "-j" + str(options.jobs)], build, cross_env)
-    for name in ("libicuuc.a", "libicui18n.a", "libicudata.a"):
-        verify_archive(build / "lib" / name, options.simulator, environment)
+    for archive in ("lib/libicuuc.a", "lib/libicui18n.a", "stubdata/libicudata.a"):
+        verify_archive(build / archive, options.simulator, environment)
     run(["make", "install"], build, cross_env)
 
 
