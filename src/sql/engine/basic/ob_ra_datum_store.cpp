@@ -327,7 +327,6 @@ ObRADatumStore::ObRADatumStore(common::ObIAllocator *alloc /* = NULL */)
     inner_reader_(*this), mem_hold_(0),
     inner_allocator_(lib::ObMemAttr(common::ObModIds::OB_SQL_ROW_STORE)),
     allocator_(NULL == alloc ? &inner_allocator_ : alloc),
-    use_inner_allocator_(NULL == alloc),
     row_extend_size_(0), mem_stat_(NULL), io_observer_(NULL)
 {
 }
@@ -343,7 +342,7 @@ int ObRADatumStore::init(int64_t mem_limit,
   } else {
     ctx_id_ = mem_ctx_id;
     label_ = label;
-    if (use_inner_allocator_) {
+    if (allocator_ == &inner_allocator_) {
       const ObMemAttr attr(label_, ctx_id_);
       inner_allocator_.set_attr(attr);
     }

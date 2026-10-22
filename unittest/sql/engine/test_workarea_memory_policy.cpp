@@ -10,6 +10,7 @@
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_ra_datum_store.h"
+#include "sql/engine/basic/ob_ra_row_store.h"
 #include "sql/engine/basic/ob_workarea_memory_limit.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_sql_memory_manager.h"
@@ -18,6 +19,7 @@
 #include "share/rc/ob_server_runtime.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 
+#include <algorithm>
 #include <vector>
 #include <thread>
 
@@ -331,6 +333,64 @@ TEST(TestWorkareaMemoryPolicy, chunk_datum_store_uses_explicit_allocator)
     EXPECT_EQ(1, store.get_row_cnt());
     store.reset();
   }
+}
+
+TEST(TestWorkareaMemoryPolicy, ra_datum_store_uses_explicit_allocator)
+{
+  DefaultPageAllocator backing(ObMemAttr("WAExternal", ObCtxIds::WORK_AREA));
+  const int64_t value = 42;
+  ObDatum datum(reinterpret_cast<const char *>(&value), sizeof(value), false);
+  ObSEArray<ObDatum, 1> row;
+  ASSERT_EQ(OB_SUCCESS, row.push_back(datum));
+  for (const bool use_setter : {false, true}) {
+    FailingAllocator allocator(backing);
+    ObRADatumStore store(use_setter ? nullptr : &allocator);
+    if (use_setter) {
+      store.set_allocator(allocator);
+    }
+    ASSERT_EQ(OB_SUCCESS, store.init(0, ObCtxIds::WORK_AREA, "WAExternal"));
+    allocator.arm();
+    EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, store.add_row(row));
+    EXPECT_EQ(1, allocator.failures());
+    ASSERT_EQ(OB_SUCCESS, store.add_row(row));
+    ASSERT_EQ(OB_SUCCESS, store.finish_add_row());
+    EXPECT_EQ(1, store.get_row_cnt());
+    const ObRADatumStore::StoredRow *stored_row = nullptr;
+    ASSERT_EQ(OB_SUCCESS, store.get_row(0, stored_row));
+    ASSERT_NE(nullptr, stored_row);
+    EXPECT_EQ(42, stored_row->cells()[0].get_int());
+    store.reset();
+  }
+}
+
+TEST(TestWorkareaMemoryPolicy, ra_row_store_random_access_and_error_codes)
+{
+  ObRARowStore store;
+  ObObj cell;
+  ObNewRow row;
+  row.cells_ = &cell;
+  row.count_ = 1;
+  EXPECT_EQ(OB_NOT_INIT, store.add_row(row));
+  ASSERT_EQ(OB_SUCCESS, store.init(0, ObCtxIds::WORK_AREA, "WARARow"));
+  EXPECT_EQ(OB_INIT_TWICE, store.init(0));
+  std::vector<char> payload(40L << 10);
+  for (int64_t i = 0; i < 8; ++i) {
+    std::fill(payload.begin(), payload.end(), 'a' + i);
+    cell.set_varchar(ObString(payload.size(), payload.data()));
+    ASSERT_EQ(OB_SUCCESS, store.add_row(row));
+  }
+  ASSERT_EQ(OB_SUCCESS, store.finish_add_row());
+  EXPECT_FALSE(store.is_file_open());
+  const ObNewRow *stored_row = nullptr;
+  for (const int64_t row_id : {7, 0, 4, 2, 6, 1, 5, 3}) {
+    ASSERT_EQ(OB_SUCCESS, store.get_row(row_id, stored_row));
+    ASSERT_NE(nullptr, stored_row);
+    std::fill(payload.begin(), payload.end(), 'a' + row_id);
+    EXPECT_EQ(ObString(payload.size(), payload.data()),
+              stored_row->cells_[0].get_varchar());
+  }
+  EXPECT_EQ(OB_INDEX_OUT_OF_RANGE, store.get_row(-1, stored_row));
+  EXPECT_EQ(OB_INDEX_OUT_OF_RANGE, store.get_row(8, stored_row));
 }
 
 TEST(TestWorkareaMemoryPolicy, budget_is_not_allocation_admission)
