@@ -790,7 +790,7 @@ int ObOptimizerTraceImpl::append(const ObNewRange &range)
   return ret;
 }
 
-int ObOptimizerTraceImpl::append(const ObOptTabletLoc& tablet_loc)
+int ObOptimizerTraceImpl::append(const TabletAccessTarget& tablet_loc)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(append("(partition id:", tablet_loc.get_partition_id()))) {
@@ -801,11 +801,6 @@ int ObOptimizerTraceImpl::append(const ObOptTabletLoc& tablet_loc)
   } else if (OB_FAIL(append(")"))) {
   }
   return ret;
-}
-
-int ObOptimizerTraceImpl::append(const ObCandiTabletLoc& candi_tablet_loc)
-{
-  return append(candi_tablet_loc.get_partition_location());
 }
 
 int ObOptimizerTraceImpl::append(const ObBatchEstTasks& task)

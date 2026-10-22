@@ -26,7 +26,7 @@ namespace sql {
 struct ObPlanCacheCtx;
 class ObPhysicalPlan;
 class ObTableLocation;
-class ObCandiTableLoc;
+class TableAccessTargets;
 class ObSqlPlanSet;
 
 class ObDistPlans {

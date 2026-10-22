@@ -48,7 +48,7 @@ class ObPhysicalPlan;
 struct ObSqlCtx;
 class ObTableLocation;
 class ObPhyTableLocation;
-class ObCandiTableLoc;
+class TableAccessTargets;
 class ObTablePartitionInfo;
 class ObPlanCacheValue;
 class ObDASCtx;
@@ -924,16 +924,16 @@ public:
   // used for getting plan
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,
-                               ObIArray<ObCandiTableLoc> &phy_location_infos);
+                               ObIArray<TableAccessTargets> &phy_location_infos);
 
   // used for adding plan
   static int get_phy_locations(const common::ObIArray<ObTablePartitionInfo *> &partition_infos,
                                //ObIArray<ObDASTableLoc> &phy_locations,
-                               ObIArray<ObCandiTableLoc> &phy_location_infos);
+                               ObIArray<TableAccessTargets> &phy_location_infos);
 
   static int build_table_locs(ObDASCtx &das_ctx,
                               const common::ObIArray<ObTableLocation> &table_locations,
-                              const common::ObIArray<ObCandiTableLoc> &candi_table_locs);
+                              const common::ObIArray<TableAccessTargets> &table_targets);
   static int build_related_tablet_info(const ObTableLocation &table_location,
                                        ObExecContext &exec_ctx,
                                        DASRelatedTabletMap *&related_map);

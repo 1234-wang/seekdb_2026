@@ -671,7 +671,7 @@ int ObLogDelUpd::compute_sharding_info()
   } else if (!(is_pdml() || get_das_dop() > 0)) {
     is_partition_wise_ = !is_multi_part_dml_ && !child->is_exchange_allocated() &&
                          get_sharding()->is_distributed() &&
-                         NULL != get_sharding()->get_phy_table_location_info();
+                         NULL != get_sharding()->get_access_targets();
   }
   return ret;
 }

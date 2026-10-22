@@ -49,14 +49,14 @@ struct PwjTable {
 
   int init(const ObShardingInfo &info);
   int init(const share::schema::ObTableSchema &table_schema,
-           const ObCandiTableLoc &phy_tbl_info);
+           const TableAccessTargets &phy_tbl_info);
 
   TO_STRING_KV(K_(part_level), K_(part_type), K_(subpart_type),
                K_(part_number),
                K_(is_partition_single), K_(is_subpartition_single),
                K_(all_partition_indexes), K_(all_subpartition_indexes));
 
-  const ObCandiTableLoc *phy_table_loc_info_;
+  const TableAccessTargets *phy_table_loc_info_;
   // Partition level
   share::schema::ObPartitionLevel part_level_;
   // First-level partition type
@@ -121,7 +121,7 @@ public:
    * @param is_subpartition_single:
    *    whether each first-level partition involves only one second-level partition in phy_table_location_info_ of a secondary partition table
    */
-  static int extract_all_partition_indexes(const ObCandiTableLoc &phy_table_location_info,
+  static int extract_all_partition_indexes(const TableAccessTargets &phy_table_location_info,
                                            const share::schema::ObTableSchema &table_schema,
                                            ObIArray<uint64_t> &all_tablet_ids,
                                            ObIArray<int64_t> &all_partition_indexes,

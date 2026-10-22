@@ -1103,7 +1103,7 @@ SQL_UNITY_GROUPS = [
             "src/sql/optimizer/ob_opt_selectivity.cpp",
             "src/sql/optimizer/ob_optimizer.cpp",
             "src/sql/optimizer/ob_optimizer_util.cpp",
-            "src/sql/optimizer/ob_phy_table_location_info.cpp",
+            "src/sql/optimizer/table_access_targets.cpp",
             "src/sql/optimizer/ob_pwj_comparer.cpp",
             "src/sql/optimizer/ob_px_resource_analyzer.cpp",
             "src/sql/optimizer/ob_raw_expr_add_to_context.cpp",

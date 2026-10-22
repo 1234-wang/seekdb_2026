@@ -686,7 +686,7 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
       OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard()) ||
       OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (0 == insert_table_part->get_phy_tbl_location_info().get_partition_cnt()) {
+  } else if (0 == insert_table_part->get_access_targets().get_tablet_count()) {
     is_multi_part_dml = true;
     OPT_TRACE("insert table has no partition, force use multi part dml");
   } else if (use_parallel_das_dml_) {

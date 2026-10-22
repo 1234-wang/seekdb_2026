@@ -23,7 +23,7 @@
 #include "lib/allocator/page_arena.h"
 #include "sql/optimizer/ob_table_partition_info.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
+#include "sql/optimizer/table_access_targets.h"
 
 namespace oceanbase
 {
@@ -82,27 +82,27 @@ public:
                           const ObDMLStmt &stmt,
                           const uint64_t table_id,
                           const uint64_t ref_table_id,
-                          const ObCandiTableLoc &phy_table_location_info);
+                          const TableAccessTargets &phy_table_location_info);
   const common::ObIArray<ObRawExpr*> &get_partition_keys() const { return partition_keys_; }
   common::ObIArray<ObRawExpr*> &get_partition_keys() { return partition_keys_; }
   const common::ObIArray<ObRawExpr*> &get_sub_partition_keys() const { return sub_partition_keys_; }
   common::ObIArray<ObRawExpr*> &get_sub_partition_keys() { return sub_partition_keys_; }
   const common::ObIArray<ObRawExpr*> &get_partition_func() const { return part_func_exprs_; }
   common::ObIArray<ObRawExpr*> &get_partition_func() { return part_func_exprs_; }
-  inline ObCandiTableLoc *get_phy_table_location_info()
+  inline TableAccessTargets *get_access_targets()
   {
-    return const_cast<ObCandiTableLoc *>
-      (static_cast<const ObShardingInfo&>(*this).get_phy_table_location_info());
+    return const_cast<TableAccessTargets *>
+      (static_cast<const ObShardingInfo&>(*this).get_access_targets());
   }
-  inline const ObCandiTableLoc *get_phy_table_location_info() const
+  inline const TableAccessTargets *get_access_targets() const
   { return phy_table_location_info_; }
 
-  inline void set_phy_table_location_info(ObCandiTableLoc *phy_loc_info)
+  inline void set_access_targets(TableAccessTargets *phy_loc_info)
   { phy_table_location_info_ = phy_loc_info; }
 
   inline int64_t get_part_cnt() const
   {
-    return NULL == phy_table_location_info_ ? 0 : phy_table_location_info_->get_partition_cnt();
+    return NULL == phy_table_location_info_ ? 0 : phy_table_location_info_->get_tablet_count();
   }
   // Partition-related getter
   inline share::schema::ObPartitionLevel get_part_level() const { return part_level_;}
@@ -337,7 +337,7 @@ private:
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> sub_partition_keys_;
   // Partition method expr
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> part_func_exprs_;
-  const ObCandiTableLoc *phy_table_location_info_;
+  const TableAccessTargets *phy_table_location_info_;
   // first-level partition array
   share::schema::ObPartition **partition_array_;
   // All partition_id (physical partition id) in phy_table_location_info_

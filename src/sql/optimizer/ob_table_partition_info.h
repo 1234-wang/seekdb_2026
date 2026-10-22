@@ -17,7 +17,7 @@
 #ifndef OCEANBASE_SQL_OB_TABLE_PARTITION_INFO_
 #define OCEANBASE_SQL_OB_TABLE_PARTITION_INFO_
 
-#include "sql/optimizer/ob_phy_table_location_info.h"
+#include "sql/optimizer/table_access_targets.h"
 #include "sql/optimizer/ob_table_location.h"
 
 namespace oceanbase
@@ -75,13 +75,13 @@ public:
     return table_location_;
   }
 
-  const ObCandiTableLoc &get_phy_tbl_location_info() const
+  const TableAccessTargets &get_access_targets() const
   {
-    return candi_table_loc_;
+    return table_targets_;
   }
-  ObCandiTableLoc &get_phy_tbl_location_info_for_update()
+  TableAccessTargets &get_access_targets_for_update()
   {
-    return candi_table_loc_;
+    return table_targets_;
   }
 
   void set_table_location(const ObTableLocation &tbl)
@@ -93,7 +93,7 @@ public:
   uint64_t get_ref_table_id() const { return table_location_.get_ref_table_id(); }
   share::schema::ObPartitionLevel get_part_level() const { return table_location_.get_part_level(); }
   TO_STRING_KV(K_(table_location),
-               K_(candi_table_loc));
+               K_(table_targets));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTablePartitionInfo);
@@ -102,7 +102,7 @@ private:
   common::ObArenaAllocator inner_allocator_;
   ObIAllocator &allocator_;
   ObTableLocation table_location_;
-  ObCandiTableLoc candi_table_loc_;
+  TableAccessTargets table_targets_;
 };
 
 }

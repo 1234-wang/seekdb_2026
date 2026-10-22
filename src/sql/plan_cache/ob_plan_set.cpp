@@ -975,7 +975,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
   int ret = OB_SUCCESS;
   ObSqlCtx &sql_ctx = pc_ctx.sql_ctx_;
   //DASTableLocList table_locs(pc_ctx.exec_ctx_.get_allocator());
-  ObArray<ObCandiTableLoc> candi_table_locs;
+  ObArray<TableAccessTargets> table_targets;
   ObPhyPlanType plan_type = OB_PHY_PLAN_UNINITIALIZED;
   if (OB_ISNULL(plan_cache_value_) ||
       OB_ISNULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
@@ -983,7 +983,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
     SQL_PC_LOG(WARN, "invalid argument", KP(plan_cache_value_), K(ret));
   } else if (OB_FAIL(get_phy_locations(sql_ctx.get_partition_infos(),
                                        //table_locs,
-                                       candi_table_locs))) {
+                                       table_targets))) {
   } else {
     // do nothing
   }
@@ -1294,11 +1294,11 @@ int ObSqlPlanSet::build_table_locations(const ObIArray<ObTableLocation> &table_l
       }
     }
   } else {
-    ObSEArray<ObCandiTableLoc, 2> candi_table_locs;
-    if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations, pc_ctx, candi_table_locs))) {
-    } else if (!candi_table_locs.empty()
+    ObSEArray<TableAccessTargets, 2> table_targets;
+    if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations, pc_ctx, table_targets))) {
+    } else if (!table_targets.empty()
                && OB_FAIL(ObPhyLocationGetter::build_table_locs(
-                   das_ctx, table_locations, candi_table_locs))) {
+                   das_ctx, table_locations, table_targets))) {
     }
   }
   if (OB_FAIL(ret)) {
@@ -1352,12 +1352,12 @@ void ObSqlPlanSet::remove_all_plan()
 //add plan used
 int ObSqlPlanSet::get_phy_locations(const ObTablePartitionInfoArray &partition_infos,
                                     //ObIArray<ObDASTableLoc> &table_locs,
-                                    ObIArray<ObCandiTableLoc> &candi_table_locs)
+                                    ObIArray<TableAccessTargets> &table_targets)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(partition_infos,
                                                      //table_locs,
-                                                     candi_table_locs))) {
+                                                     table_targets))) {
   } else {/* do nothing */}
   return ret;
 }

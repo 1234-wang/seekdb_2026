@@ -28,7 +28,7 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
                                         const ObDMLStmt &stmt,
                                         const uint64_t table_id,
                                         const uint64_t ref_table_id,
-                                        const ObCandiTableLoc &phy_table_location_info)
+                                        const TableAccessTargets &phy_table_location_info)
 {
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard *schema_guard = NULL;
@@ -494,10 +494,10 @@ int ObShardingInfo::check_if_match_partition_wise(const EqualSets &equal_sets,
     }
     if (OB_SUCC(ret)) {
       if (NULL != left_strong_sharding &&
-          NULL != left_strong_sharding->get_phy_table_location_info() &&
+          NULL != left_strong_sharding->get_access_targets() &&
           OB_FAIL(left_sharding.push_back(left_strong_sharding))) {
       } else if (NULL != right_strong_sharding &&
-                 NULL != right_strong_sharding->get_phy_table_location_info() &&
+                 NULL != right_strong_sharding->get_access_targets() &&
                  OB_FAIL(right_sharding.push_back(right_strong_sharding))) {
       } else if (has_null_safe &&
                  OB_FAIL(check_if_match_partition_wise(equal_sets,
@@ -872,8 +872,8 @@ int ObShardingInfo::is_sharding_equal(const ObShardingInfo *left_sharding,
                                                    right_sharding->get_partition_func(),
                                                    equal_sets)) {
     is_equal = false;
-  } else if (NULL == left_sharding->get_phy_table_location_info() &&
-             NULL == right_sharding->get_phy_table_location_info()) {
+  } else if (NULL == left_sharding->get_access_targets() &&
+             NULL == right_sharding->get_access_targets()) {
     is_equal = true;
   } else if (OB_FAIL(is_compatible_partition_key(*left_sharding, *right_sharding, is_equal))) {
   } else if (!is_equal) {

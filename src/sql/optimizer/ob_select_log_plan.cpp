@@ -3497,7 +3497,7 @@ int ObSelectLogPlan::check_if_set_match_repart(const EqualSets &equal_sets,
     /* do nothing */
   } else if (OB_ISNULL(target_sharding = target_child.get_sharding())) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (!target_child.is_distributed() || NULL == target_sharding->get_phy_table_location_info()) {
+  } else if (!target_child.is_distributed() || NULL == target_sharding->get_access_targets()) {
     /* do nothing */
   } else if (OB_FAIL(target_sharding->get_all_partition_keys(target_part_keys, true))) {
   } else if (target_part_keys.empty()) {
@@ -7404,7 +7404,7 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     table_scan->set_scan_direction(index_scan->get_scan_direction());
     // Change the table_id of project table partition info
     table_scan_part_info->get_table_location().set_table_id(table_scan->get_table_id());
-    table_scan_part_info->get_phy_tbl_location_info_for_update().set_table_location_key(
+    table_scan_part_info->get_access_targets_for_update().set_table_identity(
         table_scan->get_table_id(), table_scan->get_ref_table_id());
     table_scan->set_table_partition_info(table_scan_part_info);
     table_scan->set_strong_sharding(index_scan->get_strong_sharding());

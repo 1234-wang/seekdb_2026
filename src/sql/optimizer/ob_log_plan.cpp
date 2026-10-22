@@ -795,7 +795,7 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = optimizer_context_.get_exec_ctx();
   ObSEArray<const ObTableLocation*, 1> tbl_loc_list;
-  ObSEArray<ObCandiTableLoc*, 1> phy_tbl_loc_info_list;
+  ObSEArray<TableAccessTargets*, 1> phy_tbl_loc_info_list;
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -808,7 +808,7 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
       LOG_ERROR("tbl part info is NULL", K(ret), K(i), K(tbl_part_info_list.count()));
     } else if (OB_FAIL(tbl_loc_list.push_back(&tbl_part_info->get_table_location()))) {
     } else if (OB_FAIL(phy_tbl_loc_info_list.push_back(
-                &tbl_part_info->get_phy_tbl_location_info_for_update()))) {
+                &tbl_part_info->get_access_targets_for_update()))) {
     }
   }
   if (OB_FAIL(ret)) {
@@ -822,26 +822,29 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
 int ObLogPlan::validate_local_tablets(
     ObExecContext &exec_ctx,
     const ObIArray<const ObTableLocation*> &table_locations,
-    ObIArray<ObCandiTableLoc*> &tablet_locations)
+    ObIArray<TableAccessTargets*> &tablet_locations)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(table_locations.count() != tablet_locations.count())) {
+  if (OB_UNLIKELY(!table_locations.empty()
+                  && (!GCTX.self_addr().is_valid() || exec_ctx.get_addr() != GCTX.self_addr()))) {
+    ret = OB_LOCATION_NOT_EXIST;
+  } else if (OB_UNLIKELY(table_locations.count() != tablet_locations.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table location count does not match tablet location count", K(ret),
              K(table_locations.count()), K(tablet_locations.count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_locations.count(); ++i) {
     const ObTableLocation *table_location = table_locations.at(i);
-    ObCandiTableLoc *tablet_location = tablet_locations.at(i);
+    TableAccessTargets *tablet_location = tablet_locations.at(i);
     if (OB_ISNULL(table_location) || OB_ISNULL(tablet_location)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table or tablet location is NULL", K(ret), K(i),
                 KP(table_location), KP(tablet_location));
     } else {
-      const ObCandiTabletLocIArray &tablets = tablet_location->get_phy_part_loc_info_list();
+      const TabletAccessTargetIArray &tablets = tablet_location->get_tablets();
       for (int64_t j = 0; OB_SUCC(ret) && j < tablets.count(); ++j) {
-        const ObOptTabletLoc &tablet = tablets.at(j).get_partition_location();
-        if (!tablet.is_valid() || tablet.get_server() != exec_ctx.get_addr()) {
+        const TabletAccessTarget &tablet = tablets.at(j);
+        if (!tablet.is_valid()) {
           ret = OB_LOCATION_NOT_EXIST;
         }
       }
@@ -6607,7 +6610,7 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
       bool das_multi_partition = false;
       if (table_scan->use_das() && NULL != table_scan->get_table_partition_info()) {
         int64_t partition_count = table_scan->get_table_partition_info()->
-                                  get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+                                  get_access_targets().get_tablets().count();
         if (1 != partition_count) {
           das_multi_partition = true;
         }
@@ -9156,7 +9159,7 @@ int ObLogPlan::check_location_need_multi_partition_dml(ObLogicalOperator &top,
     // than one tablet.  Such rows must carry their tablet id through the
     // multi-part DML routing path instead of being sent to the first tablet.
     is_multi_part_dml =
-        source_table_part->get_phy_tbl_location_info().get_partition_cnt() > 1;
+        source_table_part->get_access_targets().get_tablet_count() > 1;
     is_result_local = true;
   } else {
     // dml enable PX mode to decide whether to use multi part plan
@@ -10038,7 +10041,7 @@ int ObLogPlan::build_location_related_tablet_ids()
     DASRelatedTabletMap *map = nullptr;
     if (OB_ISNULL(table_part_info)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (0 == table_part_info->get_phy_tbl_location_info().get_partition_cnt()) {
+    } else if (0 == table_part_info->get_access_targets().get_tablet_count()) {
       // partition count is 0 means no matching partition for data table, no need to calculate
       // related tablet ids for it.
     } else if (!table_part_info->get_table_location().use_das() &&
@@ -10281,7 +10284,7 @@ int ObLogPlan::check_pwj_cons(const ObPwjConstraint &pwj_cons,
   ObTablePartitionInfo *first_table_partition_info = base_location_cons.at(pwj_cons.at(0)).table_partition_info_;
   if (OB_ISNULL(first_table_partition_info)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (1 == first_table_partition_info->get_phy_tbl_location_info().get_partition_cnt()) {
+  } else if (1 == first_table_partition_info->get_access_targets().get_tablet_count()) {
     // Single-partition PWJ constraints were already checked.
   } else {
     // distribute partition wise join
@@ -10303,7 +10306,7 @@ int ObLogPlan::check_pwj_cons(const ObPwjConstraint &pwj_cons,
                                                             table_schema))) {
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(table.init(*table_schema, table_part_info->get_phy_tbl_location_info()))) {
+      } else if (OB_FAIL(table.init(*table_schema, table_part_info->get_access_targets()))) {
       } else if (OB_FAIL(pwj_comparer.add_table(table, is_same))) {
       } else if (!is_same) {
         ret = OB_ERR_UNEXPECTED;

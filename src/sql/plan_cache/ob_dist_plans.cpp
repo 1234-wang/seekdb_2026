@@ -63,25 +63,25 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
       // fill table location for single plan using px
       // for single dist plan without px, we already fill the phy locations while calculating plan type
       // for multi table px plan, physical location is calculated in match step
-      ObArray<ObCandiTableLoc> candi_table_locs;
+      ObArray<TableAccessTargets> table_targets;
       if (OB_ISNULL(plan_set_)) {
         ret = OB_INVALID_ARGUMENT;
       } else if (!plan_set_->enable_inner_part_parallel()) {
         // do nothing
       } else if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(plan->get_table_locations(),
                                                                 pc_ctx,
-                                                                candi_table_locs))) {
-      } else if (candi_table_locs.empty()) {
+                                                                table_targets))) {
+      } else if (table_targets.empty()) {
         // do nothing.
       } else if (OB_FAIL(ObPhyLocationGetter::build_table_locs(
                    pc_ctx.exec_ctx_.get_das_ctx(), plan->get_table_locations(),
-                   candi_table_locs))) {
+                   table_targets))) {
       }
     }
   }
 
   ObPlanMatchHelper helper;
-  ObArray<ObCandiTableLoc> phy_tbl_infos;
+  ObArray<TableAccessTargets> phy_tbl_infos;
   ObArray<ObTableLocation> out_tbl_locations;
   for (int64_t i = 0; OB_SUCC(ret) && !is_matched && i < dist_plans_.count();
        i++) {
@@ -113,7 +113,7 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
   int ret = OB_SUCCESS;
   bool is_matched = false;
   ObPlanMatchHelper helper;
-  ObArray<ObCandiTableLoc> phy_tbl_infos;
+  ObArray<TableAccessTargets> phy_tbl_infos;
   ObArray<ObTableLocation> out_tbl_locations;
 
   for (int64_t i = 0; OB_SUCC(ret) && !is_matched && i < dist_plans_.count(); i++) {

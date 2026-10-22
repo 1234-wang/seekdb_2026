@@ -21,7 +21,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
+#include "sql/optimizer/table_access_targets.h"
 #include "sql/optimizer/ob_table_location.h"
 #include "sql/session/ob_basic_session_info.h"
 namespace oceanbase
@@ -200,12 +200,11 @@ int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
 }
 
 int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
-                                  const ObCandiTabletLoc &candi_tablet_loc,
+                                  const TabletAccessTarget &tablet_target,
                                   ObDASTabletLoc *&tablet_loc)
 {
   int ret = OB_SUCCESS;
-  const ObOptTabletLoc &opt_tablet_loc = candi_tablet_loc.get_partition_location();
-  if (OB_FAIL(table_loc.get_tablet_loc_by_id(opt_tablet_loc.get_tablet_id(), tablet_loc))) {
+  if (OB_FAIL(table_loc.get_tablet_loc_by_id(tablet_target.get_tablet_id(), tablet_loc))) {
   }
   if (OB_SUCC(ret) && tablet_loc == nullptr) {
     void *tablet_buf = allocator_.alloc(sizeof(ObDASTabletLoc));
@@ -213,9 +212,9 @@ int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       tablet_loc = new(tablet_buf) ObDASTabletLoc();
-      tablet_loc->tablet_id_ = opt_tablet_loc.get_tablet_id();
-      tablet_loc->partition_id_ = opt_tablet_loc.get_partition_id();
-      tablet_loc->first_level_part_id_ = opt_tablet_loc.get_first_level_part_id();
+      tablet_loc->tablet_id_ = tablet_target.get_tablet_id();
+      tablet_loc->partition_id_ = tablet_target.get_partition_id();
+      tablet_loc->first_level_part_id_ = tablet_target.get_first_level_part_id();
       tablet_loc->loc_meta_ = table_loc.loc_meta_;
       if (OB_FAIL(table_loc.add_tablet_loc(tablet_loc))) {
       }
@@ -322,23 +321,23 @@ int ObDASCtx::extended_table_loc(const ObDASTableLocMeta &loc_meta, ObDASTableLo
   return ret;
 }
 
-int ObDASCtx::add_candi_table_loc(const ObDASTableLocMeta &loc_meta,
-                                  const ObCandiTableLoc &candi_table_loc)
+int ObDASCtx::add_table_access_targets(const ObDASTableLocMeta &loc_meta,
+                                  const TableAccessTargets &table_targets)
 {
   int ret = OB_SUCCESS;
   ObDASTableLoc *table_loc = nullptr;
   ObDASTableLocMeta *final_meta = nullptr;
-  const ObCandiTabletLocIArray &candi_tablet_locs = candi_table_loc.get_phy_part_loc_info_list();
+  const TabletAccessTargetIArray &tablet_targets = table_targets.get_tablets();
   if (OB_FAIL(ObDASUtils::build_table_loc_meta(allocator_, loc_meta, final_meta))) {
   } else if (OB_FAIL(extended_table_loc(*final_meta, table_loc))) {
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_locs.count(); ++i) {
-    const ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_targets.count(); ++i) {
+    const TabletAccessTarget &tablet_target = tablet_targets.at(i);
     ObDASTabletLoc *tablet_loc = nullptr;
-    if (OB_FAIL(extended_tablet_loc(*table_loc, candi_tablet_loc, tablet_loc))) {
+    if (OB_FAIL(extended_tablet_loc(*table_loc, tablet_target, tablet_loc))) {
     }
   }
-  LOG_DEBUG("das table loc assign finish", K(candi_table_loc), K(loc_meta), K(table_loc->get_tablet_locs()));
+  LOG_DEBUG("das table loc assign finish", K(table_targets), K(loc_meta), K(table_loc->get_tablet_locs()));
   return ret;
 }
 

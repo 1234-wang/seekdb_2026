@@ -28,6 +28,8 @@ namespace sql
 {
 class ObDASTabletMapper;
 class ObQueryRetryInfo;
+class TabletAccessTarget;
+class TableAccessTargets;
 
 struct DmlRowkeyDistCtx
 {
@@ -116,10 +118,10 @@ public:
                           const common::ObObjectID &partition_id = OB_INVALID_ID,
                           const common::ObObjectID &first_level_part_id = OB_INVALID_ID);
   int extended_tablet_loc(ObDASTableLoc &table_loc,
-                          const ObCandiTabletLoc &candi_tablet_loc,
+                          const TabletAccessTarget &tablet_target,
                           ObDASTabletLoc *&talet_loc);
   int extended_table_loc(const ObDASTableLocMeta &loc_meta, ObDASTableLoc *&table_loc);
-  int add_candi_table_loc(const ObDASTableLocMeta &loc_meta, const ObCandiTableLoc &candi_table_loc);
+  int add_table_access_targets(const ObDASTableLocMeta &loc_meta, const TableAccessTargets &table_targets);
   int add_final_table_loc(const ObDASTableLocMeta &loc_meta,
                           const ObIArray<ObTabletID> &tablet_ids,
                           const ObIArray<ObObjectID> &partition_ids,

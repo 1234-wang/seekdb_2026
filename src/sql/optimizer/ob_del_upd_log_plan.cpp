@@ -340,7 +340,7 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
                                                           stmt,
                                                           table_id,
                                                           ref_table_id,
-                                                          table_partition_info->get_phy_tbl_location_info_for_update()))) {
+                                                          table_partition_info->get_access_targets_for_update()))) {
     } else {
     }
   }
@@ -403,7 +403,7 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_del_upd(const ObShardingInfo
   } else if (OB_FAIL(exch_info.repartition_func_exprs_.assign(source_sharding.get_partition_func()))) {
   } else if (OB_FAIL(compute_hash_dist_exprs_for_pdml_del_upd(exch_info, index_dml_info))) {
   } else if (!is_index_maintenance &&
-             OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_phy_tbl_location_info().get_partition_cnt(),
+             OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_access_targets().get_tablet_count(),
                                               exch_info.parallel_))) {
   } else {
     share::schema::ObPartitionLevel part_level = source_sharding.get_part_level();
@@ -499,7 +499,7 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
                              get_optimizer_context().get_expr_factory(),
                              exch_info))) {
   } else if (!is_index_maintenance && !is_pdml_update_split &&
-             OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_phy_tbl_location_info().get_partition_cnt(),
+             OB_FAIL(get_pdml_parallel_degree(target_table_partition.get_access_targets().get_tablet_count(),
                                               exch_info.parallel_))) {
   } else {
     share::schema::ObPartitionLevel part_level = target_sharding.get_part_level();

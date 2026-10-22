@@ -322,7 +322,7 @@ SQL_INTERFACE_CLOSURE_HEADERS = [
     "optimizer/ob_opt_selectivity.h",
     "optimizer/ob_optimizer.h",
     "optimizer/ob_optimizer_context.h",
-    "optimizer/ob_phy_table_location_info.h",
+    "optimizer/table_access_targets.h",
     "optimizer/ob_pwj_comparer.h",
     "optimizer/ob_px_resource_analyzer.h",
     "optimizer/ob_raw_expr_check_dep.h",

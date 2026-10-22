@@ -3267,9 +3267,9 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
                                                 char *buf, int64_t &buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  const ObCandiTabletLocIArray &partitions =
-    table_partition_info.get_phy_tbl_location_info().get_phy_part_loc_info_list();
-  uint64_t ref_table_id = table_partition_info.get_phy_tbl_location_info().get_ref_table_id();
+  const TabletAccessTargetIArray &partitions =
+    table_partition_info.get_access_targets().get_tablets();
+  uint64_t ref_table_id = table_partition_info.get_access_targets().get_ref_table_id();
   uint64_t table_id = table_partition_info.get_table_id();
   const bool two_level = (share::schema::PARTITION_LEVEL_TWO
                           == table_partition_info.get_part_level());
@@ -3290,7 +3290,7 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
   int64_t N = partitions.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
     ObLogicalOperator::PartInfo part_info;
-    const ObOptTabletLoc &part_loc = partitions.at(i).get_partition_location();
+    const TabletAccessTarget &part_loc = partitions.at(i);
     if (is_virtual_table(ref_table_id)) {
       if (EMPTY_VIRTUAL_TABLE_TABLET_ID == part_loc.get_partition_id()) {
 

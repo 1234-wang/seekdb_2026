@@ -428,10 +428,10 @@ class Path
     inline ObShardingInfo* try_get_sharding_with_table_location() const
     {
       ObShardingInfo *ret_sharding = NULL;
-      if (NULL != strong_sharding_ && NULL != strong_sharding_->get_phy_table_location_info()) {
+      if (NULL != strong_sharding_ && NULL != strong_sharding_->get_access_targets()) {
         ret_sharding = strong_sharding_;
       } else if (!weak_sharding_.empty() && NULL != weak_sharding_.at(0)
-                 && NULL != weak_sharding_.at(0)->get_phy_table_location_info()) {
+                 && NULL != weak_sharding_.at(0)->get_access_targets()) {
         ret_sharding = weak_sharding_.at(0);
       }
       return ret_sharding;
@@ -679,7 +679,7 @@ class Path
     bool can_das_dynamic_part_pruning() const { return can_das_dynamic_part_pruning_ > 0; }
     int64_t get_part_cnt_before_das_dynamic_part_pruning() const {
       return  can_das_dynamic_part_pruning() && NULL != table_partition_info_
-              ? table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() : 1;
+              ? table_partition_info_->get_access_targets().get_tablet_count() : 1;
     }
     virtual bool is_index_merge_path() const { return false; }
     TO_STRING_KV(K_(table_id),
@@ -1620,7 +1620,7 @@ struct NullAwareAntiJoinInfo {
                             ObIArray<int64_t> &subpart_ids,
                             int64_t &subpart_cnt_in_parts);
 
-    int get_index_partition_ids(const ObCandiTabletLocIArray &part_loc_info_array,
+    int get_index_partition_ids(const TabletAccessTargetIArray &part_loc_info_array,
                                 const share::schema::ObTableSchema &table_schema,
                                 const share::schema::ObTableSchema &index_schema,
                                 ObIArray<int64_t> &index_part_ids);

@@ -641,7 +641,7 @@ int ObPLGatherStatNode::add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> 
 
 
 ObTableLocationType ObTableLocation::get_location_type(
-    const ObCandiTabletLocIArray &phy_part_loc_info_list) const
+    const TabletAccessTargetIArray &phy_part_loc_info_list) const
 {
   // All tablets are routed locally in seekdb.  DISTRIBUTED only describes a
   // multi-tablet sharding shape so local PX can retain its partition/exchange
@@ -1262,10 +1262,10 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
   return ret;
 }
 
-int ObTableLocation::calculate_candi_tablet_locations(
+int ObTableLocation::calculate_tablet_targets(
     ObExecContext &exec_ctx,
     const ParamStore &params,
-    ObCandiTabletLocIArray &candi_tablet_locs,
+    TabletAccessTargetIArray &tablet_targets,
     const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
@@ -1280,11 +1280,10 @@ int ObTableLocation::calculate_candi_tablet_locations(
                                           partition_ids,
                                           first_level_part_ids,
                                           dtc_params))) {
-  } else if (OB_FAIL(get_tablet_locations(exec_ctx.get_das_ctx(),
-                                          tablet_ids,
+  } else if (OB_FAIL(get_tablet_targets(tablet_ids,
                                           partition_ids,
                                           first_level_part_ids,
-                                          candi_tablet_locs))) {
+                                          tablet_targets))) {
   } else {}//do nothing
 
   return ret;
@@ -1682,36 +1681,27 @@ int ObTableLocation::set_is_das_empty_part(ObExecContext &exec_ctx,
   return ret;
 }
 
-int ObTableLocation::get_tablet_locations(ObDASCtx &das_ctx,
-                                          const ObIArray<ObTabletID> &tablet_ids,
-                                          const ObIArray<ObObjectID> &partition_ids,
-                                          const ObIArray<ObObjectID> &first_level_part_ids,
-                                          ObCandiTabletLocIArray &candi_tablet_locs) const
+int ObTableLocation::get_tablet_targets(const ObIArray<ObTabletID> &tablet_ids,
+                                      const ObIArray<ObObjectID> &partition_ids,
+                                      const ObIArray<ObObjectID> &first_level_part_ids,
+                                      TabletAccessTargetIArray &tablet_targets) const
 {
   int ret = OB_SUCCESS;
   NG_TRACE(get_location_cache_begin);
-  candi_tablet_locs.reset();
+  tablet_targets.reset();
   const int64_t tablet_cnt = tablet_ids.count();
   if (OB_UNLIKELY(partition_ids.count() != tablet_cnt
                   || (!first_level_part_ids.empty()
                       && first_level_part_ids.count() != tablet_cnt))) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(candi_tablet_locs.prepare_allocate(tablet_cnt))) {
+  } else if (OB_FAIL(tablet_targets.prepare_allocate(tablet_cnt))) {
   } else {
-    UNUSED(das_ctx);
-    ObLSLocation local_location;
-    if (OB_FAIL(local_location.init(SYS_LS, GCTX.self_addr(), 1))) {
-    }
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_cnt; ++i) {
       const ObObjectID first_level_part_id = first_level_part_ids.empty()
           ? OB_INVALID_ID : first_level_part_ids.at(i);
-      if (OB_FAIL(candi_tablet_locs.at(i).set_local_location(
-                     partition_ids.at(i),
-                     first_level_part_id,
-                     tablet_ids.at(i),
-                     local_location,
-                     GCTX.self_addr()))) {
-      }
+      tablet_targets.at(i).set_tablet_info(tablet_ids.at(i),
+                                         partition_ids.at(i),
+                                         first_level_part_id);
     }
   }
   NG_TRACE(get_location_cache_end);

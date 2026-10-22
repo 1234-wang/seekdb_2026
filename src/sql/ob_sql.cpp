@@ -2798,8 +2798,8 @@ int ObSql::code_generate(
         for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_infos.count(); i++) {
           ObTableLocation &tl = tbl_part_infos.at(i)->get_table_location();
           if (!tl.use_das()) {
-            const ObCandiTableLoc &candi_table_loc = tbl_part_infos.at(i)->get_phy_tbl_location_info();
-            if (OB_FAIL(das_ctx.add_candi_table_loc(tl.get_loc_meta(), candi_table_loc))) {
+            const TableAccessTargets &table_targets = tbl_part_infos.at(i)->get_access_targets();
+            if (OB_FAIL(das_ctx.add_table_access_targets(tl.get_loc_meta(), table_targets))) {
             } else if (OB_UNLIKELY(das_ctx.get_table_loc_list().empty())) {
               ret = OB_ERR_UNEXPECTED;
             }

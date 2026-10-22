@@ -178,18 +178,18 @@ int ObAdaptiveAutoDop::build_storage_estimation_tasks(
     is_single_part = (1 == tablet_locs.size());
     part_cnt = tablet_locs.size();
     int64_t schema_version = table_schema->get_schema_version();
-    DASTabletLocSEArray candi_tablet_locs;
+    DASTabletLocSEArray tablet_targets;
     DASTabletLocSEArray chosen_tablet_locs;
-    if (OB_FAIL(candi_tablet_locs.reserve(tablet_locs.size()))) {
+    if (OB_FAIL(tablet_targets.reserve(tablet_locs.size()))) {
     } else {
       FOREACH_X(tablet_loc, tablet_locs, OB_SUCC(ret))
       {
-        if (OB_FAIL(candi_tablet_locs.push_back(*tablet_loc))) {
+        if (OB_FAIL(tablet_targets.push_back(*tablet_loc))) {
         }
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(choose_storage_estimation_partitions(MAX_EST_TASK_NUM, candi_tablet_locs,
+    } else if (OB_FAIL(choose_storage_estimation_partitions(MAX_EST_TASK_NUM, tablet_targets,
                                                             chosen_tablet_locs))) {
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < chosen_tablet_locs.count(); i++) {

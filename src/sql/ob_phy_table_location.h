@@ -23,8 +23,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObCandiTableLoc;
-class ObCandiTabletLoc;
+class TableAccessTargets;
 
 
 class ObPhyTableLocation final
@@ -35,7 +34,7 @@ public:
   ObPhyTableLocation();
   void reset();
   int assign(const ObPhyTableLocation &other);
-  int assign_from_phy_table_loc_info(const ObCandiTableLoc &other);
+  int assign_from_phy_table_loc_info(const TableAccessTargets &other);
   inline bool operator== (const ObPhyTableLocation &other) const
   {
     return table_location_key_ == other.table_location_key_ &&  ref_table_id_ == other.ref_table_id_;

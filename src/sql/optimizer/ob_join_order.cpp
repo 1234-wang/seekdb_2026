@@ -427,7 +427,7 @@ int ObJoinOrder::compute_sharding_info_with_part_info(ObTableLocationType locati
                                   *get_plan()->get_stmt(),
                                   table_partition_info->get_table_id(),
                                   table_partition_info->get_ref_table_id(),
-                                  table_partition_info->get_phy_tbl_location_info_for_update()))) {
+                                  table_partition_info->get_access_targets_for_update()))) {
     } else {
     }
   }
@@ -505,14 +505,14 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     path->ordering_.reset();
   } else if (!path->use_das_
              && !path->strong_sharding_->is_distributed()
-             && path->table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() > 1) {
+             && path->table_partition_info_->get_access_targets().get_tablet_count() > 1) {
     // A standalone local plan may cover multiple local tablets without a GI.
     // The table scan executes one task per tablet, so concatenating those tasks
     // cannot preserve the global index order (for example, for hash partitions).
     path->ordering_.reset();
   } else if (path->use_das_ &&
              !path->ordering_.empty() &&
-             path->table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() > 1) {
+             path->table_partition_info_->get_access_targets().get_tablet_count() > 1) {
     if (get_plan()->get_optimizer_context().is_das_keep_order_enabled()) {
       // when enable das keep order optimization, DAS layer can provide a guarantee of local order,
       // otherwise the order is totally not guaranteed.
@@ -524,7 +524,7 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     path->is_local_order_ = false;
   } else if (get_plan()->get_optimizer_context().is_online_ddl()) {
     path->is_local_order_ = true;
-  } else if (path->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count() == 1 &&
+  } else if (path->table_partition_info_->get_access_targets().get_tablets().count() == 1 &&
             !is_virtual_table(path->ref_table_id_)) {
     path->is_range_order_ = true;
   } else if (OB_FAIL(path->table_partition_info_->get_not_insert_dml_part_sort_expr(*get_plan()->get_stmt(),
@@ -641,7 +641,7 @@ int ObJoinOrder::get_random_parallel(const int64_t parallel_degree_limit,
                                     K(table_partition_info_->get_ref_table_id()),
                                     K(is_virtual_table(table_partition_info_->get_ref_table_id())));
   } else {
-    const int64_t part_cnt = table_partition_info_->get_phy_tbl_location_info().get_partition_cnt();
+    const int64_t part_cnt = table_partition_info_->get_access_targets().get_tablet_count();
     const bool limit_beyond_part_cnt = ObGlobalHint::UNSET_PARALLEL == parallel_degree_limit
                                        || parallel_degree_limit > part_cnt;
     int64_t parallel_type = ObRandom::rand(0, limit_beyond_part_cnt ? 2 : 1);
@@ -6712,7 +6712,7 @@ int AccessPath::compute_is_das_dynamic_part_pruning(const EqualSets &equal_sets,
              || OB_ISNULL(parent_->get_plan()->get_stmt())
              || OB_ISNULL(table_partition_info_)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() <= 1) {
+  } else if (table_partition_info_->get_access_targets().get_tablet_count() <= 1) {
     can_das_dynamic_part_pruning_ = false;
   } else {
     ObSEArray<ObRawExpr*, 8> part_keys;
@@ -7877,7 +7877,7 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
     } else {
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
       if (NULL != right_path_->get_sharding() &&
-          NULL != right_path_->get_sharding()->get_phy_table_location_info()) {
+          NULL != right_path_->get_sharding()->get_access_targets()) {
         right_part_cnt = right_path_->get_sharding()->get_part_cnt();
       }
       right_rows /= right_part_cnt;
@@ -13148,7 +13148,7 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     table_meta_info_.table_column_count_ = table_schema->get_column_count();
     table_meta_info_.micro_block_size_ = table_schema->get_block_size();
     table_meta_info_.part_count_ =
-        table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+        table_partition_info_->get_access_targets().get_tablets().count();
     table_meta_info_.schema_version_ = table_schema->get_schema_version();
   }
   if (OB_SUCC(ret)) {
@@ -13194,7 +13194,7 @@ int ObJoinOrder::fill_path_index_meta_info_for_one_ap(AccessPath *access_path)
 
     ObIndexMetaInfo &index_meta_info = access_path->est_cost_info_.index_meta_info_;
     index_meta_info.index_part_count_ =
-        access_path->table_partition_info_->get_phy_tbl_location_info().get_partition_cnt();
+        access_path->table_partition_info_->get_access_targets().get_tablet_count();
     index_meta_info.index_micro_block_size_ = table_meta_info_.micro_block_size_;
     index_meta_info.index_column_count_ = table_meta_info_.table_column_count_;
     index_meta_info.index_part_size_ = table_meta_info_.part_size_;
@@ -13534,10 +13534,10 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
     ObSEArray<ObTabletID, 64> all_used_tablet_id;
     ObSEArray<int64_t, 10> table_stat_part_ids;
     ObSEArray<int64_t, 10> hist_stat_part_ids;
-    const ObCandiTabletLocIArray &part_loc_info_array =
-              table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list();
+    const TabletAccessTargetIArray &part_loc_info_array =
+              table_partition_info_->get_access_targets().get_tablets();
     for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
-      const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
+      const TabletAccessTarget &part_loc = part_loc_info_array.at(i);
       if (OB_FAIL(all_used_part_id.push_back(part_loc.get_partition_id()))) {
       } else if (OB_FAIL(all_used_tablet_id.push_back(part_loc.get_tablet_id()))) {
       }
@@ -13632,7 +13632,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   return ret;
 }
 
-int ObJoinOrder::get_index_partition_ids(const ObCandiTabletLocIArray &part_loc_info_array,
+int ObJoinOrder::get_index_partition_ids(const TabletAccessTargetIArray &part_loc_info_array,
                                          const share::schema::ObTableSchema &table_schema,
                                          const share::schema::ObTableSchema &index_schema,
                                          ObIArray<int64_t> &index_part_ids)
@@ -13650,7 +13650,7 @@ int ObJoinOrder::get_index_partition_ids(const ObCandiTabletLocIArray &part_loc_
     ObArray<int64_t> part_idx;
     ObArray<int64_t> subpart_idx;
     for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
-      const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
+      const TabletAccessTarget &part_loc = part_loc_info_array.at(i);
       if (OB_FAIL(table_part_ids.push_back(part_loc.get_partition_id()))) {
       }
     }
@@ -13693,12 +13693,12 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t table_id,
   } else {
     ObSEArray<int64_t, 64> all_used_part_id;
     ObSEArray<int64_t, 64> table_stat_part_ids;
-    const ObCandiTabletLocIArray &part_loc_info_array =
-              table_partition_info->get_phy_tbl_location_info().get_phy_part_loc_info_list();
+    const TabletAccessTargetIArray &part_loc_info_array =
+              table_partition_info->get_access_targets().get_tablets();
 
     if (index_meta_info.is_global_index_ || is_virtual_table(index_meta_info.ref_table_id_)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
-        const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
+        const TabletAccessTarget &part_loc = part_loc_info_array.at(i);
         if (OB_FAIL(all_used_part_id.push_back(part_loc.get_partition_id()))) {
         }
       }
@@ -16892,10 +16892,10 @@ int ObJoinOrder::estimate_fts_index_scan(uint64_t table_id,
       table_meta_range.table_column_count_ = index_schema->get_column_count();
       table_meta_range.micro_block_size_ = index_schema->get_block_size();
       table_meta_range.part_count_ =
-          index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
+          index_part_info.get_access_targets().get_tablets().count();
       table_meta_range.schema_version_ = index_schema->get_schema_version();
       if (FAILEDx(ObAccessPathEstimation::storage_estimate_range_rowcount(OPT_CTX,
-                        index_part_info.get_phy_tbl_location_info().get_phy_part_loc_info_list(),
+                        index_part_info.get_access_targets().get_tablets(),
                         false,
                         &ranges,
                         table_meta_range))) {

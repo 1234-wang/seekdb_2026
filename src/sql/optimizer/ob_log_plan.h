@@ -171,7 +171,7 @@ public:
   static int validate_local_tablets(
       ObExecContext &exec_ctx,
       const common::ObIArray<const ObTableLocation*> &table_locations,
-      common::ObIArray<ObCandiTableLoc*> &tablet_locations);
+      common::ObIArray<TableAccessTargets*> &tablet_locations);
 
 public:
   ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt);
@@ -355,7 +355,7 @@ public:
                            bool index_back,
                            bool need_set,
                            double &cost);
-  int is_partition_in_same_server(const ObIArray<const ObCandiTableLoc *> &phy_location_infos,
+  int is_partition_in_same_server(const ObIArray<const TableAccessTargets *> &phy_location_infos,
                                   bool &is_same,
                                   bool &multi_part_table,
                                   common::ObAddr &first_addr);

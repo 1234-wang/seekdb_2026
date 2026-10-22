@@ -32,7 +32,7 @@ int ObTablePartitionInfo::assign(const ObTablePartitionInfo &other)
 {
   int ret = OB_SUCCESS;
   table_location_ = other.table_location_;
-  if (OB_FAIL(candi_table_loc_.assign(other.candi_table_loc_))) {
+  if (OB_FAIL(table_targets_.assign(other.table_targets_))) {
   }
   return ret;
 }
@@ -77,14 +77,13 @@ int ObTablePartitionInfo::calculate_phy_table_location_info(
                           const common::ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  ObCandiTableLoc candi_table_loc;
-  if (OB_FAIL(table_location_.calculate_candi_tablet_locations(
+  if (OB_FAIL(table_location_.calculate_tablet_targets(
                        exec_ctx,
                        params,
-                       candi_table_loc_.get_phy_part_loc_info_list_for_update(),
+                       table_targets_.get_tablets_for_update(),
                        dtc_params))) {
   } else {
-    candi_table_loc_.set_table_location_key(
+    table_targets_.set_table_identity(
         table_location_.get_table_id(), table_location_.get_ref_table_id());
   }
   return ret;
@@ -112,7 +111,7 @@ int ObTablePartitionInfo::replace_final_location_key(ObExecContext &exec_ctx,
       ref_table_id = ref_table_id;
       if (OB_FAIL(loc_meta.related_table_ids_.push_back(ref_table_id))) {
       } else if (OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(table_location_, exec_ctx, related_map))) {
-      } else if (OB_FAIL(candi_table_loc_.replace_local_index_loc(*related_map, ref_table_id))) {
+      } else if (OB_FAIL(table_targets_.replace_local_index_targets(*related_map, ref_table_id))) {
       } else if (OB_FAIL(table_location_.replace_ref_table_id(ref_table_id, exec_ctx))) {
       }
       //need to clear the related info in location meta
@@ -125,18 +124,18 @@ int ObTablePartitionInfo::replace_final_location_key(ObExecContext &exec_ctx,
       //get the real table location info use the real table id
       if (OB_FAIL(table_location_.replace_ref_table_id(ref_table_id, exec_ctx))) {
       } else if (!is_das_dyn_prune_part) {
-        candi_table_loc_.set_table_location_key(table_location_.get_table_id(), ref_table_id);
+        table_targets_.set_table_identity(table_location_.get_table_id(), ref_table_id);
       }
     }
-    LOG_TRACE("replace final location info", K(table_location_.get_loc_meta()), K(ref_table_id), K(candi_table_loc_));
+    LOG_TRACE("replace final location info", K(table_location_.get_loc_meta()), K(ref_table_id), K(table_targets_));
   }
   return ret;
 }
 
 ObTableLocationType ObTablePartitionInfo::get_location_type() const
 {
-  const ObCandiTabletLocIArray &phy_part_loc_info_list =
-      candi_table_loc_.get_phy_part_loc_info_list();
+  const TabletAccessTargetIArray &phy_part_loc_info_list =
+      table_targets_.get_tablets();
   return table_location_.get_location_type(phy_part_loc_info_list);
 }
 

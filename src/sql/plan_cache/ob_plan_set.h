@@ -363,7 +363,7 @@ private:
                             ObPlanCacheCtx &pc_ctx);
 
   int get_phy_locations(const ObTablePartitionInfoArray &partition_infos,
-                        ObIArray<ObCandiTableLoc> &candi_table_locs);
+                        ObIArray<TableAccessTargets> &table_targets);
 
   int get_plan_type(const ObIArray<ObTableLocation> &table_locations,
                     const bool is_contain_uncertain_op,

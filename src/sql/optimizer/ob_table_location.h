@@ -26,7 +26,7 @@
 #include "sql/engine/expr/ob_sql_expression_factory.h"
 #include "sql/engine/expr/ob_expr_operator_factory.h"
 #include "sql/code_generator/ob_column_index_provider.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
+#include "sql/optimizer/table_access_targets.h"
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "lib/hash/ob_pointer_hashmap.h"
@@ -423,7 +423,7 @@ public:
   };
 
   ObTableLocationType get_location_type(
-      const ObCandiTabletLocIArray &phy_part_loc_info_list) const;
+      const TabletAccessTargetIArray &phy_part_loc_info_list) const;
 
   //get virtual talbe partition ids or fake id. ref_table_id should be partitioned virtual table
   //@param [in] ref_table_id partitioned virtual table
@@ -585,13 +585,12 @@ public:
    *    ObTableLocation has been inited.
    *
    * @param params[in]  SQL parameters
-   * @param location_cache[in]  location cache
-   * @param partition_location_list[out] the table's partition_location_list
+   * @param tablet_targets[out] local tablets selected by partition calculation
    */
-  int calculate_candi_tablet_locations(
+  int calculate_tablet_targets(
       ObExecContext &exec_ctx,
       const ParamStore &params,
-      ObCandiTabletLocIArray &candi_tablet_locs,
+      TabletAccessTargetIArray &tablet_targets,
       const common::ObDataTypeCastParams &dtc_params) const;
 
   int calculate_single_tablet_partition(ObExecContext &exec_ctx,
@@ -643,11 +642,10 @@ public:
                                  common::ObIArray<common::ObTabletID> &tablet_ids,
                                  common::ObIArray<common::ObObjectID> &partition_ids);
 
-  int get_tablet_locations(ObDASCtx &das_ctx,
-                           const ObIArray<ObTabletID> &tablet_ids,
+  int get_tablet_targets(const ObIArray<ObTabletID> &tablet_ids,
                            const ObIArray<ObObjectID> &partition_ids,
                            const ObIArray<ObObjectID> &first_level_part_ids,
-                           ObCandiTabletLocIArray &candi_tablet_locs) const;
+                           TabletAccessTargetIArray &tablet_targets) const;
 
   int add_final_tablet_locations(ObDASCtx &das_ctx,
                                  const ObIArray<ObTabletID> &tablet_ids,

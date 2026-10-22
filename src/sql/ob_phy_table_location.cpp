@@ -17,7 +17,7 @@
 #define USING_LOG_PREFIX SQL
 
 #include "ob_phy_table_location.h"
-#include "sql/optimizer/ob_phy_table_location_info.h"
+#include "sql/optimizer/table_access_targets.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 namespace oceanbase
@@ -76,10 +76,10 @@ int ObPhyTableLocation::assign(const ObPhyTableLocation &other)
 
 
 
-int ObPhyTableLocation::assign_from_phy_table_loc_info(const ObCandiTableLoc &other)
+int ObPhyTableLocation::assign_from_phy_table_loc_info(const TableAccessTargets &other)
 {
   int ret = OB_SUCCESS;
-  table_location_key_ = other.get_table_location_key();
+  table_location_key_ = other.get_table_ref_id();
   ref_table_id_ = other.get_ref_table_id();
   return ret;
 }
