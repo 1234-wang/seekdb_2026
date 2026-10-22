@@ -970,7 +970,6 @@ public:
   void set_allocator(common::ObIAllocator &alloc)
   {
     allocator_ = &alloc;
-    use_inner_allocator_ = false;
   }
 
   void reset();
@@ -1182,7 +1181,6 @@ private:
   int64_t max_hold_mem_;
   common::DefaultPageAllocator inner_allocator_;
   common::ObIAllocator *allocator_;
-  bool use_inner_allocator_;
 
   uint32_t row_extend_size_;
   ObSqlMemoryCallback *callback_;

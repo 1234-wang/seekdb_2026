@@ -312,6 +312,27 @@ TEST(TestWorkareaMemoryPolicy, explicit_local_limits_and_overflow)
   EXPECT_TRUE(should_spill_workarea(INT64_MAX, INT64_MAX, 1));
 }
 
+TEST(TestWorkareaMemoryPolicy, chunk_datum_store_uses_explicit_allocator)
+{
+  DefaultPageAllocator backing(ObMemAttr("WAExternal", ObCtxIds::WORK_AREA));
+  const TestStoredRow row(128);
+  for (const bool use_setter : {false, true}) {
+    FailingAllocator allocator(backing);
+    ObChunkDatumStore store("WAExternal", use_setter ? nullptr : &allocator);
+    if (use_setter) {
+      store.set_allocator(allocator);
+    }
+    ASSERT_EQ(OB_SUCCESS, store.init(0, ObCtxIds::WORK_AREA, "WAExternal", false,
+        0, ObChunkDatumStore::MIN_BLOCK_SIZE));
+    allocator.arm();
+    EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, store.add_row(row.get()));
+    EXPECT_EQ(1, allocator.failures());
+    ASSERT_EQ(OB_SUCCESS, store.add_row(row.get()));
+    EXPECT_EQ(1, store.get_row_cnt());
+    store.reset();
+  }
+}
+
 TEST(TestWorkareaMemoryPolicy, budget_is_not_allocation_admission)
 {
   TestSqlMemoryManagerGuard guard;

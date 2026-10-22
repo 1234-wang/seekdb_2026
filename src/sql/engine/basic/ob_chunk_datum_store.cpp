@@ -467,7 +467,6 @@ ObChunkDatumStore::ObChunkDatumStore(const lib::ObLabel &label, common::ObIAlloc
     mem_hold_(0), mem_used_(0), max_hold_mem_(0),
     inner_allocator_(lib::ObMemAttr(label)),
     allocator_(NULL == alloc ? &inner_allocator_ : alloc),
-    use_inner_allocator_(NULL == alloc),
     row_extend_size_(0), callback_(nullptr), batch_ctx_(NULL),
     tmp_dump_blk_(nullptr)
 {
@@ -487,7 +486,7 @@ int ObChunkDatumStore::init(int64_t mem_limit,
   enable_dump_ = enable_dump;
   
   ctx_id_ = mem_ctx_id;
-  if (use_inner_allocator_) {
+  if (allocator_ == &inner_allocator_) {
     const ObMemAttr attr(label_, ctx_id_);
     inner_allocator_.set_attr(attr);
   }
