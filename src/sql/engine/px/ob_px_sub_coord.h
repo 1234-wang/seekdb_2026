@@ -85,8 +85,8 @@ public:
       ObOpSpec &root,
       ObSqcCtx &sqc_ctx,
       const DASRuntimeTabletIArray &tsc_locations,
-      const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
-  int rebuild_sqc_access_table_locations();
+      const ObIArray<SqcTabletAccessKey> &tsc_location_keys);
+  int rebuild_sqc_tablet_accesses();
   void set_is_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
   int get_participants(ObPxSqcMeta &sqc,
                        const int64_t table_id,
@@ -98,15 +98,15 @@ private:
                      ObOpSpec &root,
                      ObSqcCtx &sqc_ctx,
                      const DASRuntimeTabletIArray &tsc_locations,
-                     const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
+                     const ObIArray<SqcTabletAccessKey> &tsc_location_keys);
   int setup_gi_op_input(ObExecContext &ctx,
                         ObOpSpec &root,
                         ObSqcCtx &sqc_ctx,
                         const DASRuntimeTabletIArray &tsc_locations,
-                        const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
+                        const ObIArray<SqcTabletAccessKey> &tsc_location_keys);
   int get_tsc_or_dml_op_tablets(ObOpSpec &root,
                                 const DASRuntimeTabletIArray &tsc_locations,
-                                const common::ObIArray<ObSqcTableLocationKey> &tsc_location_keys,
+                                const common::ObIArray<SqcTabletAccessKey> &tsc_location_keys,
                                 common::ObIArray<const ObTableScanSpec*> &scan_ops,
                                 common::ObIArray<DASRuntimeTabletArray> &tablets_array);
   int link_sqc_qc_channel(ObPxInitSqcArgs &sqc_arg);

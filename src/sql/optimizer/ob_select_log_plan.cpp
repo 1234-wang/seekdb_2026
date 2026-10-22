@@ -7403,7 +7403,7 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     table_scan->set_index_table_id(index_scan->get_ref_table_id());
     table_scan->set_scan_direction(index_scan->get_scan_direction());
     // Change the table_id of project table partition info
-    table_scan_part_info->get_table_location().set_table_id(table_scan->get_table_id());
+    table_scan_part_info->get_table_access_plan().set_table_id(table_scan->get_table_id());
     table_scan_part_info->get_access_targets_for_update().set_table_identity(
         table_scan->get_table_id(), table_scan->get_ref_table_id());
     table_scan->set_table_partition_info(table_scan_part_info);

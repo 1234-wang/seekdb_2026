@@ -695,7 +695,7 @@ int ObLogDelUpd::compute_plan_type()
   return ret;
 }
 
-int ObLogDelUpd::get_table_location_type(ObTableLocationType &type)
+int ObLogDelUpd::get_table_location_type(TableAccessShape &type)
 {
   int ret = OB_SUCCESS;
   type = OB_TBL_LOCATION_UNINITIALIZED;

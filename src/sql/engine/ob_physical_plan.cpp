@@ -66,8 +66,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     contain_table_scan_(false),
     has_nested_sql_(false),
     session_id_(0),
-    table_locations_(allocator_),
-    das_table_locations_(allocator_),
+    table_access_plans_(allocator_),
+    das_table_access_plans_(allocator_),
     row_param_map_(allocator_),
     is_update_uniq_index_(false),
     contain_index_location_(false),
@@ -651,24 +651,24 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     px_parallel_rule_,
                     px_worker_share_plan_enabled_);
 
-int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
+int ObPhysicalPlan::set_table_access_plans(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  table_locations_.reset();
-  das_table_locations_.reset();
-  if (OB_FAIL(table_locations_.prepare_allocate_and_keep_count(infos.count(),
+  table_access_plans_.reset();
+  das_table_access_plans_.reset();
+  if (OB_FAIL(table_access_plans_.prepare_allocate_and_keep_count(infos.count(),
                                                  allocator_))) {
-  } else if (OB_FAIL(das_table_locations_.prepare_allocate_and_keep_count(infos.count(),
+  } else if (OB_FAIL(das_table_access_plans_.prepare_allocate_and_keep_count(infos.count(),
                                                             allocator_))) {
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-    ObTableLocation &tl = infos.at(i)->get_table_location();
+    TableAccessPlan &tl = infos.at(i)->get_table_access_plan();
     const ObTableSchema *table_schema = nullptr;
     if (tl.use_das()) {
-      if (OB_FAIL(das_table_locations_.push_back(tl))) {
+      if (OB_FAIL(das_table_access_plans_.push_back(tl))) {
       }
-    } else if (OB_FAIL(table_locations_.push_back(tl))) {
+    } else if (OB_FAIL(table_access_plans_.push_back(tl))) {
     } else if (OB_FAIL(schema_guard.get_table_schema( tl.get_ref_table_id(), table_schema))) {
     } else {
       contain_index_location_ |= table_schema->is_index_table();
@@ -679,7 +679,7 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
   return ret;
 }
 
-int ObPhysicalPlan::set_location_constraints(const ObIArray<LocationConstraint> &base_constraints,
+int ObPhysicalPlan::set_location_constraints(const ObIArray<TableAccessConstraint> &base_constraints,
                                              const ObIArray<ObPwjConstraint *> &strict_constraints,
                                              const ObIArray<ObPwjConstraint *> &non_strict_constraints)
 {
@@ -761,8 +761,8 @@ int ObPhysicalPlan::set_location_constraints(const ObIArray<LocationConstraint> 
 bool ObPhysicalPlan::has_same_location_constraints(const ObPhysicalPlan &r) const
 {
   bool is_same = true;
-  const ObIArray<LocationConstraint>& l_base_cons = get_base_constraints();
-  const ObIArray<LocationConstraint>& r_base_cons = r.get_base_constraints();
+  const ObIArray<TableAccessConstraint>& l_base_cons = get_base_constraints();
+  const ObIArray<TableAccessConstraint>& r_base_cons = r.get_base_constraints();
   const ObIArray<ObPlanPwjConstraint>& l_non_strict_cons = get_non_strict_constraints();
   const ObIArray<ObPlanPwjConstraint>& r_non_strict_cons = r.get_non_strict_constraints();
   const ObIArray<ObPlanPwjConstraint>& l_strict_cons = get_strict_constraints();

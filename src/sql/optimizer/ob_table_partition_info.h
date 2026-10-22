@@ -18,7 +18,7 @@
 #define OCEANBASE_SQL_OB_TABLE_PARTITION_INFO_
 
 #include "sql/optimizer/table_access_targets.h"
-#include "sql/optimizer/ob_table_location.h"
+#include "sql/optimizer/table_access_plan.h"
 
 namespace oceanbase
 {
@@ -34,7 +34,7 @@ public:
   {}
   ObTablePartitionInfo(common::ObIAllocator &allocator)
   : allocator_(allocator),
-  table_location_(allocator)
+  table_access_plan_(allocator)
   {}
   virtual ~ObTablePartitionInfo() {}
 
@@ -63,16 +63,16 @@ public:
 
   int set_table_location_direction(const ObOrderDirection &direction);
   int fill_phy_tbl_loc_info_direction();
-  ObTableLocationType get_location_type() const;
+  TableAccessShape get_location_type() const;
 
-  ObTableLocation &get_table_location()
+  TableAccessPlan &get_table_access_plan()
   {
-    return table_location_;
+    return table_access_plan_;
   }
 
-  const ObTableLocation &get_table_location() const
+  const TableAccessPlan &get_table_access_plan() const
   {
-    return table_location_;
+    return table_access_plan_;
   }
 
   const TableAccessTargets &get_access_targets() const
@@ -84,15 +84,15 @@ public:
     return table_targets_;
   }
 
-  void set_table_location(const ObTableLocation &tbl)
+  void set_table_access_plan(const TableAccessPlan &tbl)
   {
-    table_location_ = tbl;
+    table_access_plan_ = tbl;
   }
 
-  uint64_t get_table_id() const { return table_location_.get_table_id(); }
-  uint64_t get_ref_table_id() const { return table_location_.get_ref_table_id(); }
-  share::schema::ObPartitionLevel get_part_level() const { return table_location_.get_part_level(); }
-  TO_STRING_KV(K_(table_location),
+  uint64_t get_table_id() const { return table_access_plan_.get_table_id(); }
+  uint64_t get_ref_table_id() const { return table_access_plan_.get_ref_table_id(); }
+  share::schema::ObPartitionLevel get_part_level() const { return table_access_plan_.get_part_level(); }
+  TO_STRING_KV(K_(table_access_plan),
                K_(table_targets));
 
 private:
@@ -101,7 +101,7 @@ private:
 private:
   common::ObArenaAllocator inner_allocator_;
   ObIAllocator &allocator_;
-  ObTableLocation table_location_;
+  TableAccessPlan table_access_plan_;
   TableAccessTargets table_targets_;
 };
 

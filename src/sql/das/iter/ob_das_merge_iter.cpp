@@ -177,7 +177,7 @@ common::ObIAllocator *ObDASMergeIter::get_das_alloc()
   return alloc;
 }
 
-int ObDASMergeIter::create_das_task(const DASRuntimeTabletAccess *tablet_loc, ObDASScanOp *&scan_op, bool &reuse_op)
+int ObDASMergeIter::create_das_task(const DASRuntimeTabletAccess *tablet_access, ObDASScanOp *&scan_op, bool &reuse_op)
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
@@ -185,10 +185,10 @@ int ObDASMergeIter::create_das_task(const DASRuntimeTabletAccess *tablet_loc, Ob
   reuse_op = false;
   if (OB_ISNULL(das_ref_)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_NOT_NULL(task_op = das_ref_->find_das_task(tablet_loc, op_type))) {
+  } else if (OB_NOT_NULL(task_op = das_ref_->find_das_task(tablet_access, op_type))) {
     // reuse scan op
     reuse_op = true;
-  } else if (OB_FAIL(das_ref_->create_das_task(tablet_loc, op_type, task_op))) {
+  } else if (OB_FAIL(das_ref_->create_das_task(tablet_access, op_type, task_op))) {
   }
   if (OB_SUCC(ret)) {
     scan_op = static_cast<ObDASScanOp*>(task_op);
@@ -432,26 +432,26 @@ int ObDASMergeIter::update_output_tablet_id(ObIDASTaskOp *output_das_task)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(pdml_partition_id_) && OB_NOT_NULL(eval_ctx_) && OB_NOT_NULL(output_das_task)) {
-    const DASRuntimeTabletAccess *tablet_loc = nullptr;
+    const DASRuntimeTabletAccess *tablet_access = nullptr;
     int64_t output_id = OB_INVALID_ID;
     if (partition_id_calc_type_ > 0) {
-      tablet_loc = output_das_task->get_tablet_loc();
+      tablet_access = output_das_task->get_tablet_access();
     } else if (should_scan_index_) {
-      tablet_loc = ObDASUtils::get_related_tablet_loc(*output_das_task->get_tablet_loc(), ref_table_id_);
+      tablet_access = ObDASUtils::get_related_tablet_access(*output_das_task->get_tablet_access(), ref_table_id_);
     } else {
-      tablet_loc = output_das_task->get_tablet_loc();
+      tablet_access = output_das_task->get_tablet_access();
     }
 
-    if (OB_ISNULL(tablet_loc)) {
+    if (OB_ISNULL(tablet_access)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
       if (partition_id_calc_type_ == 0) {
-        output_id = tablet_loc->tablet_id_.id();
+        output_id = tablet_access->tablet_id_.id();
       } else if (partition_id_calc_type_ == 1) {
-        output_id = tablet_loc->first_level_part_id_ != OB_INVALID_ID ?
-                    tablet_loc->first_level_part_id_ : tablet_loc->partition_id_;
+        output_id = tablet_access->first_level_part_id_ != OB_INVALID_ID ?
+                    tablet_access->first_level_part_id_ : tablet_access->partition_id_;
       } else if (partition_id_calc_type_ == 2) {
-        output_id = tablet_loc->partition_id_;
+        output_id = tablet_access->partition_id_;
       } else {
         ret = OB_INVALID_ARGUMENT;
       }
@@ -625,7 +625,7 @@ int ObDASMergeIter::get_next_sorted_row()
       ret = OB_ITER_END;
     } else {
       if (need_update_partition_id_) {
-        ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_;
+        ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_access()->tablet_id_;
         if (OB_FAIL(update_output_tablet_id(das_tasks_arr_[output_idx]))) {
         }
       }
@@ -717,7 +717,7 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
         // We need keep the datum points to the frame.
         reset_wild_datum_ptr();
         if (need_update_partition_id_) {
-          ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_loc()->tablet_id_;
+          ObTabletID tablet_id = das_tasks_arr_[output_idx]->get_tablet_access()->tablet_id_;
           if (OB_FAIL(update_output_tablet_id(das_tasks_arr_[output_idx]))) {
           }
         }

@@ -107,22 +107,22 @@ public:
   }
 
   int init(const ObPhysicalPlan &plan, ObExecContext &ctx);
-  DASRuntimeTableAccess *find_table_access(uint64_t table_loc_id, uint64_t ref_table_id);
+  DASRuntimeTableAccess *find_table_access(uint64_t table_ref_id, uint64_t ref_table_id);
   DASRuntimeTableList &get_table_accesses() { return table_accesses_; }
   const DASRuntimeTableList &get_table_accesses() const { return table_accesses_; }
   DASDelCtxList& get_das_del_ctx_list() { return del_ctx_list_; }
   DASTableIdList& get_parent_table_set() { return parent_table_set_; }
-  int ensure_tablet_access(DASRuntimeTableAccess &table_loc,
+  int ensure_tablet_access(DASRuntimeTableAccess &table_access,
                           const common::ObTabletID &tablet_id,
-                          DASRuntimeTabletAccess *&tablet_loc,
+                          DASRuntimeTabletAccess *&tablet_access,
                           const common::ObObjectID &partition_id = OB_INVALID_ID,
                           const common::ObObjectID &first_level_part_id = OB_INVALID_ID);
-  int ensure_tablet_access(DASRuntimeTableAccess &table_loc,
+  int ensure_tablet_access(DASRuntimeTableAccess &table_access,
                           const TabletAccessTarget &tablet_target,
                           DASRuntimeTabletAccess *&talet_loc);
-  int ensure_table_access(const DASTableAccessMeta &loc_meta, DASRuntimeTableAccess *&table_loc);
-  int add_table_access_targets(const DASTableAccessMeta &loc_meta, const TableAccessTargets &table_targets);
-  int add_final_table_access(const DASTableAccessMeta &loc_meta,
+  int ensure_table_access(const DASTableAccessMeta &access_meta, DASRuntimeTableAccess *&table_access);
+  int add_table_access_targets(const DASTableAccessMeta &access_meta, const TableAccessTargets &table_targets);
+  int add_final_table_access(const DASTableAccessMeta &access_meta,
                           const ObIArray<ObTabletID> &tablet_ids,
                           const ObIArray<ObObjectID> &partition_ids,
                           const ObIArray<ObObjectID> &first_level_part_ids);
@@ -155,8 +155,8 @@ public:
   void set_retry_info(const ObQueryRetryInfo *retry_info);
   // Successful cleanup and unrelated errors must not erase a retry error.
   void record_access_error(int err_no);
-  int build_related_tablet_accesses(DASRuntimeTabletAccess &tablet_loc);
-  int build_related_table_accesses(DASRuntimeTableAccess &table_loc);
+  int build_related_tablet_accesses(DASRuntimeTabletAccess &tablet_access);
+  int build_related_table_accesses(DASRuntimeTableAccess &table_access);
   int rebuild_tablet_access_links();
   const GroupParamArray* get_group_params() { return group_params_; }
   int64_t get_current_group_id() const { return current_group_id_; }
@@ -169,7 +169,7 @@ public:
   ObDASTaskFactory &get_das_factory() { return das_factory_; }
   void set_sql_ctx(ObSqlCtx *sql_ctx) { sql_ctx_ = sql_ctx; }
   DASRelatedTabletMap &get_related_tablet_map() { return related_tablet_map_; }
-  int build_related_tablet_map(const DASTableAccessMeta &loc_meta);
+  int build_related_tablet_map(const DASTableAccessMeta &access_meta);
 
   int find_group_param_by_param_idx(int64_t param_idx,
                                     bool &exist, uint64_t &array_idx);

@@ -362,7 +362,7 @@ private:
   
   
   int generate_fk_table_loc_info(uint64_t index_table_id,
-                                 DASTableAccessMeta &loc_meta,
+                                 DASTableAccessMeta &access_meta,
                                  ObTabletID &tablet_id,
                                  bool &is_part_table_);
   
@@ -422,7 +422,7 @@ private:
                                      const IndexDMLInfo &index_dml_info,
                                      ObDASDMLBaseCtDef &das_dml_ctdef);
 private:
-  int generate_table_loc_meta(const IndexDMLInfo &index_dml_info, DASTableAccessMeta &loc_meta);
+  int generate_table_access_meta(const IndexDMLInfo &index_dml_info, DASTableAccessMeta &access_meta);
 private:
   ObStaticEngineCG &cg_;
 };

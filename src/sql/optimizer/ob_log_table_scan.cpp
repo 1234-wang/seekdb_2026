@@ -2219,7 +2219,7 @@ bool ObLogTableScan::is_need_feedback() const
   return ret;
 }
 
-int ObLogTableScan::get_phy_location_type(ObTableLocationType &location_type)
+int ObLogTableScan::get_phy_location_type(TableAccessShape &location_type)
 {
   int ret = OB_SUCCESS;
   ObShardingInfo *sharding = get_sharding();

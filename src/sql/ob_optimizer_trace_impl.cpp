@@ -349,7 +349,7 @@ int ObOptimizerTraceImpl::append(const OpParallelRule& rule)
   return ret;
 }
 
-int ObOptimizerTraceImpl::append(const ObTableLocationType& type)
+int ObOptimizerTraceImpl::append(const TableAccessShape& type)
 {
   int ret = OB_SUCCESS;
   switch(type) {
@@ -790,14 +790,14 @@ int ObOptimizerTraceImpl::append(const ObNewRange &range)
   return ret;
 }
 
-int ObOptimizerTraceImpl::append(const TabletAccessTarget& tablet_loc)
+int ObOptimizerTraceImpl::append(const TabletAccessTarget& tablet_access)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(append("(partition id:", tablet_loc.get_partition_id()))) {
-  } else if (tablet_loc.get_first_level_part_id() >= 0 &&
-             OB_FAIL(append(", first level partition id:", tablet_loc.get_first_level_part_id()))) {
+  if (OB_FAIL(append("(partition id:", tablet_access.get_partition_id()))) {
+  } else if (tablet_access.get_first_level_part_id() >= 0 &&
+             OB_FAIL(append(", first level partition id:", tablet_access.get_first_level_part_id()))) {
   } else if (OB_FAIL(append(", tablet id:"))) {
-  } else if (OB_FAIL(append(tablet_loc.get_tablet_id().id()))) {
+  } else if (OB_FAIL(append(tablet_access.get_tablet_id().id()))) {
   } else if (OB_FAIL(append(")"))) {
   }
   return ret;

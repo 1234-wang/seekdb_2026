@@ -1346,15 +1346,15 @@ public:
   /**
    * Generate a table's location constraint for pdml index maintain op
    */
-  int get_tbl_loc_cons_for_pdml_index(LocationConstraint &loc_cons);
+  int get_tbl_loc_cons_for_pdml_index(TableAccessConstraint &loc_cons);
   /**
    * Generate a table's location constraint for table scan op
    */
-  int get_tbl_loc_cons_for_scan(LocationConstraint &loc_cons);
+  int get_tbl_loc_cons_for_scan(TableAccessConstraint &loc_cons);
   /**
    * @brief Generate a table's location constraint for insert op
    */
-  int get_tbl_loc_cons_for_insert(LocationConstraint &loc_cons, bool &is_multi_part_dml);
+  int get_tbl_loc_cons_for_insert(TableAccessConstraint &loc_cons, bool &is_multi_part_dml);
 
   int get_table_scan(ObLogicalOperator *&tsc, uint64_t table_id);
 
@@ -1874,12 +1874,12 @@ protected:
   // Non-strict partition wise join constraint, requires the base table partitions within the group to be physically identical
   ObPwjConstraint non_strict_pwj_constraint_;
   // The physical distribution of the dependent tables
-  //ObLocationConstraint if there is only one element, then only need to constrain whether the location type is consistent;
+  //TableAccessConstraints if there is only one element, then only need to constrain whether the location type is consistent;
   //                    If there are multiple elements, then each location's corresponding physical distribution needs to be verified to be the same
-  ObLocationConstraint location_constraint_;
+  TableAccessConstraints location_constraint_;
   // Used for constraint extraction of multi part dml
   // multi_part_location_constraint_ can only have one constraint element
-  ObLocationConstraint multi_part_location_constraint_;
+  TableAccessConstraints multi_part_location_constraint_;
   bool exchange_allocated_;
   ObPhyPlanType phy_plan_type_;
   ObPhyPlanType location_type_;

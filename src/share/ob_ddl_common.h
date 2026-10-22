@@ -23,7 +23,6 @@ namespace oceanbase { namespace common { struct ObDatum; } }
 #include "share/config/ob_server_config.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
-#include "share/location_cache/ob_location_struct.h"
 #include "common/ob_role.h"
 #include "share/tablet/ob_tablet_read_mode.h"
 #include "share/ob_batch_selector.h"

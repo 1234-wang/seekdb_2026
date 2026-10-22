@@ -139,12 +139,12 @@ class ObPxSqcDistributionUtil
 public:
   ObPxSqcDistributionUtil() = default;
   ~ObPxSqcDistributionUtil() = default;
-  static int alloc_by_data_distribution(const ObIArray<ObTableLocation> *table_locations,
+  static int alloc_by_data_distribution(const ObIArray<TableAccessPlan> *table_access_plans,
                                         ObExecContext &ctx,
                                         ObDfo &dfo);
 
   static int alloc_by_data_distribution_inner(
-      const ObIArray<ObTableLocation> *table_locations,
+      const ObIArray<TableAccessPlan> *table_access_plans,
       ObExecContext &ctx, ObDfo &dfo);
   static int alloc_by_child_distribution(const ObDfo &child,
                                          ObDfo &parent);
@@ -155,7 +155,7 @@ public:
   static int alloc_by_local_distribution(ObExecContext &exec_ctx,
                                          ObDfo &root);
   static int alloc_by_reference_child_distribution(ObDfo &parent);
-  static int alloc_distribution_of_reference_child(const ObIArray<ObTableLocation> *table_locations,
+  static int alloc_distribution_of_reference_child(const ObIArray<TableAccessPlan> *table_access_plans,
                                                    ObExecContext &exec_ctx,
                                                    ObDfo &parent);
   static int find_reference_child(ObDfo &parent, ObDfo *&reference_child);
@@ -185,7 +185,7 @@ private:
       ObBaseOrderMap &base_order_map, int64_t op_id,
       ObIArray<std::pair<int64_t, bool>> &locations_order);
   static int build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec*> &scan_ops,
-      const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo);
+      const ObIArray<TableAccessPlan> *table_access_plans, ObDfo &dfo);
 
   static int build_dfo_sqc(ObExecContext &ctx,
                            const DASRuntimeTabletList &locations,
@@ -203,19 +203,19 @@ private:
    *       corresponding to insert and tsc in the presence of INSERT
    */
   static int set_dfo_accessed_location(ObExecContext &ctx,
-                                       int64_t base_table_location_key,
+                                       int64_t base_table_ref_id,
                                        ObDfo &dfo,
                                        common::ObIArray<const ObTableScanSpec *> &scan_ops,
                                        const ObTableModifySpec* dml_op,
                                        DASRuntimeTableAccess *dml_loc);
   /**
-   * Add the partition information (table_loc) involved in the
+   * Add the partition information (table_access) involved in the
    * current phy_op to the corresponding SQC access location
    */
   static int set_sqcs_accessed_location(
-      ObExecContext &ctx, int64_t base_table_location_key, ObDfo &dfo,
+      ObExecContext &ctx, int64_t base_table_ref_id, ObDfo &dfo,
       ObBaseOrderMap &base_order_map,
-      const DASRuntimeTableAccess *table_loc, const ObOpSpec *phy_op,
+      const DASRuntimeTableAccess *table_access, const ObOpSpec *phy_op,
       ObIArray<std::pair<int64_t, bool>> &locations_order);
   /**
    * Get the access sequence of the partition of the current phy_op,
@@ -260,7 +260,7 @@ public:
 };
 
 
-class ObPxPartitionLocationUtil
+class PxTabletAccessUtil
 {
 public:
   /**
@@ -272,8 +272,8 @@ public:
    */
   static int get_all_tables_tablets(const common::ObIArray<const ObTableScanSpec*> &scan_ops,
                                     const DASRuntimeTabletIArray &all_locations,
-                                    const common::ObIArray<ObSqcTableLocationKey> &tsc_location_keys,
-                                    ObSqcTableLocationKey dml_location_key,
+                                    const common::ObIArray<SqcTabletAccessKey> &tsc_location_keys,
+                                    SqcTabletAccessKey dml_location_key,
                                     common::ObIArray<DASRuntimeTabletArray> &tablets);
 };
 
@@ -873,7 +873,7 @@ private:
                                          ObDfo &child,
                                          ObPxPartChMapArray &map);
 
-  static int get_pkey_table_locations(int64_t table_location_key,
+  static int get_pkey_tablet_accesses(int64_t table_ref_id,
       ObPxSqcMeta &sqc,
       DASRuntimeTabletIArray &pkey_locations);
 };

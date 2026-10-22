@@ -26,7 +26,7 @@
 #include "sql/engine/expr/ob_expr_operator_factory.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/executor/ob_executor.h"
-#include "sql/optimizer/ob_table_location.h"
+#include "sql/optimizer/table_access_plan.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/plan_cache/ob_cache_object.h"
 #include "sql/engine/expr/ob_sql_expression_factory.h"
@@ -54,7 +54,7 @@ class ObSqlSchemaGuard;
 
 //class ObPhysicalPlan: public common::ObDLinkBase<ObPhysicalPlan>
 typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>, common::ObIAllocator> PhyRowParamMap;
-typedef common::ObFixedArray<ObTableLocation, common::ObIAllocator> TableLocationFixedArray;
+typedef common::ObFixedArray<TableAccessPlan, common::ObIAllocator> TableAccessPlanArray;
 typedef common::ObFixedArray<ObPlanPwjConstraint, common::ObIAllocator> PlanPwjConstraintArray;
 
 class ObPhysicalPlan : public ObPlanCacheObject
@@ -227,12 +227,12 @@ public:
   void set_session_id(uint64_t v) { session_id_ = v; }
   uint64_t get_session_id() const { return session_id_; }
   bool contains_temp_table() const {return 0 != session_id_; }
-  bool use_das() const { return !das_table_locations_.empty(); }
-  int set_table_locations(const ObIArray<ObTablePartitionInfo *> &info,
+  bool use_das() const { return !das_table_access_plans_.empty(); }
+  int set_table_access_plans(const ObIArray<ObTablePartitionInfo *> &info,
                           share::schema::ObSchemaGetterGuard &schema_guard);
-  common::ObIArray<ObTableLocation> &get_table_locations() { return table_locations_; }
-  const common::ObIArray<ObTableLocation> &get_table_locations() const { return table_locations_; }
-  const common::ObIArray<ObTableLocation> &get_das_table_locations() const { return das_table_locations_; }
+  common::ObIArray<TableAccessPlan> &get_table_access_plans() { return table_access_plans_; }
+  const common::ObIArray<TableAccessPlan> &get_table_access_plans() const { return table_access_plans_; }
+  const common::ObIArray<TableAccessPlan> &get_das_table_access_plans() const { return das_table_access_plans_; }
 
   inline const share::schema::ObStmtNeedPrivs &get_stmt_need_privs() const { return stmt_need_privs_; }
   int set_stmt_need_privs(const share::schema::ObStmtNeedPrivs& stmt_need_privs);
@@ -298,13 +298,13 @@ public:
   int64_t get_access_table_num() const { return stat_.access_table_num_; }
   ObTableRowCount *&get_table_row_count_first_exec() { return stat_.table_row_count_first_exec_; }
 
-  ObIArray<LocationConstraint>& get_base_constraints() { return base_constraints_; }
-  const ObIArray<LocationConstraint>& get_base_constraints() const { return base_constraints_; }
+  ObIArray<TableAccessConstraint>& get_base_constraints() { return base_constraints_; }
+  const ObIArray<TableAccessConstraint>& get_base_constraints() const { return base_constraints_; }
   ObIArray<ObPlanPwjConstraint>& get_strict_constraints() { return strict_constrinats_; }
   const ObIArray<ObPlanPwjConstraint>& get_strict_constraints() const { return strict_constrinats_; }
   ObIArray<ObPlanPwjConstraint>& get_non_strict_constraints() { return non_strict_constrinats_; }
   const ObIArray<ObPlanPwjConstraint>& get_non_strict_constraints() const { return non_strict_constrinats_; }
-  int set_location_constraints(const ObIArray<LocationConstraint> &base_constraints,
+  int set_location_constraints(const ObIArray<TableAccessConstraint> &base_constraints,
                                const ObIArray<ObPwjConstraint *> &strict_constraints,
                                const ObIArray<ObPwjConstraint *> &non_strict_constraints);
   bool has_same_location_constraints(const ObPhysicalPlan &r) const;
@@ -450,8 +450,8 @@ private:
   uint64_t  session_id_; // When the plan includes temporary tables, record table_schema->session_id, used to determine if the plan can be reused
 
   //for plan cache, not need serialize
-  TableLocationFixedArray table_locations_; // ordinary table's table location, participate in plan cache plan selection
-  TableLocationFixedArray das_table_locations_; // DAS table's table location, used for calculating DAS partition information
+  TableAccessPlanArray table_access_plans_; // ordinary table's table location, participate in plan cache plan selection
+  TableAccessPlanArray das_table_access_plans_; // DAS table's table location, used for calculating DAS partition information
 
   PhyRowParamMap row_param_map_;
   bool is_update_uniq_index_;
@@ -459,7 +459,7 @@ private:
   bool contain_index_location_;
   // Used for distributed plan comparison
   // Base table location constraint, including base tables on TABLE_SCAN operator and base tables on INSERT operator
-  ObPlanLocationConstraint base_constraints_;
+  PlanTableAccessConstraints base_constraints_;
   // Strict partition-wise join constraint, requires that the base table partitions within the same group are logically and physically equal.
   // Each group is an array, saving the offset of the corresponding base table in base_table_constraints_
   // If t1, t2 need to satisfy strict constraints, then for each partition of t1 (after partition pruning), there must be a corresponding partition of t2 with the same definition (after partition pruning)

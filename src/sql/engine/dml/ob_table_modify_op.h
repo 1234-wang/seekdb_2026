@@ -109,13 +109,13 @@ public:
   virtual bool is_dml_operator() const override { return true; }
   //This interface is only allowed to be used in a single-table DML operator,
   //it is invalid when multiple tables are modified in one DML operator
-  int get_single_table_loc_id(common::ObTableID &table_loc_id,
+  int get_single_table_ref_id(common::ObTableID &table_ref_id,
                               common::ObTableID &ref_table_id) const
   {
     const ObDMLBaseCtDef *dml_ctdef = nullptr;
     int ret = get_single_dml_ctdef(dml_ctdef);
     if (common::OB_SUCCESS == ret) {
-      table_loc_id = dml_ctdef->das_base_ctdef_.table_id_;
+      table_ref_id = dml_ctdef->das_base_ctdef_.table_id_;
       ref_table_id = dml_ctdef->das_base_ctdef_.index_tid_;
     }
     return ret;
@@ -164,26 +164,26 @@ public:
 public:
   ObTableModifyOpInput(ObExecContext &ctx, const ObOpSpec &spec)
     : ObOpInput(ctx, spec),
-      table_loc_(nullptr),
-      tablet_loc_(nullptr)
+      table_access_(nullptr),
+      tablet_access_(nullptr)
   { }
   virtual ~ObTableModifyOpInput() { }
   virtual void reset()
   {
-    table_loc_ = nullptr;
-    tablet_loc_ = nullptr;
+    table_access_ = nullptr;
+    tablet_access_ = nullptr;
   }
-  inline void set_tablet_loc(DASRuntimeTabletAccess *tablet_loc) { tablet_loc_ = tablet_loc; }
-  inline DASRuntimeTabletAccess *get_tablet_loc() { return tablet_loc_; }
-  inline DASRuntimeTableAccess *get_table_loc() { return table_loc_; }
+  inline void set_tablet_access(DASRuntimeTabletAccess *tablet_access) { tablet_access_ = tablet_access; }
+  inline DASRuntimeTabletAccess *get_tablet_access() { return tablet_access_; }
+  inline DASRuntimeTableAccess *get_table_access() { return table_access_; }
   const ObTableModifySpec &get_spec() const
   {
     return static_cast<const ObTableModifySpec &>(spec_);
   }
-  TO_STRING_KV(KPC_(table_loc), KPC_(tablet_loc));
+  TO_STRING_KV(KPC_(table_access), KPC_(tablet_access));
 protected:
-  DASRuntimeTableAccess *table_loc_;
-  DASRuntimeTabletAccess *tablet_loc_; //for single table modify op
+  DASRuntimeTableAccess *table_access_;
+  DASRuntimeTabletAccess *tablet_access_; //for single table modify op
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifyOpInput);
 };

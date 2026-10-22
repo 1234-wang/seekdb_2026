@@ -160,10 +160,10 @@ int ObAdaptiveAutoDop::build_storage_estimation_tasks(
   const int64_t index_id = cost_tsc_info.get_index_id();
   const int64_t MAX_EST_TASK_NUM = 10;
 
-  FOREACH(table_loc, table_locs)
+  FOREACH(table_access, table_locs)
   {
-    if (index_id == (*table_loc)->get_ref_table_id()) {
-      match_table_loc = (*table_loc);
+    if (index_id == (*table_access)->get_ref_table_id()) {
+      match_table_loc = (*table_access);
       break;
     }
   }
@@ -182,9 +182,9 @@ int ObAdaptiveAutoDop::build_storage_estimation_tasks(
     DASRuntimeTabletSEArray chosen_tablet_locs;
     if (OB_FAIL(tablet_targets.reserve(tablet_locs.size()))) {
     } else {
-      FOREACH_X(tablet_loc, tablet_locs, OB_SUCC(ret))
+      FOREACH_X(tablet_access, tablet_locs, OB_SUCC(ret))
       {
-        if (OB_FAIL(tablet_targets.push_back(*tablet_loc))) {
+        if (OB_FAIL(tablet_targets.push_back(*tablet_access))) {
         }
       }
     }
@@ -205,7 +205,7 @@ int ObAdaptiveAutoDop::build_storage_estimation_tasks(
 int ObAdaptiveAutoDop::add_estimation_tasks(const ObTableScanSpec &tsc_spec,
                                             const ObCostTableScanSimpleInfo &cost_tsc_info,
                                             const int64_t schema_version,
-                                            DASRuntimeTabletAccess *tablet_loc, ObQueryRangeArray &ranges,
+                                            DASRuntimeTabletAccess *tablet_access, ObQueryRangeArray &ranges,
                                             ObIArray<ObBatchEstTasks *> &tasks)
 {
   int ret = OB_SUCCESS;
@@ -231,7 +231,7 @@ int ObAdaptiveAutoDop::add_estimation_tasks(const ObTableScanSpec &tsc_spec,
     index_est_arg->index_id_ = cost_tsc_info.get_index_id();
     index_est_arg->scan_flag_ = tsc_spec.get_query_flag();
     index_est_arg->range_columns_count_ = cost_tsc_info.get_range_columns_count();
-    index_est_arg->tablet_id_ = tablet_loc->tablet_id_;
+    index_est_arg->tablet_id_ = tablet_access->tablet_id_;
     
     
     index_est_arg->tx_id_ = sql_ctx->session_info_->get_tx_id();

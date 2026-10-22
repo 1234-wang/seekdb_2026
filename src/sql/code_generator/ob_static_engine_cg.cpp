@@ -2815,11 +2815,11 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(coord->get_table_locations().prepare_allocate(op.get_pruning_table_locations().count(),
+      } else if (OB_FAIL(coord->get_table_access_plans().prepare_allocate(op.get_pruning_table_locations().count(),
           phy_plan_->get_allocator()))) {
       } else {
         for (int i = 0; i < op.get_pruning_table_locations().count() && OB_SUCC(ret); ++i) {
-          OZ(coord->get_table_locations().at(i).assign(op.get_pruning_table_locations().at(i)));
+          OZ(coord->get_table_access_plans().at(i).assign(op.get_pruning_table_locations().at(i)));
         }
       }
       LOG_TRACE("map worker to px coordinator", K(spec.get_type()),
@@ -3537,7 +3537,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   OZ(set_partition_range_info(op, spec));
 
   if (OB_SUCC(ret)) {
-    spec.table_loc_id_ = op.get_table_id();
+    spec.table_ref_id_ = op.get_table_id();
     spec.ref_table_id_ = op.get_ref_table_id();
     spec.is_index_global_ = op.get_is_index_global();
     spec.frozen_version_ = op.get_plan()->get_optimizer_context().get_global_hint().frozen_version_;
@@ -3555,7 +3555,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       phy_plan_->set_contain_table_scan(true);
     }
     if (OB_NOT_NULL(op.get_table_partition_info())) {
-      op.get_table_partition_info()->get_table_location().set_use_das(spec.use_dist_das_);
+      op.get_table_partition_info()->get_table_access_plan().set_use_das(spec.use_dist_das_);
     }
     if (NULL != op.get_limit_expr()) {
       CK(op.get_limit_expr()->get_result_type().is_integer_type());
@@ -3579,7 +3579,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     }
     LOG_TRACE("CG index table scan",
               K(spec.tsc_ctdef_.scan_ctdef_.ref_table_id_),
-              K(spec.table_loc_id_),
+              K(spec.table_ref_id_),
               K(spec.ref_table_id_),
               K(op.get_ref_table_id()),
               K(op.get_index_table_id()),
@@ -4194,7 +4194,7 @@ int ObStaticEngineCG::set_partition_range_info(ObLogTableScan &op, ObTableScanSp
              || is_cte_table(ref_table_id)) {
     /*do nothing*/
   } else if (!stmt->is_select_stmt()
-             || tbl_part_info->get_table_location().has_generated_column()) {
+             || tbl_part_info->get_table_access_plan().has_generated_column()) {
     /*do nothing*/
   } else if (OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
@@ -6240,12 +6240,12 @@ int ObStaticEngineCG::add_output_datum_check_flag(ObOpSpec &spec)
 }
 
 int ObStaticEngineCG::generate_calc_part_id_expr(const ObRawExpr &src,
-                                                 const DASTableAccessMeta *loc_meta,
+                                                 const DASTableAccessMeta *access_meta,
                                                  ObExpr *&dst)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_rt_expr(src, dst))) {
-  } else if (loc_meta != nullptr && !loc_meta->unuse_related_pruning_) {
+  } else if (access_meta != nullptr && !access_meta->unuse_related_pruning_) {
     // Related local index tablet_id pruning can only be used in a local plan (all operators
     //use the same das context),
     //because the distributed plan will pass tablet_id through exchange operator,
@@ -6253,7 +6253,7 @@ int ObStaticEngineCG::generate_calc_part_id_expr(const ObRawExpr &src,
     //unused related pruning in distributed plan's dml operator,
     //we will build the related tablet_id map when dml operator be opened in distributed plan
     CalcPartitionBaseInfo *calc_part_info = static_cast<CalcPartitionBaseInfo*>(dst->extra_info_);
-    if (OB_FAIL(calc_part_info->related_table_ids_.assign(loc_meta->related_table_ids_))) {
+    if (OB_FAIL(calc_part_info->related_table_ids_.assign(access_meta->related_table_ids_))) {
     }
   }
   return ret;

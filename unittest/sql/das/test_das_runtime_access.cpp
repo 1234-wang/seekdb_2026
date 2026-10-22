@@ -15,6 +15,7 @@
  */
 
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/px/ob_dfo.h"
 #include <gtest/gtest.h>
 #include <vector>
 
@@ -58,7 +59,7 @@ TEST(DASRuntimeAccess, aliases_related_tablets_and_px_roundtrip)
   ObArenaAllocator allocator;
   ObDASCtx ctx(allocator);
   DASTableAccessMeta meta(allocator);
-  meta.table_loc_id_ = 600001;
+  meta.table_ref_id_ = 600001;
   meta.ref_table_id_ = 500001;
   meta.related_table_ids_.set_capacity(1);
   ASSERT_EQ(OB_SUCCESS, meta.related_table_ids_.push_back(500002));
@@ -79,7 +80,7 @@ TEST(DASRuntimeAccess, aliases_related_tablets_and_px_roundtrip)
   EXPECT_EQ(tablet, tablet->next_->next_);
 
   DASTableAccessMeta alias_meta(allocator);
-  alias_meta.table_loc_id_ = 600002;
+  alias_meta.table_ref_id_ = 600002;
   alias_meta.ref_table_id_ = 500001;
   DASRuntimeTableAccess *alias_table = nullptr;
   ASSERT_EQ(OB_SUCCESS, ctx.ensure_table_access(alias_meta, alias_table));
@@ -149,6 +150,47 @@ TEST(DASRuntimeAccess, tablet_v1_wire_compatibility)
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, tablet.serialize(roundtrip.data(), roundtrip.size(), pos));
   EXPECT_EQ(bytes, roundtrip);
+}
+
+// Preserve the old PX key layout, including the dynamic-DML flag.
+struct LegacySqcKeyV1
+{
+  OB_UNIS_VERSION(1);
+public:
+  int64_t table_location_key_;
+  int64_t ref_table_id_;
+  ObTabletID tablet_id_;
+  bool is_dml_;
+  bool is_loc_uncertain_;
+};
+OB_SERIALIZE_MEMBER(LegacySqcKeyV1, table_location_key_, ref_table_id_, tablet_id_,
+                    is_dml_, is_loc_uncertain_);
+
+TEST(DASRuntimeAccess, px_key_v1_wire_compatibility)
+{
+  for (bool dynamic : {false, true}) {
+    LegacySqcKeyV1 legacy;
+    legacy.table_location_key_ = 600001;
+    legacy.ref_table_id_ = 500001;
+    legacy.tablet_id_ = ObTabletID(200001);
+    legacy.is_dml_ = true;
+    legacy.is_loc_uncertain_ = dynamic;
+    std::vector<char> bytes(legacy.get_serialize_size());
+    int64_t pos = 0;
+    ASSERT_EQ(OB_SUCCESS, legacy.serialize(bytes.data(), bytes.size(), pos));
+    SqcTabletAccessKey key;
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, key.deserialize(bytes.data(), bytes.size(), pos));
+    EXPECT_EQ(legacy.table_location_key_, key.table_ref_id_);
+    EXPECT_EQ(legacy.ref_table_id_, key.ref_table_id_);
+    EXPECT_EQ(legacy.tablet_id_, key.tablet_id_);
+    EXPECT_TRUE(key.is_dml_);
+    EXPECT_EQ(dynamic, key.has_dynamic_tablets_);
+    std::vector<char> roundtrip(key.get_serialize_size());
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, key.serialize(roundtrip.data(), roundtrip.size(), pos));
+    EXPECT_EQ(bytes, roundtrip);
+  }
 }
 
 } // namespace sql

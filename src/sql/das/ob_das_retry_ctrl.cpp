@@ -33,11 +33,11 @@ void ObDASRetryCtrl::tablet_access_retry_proc(ObDASRef &das_ref,
   int ret = OB_SUCCESS;
   ObTableID ref_table_id = task_op.get_ref_table_id();
   ObDASCtx &das_ctx = DAS_CTX(das_ref.get_exec_ctx());
-  const DASRuntimeTabletAccess *tablet_loc = task_op.get_tablet_loc();
+  const DASRuntimeTabletAccess *tablet_access = task_op.get_tablet_access();
   bool tablet_exist = false;
   schema::ObSchemaGetterGuard schema_guard;
   const schema::ObTableSchema *table_schema = nullptr;
-  if (OB_ISNULL(tablet_loc)) {
+  if (OB_ISNULL(tablet_access)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -52,18 +52,18 @@ void ObDASRetryCtrl::tablet_access_retry_proc(ObDASRef &das_ref,
     LOG_WARN("table not exist,  maybe dropped by DDL, stop das retry", K(ref_table_id));
   } else if (table_schema->is_vir_table()) {
     // Virtual table accesses do not support tablet-level retry.
-  } else if (OB_FAIL(table_schema->check_if_tablet_exists(tablet_loc->tablet_id_, tablet_exist))) {
+  } else if (OB_FAIL(table_schema->check_if_tablet_exists(tablet_access->tablet_id_, tablet_exist))) {
   } else if (!tablet_exist) {
     // partition could be dropped or table could be truncated, in this case we return OB_SCHEMA_EAGAIN and
     // attempt statement-level retry
     task_op.set_errcode(OB_SCHEMA_EAGAIN);
-    LOG_WARN("partition not exist, maybe dropped by DDL or table was truncated", K(tablet_loc), K(ref_table_id));
+    LOG_WARN("partition not exist, maybe dropped by DDL or table was truncated", K(tablet_access), K(ref_table_id));
   } else {
     das_ctx.record_retry_error(task_op.get_errcode());
     need_retry = true;
-    const DASTableAccessMeta *loc_meta = tablet_loc->loc_meta_;
+    const DASTableAccessMeta *access_meta = tablet_access->access_meta_;
     LOG_INFO("[DAS RETRY] tablet still exists, retry DAS task",
-             "errcode", task_op.get_errcode(), KPC(loc_meta), KPC(tablet_loc));
+             "errcode", task_op.get_errcode(), KPC(access_meta), KPC(tablet_access));
   }
 }
 

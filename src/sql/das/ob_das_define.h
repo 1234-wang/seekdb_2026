@@ -97,7 +97,7 @@ struct DASTableAccessMeta
   OB_UNIS_VERSION(1);
 public:
   DASTableAccessMeta(common::ObIAllocator &alloc)
-    : table_loc_id_(common::OB_INVALID_ID),
+    : table_ref_id_(common::OB_INVALID_ID),
       ref_table_id_(common::OB_INVALID_ID),
       related_table_ids_(alloc),
       flags_(0)
@@ -107,21 +107,21 @@ public:
   int init_related_meta(uint64_t related_table_id, DASTableAccessMeta &related_meta) const;
   void reset()
   {
-    table_loc_id_ = common::OB_INVALID_ID;
+    table_ref_id_ = common::OB_INVALID_ID;
     ref_table_id_ = common::OB_INVALID_ID;
     flags_ = 0;
     related_table_ids_.reset();
   }
 
-  TO_STRING_KV(K_(table_loc_id),
+  TO_STRING_KV(K_(table_ref_id),
                K_(ref_table_id),
                K_(related_table_ids),
                K_(use_dist_das),
                K_(is_weak_read),
                K_(unuse_related_pruning));
 
-  uint64_t table_loc_id_; //location object id
-  uint64_t ref_table_id_; //table object id
+  uint64_t table_ref_id_; // SQL table-reference ID; distinguishes aliases of the same physical table.
+  uint64_t ref_table_id_; // Physical table or index ID.
   DASTableIDArray related_table_ids_;
   union {
     uint64_t flags_;
@@ -153,7 +153,7 @@ struct DASRuntimeTabletAccess
 public:
   DASRuntimeTabletAccess()
     : tablet_id_(),
-      loc_meta_(nullptr),
+      access_meta_(nullptr),
       next_(this),
       reserved_flags_(0),
       partition_id_(OB_INVALID_ID),
@@ -162,7 +162,7 @@ public:
   ~DASRuntimeTabletAccess() = default;
 
   TO_STRING_KV(K_(tablet_id),
-               K_(loc_meta),
+               K_(access_meta),
                K_(partition_id),
                K_(first_level_part_id));
   /**
@@ -173,8 +173,8 @@ public:
    * because DASRuntimeTabletAccess will not be released
    */
   common::ObTabletID tablet_id_; //the data_object_id corresponding to partition_id
-  const DASTableAccessMeta *loc_meta_; //reference the table location meta, not serialize it
-  DASRuntimeTabletAccess *next_; //to bind all data table and local index tablet location
+  const DASTableAccessMeta *access_meta_; // References access metadata; not serialized.
+  DASRuntimeTabletAccess *next_; // Links related base-table and local-index tablet accesses.
   // Retain the reserved V1 wire slot; no per-tablet location-refresh state.
   uint64_t reserved_flags_;
   // partition id of this tablet
@@ -222,8 +222,8 @@ private:
 };
 
 /**
- * store the location information of which tables are accessed in this plan
- * generate this table location when this plan is chosen in the plan cache or generated this plan by CG
+ * Store per-execution state for a table reference accessed by this plan.
+ * Created when selecting a cached plan or generating an execution plan.
  * for multiple part dml operator, maybe generated when the operator is opened
  */
 struct DASRuntimeTableAccess
@@ -232,7 +232,7 @@ struct DASRuntimeTableAccess
 public:
   DASRuntimeTableAccess(common::ObIAllocator &allocator)
     : allocator_(allocator),
-      loc_meta_(nullptr),
+      access_meta_(nullptr),
       flags_(0),
       tablet_accesses_(allocator),
       tablet_accesses_map_(allocator),
@@ -240,17 +240,17 @@ public:
   { }
   ~DASRuntimeTableAccess() = default;
 
-  int64_t get_table_location_key() const { return loc_meta_->table_loc_id_; }
-  int64_t get_ref_table_id() const { return loc_meta_->ref_table_id_; }
+  int64_t get_table_ref_id() const { return access_meta_->table_ref_id_; }
+  int64_t get_ref_table_id() const { return access_meta_->ref_table_id_; }
   bool empty() const { return tablet_accesses_.size() == 0; }
   const DASRuntimeTabletList &get_tablet_accesses() const { return tablet_accesses_; }
   DASRuntimeTabletAccess *get_first_tablet_access() { return tablet_accesses_.get_first(); }
   DASRuntimeTabletListIter tablet_accesses_begin() { return tablet_accesses_.begin(); }
   DASRuntimeTabletListIter tablet_accesses_end() { return tablet_accesses_.end(); }
-  int find_tablet_access(const ObTabletID &tablet_id, DASRuntimeTabletAccess *&tablet_loc);
-  int add_tablet_access(DASRuntimeTabletAccess *table_loc);
+  int find_tablet_access(const ObTabletID &tablet_id, DASRuntimeTabletAccess *&tablet_access);
+  int add_tablet_access(DASRuntimeTabletAccess *table_access);
 
-  TO_STRING_KV(KPC_(loc_meta),
+  TO_STRING_KV(KPC_(access_meta),
                K_(tablet_accesses),
                K_(is_writing),
                K_(is_reading),
@@ -264,7 +264,7 @@ public:
    * because DASRuntimeTableAccess will not be released
    */
   common::ObIAllocator &allocator_;
-  const DASTableAccessMeta *loc_meta_;
+  const DASTableAccessMeta *access_meta_;
   union {
     /**
      * used to mark some status related to table access,
@@ -287,18 +287,18 @@ private:
   int create_tablet_accesses_map();
 
   /**
-   * The reason for using ObList to store ObTabletLoc objects is that
+   * The reason for using ObList to store DASRuntimeTabletAccess objects is that
    * during the execution process,
    * some operators will dynamically extend some new partitions,
    * so tablet_accesses_ needs to be able to expand dynamically.
    * ObArray/ObSEArray will cause dynamic extension or release of memory when expanding members.
    * At the same time, in partition task retry,
-   * it is very convenient to clear the invalid TabletLoc object,
+   * it is very convenient to clear the invalid tablet access object,
    * so ObList is more suitable for its needs.
    * Why not use ObDList?
-   * Considering that ObTabletLoc may be referenced by list of other modules, such as PX,
+   * Considering that DASRuntimeTabletAccess may be referenced by list of other modules, such as PX,
    * and elements in ObDList can only be referenced by one list at the same time,
-   * ObDList has more restrictions and is not suitable as a container for ObTabletLoc
+   * ObDList has more restrictions and is not suitable as a container for DASRuntimeTabletAccess
    **/
   DASRuntimeTabletList tablet_accesses_;
   TabletHashMap tablet_accesses_map_;
@@ -309,7 +309,6 @@ typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObFixedArray<uint64_t, common::ObIAllocator> UIntFixedArray;
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> IntFixedArray;
 typedef common::ObFixedArray<ObObjectID, common::ObIAllocator> ObjectIDFixedArray;
-typedef common::ObFixedArray<DASRuntimeTableAccess*, common::ObIAllocator> DASTableLocFixedArray;
 
 //DAS: data access service
 //CtDef: Compile time Definition
@@ -345,7 +344,7 @@ public:
   ObDASOpType op_type_;
   const ObDASBaseCtDef *ctdef_;
   ObEvalCtx *eval_ctx_; //nullptr in DML DAS Op
-  DASRuntimeTableAccess *table_loc_;
+  DASRuntimeTableAccess *table_access_;
   ObDASBaseRtDef **children_;
   uint32_t children_cnt_;
 
@@ -356,7 +355,7 @@ protected:
     : op_type_(op_type),
       ctdef_(nullptr),
       eval_ctx_(NULL),
-      table_loc_(nullptr),
+      table_access_(nullptr),
       children_(nullptr),
       children_cnt_(0)
   { }

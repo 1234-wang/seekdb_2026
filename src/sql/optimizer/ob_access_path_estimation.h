@@ -399,7 +399,7 @@ public:
                                        const ObNewRange &scan_range,
                                        const ObIArray<int64_t> &part_projector,
                                        const ObIArray<int64_t> &gen_projector,
-                                       const ObTableLocation &table_location,
+                                       const TableAccessPlan &table_access_plan,
                                        ObIArray<ObTabletID> &tablet_ids,
                                        ObIArray<ObObjectID> &partition_ids,
                                        const ObIArray<ObObjectID> *level_one_part_ids = NULL);

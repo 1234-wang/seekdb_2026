@@ -711,7 +711,7 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
   } else if (OB_FALSE_IT(is_one_part_table = ObSQLUtils::is_one_part_table_can_skip_part_calc(*table_schema))) {
   } else if (insert_table_sharding->is_single() &&
              !is_one_part_table &&
-             insert_table_part->get_table_location().is_part_or_subpart_all_partition()) {
+             insert_table_part->get_table_access_plan().is_part_or_subpart_all_partition()) {
     is_multi_part_dml = true;
     OPT_TRACE("insert table has only one partition in partition level, force use multi part dml");
   } else if ((insert_stmt->is_ignore() && !is_one_part_table) ||

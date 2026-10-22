@@ -28,14 +28,14 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
                                   const ObPhysicalPlan *plan,
                                   bool &is_matched,
                                   ObIArray<TableAccessTargets> &phy_tbl_infos,
-                                  ObIArray<ObTableLocation> &out_tbl_locations) const
+                                  ObIArray<TableAccessPlan> &out_tbl_locations) const
 {
   int ret = OB_SUCCESS;
   is_matched = true;
-  const ObIArray<LocationConstraint>& base_cons = plan->get_base_constraints();
+  const ObIArray<TableAccessConstraint>& base_cons = plan->get_base_constraints();
   const ObIArray<ObPlanPwjConstraint>& strict_cons = plan->get_strict_constraints();
   const ObIArray<ObPlanPwjConstraint>& non_strict_cons = plan->get_non_strict_constraints();
-  const ObIArray<ObTableLocation> &plan_tbl_locs = plan->get_table_locations();
+  const ObIArray<TableAccessPlan> &plan_tbl_locs = plan->get_table_access_plans();
   PWJTabletIdMap pwj_map;
   bool use_pwj_map = false;
 
@@ -103,15 +103,15 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
   return ret;
 }
 
-int ObPlanMatchHelper::get_tbl_loc_with_key(const TableLocationKey key,
-                                            const ObIArray<ObTableLocation> &table_locations,
-                                            const ObTableLocation *&ret_loc_ptr) const
+int ObPlanMatchHelper::get_tbl_loc_with_key(const TableAccessKey key,
+                                            const ObIArray<TableAccessPlan> &table_access_plans,
+                                            const TableAccessPlan *&ret_loc_ptr) const
 {
   int ret = OB_SUCCESS;
   ret_loc_ptr = NULL;
-  const ObTableLocation *tmp_loc_ptr;
-  for (int i = 0; i < table_locations.count(); i++) {
-    tmp_loc_ptr = &table_locations.at(i);
+  const TableAccessPlan *tmp_loc_ptr;
+  for (int i = 0; i < table_access_plans.count(); i++) {
+    tmp_loc_ptr = &table_access_plans.at(i);
     if (tmp_loc_ptr->get_table_id() == key.table_id_ &&
         tmp_loc_ptr->get_ref_table_id() == key.ref_table_id_) {
       ret_loc_ptr = tmp_loc_ptr;
@@ -125,10 +125,10 @@ int ObPlanMatchHelper::get_tbl_loc_with_key(const TableLocationKey key,
 }
 
 int ObPlanMatchHelper::calc_table_locations(
-    const ObIArray<LocationConstraint> &loc_cons,
-    const ObIArray<ObTableLocation> &in_tbl_locations,
+    const ObIArray<TableAccessConstraint> &loc_cons,
+    const ObIArray<TableAccessPlan> &in_tbl_locations,
     const ObPlanCacheCtx &pc_ctx,
-    common::ObIArray<ObTableLocation> &out_tbl_locations,
+    common::ObIArray<TableAccessPlan> &out_tbl_locations,
     common::ObIArray<TableAccessTargets> &phy_tbl_infos) const
 {
   int ret = OB_SUCCESS;
@@ -136,7 +136,7 @@ int ObPlanMatchHelper::calc_table_locations(
     ret = OB_INVALID_ARGUMENT;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < loc_cons.count(); i++) {
-      const ObTableLocation *tmp_tbl_loc_ptr;
+      const TableAccessPlan *tmp_tbl_loc_ptr;
       if (OB_FAIL(get_tbl_loc_with_key(loc_cons.at(i).key_,
                                        in_tbl_locations,
                                        tmp_tbl_loc_ptr))) {
@@ -146,7 +146,7 @@ int ObPlanMatchHelper::calc_table_locations(
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(out_tbl_locations,
+      if (OB_FAIL(TableAccessTargetBuilder::collect_access_targets(out_tbl_locations,
                                                          pc_ctx,
                                                          phy_tbl_infos))) {
       } else {
@@ -162,8 +162,8 @@ int ObPlanMatchHelper::calc_table_locations(
 }
 
 int ObPlanMatchHelper::cmp_table_types(
-    const ObIArray<LocationConstraint> &loc_cons,
-    const common::ObIArray<ObTableLocation> &tbl_locs,
+    const ObIArray<TableAccessConstraint> &loc_cons,
+    const common::ObIArray<TableAccessPlan> &tbl_locs,
     const common::ObIArray<TableAccessTargets> &phy_tbl_infos,
     bool &is_same) const
 {
@@ -176,9 +176,9 @@ int ObPlanMatchHelper::cmp_table_types(
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < loc_cons.count(); i++) {
       const TabletAccessTargetIArray &phy_part_loc_info_list =
         phy_tbl_infos.at(i).get_tablets();
-      const ObTableLocation &tbl_loc = tbl_locs.at(i);
-      const ObTableLocationType loc_type = tbl_loc.get_location_type(phy_part_loc_info_list);
-      is_same = (loc_type == loc_cons.at(i).phy_loc_type_);
+      const TableAccessPlan &tbl_loc = tbl_locs.at(i);
+      const TableAccessShape loc_type = tbl_loc.get_location_type(phy_part_loc_info_list);
+      is_same = (loc_type == loc_cons.at(i).access_shape_);
     }
   }
   if (OB_FAIL(ret)) {
@@ -189,7 +189,7 @@ int ObPlanMatchHelper::cmp_table_types(
 
 int ObPlanMatchHelper::check_partition_constraint(
     const ObPlanCacheCtx &pc_ctx,
-    const ObIArray<LocationConstraint> &loc_cons,
+    const ObIArray<TableAccessConstraint> &loc_cons,
     const common::ObIArray<TableAccessTargets> &phy_tbl_infos,
     bool &is_match) const
 {

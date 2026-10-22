@@ -22,7 +22,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/optimizer/table_access_targets.h"
-#include "sql/optimizer/ob_table_location.h"
+#include "sql/optimizer/table_access_plan.h"
 #include "sql/session/ob_basic_session_info.h"
 namespace oceanbase
 {
@@ -75,13 +75,13 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
   ObSEArray<ObObjectID, 2> first_level_part_ids;
   ObSEArray<ObTabletID, 2> tablet_ids;
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_my_session());
-  const ObIArray<ObTableLocation> &normal_locations = plan.get_table_locations();
-  const ObIArray<ObTableLocation> &das_locations = plan.get_das_table_locations();
+  const ObIArray<TableAccessPlan> &normal_locations = plan.get_table_access_plans();
+  const ObIArray<TableAccessPlan> &das_locations = plan.get_das_table_access_plans();
   record_retry_error(ctx.get_my_session()->get_retry_info().get_last_query_retry_err());
   set_history_retry_cnt(ctx.get_my_session()->get_retry_info().get_retry_cnt());
   for (int64_t i = 0; OB_SUCC(ret) && i < das_locations.count(); ++i) {
-    const ObTableLocation &das_location = das_locations.at(i);
-    DASRuntimeTableAccess *table_loc = nullptr;
+    const TableAccessPlan &das_location = das_locations.at(i);
+    DASRuntimeTableAccess *table_access = nullptr;
     tablet_ids.reuse();
     partition_ids.reuse();
     first_level_part_ids.reuse();
@@ -91,11 +91,11 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
                                                   partition_ids,
                                                   first_level_part_ids,
                                                   dtc_params))) {
-    } else if (OB_FAIL(ensure_table_access(das_location.get_loc_meta(), table_loc))) {
+    } else if (OB_FAIL(ensure_table_access(das_location.get_access_meta(), table_access))) {
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < tablet_ids.count(); ++j) {
-      DASRuntimeTabletAccess *tablet_loc = nullptr;
-      if (OB_FAIL(ensure_tablet_access(*table_loc, tablet_ids.at(j), tablet_loc, partition_ids.at(j),
+      DASRuntimeTabletAccess *tablet_access = nullptr;
+      if (OB_FAIL(ensure_tablet_access(*table_access, tablet_ids.at(j), tablet_access, partition_ids.at(j),
                                       first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(j)))) {
       }
     }
@@ -137,92 +137,92 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
   return ret;
 }
 
-DASRuntimeTableAccess *ObDASCtx::find_table_access(uint64_t table_loc_id, uint64_t ref_table_id)
+DASRuntimeTableAccess *ObDASCtx::find_table_access(uint64_t table_ref_id, uint64_t ref_table_id)
 {
-  DASRuntimeTableAccess *table_loc = nullptr;
+  DASRuntimeTableAccess *table_access = nullptr;
   FOREACH(tmp_node, table_accesses_) {
-    if ((*tmp_node)->loc_meta_->table_loc_id_ == table_loc_id &&
-        (*tmp_node)->loc_meta_->ref_table_id_ == ref_table_id) {
-      table_loc = *tmp_node;
+    if ((*tmp_node)->access_meta_->table_ref_id_ == table_ref_id &&
+        (*tmp_node)->access_meta_->ref_table_id_ == ref_table_id) {
+      table_access = *tmp_node;
       break;
     }
   }
-  return table_loc;
+  return table_access;
 }
 
-int ObDASCtx::ensure_tablet_access(DASRuntimeTableAccess &table_loc,
+int ObDASCtx::ensure_tablet_access(DASRuntimeTableAccess &table_access,
                                   const ObTabletID &tablet_id,
-                                  DASRuntimeTabletAccess *&tablet_loc,
+                                  DASRuntimeTabletAccess *&tablet_access,
                                   const common::ObObjectID &partition_id,
                                   const common::ObObjectID &first_level_part_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(table_loc.find_tablet_access(tablet_id, tablet_loc))) {
+  if (OB_FAIL(table_access.find_tablet_access(tablet_id, tablet_access))) {
   }
-  if (OB_SUCC(ret) && tablet_loc == nullptr) {
+  if (OB_SUCC(ret) && tablet_access == nullptr) {
     void *loc_buf = allocator_.alloc(sizeof(DASRuntimeTabletAccess));
     if (OB_ISNULL(loc_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_ISNULL(tablet_loc = new(loc_buf) DASRuntimeTabletAccess())) {
+    } else if (OB_ISNULL(tablet_access = new(loc_buf) DASRuntimeTabletAccess())) {
       //do nothing
-    } else if (OB_FAIL(validate_tablet_access(table_loc.loc_meta_->ref_table_id_, tablet_id))) {
+    } else if (OB_FAIL(validate_tablet_access(table_access.access_meta_->ref_table_id_, tablet_id))) {
     } else {
-      tablet_loc->tablet_id_ = tablet_id;
-      tablet_loc->loc_meta_ = table_loc.loc_meta_;
-      tablet_loc->partition_id_ = partition_id;
-      tablet_loc->first_level_part_id_ = first_level_part_id;
-      if (OB_FAIL(table_loc.add_tablet_access(tablet_loc))) {
+      tablet_access->tablet_id_ = tablet_id;
+      tablet_access->access_meta_ = table_access.access_meta_;
+      tablet_access->partition_id_ = partition_id;
+      tablet_access->first_level_part_id_ = first_level_part_id;
+      if (OB_FAIL(table_access.add_tablet_access(tablet_access))) {
       }
     }
     //build related tablet location
-    if (OB_SUCC(ret) && OB_FAIL(build_related_tablet_accesses(*tablet_loc))) {
+    if (OB_SUCC(ret) && OB_FAIL(build_related_tablet_accesses(*tablet_access))) {
     }
   }
   return ret;
 }
 
-int ObDASCtx::ensure_tablet_access(DASRuntimeTableAccess &table_loc,
+int ObDASCtx::ensure_tablet_access(DASRuntimeTableAccess &table_access,
                                   const TabletAccessTarget &tablet_target,
-                                  DASRuntimeTabletAccess *&tablet_loc)
+                                  DASRuntimeTabletAccess *&tablet_access)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(table_loc.find_tablet_access(tablet_target.get_tablet_id(), tablet_loc))) {
+  if (OB_FAIL(table_access.find_tablet_access(tablet_target.get_tablet_id(), tablet_access))) {
   }
-  if (OB_SUCC(ret) && tablet_loc == nullptr) {
+  if (OB_SUCC(ret) && tablet_access == nullptr) {
     void *tablet_buf = allocator_.alloc(sizeof(DASRuntimeTabletAccess));
     if (OB_ISNULL(tablet_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      tablet_loc = new(tablet_buf) DASRuntimeTabletAccess();
-      tablet_loc->tablet_id_ = tablet_target.get_tablet_id();
-      tablet_loc->partition_id_ = tablet_target.get_partition_id();
-      tablet_loc->first_level_part_id_ = tablet_target.get_first_level_part_id();
-      tablet_loc->loc_meta_ = table_loc.loc_meta_;
-      if (OB_FAIL(table_loc.add_tablet_access(tablet_loc))) {
+      tablet_access = new(tablet_buf) DASRuntimeTabletAccess();
+      tablet_access->tablet_id_ = tablet_target.get_tablet_id();
+      tablet_access->partition_id_ = tablet_target.get_partition_id();
+      tablet_access->first_level_part_id_ = tablet_target.get_first_level_part_id();
+      tablet_access->access_meta_ = table_access.access_meta_;
+      if (OB_FAIL(table_access.add_tablet_access(tablet_access))) {
       }
     }
     //build related tablet location
-    if (OB_SUCC(ret) && OB_FAIL(build_related_tablet_accesses(*tablet_loc))) {
+    if (OB_SUCC(ret) && OB_FAIL(build_related_tablet_accesses(*tablet_access))) {
     }
   }
   return ret;
 }
 
-OB_INLINE int ObDASCtx::build_related_tablet_accesses(DASRuntimeTabletAccess &tablet_loc)
+OB_INLINE int ObDASCtx::build_related_tablet_accesses(DASRuntimeTabletAccess &tablet_access)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_loc.loc_meta_->related_table_ids_.count(); ++i) {
-    ObTableID related_table_id = tablet_loc.loc_meta_->related_table_ids_.at(i);
-    DASRuntimeTableAccess *related_table_loc = nullptr;
-    DASRuntimeTabletAccess *related_tablet_loc = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_access.access_meta_->related_table_ids_.count(); ++i) {
+    ObTableID related_table_id = tablet_access.access_meta_->related_table_ids_.at(i);
+    DASRuntimeTableAccess *related_table_access = nullptr;
+    DASRuntimeTabletAccess *related_tablet_access = nullptr;
     const DASRelatedTabletMap::Value *rv = nullptr;
     void *related_loc_buf = allocator_.alloc(sizeof(DASRuntimeTabletAccess));
     if (OB_ISNULL(related_loc_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_ISNULL(related_table_loc = find_table_access(tablet_loc.loc_meta_->table_loc_id_,
+    } else if (OB_ISNULL(related_table_access = find_table_access(tablet_access.access_meta_->table_ref_id_,
                                                                  related_table_id))) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_ISNULL(rv = related_tablet_map_.get_related_tablet_id(tablet_loc.tablet_id_,
+    } else if (OB_ISNULL(rv = related_tablet_map_.get_related_tablet_id(tablet_access.tablet_id_,
                                                                         related_table_id))) {
       // Related local-index tablet pruning is available only when all operators
       // share the same DAS context.
@@ -231,71 +231,71 @@ OB_INLINE int ObDASCtx::build_related_tablet_accesses(DASRuntimeTabletAccess &ta
       //unused related pruning in distributed plan's dml operator,
       //we will use get_all_tablet_and_object_id() to build the related tablet_id map when
       //dml operator's table loc was inited
-      if (OB_FAIL(build_related_tablet_map(*tablet_loc.loc_meta_))) {
-      } else if (OB_ISNULL(rv = related_tablet_map_.get_related_tablet_id(tablet_loc.tablet_id_,
+      if (OB_FAIL(build_related_tablet_map(*tablet_access.access_meta_))) {
+      } else if (OB_ISNULL(rv = related_tablet_map_.get_related_tablet_id(tablet_access.tablet_id_,
                                                                           related_table_id))) {
         ret = OB_ERR_UNEXPECTED;
       }
     }
     if (OB_SUCC(ret)) {
-      related_tablet_loc = new(related_loc_buf) DASRuntimeTabletAccess();
-      related_tablet_loc->tablet_id_ = rv->tablet_id_;
-      related_tablet_loc->loc_meta_ = related_table_loc->loc_meta_;
-      related_tablet_loc->next_ = tablet_loc.next_;
-      related_tablet_loc->partition_id_ = rv->part_id_;
-      related_tablet_loc->first_level_part_id_ = rv->first_level_part_id_;
-      tablet_loc.next_ = related_tablet_loc;
-      if (OB_FAIL(related_table_loc->add_tablet_access(related_tablet_loc))) {
+      related_tablet_access = new(related_loc_buf) DASRuntimeTabletAccess();
+      related_tablet_access->tablet_id_ = rv->tablet_id_;
+      related_tablet_access->access_meta_ = related_table_access->access_meta_;
+      related_tablet_access->next_ = tablet_access.next_;
+      related_tablet_access->partition_id_ = rv->part_id_;
+      related_tablet_access->first_level_part_id_ = rv->first_level_part_id_;
+      tablet_access.next_ = related_tablet_access;
+      if (OB_FAIL(related_table_access->add_tablet_access(related_tablet_access))) {
       }
     }
   }
   return ret;
 }
 
-OB_INLINE int ObDASCtx::build_related_table_accesses(DASRuntimeTableAccess &table_loc)
+OB_INLINE int ObDASCtx::build_related_table_accesses(DASRuntimeTableAccess &table_access)
 {
   int ret = OB_SUCCESS;
-  if (!table_loc.loc_meta_->related_table_ids_.empty()) {
-    for (DASRuntimeTabletListIter node = table_loc.tablet_accesses_begin();
-         OB_SUCC(ret) && node != table_loc.tablet_accesses_end(); ++node) {
-      DASRuntimeTabletAccess *tablet_loc = *node;
-      if (OB_FAIL(build_related_tablet_accesses(*tablet_loc))) {
+  if (!table_access.access_meta_->related_table_ids_.empty()) {
+    for (DASRuntimeTabletListIter node = table_access.tablet_accesses_begin();
+         OB_SUCC(ret) && node != table_access.tablet_accesses_end(); ++node) {
+      DASRuntimeTabletAccess *tablet_access = *node;
+      if (OB_FAIL(build_related_tablet_accesses(*tablet_access))) {
       }
     }
   }
   return ret;
 }
 
-int ObDASCtx::ensure_table_access(const DASTableAccessMeta &loc_meta, DASRuntimeTableAccess *&table_loc)
+int ObDASCtx::ensure_table_access(const DASTableAccessMeta &access_meta, DASRuntimeTableAccess *&table_access)
 {
   int ret = OB_SUCCESS;
-  table_loc = find_table_access(loc_meta.table_loc_id_, loc_meta.ref_table_id_);
-  if (nullptr == table_loc) {
+  table_access = find_table_access(access_meta.table_ref_id_, access_meta.ref_table_id_);
+  if (nullptr == table_access) {
     void *loc_buf = nullptr;
     if (OB_ISNULL(loc_buf = allocator_.alloc(sizeof(DASRuntimeTableAccess)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_ISNULL(table_loc = new(loc_buf) DASRuntimeTableAccess(allocator_))) {
+    } else if (OB_ISNULL(table_access = new(loc_buf) DASRuntimeTableAccess(allocator_))) {
       //do nothing
-    } else if (OB_FAIL(table_accesses_.push_back(table_loc))) {
+    } else if (OB_FAIL(table_accesses_.push_back(table_access))) {
     } else {
-      table_loc->loc_meta_ = &loc_meta;
+      table_access->access_meta_ = &access_meta;
     }
     //to extended related table location
-    for (int64_t i = 0; OB_SUCC(ret) && i < loc_meta.related_table_ids_.count(); ++i) {
-      ObTableID related_table_id = loc_meta.related_table_ids_.at(i);
-      DASRuntimeTableAccess *related_table_loc = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < access_meta.related_table_ids_.count(); ++i) {
+      ObTableID related_table_id = access_meta.related_table_ids_.at(i);
+      DASRuntimeTableAccess *related_table_access = nullptr;
       void *related_loc_buf = allocator_.alloc(sizeof(DASRuntimeTableAccess));
-      void *loc_meta_buf = allocator_.alloc(sizeof(DASTableAccessMeta));
-      if (OB_ISNULL(related_loc_buf) || OB_ISNULL(loc_meta_buf)) {
+      void *access_meta_buf = allocator_.alloc(sizeof(DASTableAccessMeta));
+      if (OB_ISNULL(related_loc_buf) || OB_ISNULL(access_meta_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (OB_ISNULL(related_table_loc = new(related_loc_buf) DASRuntimeTableAccess(allocator_))) {
+      } else if (OB_ISNULL(related_table_access = new(related_loc_buf) DASRuntimeTableAccess(allocator_))) {
         //do nothing
-      } else if (OB_FAIL(table_accesses_.push_back(related_table_loc))) {
+      } else if (OB_FAIL(table_accesses_.push_back(related_table_access))) {
       } else {
-        DASTableAccessMeta *related_loc_meta = new(loc_meta_buf) DASTableAccessMeta(allocator_);
-        if (OB_FAIL(loc_meta.init_related_meta(related_table_id, *related_loc_meta))) {
+        DASTableAccessMeta *related_access_meta = new(access_meta_buf) DASTableAccessMeta(allocator_);
+        if (OB_FAIL(access_meta.init_related_meta(related_table_id, *related_access_meta))) {
         } else {
-          related_table_loc->loc_meta_ = related_loc_meta;
+          related_table_access->access_meta_ = related_access_meta;
         }
       }
     }
@@ -303,49 +303,49 @@ int ObDASCtx::ensure_table_access(const DASTableAccessMeta &loc_meta, DASRuntime
   return ret;
 }
 
-int ObDASCtx::add_table_access_targets(const DASTableAccessMeta &loc_meta,
+int ObDASCtx::add_table_access_targets(const DASTableAccessMeta &access_meta,
                                   const TableAccessTargets &table_targets)
 {
   int ret = OB_SUCCESS;
-  DASRuntimeTableAccess *table_loc = nullptr;
+  DASRuntimeTableAccess *table_access = nullptr;
   DASTableAccessMeta *final_meta = nullptr;
   const TabletAccessTargetIArray &tablet_targets = table_targets.get_tablets();
-  if (OB_FAIL(ObDASUtils::build_table_access_meta(allocator_, loc_meta, final_meta))) {
-  } else if (OB_FAIL(ensure_table_access(*final_meta, table_loc))) {
+  if (OB_FAIL(ObDASUtils::build_table_access_meta(allocator_, access_meta, final_meta))) {
+  } else if (OB_FAIL(ensure_table_access(*final_meta, table_access))) {
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_targets.count(); ++i) {
     const TabletAccessTarget &tablet_target = tablet_targets.at(i);
-    DASRuntimeTabletAccess *tablet_loc = nullptr;
-    if (OB_FAIL(ensure_tablet_access(*table_loc, tablet_target, tablet_loc))) {
+    DASRuntimeTabletAccess *tablet_access = nullptr;
+    if (OB_FAIL(ensure_tablet_access(*table_access, tablet_target, tablet_access))) {
     }
   }
-  LOG_DEBUG("das table loc assign finish", K(table_targets), K(loc_meta), K(table_loc->get_tablet_accesses()));
+  LOG_DEBUG("das table loc assign finish", K(table_targets), K(access_meta), K(table_access->get_tablet_accesses()));
   return ret;
 }
 
-int ObDASCtx::add_final_table_access(const DASTableAccessMeta &loc_meta,
+int ObDASCtx::add_final_table_access(const DASTableAccessMeta &access_meta,
                                   const ObIArray<ObTabletID> &tablet_ids,
                                   const ObIArray<ObObjectID> &partition_ids,
                                   const ObIArray<ObObjectID> &first_level_part_ids)
 {
   int ret = OB_SUCCESS;
-  DASRuntimeTableAccess *table_loc = nullptr;
+  DASRuntimeTableAccess *table_access = nullptr;
   DASTableAccessMeta *final_meta = nullptr;
-  if (OB_FAIL(ObDASUtils::build_table_access_meta(allocator_, loc_meta, final_meta))) {
-  } else if (OB_FAIL(ensure_table_access(*final_meta, table_loc))) {
+  if (OB_FAIL(ObDASUtils::build_table_access_meta(allocator_, access_meta, final_meta))) {
+  } else if (OB_FAIL(ensure_table_access(*final_meta, table_access))) {
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-    DASRuntimeTabletAccess *tablet_loc = nullptr;
+    DASRuntimeTabletAccess *tablet_access = nullptr;
     ObObjectID first_level_part_id =
         first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(i);
-    if (OB_FAIL(ensure_tablet_access(*table_loc,
+    if (OB_FAIL(ensure_tablet_access(*table_access,
                                     tablet_ids.at(i),
-                                    tablet_loc,
+                                    tablet_access,
                                     partition_ids.at(i),
                                     first_level_part_id))) {
     }
   }
-  LOG_DEBUG("das table loc assign finish", K(loc_meta), K(table_loc->get_tablet_accesses()));
+  LOG_DEBUG("das table loc assign finish", K(access_meta), K(table_access->get_tablet_accesses()));
 
   if (OB_FAIL(ret)) {
     clear_table_accesses();
@@ -366,8 +366,8 @@ int64_t ObDASCtx::get_related_tablet_cnt() const
 {
   int64_t total_cnt = 0;
   FOREACH(table_node, table_accesses_) {
-    DASRuntimeTableAccess *table_loc = *table_node;
-    total_cnt += table_loc->get_tablet_accesses().size();
+    DASRuntimeTableAccess *table_access = *table_node;
+    total_cnt += table_access->get_tablet_accesses().size();
   }
 
   return total_cnt;
@@ -377,42 +377,42 @@ int ObDASCtx::rebuild_tablet_access_links()
 {
   int ret = OB_SUCCESS;
   FOREACH_X(table_node, table_accesses_, OB_SUCC(ret)) {
-    DASRuntimeTableAccess *table_loc = *table_node;
-    ObTableID table_loc_id = table_loc->loc_meta_->table_loc_id_;
-    if (table_loc->rebuild_reference_) {
+    DASRuntimeTableAccess *table_access = *table_node;
+    ObTableID table_ref_id = table_access->access_meta_->table_ref_id_;
+    if (table_access->rebuild_reference_) {
       //has been rebuild the related table reference, ignore it
       continue;
     } else {
-      table_loc->rebuild_reference_ = 1;
+      table_access->rebuild_reference_ = 1;
     }
-    for (int64_t i = 0; i < table_loc->loc_meta_->related_table_ids_.count(); ++i) {
-      ObTableID related_table_id = table_loc->loc_meta_->related_table_ids_.at(i);
-      DASRuntimeTableAccess *related_table_loc = find_table_access(table_loc_id, related_table_id);
-      related_table_loc->rebuild_reference_ = 1;
-      if (table_loc->get_tablet_accesses().size() != related_table_loc->get_tablet_accesses().size()) {
+    for (int64_t i = 0; i < table_access->access_meta_->related_table_ids_.count(); ++i) {
+      ObTableID related_table_id = table_access->access_meta_->related_table_ids_.at(i);
+      DASRuntimeTableAccess *related_table_access = find_table_access(table_ref_id, related_table_id);
+      related_table_access->rebuild_reference_ = 1;
+      if (table_access->get_tablet_accesses().size() != related_table_access->get_tablet_accesses().size()) {
         ret = OB_ERR_UNEXPECTED;
       }
-      DASRuntimeTabletList::iterator tablet_iter = table_loc->tablet_accesses_begin();
-      DASRuntimeTabletList::iterator related_tablet_iter = related_table_loc->tablet_accesses_begin();
-      for (; OB_SUCC(ret) && tablet_iter != table_loc->tablet_accesses_end();
+      DASRuntimeTabletList::iterator tablet_iter = table_access->tablet_accesses_begin();
+      DASRuntimeTabletList::iterator related_tablet_iter = related_table_access->tablet_accesses_begin();
+      for (; OB_SUCC(ret) && tablet_iter != table_access->tablet_accesses_end();
           ++tablet_iter, ++related_tablet_iter) {
-        DASRuntimeTabletAccess *tablet_loc = *tablet_iter;
-        DASRuntimeTabletAccess *related_tablet_loc = *related_tablet_iter;
-        related_tablet_loc->next_ = tablet_loc->next_;
-        tablet_loc->next_ = related_tablet_loc;
+        DASRuntimeTabletAccess *tablet_access = *tablet_iter;
+        DASRuntimeTabletAccess *related_tablet_access = *related_tablet_iter;
+        related_tablet_access->next_ = tablet_access->next_;
+        tablet_access->next_ = related_tablet_access;
       }
     }
   }
   return ret;
 }
 
-int ObDASCtx::build_related_tablet_map(const DASTableAccessMeta &loc_meta)
+int ObDASCtx::build_related_tablet_map(const DASTableAccessMeta &access_meta)
 {
   int ret = OB_SUCCESS;
   ObDASTabletMapper tablet_mapper;
   ObArray<ObTabletID> tablet_ids;
   ObArray<ObObjectID> partition_ids;
-  if (OB_FAIL(get_das_tablet_mapper(loc_meta.ref_table_id_, tablet_mapper, &loc_meta.related_table_ids_))) {
+  if (OB_FAIL(get_das_tablet_mapper(access_meta.ref_table_id_, tablet_mapper, &access_meta.related_table_ids_))) {
   } else if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id(tablet_ids, partition_ids))) {
   }
   return ret;
@@ -443,8 +443,8 @@ OB_DEF_SERIALIZE(ObDASCtx)
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(table_accesses_.size());
   FOREACH_X(tmp_node, table_accesses_, OB_SUCC(ret)) {
-    DASRuntimeTableAccess *table_loc = *tmp_node;
-    OB_UNIS_ENCODE(*table_loc);
+    DASRuntimeTableAccess *table_access = *tmp_node;
+    OB_UNIS_ENCODE(*table_access);
   }
   OB_UNIS_ENCODE(flags_);
   OB_UNIS_ENCODE(snapshot_);
@@ -458,17 +458,17 @@ OB_DEF_DESERIALIZE(ObDASCtx)
   int64_t size = 0;
   OB_UNIS_DECODE(size);
   for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-    DASRuntimeTableAccess *table_loc = nullptr;
+    DASRuntimeTableAccess *table_access = nullptr;
     void *table_buf = allocator_.alloc(sizeof(DASRuntimeTableAccess));
     if (OB_ISNULL(table_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      table_loc = new(table_buf) DASRuntimeTableAccess(allocator_);
-      if (OB_FAIL(table_accesses_.push_back(table_loc))) {
+      table_access = new(table_buf) DASRuntimeTableAccess(allocator_);
+      if (OB_FAIL(table_accesses_.push_back(table_access))) {
       }
     }
-    OB_UNIS_DECODE(*table_loc);
-    OX(table_loc->rebuild_reference_ = 0);
+    OB_UNIS_DECODE(*table_access);
+    OX(table_access->rebuild_reference_ = 0);
   }
   OB_UNIS_DECODE(flags_);
   OB_UNIS_DECODE(snapshot_);
@@ -483,8 +483,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASCtx)
   int64_t len = 0;
   OB_UNIS_ADD_LEN(table_accesses_.size());
   FOREACH(tmp_node, table_accesses_) {
-    DASRuntimeTableAccess *table_loc = *tmp_node;
-    OB_UNIS_ADD_LEN(*table_loc);
+    DASRuntimeTableAccess *table_access = *tmp_node;
+    OB_UNIS_ADD_LEN(*table_access);
   }
   OB_UNIS_ADD_LEN(flags_);
   OB_UNIS_ADD_LEN(snapshot_);

@@ -331,7 +331,7 @@ int ObJoinOrder::set_sharding_info_for_base_path(ObIArray<AccessPath *> &access_
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
   ObOptimizerContext *opt_ctx = NULL;
-  ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
+  TableAccessShape location_type = OB_TBL_LOCATION_UNINITIALIZED;
   AccessPath *path = NULL;
   ObShardingInfo *sharding_info = NULL;
   ObTablePartitionInfo *table_partition_info = NULL;
@@ -376,7 +376,7 @@ int ObJoinOrder::compute_sharding_info_for_index_info_entry(const uint64_t table
 {
   int ret = OB_SUCCESS;
   ObTablePartitionInfo *part_info = NULL;
-  ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
+  TableAccessShape location_type = OB_TBL_LOCATION_UNINITIALIZED;
   ObShardingInfo *sharding_info = NULL;
   if (OB_ISNULL(index_info_entry)
       || OB_ISNULL(part_info = index_info_entry->get_partition_info())) {
@@ -404,7 +404,7 @@ int ObJoinOrder::compute_sharding_info_for_index_info_entry(const uint64_t table
   return ret;
 }
 
-int ObJoinOrder::compute_sharding_info_with_part_info(ObTableLocationType location_type,
+int ObJoinOrder::compute_sharding_info_with_part_info(TableAccessShape location_type,
                                                       ObTablePartitionInfo* table_partition_info,
                                                       ObShardingInfo *&sharding_info)
 {
@@ -1400,7 +1400,7 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())
     || OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(ObTableLocation::get_is_weak_read(*stmt, session_info, OPT_CTX.get_exec_ctx()->get_sql_ctx(), is_weak_read))) {
+  } else if (OB_FAIL(TableAccessPlan::get_is_weak_read(*stmt, session_info, OPT_CTX.get_exec_ctx()->get_sql_ctx(), is_weak_read))) {
   } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;

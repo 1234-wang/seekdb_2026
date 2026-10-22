@@ -52,12 +52,12 @@ int TableAccessTargets::replace_local_index_targets(DASRelatedTabletMap &map, Ob
   int ret = OB_SUCCESS;
   ref_table_id_ = ref_table_id;
   for (int64_t i = 0; i < tablet_targets_.count(); ++i) {
-    TabletAccessTarget &tablet_loc = tablet_targets_.at(i);
+    TabletAccessTarget &tablet_access = tablet_targets_.at(i);
     const DASRelatedTabletMap::Value *rv = nullptr;
-    if (OB_ISNULL(rv = map.get_related_tablet_id(tablet_loc.get_tablet_id(), ref_table_id))) {
+    if (OB_ISNULL(rv = map.get_related_tablet_id(tablet_access.get_tablet_id(), ref_table_id))) {
       ret = OB_ERR_UNEXPECTED;
     } else {
-      tablet_loc.set_tablet_info(rv->tablet_id_, rv->part_id_, rv->first_level_part_id_);
+      tablet_access.set_tablet_info(rv->tablet_id_, rv->part_id_, rv->first_level_part_id_);
     }
   }
   return ret;

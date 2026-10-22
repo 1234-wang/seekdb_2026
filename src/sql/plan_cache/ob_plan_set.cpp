@@ -981,7 +981,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
       OB_ISNULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(WARN, "invalid argument", KP(plan_cache_value_), K(ret));
-  } else if (OB_FAIL(get_phy_locations(sql_ctx.get_partition_infos(),
+  } else if (OB_FAIL(collect_access_targets(sql_ctx.get_partition_infos(),
                                        //table_locs,
                                        table_targets))) {
   } else {
@@ -1048,7 +1048,7 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
   } else if (OB_ISNULL(pc_malloc_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(ObPlanSet::init_new_set(pc_ctx, plan, pc_malloc_))) {
-  } else if (OB_FAIL(table_locations_.prepare_allocate_and_keep_count(sql_ctx.get_partition_info_count(),
+  } else if (OB_FAIL(table_access_plans_.prepare_allocate_and_keep_count(sql_ctx.get_partition_info_count(),
                                                         *plan_cache_value_->get_pcv_set()->get_allocator()))) {
   } else if (OB_FAIL(dist_plans_.init(this))) {
   } else {
@@ -1091,9 +1091,9 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       if (NULL == partition_infos.at(i)) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(table_locations_.push_back(partition_infos.at(i)->get_table_location()))) {
+      } else if (OB_FAIL(table_access_plans_.push_back(partition_infos.at(i)->get_table_access_plan()))) {
       } else if (is_all_non_partition_
-                 && partition_infos.at(i)->get_table_location().is_partitioned()) {
+                 && partition_infos.at(i)->get_table_access_plan().is_partitioned()) {
         is_all_non_partition_ = false;
       }
     } // for end
@@ -1152,7 +1152,7 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
   } else {
     pc_ctx.exist_local_plan_ = true;
     if (FALSE_IT(plan = local_plan)) {
-    } else if (OB_FAIL(get_plan_type(plan->get_table_locations(),
+    } else if (OB_FAIL(get_plan_type(plan->get_table_access_plans(),
                                      plan->has_uncertain_local_operator(), pc_ctx,
                                      real_type))) {
     } else if (OB_PHY_PLAN_LOCAL != real_type) {
@@ -1251,7 +1251,7 @@ void ObSqlPlanSet::reset()
   is_contain_virtual_table_ = false;
   is_contain_inner_table_ = false;
   enable_inner_part_parallel_exec_ = false;
-  table_locations_.reset();
+  table_access_plans_.reset();
   if (OB_ISNULL(plan_cache_value_)
       || OB_ISNULL(plan_cache_value_->get_pc_alloc())) {
     //do nothing
@@ -1268,7 +1268,7 @@ void ObSqlPlanSet::reset()
 
 // Build this execution's tablet locations without candidate replica descriptions
 // when the plan already owns the non-partitioned table and related-index IDs.
-int ObSqlPlanSet::build_table_locations(const ObIArray<ObTableLocation> &table_locations,
+int ObSqlPlanSet::build_table_locations(const ObIArray<TableAccessPlan> &table_access_plans,
                                        ObPlanCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1276,8 +1276,8 @@ int ObSqlPlanSet::build_table_locations(const ObIArray<ObTableLocation> &table_l
   ObDASCtx &das_ctx = exec_ctx.get_das_ctx();
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   bool build_directly = GCTX.self_addr().is_valid() && exec_ctx.get_addr() == GCTX.self_addr();
-  for (int64_t i = 0; build_directly && i < table_locations.count(); ++i) {
-    const ObTableLocation &location = table_locations.at(i);
+  for (int64_t i = 0; build_directly && i < table_access_plans.count(); ++i) {
+    const TableAccessPlan &location = table_access_plans.at(i);
     build_directly = location.is_non_partition_optimized()
                      && !location.is_partitioned()
                      && !is_virtual_table(location.get_ref_table_id());
@@ -1288,17 +1288,17 @@ int ObSqlPlanSet::build_table_locations(const ObIArray<ObTableLocation> &table_l
   } else if (build_directly) {
     const ObDataTypeCastParams dtc_params =
         ObBasicSessionInfo::create_dtc_params(pc_ctx.sql_ctx_.session_info_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_locations.count(); ++i) {
-      if (OB_FAIL(table_locations.at(i).calculate_final_tablet_locations(
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_access_plans.count(); ++i) {
+      if (OB_FAIL(table_access_plans.at(i).calculate_final_tablet_locations(
               exec_ctx, plan_ctx->get_param_store(), dtc_params))) {
       }
     }
   } else {
     ObSEArray<TableAccessTargets, 2> table_targets;
-    if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations, pc_ctx, table_targets))) {
+    if (OB_FAIL(TableAccessTargetBuilder::collect_access_targets(table_access_plans, pc_ctx, table_targets))) {
     } else if (!table_targets.empty()
-               && OB_FAIL(ObPhyLocationGetter::build_table_locs(
-                   das_ctx, table_locations, table_targets))) {
+               && OB_FAIL(TableAccessTargetBuilder::build_runtime_accesses(
+                   das_ctx, table_access_plans, table_targets))) {
     }
   }
   if (OB_FAIL(ret)) {
@@ -1320,9 +1320,9 @@ int ObSqlPlanSet::calc_phy_plan_type_v2(const ObPlanCacheCtx &pc_ctx,
   } else {
     bool is_all_empty = true;
     bool is_all_single_partition = true;
-    FOREACH_X(table_loc, table_locs, is_all_single_partition)
+    FOREACH_X(table_access, table_locs, is_all_single_partition)
     {
-      const DASRuntimeTabletList &tablet_locs = (*table_loc)->get_tablet_accesses();
+      const DASRuntimeTabletList &tablet_locs = (*table_access)->get_tablet_accesses();
       if (tablet_locs.size() != 0) {
         is_all_empty = false;
       }
@@ -1350,25 +1350,25 @@ void ObSqlPlanSet::remove_all_plan()
 
 
 //add plan used
-int ObSqlPlanSet::get_phy_locations(const ObTablePartitionInfoArray &partition_infos,
+int ObSqlPlanSet::collect_access_targets(const ObTablePartitionInfoArray &partition_infos,
                                     //ObIArray<DASRuntimeTableAccess> &table_locs,
                                     ObIArray<TableAccessTargets> &table_targets)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(partition_infos,
+  if (OB_FAIL(TableAccessTargetBuilder::collect_access_targets(partition_infos,
                                                      //table_locs,
                                                      table_targets))) {
   } else {/* do nothing */}
   return ret;
 }
 
-int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations,
+int ObSqlPlanSet::get_plan_type(const ObIArray<TableAccessPlan> &table_access_plans,
                                 const bool is_contain_uncertain_op,
                                 ObPlanCacheCtx &pc_ctx,
                                 ObPhyPlanType &plan_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(build_table_locations(table_locations, pc_ctx))) {
+  if (OB_FAIL(build_table_locations(table_access_plans, pc_ctx))) {
   } else if (OB_FAIL(calc_phy_plan_type_v2(pc_ctx,
                                            plan_type))) {
   } else {

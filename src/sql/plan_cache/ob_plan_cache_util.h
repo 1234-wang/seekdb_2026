@@ -46,7 +46,7 @@ namespace sql
 class ObPCVSet;
 class ObPhysicalPlan;
 struct ObSqlCtx;
-class ObTableLocation;
+class TableAccessPlan;
 class TableAccessTargets;
 class ObTablePartitionInfo;
 class ObPlanCacheValue;
@@ -917,23 +917,22 @@ public:
   common::ObIArray<uint64_t> *key_array_;
 };
 
-struct ObPhyLocationGetter
+struct TableAccessTargetBuilder
 {
 public:
   // used for getting plan
-  static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
+  static int collect_access_targets(const ObIArray<TableAccessPlan> &table_access_plans,
                                const ObPlanCacheCtx &pc_ctx,
-                               ObIArray<TableAccessTargets> &phy_location_infos);
+                               ObIArray<TableAccessTargets> &table_targets);
 
   // used for adding plan
-  static int get_phy_locations(const common::ObIArray<ObTablePartitionInfo *> &partition_infos,
-                               //ObIArray<DASRuntimeTableAccess> &phy_locations,
-                               ObIArray<TableAccessTargets> &phy_location_infos);
+  static int collect_access_targets(const common::ObIArray<ObTablePartitionInfo *> &partition_infos,
+                               ObIArray<TableAccessTargets> &table_targets);
 
-  static int build_table_locs(ObDASCtx &das_ctx,
-                              const common::ObIArray<ObTableLocation> &table_locations,
+  static int build_runtime_accesses(ObDASCtx &das_ctx,
+                              const common::ObIArray<TableAccessPlan> &table_access_plans,
                               const common::ObIArray<TableAccessTargets> &table_targets);
-  static int build_related_tablet_info(const ObTableLocation &table_location,
+  static int build_related_tablet_info(const TableAccessPlan &table_access_plan,
                                        ObExecContext &exec_ctx,
                                        DASRelatedTabletMap *&related_map);
 

@@ -758,7 +758,7 @@ public:
   inline const ObRawExpr* get_snapshot_query_expr() const { return fq_expr_; }
   inline ObRawExpr* &get_snapshot_query_expr() { return fq_expr_; }
   inline void set_snapshot_query_expr(ObRawExpr *expr) { fq_expr_ = expr; }
-  int get_phy_location_type(ObTableLocationType &location_type);
+  int get_phy_location_type(TableAccessShape &location_type);
   virtual int generate_access_exprs();
   int copy_filter_before_index_back();
   int copy_filter_for_index_merge();

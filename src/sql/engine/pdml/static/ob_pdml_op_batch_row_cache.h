@@ -128,7 +128,7 @@ class ObDMLOpDataWriter
 public:
   // Write data in bulk to the storage layer
   virtual int write_rows(ObExecContext &ctx,
-                         const DASRuntimeTabletAccess *tablet_loc,
+                         const DASRuntimeTabletAccess *tablet_access,
                          ObPDMLOpRowIterator &iterator) = 0;
 };
 

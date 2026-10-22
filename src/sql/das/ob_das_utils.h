@@ -31,12 +31,12 @@ class ObDASUtils
 {
 public:
   static int find_tablet_access(const ObTabletID &tablet_id,
-                                  DASRuntimeTableAccess &table_loc,
-                                  DASRuntimeTabletAccess *&tablet_loc);
+                                  DASRuntimeTableAccess &table_access,
+                                  DASRuntimeTabletAccess *&tablet_access);
   static int check_nested_sql_mutating(common::ObTableID ref_table_id,
                                        ObExecContext &exec_ctx,
                                        bool is_reading = false);
-  static DASRuntimeTabletAccess *get_related_tablet_loc(const DASRuntimeTabletAccess &tablet_loc,
+  static DASRuntimeTabletAccess *get_related_tablet_access(const DASRuntimeTabletAccess &tablet_access,
                                                 common::ObTableID related_table_id);
   static int build_table_access_meta(common::ObIAllocator &allocator,
                                   const DASTableAccessMeta &src,

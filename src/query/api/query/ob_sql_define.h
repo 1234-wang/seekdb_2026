@@ -283,7 +283,7 @@ inline const ObString &ob_join_type_str(ObJoinType join_type)
   }
 }
 
-enum ObTableLocationType
+enum TableAccessShape
 {
   OB_TBL_LOCATION_UNINITIALIZED = 0,
   OB_TBL_LOCATION_LOCAL,

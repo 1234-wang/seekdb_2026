@@ -41,7 +41,7 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t cur_idx = gi_task_set_.at(pos).idx_;
-    info.tablet_loc_ = const_cast<DASRuntimeTabletAccess *>(gi_task_set_.at(pos).tablet_loc_);
+    info.tablet_access_ = const_cast<DASRuntimeTabletAccess *>(gi_task_set_.at(pos).tablet_access_);
     info.ranges_.reset();
     info.granule_type_ = gi_task_set_.at(pos).granule_type_;
     for (int64_t i = pos; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
@@ -63,7 +63,7 @@ int ObGITaskSet::get_task_tablet_id_at_pos(const int64_t &pos, uint64_t &tablet_
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t cur_idx = gi_task_set_.at(pos).idx_;
-    tablet_id = gi_task_set_.at(pos).tablet_loc_->tablet_id_.id();
+    tablet_id = gi_task_set_.at(pos).tablet_access_->tablet_id_.id();
   }
   return ret;
 }
@@ -101,7 +101,7 @@ int ObGITaskSet::get_next_gi_task(ObGranuleTaskInfo &info)
     ret = OB_ERR_UNEXPECTED;
   } else {
     int64_t cur_idx = gi_task_set_.at(cur_pos_).idx_;
-    info.tablet_loc_ = gi_task_set_.at(cur_pos_).tablet_loc_;
+    info.tablet_access_ = gi_task_set_.at(cur_pos_).tablet_access_;
     info.ranges_.reset();
     info.granule_type_ = gi_task_set_.at(cur_pos_).granule_type_;
     for (int64_t i = cur_pos_; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
@@ -149,8 +149,8 @@ int ObGITaskSet::set_pw_affi_partition_order(bool asc, bool force_reverse)
   } else {
     // first we do a defensive check. if data already sorted as expected, we just skip reverse
     if (!force_reverse &&
-        ((asc && (gi_task_set_.at(0).tablet_loc_->tablet_id_ <= gi_task_set_.at(1).tablet_loc_->tablet_id_))
-         || (!asc && (gi_task_set_.at(0).tablet_loc_->tablet_id_ > gi_task_set_.at(1).tablet_loc_->tablet_id_)))) {
+        ((asc && (gi_task_set_.at(0).tablet_access_->tablet_id_ <= gi_task_set_.at(1).tablet_access_->tablet_id_))
+         || (!asc && (gi_task_set_.at(0).tablet_access_->tablet_id_ > gi_task_set_.at(1).tablet_access_->tablet_id_)))) {
       // no need to reverse this taskset
     } else {
       common::ObArray<ObGITaskInfo> reverse_task_info;
@@ -182,8 +182,8 @@ int ObGITaskSet::set_block_order(bool desc)
       // step1: in order to reverse block inside a partition, look for partition boundary
       int64_t upper_exclusive = lower_inclusive + 1;
       for (; upper_exclusive < gi_task_set_.count() && OB_SUCC(ret); ++upper_exclusive) {
-        if (gi_task_set_.at(upper_exclusive).tablet_loc_->tablet_id_.id() !=
-            gi_task_set_.at(lower_inclusive).tablet_loc_->tablet_id_.id()) {
+        if (gi_task_set_.at(upper_exclusive).tablet_access_->tablet_id_.id() !=
+            gi_task_set_.at(lower_inclusive).tablet_access_->tablet_id_.id()) {
           break;
         }
       }
@@ -949,7 +949,7 @@ int ObRandomGranuleSplitter::split_granule(ObIAllocator &allocator, ObGranuleIte
                                            ObGranulePumpArgs &args, const ObTableScanSpec *tsc,
                                            int64_t op_id, ObGITaskSet &output_task_set,
                                            ObGITaskSet::ObGIRandomType random_type,
-                                           DASRuntimeTabletAccess *tablet_loc,
+                                           DASRuntimeTabletAccess *tablet_access,
                                            const ObIArray<ObNewRange> &ranges)
 {
   /* Be careful to access shared data(such as sqc handler, gi pump....) in this function, because
@@ -971,7 +971,7 @@ int ObRandomGranuleSplitter::split_granule(ObIAllocator &allocator, ObGranuleIte
   } else if (OB_UNLIKELY(args.parallelism_ <= 0 || args.tablet_size_ <= 0 || ranges.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parameter", K(args.parallelism_), K(args.tablet_size_), K(ranges.count()));
-  } else if (OB_FAIL(tablets.push_back(tablet_loc))) {
+  } else if (OB_FAIL(tablets.push_back(tablet_access))) {
   } else {
     /* Multiple px workers may enter split_block_ranges, think about concurrency here:
      * 1. exec context is used to allocate memory for das task, the memory is non shared, so we use
@@ -1083,10 +1083,10 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
   ARRAY_FOREACH_X(taskset.gi_task_set_, idx, cnt, OB_SUCC(ret)) {
     if (cur_idx != taskset.gi_task_set_.at(idx).idx_) {
       cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different parition key in Affinitize
-      const DASRuntimeTabletAccess &tablet_loc = *taskset.gi_task_set_.at(idx).tablet_loc_;
+      const DASRuntimeTabletAccess &tablet_access = *taskset.gi_task_set_.at(idx).tablet_access_;
       int64_t tablet_idx = -1;
-      if (NULL == table_schema || table_schema->get_table_id() != tablet_loc.loc_meta_->ref_table_id_) {
-        uint64_t table_id = tablet_loc.loc_meta_->ref_table_id_;
+      if (NULL == table_schema || table_schema->get_table_id() != tablet_access.access_meta_->ref_table_id_) {
+        uint64_t table_id = tablet_access.access_meta_->ref_table_id_;
         if (OB_FAIL(GCTX.schema_service_->get_runtime_schema_guard(
                     schema_guard))) {
         } else if (OB_FAIL(schema_guard.get_table_schema(
@@ -1101,18 +1101,18 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
         // for virtual table, we can directly mock a tablet id
         // function build_tablet_idx_map will mock a idx map whose key
         // varies from 1 to table_schema->get_all_part_num(), and the value = key + 1
-        // so we can directly set tablet_idx = tablet_loc.tablet_id_.id() + 1, the result is same
+        // so we can directly set tablet_idx = tablet_access.tablet_id_.id() + 1, the result is same
         if (is_virtual_table(table_schema->get_table_id())) {
-          tablet_idx = tablet_loc.tablet_id_.id() + 1;
-        } else if (OB_FAIL(idx_map.get_refactored(tablet_loc.tablet_id_.id(), tablet_idx))) {
+          tablet_idx = tablet_access.tablet_id_.id() + 1;
+        } else if (OB_FAIL(idx_map.get_refactored(tablet_access.tablet_id_.id(), tablet_idx))) {
           ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(tablet_loc.tablet_id_.id(),
+      } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(tablet_access.tablet_id_.id(),
                                                                partitions_info_,
                                                                partition_row_info))) {
-      } else if (OB_FAIL(affinitize_rule.add_partition(tablet_loc.tablet_id_.id(),
+      } else if (OB_FAIL(affinitize_rule.add_partition(tablet_access.tablet_id_.id(),
                                                       tablet_idx,
                                                       parallelism,
                                                       partition_row_info))) {
@@ -1130,7 +1130,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
         ret = OB_ERR_UNEXPECTED;
       }
       ARRAY_FOREACH(taskset.gi_task_set_, idx) {
-        const DASRuntimeTabletAccess &tablet_key = *taskset.gi_task_set_.at(idx).tablet_loc_;
+        const DASRuntimeTabletAccess &tablet_key = *taskset.gi_task_set_.at(idx).tablet_access_;
         if (tablet_id == tablet_key.tablet_id_.id()) {
           ObGITaskSet &real_task_set = taskset_array.at(task_id);
           if (OB_FAIL(real_task_set.gi_task_set_.push_back(taskset.gi_task_set_.at(idx)))) {
@@ -1584,7 +1584,7 @@ int ObGranulePump::regenerate_gi_task(ObGranulePumpArgs &args)
 }
 
 int ObGranulePump::split_granule(ObGranuleIteratorOp *gi_op, int64_t scan_op_id,
-                                             DASRuntimeTabletAccess *tablet_loc,
+                                             DASRuntimeTabletAccess *tablet_access,
                                              const ObIArray<ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;
@@ -1654,7 +1654,7 @@ int ObGranulePump::split_granule(ObGranuleIteratorOp *gi_op, int64_t scan_op_id,
        * fill_shared_pool.
        */
       if (OB_FAIL(splitter.split_granule(allocator, gi_op, *target_arg, scan_ops.at(0), scan_op_id,
-                                         output_task_set, random_type, tablet_loc,
+                                         output_task_set, random_type, tablet_access,
                                          memory_safe_ranges))) {
       } else if (OB_FAIL(fill_shared_pool(
                      output_task_set,

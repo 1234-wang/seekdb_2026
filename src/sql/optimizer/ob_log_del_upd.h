@@ -300,7 +300,7 @@ public:
   {
     return table_partition_info_;
   }
-  int get_table_location_type(ObTableLocationType &type);
+  int get_table_location_type(TableAccessShape &type);
   inline void set_need_allocate_partition_id_expr(bool need_alloc_part_id_expr) {
     need_alloc_part_id_expr_ = need_alloc_part_id_expr;
   }

@@ -63,12 +63,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPartIdRowMapManager);
 };
 
-struct TableLocationKey
+struct TableAccessKey
 {
   uint64_t table_id_;
   uint64_t ref_table_id_;
 
-  bool operator==(const TableLocationKey &other) const
+  bool operator==(const TableAccessKey &other) const
   {
     return table_id_ == other.table_id_ && ref_table_id_ == other.ref_table_id_;
   }

@@ -1065,7 +1065,7 @@ int ObMPQuery::check_readonly_stmt(ObMySQLResultSet &result)
     const int64_t table_count = DAS_CTX(result.get_exec_context()).get_table_accesses().size();
     if (0 == table_count) {
       //This case is special, jdbc will send a special statement select @@session.tx_read_only when sending the query statement;
-      //For convenience of obtest testing, the restriction on the select statement for no table_locations needs to be removed
+      //For convenience of obtest testing, the restriction on the select statement for no table_access_plans needs to be removed
     } else if (OB_FAIL(result.get_read_consistency(consistency))) {
     } else if (WEAK != consistency) {
       ret = OB_ERR_READ_ONLY;

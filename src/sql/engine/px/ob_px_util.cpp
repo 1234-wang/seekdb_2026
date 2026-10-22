@@ -111,13 +111,13 @@ int ObBaseOrderMap::reorder_partition_as_base_order(int64_t pwj_group_id,
 // Physical distribution strategy: For leaf nodes, dfo distribution is generally directly according to data distribution
 // Note: If there are two or more scans in dfo, only consider the first one. And, the remaining scans
 //       The copy distribution is exactly the same as the first scan, otherwise an error is reported.
-int ObPxSqcDistributionUtil::alloc_by_data_distribution(const ObIArray<ObTableLocation> *table_locations,
+int ObPxSqcDistributionUtil::alloc_by_data_distribution(const ObIArray<TableAccessPlan> *table_access_plans,
                                                    ObExecContext &ctx,
                                                    ObDfo &dfo)
 {
   int ret = OB_SUCCESS;
   if (nullptr != dfo.get_root_op_spec()) {
-    if (OB_FAIL(alloc_by_data_distribution_inner(table_locations, ctx, dfo))) {
+    if (OB_FAIL(alloc_by_data_distribution_inner(table_access_plans, ctx, dfo))) {
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -127,20 +127,20 @@ int ObPxSqcDistributionUtil::alloc_by_data_distribution(const ObIArray<ObTableLo
 
 
 int ObPxSqcDistributionUtil::build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec *> &scan_ops,
-      const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo)
+      const ObIArray<TableAccessPlan> *table_access_plans, ObDfo &dfo)
 {
   int ret = OB_SUCCESS;
-  uint64_t table_location_key = OB_INVALID_INDEX;
+  uint64_t table_ref_id = OB_INVALID_INDEX;
   for (int i = 0; i < scan_ops.count() && OB_SUCC(ret); ++i) {
     if (OB_ISNULL(scan_ops.at(i))) {
       ret = OB_ERR_UNEXPECTED;
     } else {
-      table_location_key = scan_ops.at(i)->get_table_loc_id();
-      for (int j = 0; j < table_locations->count() && OB_SUCC(ret); ++j) {
-        if (table_location_key == table_locations->at(j).get_table_id()) {
+      table_ref_id = scan_ops.at(i)->get_table_ref_id();
+      for (int j = 0; j < table_access_plans->count() && OB_SUCC(ret); ++j) {
+        if (table_ref_id == table_access_plans->at(j).get_table_id()) {
           ObIArray<ObPxSqcMeta> &sqcs = dfo.get_sqcs();
           for (int k = 0; k < sqcs.count() && OB_SUCC(ret); ++k) {
-            if (OB_FAIL(sqcs.at(k).get_pruning_table_locations().push_back(table_locations->at(j)))) {
+            if (OB_FAIL(sqcs.at(k).get_pruning_table_locations().push_back(table_access_plans->at(j)))) {
             }
           }
         }
@@ -151,7 +151,7 @@ int ObPxSqcDistributionUtil::build_dynamic_partition_table_location(common::ObIA
 }
 
 int ObPxSqcDistributionUtil::alloc_by_data_distribution_inner(
-    const ObIArray<ObTableLocation> *table_locations,
+    const ObIArray<TableAccessPlan> *table_access_plans,
     ObExecContext &ctx,
     ObDfo &dfo)
 {
@@ -182,19 +182,19 @@ int ObPxSqcDistributionUtil::alloc_by_data_distribution_inner(
     if (OB_FAIL(alloc_by_local_distribution(ctx, dfo))) {
     }
   } else {
-    DASRuntimeTableAccess *table_loc = NULL;
+    DASRuntimeTableAccess *table_access = NULL;
     DASRuntimeTableAccess *dml_full_loc = NULL;
-    uint64_t table_location_key = OB_INVALID_INDEX;
+    uint64_t table_ref_id = OB_INVALID_INDEX;
     uint64_t ref_table_id = OB_INVALID_ID;
     if (scan_ops.count() > 0) {
       scan_op = scan_ops.at(0);
-      table_location_key = scan_op->get_table_loc_id();
+      table_ref_id = scan_op->get_table_ref_id();
       ref_table_id = scan_op->get_loc_ref_table_id();
     }
     if (OB_SUCC(ret)) {
       if (dml_ops.count() > 0) {
         dml_op = dml_ops.at(0);
-        if (OB_FAIL(dml_op->get_single_table_loc_id(table_location_key, ref_table_id))) {
+        if (OB_FAIL(dml_op->get_single_table_ref_id(table_ref_id, ref_table_id))) {
         }
       }
     }
@@ -203,35 +203,35 @@ int ObPxSqcDistributionUtil::alloc_by_data_distribution_inner(
     } else if (dml_op && dml_op->is_table_location_uncertain()) {
       // Need to get FULL TABLE LOCATION. FIX ME YISHEN.
       CK(OB_NOT_NULL(ctx.get_my_session()));
-      OZ(ObTableLocation::build_full_local_table_loc(DAS_CTX(ctx),
+      OZ(TableAccessPlan::build_full_table_access(DAS_CTX(ctx),
                                                      ctx.get_allocator(),
-                                                     table_location_key,
+                                                     table_ref_id,
                                                      ref_table_id,
-                                                     table_loc));
+                                                     table_access));
       if (OB_SUCC(ret)) {
-        dml_full_loc = table_loc;
+        dml_full_loc = table_access;
       }
     } else {
       // Obtain the location information of the partition corresponding to the current DFO through TSC or DML
       // Subsequently use location information to construct the corresponding SQC meta
-      if (OB_ISNULL(table_loc = DAS_CTX(ctx).find_table_access(table_location_key, ref_table_id))) {
+      if (OB_ISNULL(table_access = DAS_CTX(ctx).find_table_access(table_ref_id, ref_table_id))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get table loc", K(ret), K(table_location_key), K(ref_table_id), K(DAS_CTX(ctx).get_table_accesses()));
+        LOG_WARN("fail to get table loc", K(ret), K(table_ref_id), K(ref_table_id), K(DAS_CTX(ctx).get_table_accesses()));
       }
     }
 
     if (OB_FAIL(ret)) {
       // bypass
-    } else if (OB_ISNULL(table_loc)) {
+    } else if (OB_ISNULL(table_access)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
-      const DASRuntimeTabletList &locations = table_loc->get_tablet_accesses();
+      const DASRuntimeTabletList &locations = table_access->get_tablet_accesses();
       if (locations.size() <= 0) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(build_dfo_sqc(ctx, locations, dfo))) {
-      } else if (OB_FAIL(set_dfo_accessed_location(ctx, table_location_key, dfo, scan_ops, dml_op, dml_full_loc))) {
-      } else if (OB_NOT_NULL(table_locations) && !table_locations->empty() &&
-            OB_FAIL(build_dynamic_partition_table_location(scan_ops, table_locations, dfo))) {
+      } else if (OB_FAIL(set_dfo_accessed_location(ctx, table_ref_id, dfo, scan_ops, dml_op, dml_full_loc))) {
+      } else if (OB_NOT_NULL(table_access_plans) && !table_access_plans->empty() &&
+            OB_FAIL(build_dynamic_partition_table_location(scan_ops, table_access_plans, dfo))) {
       }
     }
   }
@@ -405,14 +405,14 @@ int ObPxSqcDistributionUtil::alloc_by_temp_child_distribution_inner(ObExecContex
     LOG_WARN("expect temp table in dfo", K(child.get_temp_table_id()), K(temp_ctx));
   }
   if (OB_SUCC(ret)) {
-    int64_t base_table_location_key = OB_INVALID_ID;
+    int64_t base_table_ref_id = OB_INVALID_ID;
     if (OB_ISNULL(root_op)) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(find_scan_ops(scan_ops, *root_op))) {
     } else if (scan_ops.empty()) {
-    } else if (FALSE_IT(base_table_location_key = scan_ops.at(0)->get_table_loc_id())) {
+    } else if (FALSE_IT(base_table_ref_id = scan_ops.at(0)->get_table_ref_id())) {
     } else if (OB_FAIL(set_dfo_accessed_location(exec_ctx,
-          base_table_location_key, child, scan_ops, NULL, NULL))) {
+          base_table_ref_id, child, scan_ops, NULL, NULL))) {
     }
   }
   return ret;
@@ -507,7 +507,7 @@ int ObPxSqcDistributionUtil::alloc_by_reference_child_distribution(
 }
 
 int ObPxSqcDistributionUtil::alloc_distribution_of_reference_child(
-                                          const ObIArray<ObTableLocation> *table_locations,
+                                          const ObIArray<TableAccessPlan> *table_access_plans,
                                           ObExecContext &exec_ctx,
                                           ObDfo &parent)
 {
@@ -516,7 +516,7 @@ int ObPxSqcDistributionUtil::alloc_distribution_of_reference_child(
   if (OB_FAIL(find_reference_child(parent, reference_child))) {
   } else if (OB_ISNULL(reference_child)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
+  } else if (OB_FAIL(alloc_by_data_distribution(table_access_plans, exec_ctx, *reference_child))) {
   }
   return ret;
 }
@@ -575,15 +575,15 @@ int ObPxSqcDistributionUtil::get_access_partition_order_recursively (
 }
 
 int ObPxSqcDistributionUtil::set_dfo_accessed_location(ObExecContext &ctx,
-                                                  int64_t base_table_location_key,
+                                                  int64_t base_table_ref_id,
                                                   ObDfo &dfo,
                                                   ObIArray<const ObTableScanSpec *> &scan_ops,
                                                   const ObTableModifySpec *dml_op,
                                                   DASRuntimeTableAccess *dml_loc)
 {
   int ret = OB_SUCCESS;
-  DASRuntimeTableAccess *dml_table_loc = nullptr;
-  ObTableID dml_table_location_key = OB_INVALID_ID;
+  DASRuntimeTableAccess *dml_table_access = nullptr;
+  ObTableID dml_table_ref_id = OB_INVALID_ID;
   ObTableID dml_ref_table_id = OB_INVALID_ID;
   ObBaseOrderMap base_order_map;
   ObSEArray<std::pair<int64_t, bool>, 18> locations_order;
@@ -593,54 +593,54 @@ int ObPxSqcDistributionUtil::set_dfo_accessed_location(ObExecContext &ctx,
   if (OB_FAIL(ret) || OB_ISNULL(dml_op)) {
     // pass
   } else {
-    DASRuntimeTableAccess *table_loc = nullptr;
-    ObTableID table_location_key = OB_INVALID_ID;
+    DASRuntimeTableAccess *table_access = nullptr;
+    ObTableID table_ref_id = OB_INVALID_ID;
     ObTableID ref_table_id = OB_INVALID_ID;
-    if (OB_FAIL(dml_op->get_single_table_loc_id(table_location_key, ref_table_id))) {
+    if (OB_FAIL(dml_op->get_single_table_ref_id(table_ref_id, ref_table_id))) {
     } else {
       if (dml_op->is_table_location_uncertain()) {
         if (OB_ISNULL(dml_loc)) {
           ret = OB_ERR_UNEXPECTED;
         } else {
-          table_loc = dml_loc;
+          table_access = dml_loc;
         }
       } else {
         // Obtain the location information of the partition corresponding to the current DFO through TSC or DML
         // Subsequently use location information to construct the corresponding SQC meta
-        if (OB_ISNULL(table_loc = DAS_CTX(ctx).find_table_access(table_location_key, ref_table_id))) {
+        if (OB_ISNULL(table_access = DAS_CTX(ctx).find_table_access(table_ref_id, ref_table_id))) {
           ret = OB_ERR_UNEXPECTED;
         }
       }
     }
     if (OB_FAIL(ret)) {
       // bypass
-    } else if (OB_ISNULL(table_loc)) {
+    } else if (OB_ISNULL(table_access)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(set_sqcs_accessed_location(ctx, base_table_location_key,
-        dfo, base_order_map, table_loc, dml_op, locations_order))) {
+    } else if (OB_FAIL(set_sqcs_accessed_location(ctx, base_table_ref_id,
+        dfo, base_order_map, table_access, dml_op, locations_order))) {
     }
-    dml_table_loc = table_loc;
-    dml_table_location_key = table_location_key;
+    dml_table_access = table_access;
+    dml_table_ref_id = table_ref_id;
     dml_ref_table_id = ref_table_id;
   }
   // Process tsc corresponding partition location information
   for (int64_t i = 0; OB_SUCC(ret) && i < scan_ops.count(); ++i) {
-    DASRuntimeTableAccess *table_loc = nullptr;
+    DASRuntimeTableAccess *table_access = nullptr;
     const ObTableScanSpec *scan_op = nullptr;
-    uint64_t table_location_key = common::OB_INVALID_ID;
+    uint64_t table_ref_id = common::OB_INVALID_ID;
     uint64_t ref_table_id = common::OB_INVALID_ID;
     // Physical table or virtual table?
     if (OB_ISNULL(scan_op = scan_ops.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (FALSE_IT(table_location_key = scan_op->get_table_loc_id())) {
+    } else if (FALSE_IT(table_ref_id = scan_op->get_table_ref_id())) {
     } else if (FALSE_IT(ref_table_id = scan_op->get_loc_ref_table_id())) {
-    } else if (OB_ISNULL(table_loc = DAS_CTX(ctx).find_table_access(table_location_key, ref_table_id))) {
+    } else if (OB_ISNULL(table_access = DAS_CTX(ctx).find_table_access(table_ref_id, ref_table_id))) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
           // dml op has already set sqc.get_location information,
           // table scan does not need to be set again
-          OB_ISNULL(dml_op) ? base_table_location_key : OB_INVALID_ID,
-          dfo, base_order_map, table_loc, scan_op, locations_order))) {
+          OB_ISNULL(dml_op) ? base_table_ref_id : OB_INVALID_ID,
+          dfo, base_order_map, table_access, scan_op, locations_order))) {
     }
   } // end for
   if (OB_FAIL(ret)) {
@@ -658,26 +658,26 @@ int ObPxSqcDistributionUtil::set_dfo_accessed_location(ObExecContext &ctx,
 }
 
 int ObPxSqcDistributionUtil::set_sqcs_accessed_location(
-    ObExecContext &ctx, int64_t base_table_location_key, ObDfo &dfo,
+    ObExecContext &ctx, int64_t base_table_ref_id, ObDfo &dfo,
     ObBaseOrderMap &base_order_map,
-    const DASRuntimeTableAccess *table_loc, const ObOpSpec *phy_op,
+    const DASRuntimeTableAccess *table_access, const ObOpSpec *phy_op,
     ObIArray<std::pair<int64_t, bool>> &locations_order)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObPxSqcMeta> &sqcs = dfo.get_sqcs();
   int n_locations = 0;
-  const DASRuntimeTabletList &locations = table_loc->get_tablet_accesses();
+  const DASRuntimeTabletList &locations = table_access->get_tablet_accesses();
   DASRuntimeTabletSEArray temp_locations;
-  if (OB_ISNULL(table_loc) || OB_ISNULL(phy_op)) {
+  if (OB_ISNULL(table_access) || OB_ISNULL(phy_op)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    int64_t table_location_key = table_loc->get_table_location_key();
+    int64_t table_ref_id = table_access->get_table_ref_id();
     bool asc_order = true;
     if (locations.size() <= 0) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(get_access_partition_order(dfo, phy_op, asc_order))) {
-    } else if (OB_FAIL(ObPxSqcDistributionUtil::reorder_all_partitions(table_location_key,
-        table_loc->get_ref_table_id(), locations,
+    } else if (OB_FAIL(ObPxSqcDistributionUtil::reorder_all_partitions(table_ref_id,
+        table_access->get_ref_table_id(), locations,
         temp_locations, asc_order, ctx, base_order_map, phy_op->get_id(), locations_order))) {
     } else {
     }
@@ -686,16 +686,16 @@ int ObPxSqcDistributionUtil::set_sqcs_accessed_location(
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_SUCC(ret)) {
     ObPxSqcMeta &sqc_meta = sqcs.at(0);
-    DASRuntimeTabletIArray &sqc_locations = sqc_meta.get_access_table_locations_for_update();
-    ObIArray<ObSqcTableLocationKey> &sqc_location_keys = sqc_meta.get_access_table_location_keys();
-    ObIArray<ObSqcTableLocationIndex> &sqc_location_indexes = sqc_meta.get_access_table_location_indexes();
-    int64_t location_start_pos = sqc_locations.count();
-    int64_t location_end_pos = sqc_locations.count();
+    DASRuntimeTabletIArray &sqc_locations = sqc_meta.get_tablet_accesses_for_update();
+    ObIArray<SqcTabletAccessKey> &sqc_location_keys = sqc_meta.get_tablet_access_keys();
+    ObIArray<SqcTableAccessRange> &sqc_location_indexes = sqc_meta.get_table_access_ranges();
+    int64_t access_start_pos = sqc_locations.count();
+    int64_t access_end_pos = sqc_locations.count();
     ARRAY_FOREACH_X(temp_locations, idx, cnt, OB_SUCC(ret)) {
       if (OB_FAIL(sqc_locations.push_back(temp_locations.at(idx)))) {
-      } else if (OB_FAIL(sqc_location_keys.push_back(ObSqcTableLocationKey(
-            table_loc->get_table_location_key(),
-            table_loc->get_ref_table_id(),
+      } else if (OB_FAIL(sqc_location_keys.push_back(SqcTabletAccessKey(
+            table_access->get_table_ref_id(),
+            table_access->get_ref_table_id(),
             temp_locations.at(idx)->tablet_id_,
             IS_DML(phy_op->get_type()),
             IS_DML(phy_op->get_type()) ?
@@ -703,14 +703,14 @@ int ObPxSqcDistributionUtil::set_sqcs_accessed_location(
               false)))) {
       } else {
         ++n_locations;
-        ++location_end_pos;
+        ++access_end_pos;
       }
     }
-    if (OB_SUCC(ret) && location_start_pos < location_end_pos) {
-      if (OB_FAIL(sqc_location_indexes.push_back(ObSqcTableLocationIndex(
-          table_loc->get_table_location_key(),
-          location_start_pos,
-          location_end_pos - 1)))) {
+    if (OB_SUCC(ret) && access_start_pos < access_end_pos) {
+      if (OB_FAIL(sqc_location_indexes.push_back(SqcTableAccessRange(
+          table_access->get_table_ref_id(),
+          access_start_pos,
+          access_end_pos - 1)))) {
       }
     }
   }
@@ -768,7 +768,7 @@ private:
 };
 
 int ObPxSqcDistributionUtil::reorder_all_partitions(
-    int64_t table_location_key, int64_t ref_table_id, const DASRuntimeTabletList &src_locations,
+    int64_t table_ref_id, int64_t ref_table_id, const DASRuntimeTabletList &src_locations,
     DASRuntimeTabletIArray &dst_locations, bool asc, ObExecContext &exec_ctx,
     ObBaseOrderMap &base_order_map, int64_t op_id,
     ObIArray<std::pair<int64_t, bool>> &locations_order)
@@ -804,12 +804,12 @@ int ObPxSqcDistributionUtil::reorder_all_partitions(
       } else if (OB_NOT_NULL(group_pwj_map = exec_ctx.get_group_pwj_map())) {
         GroupPWJTabletIdInfo group_pwj_tablet_id_info;
         TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;
-        if (OB_FAIL(group_pwj_map->get_refactored(table_location_key, group_pwj_tablet_id_info))) {
+        if (OB_FAIL(group_pwj_map->get_refactored(table_ref_id, group_pwj_tablet_id_info))) {
           if (OB_HASH_NOT_EXIST == ret) {
             // means this is not a partition wise join table, do not need to reorder partition
             ret = OB_SUCCESS;
           } else {
-            LOG_WARN("failed to get_refactored", K(table_location_key));
+            LOG_WARN("failed to get_refactored", K(table_ref_id));
           }
         } else {
           // set base order or reorder partition as base order
@@ -894,20 +894,20 @@ int ObPxSqcDistributionUtil::build_tablet_idx_map(
   return ret;
 }
 
-int ObPxPartitionLocationUtil::get_all_tables_tablets(
+int PxTabletAccessUtil::get_all_tables_tablets(
     const common::ObIArray<const ObTableScanSpec*> &scan_ops,
     const DASRuntimeTabletIArray &all_locations,
-    const common::ObIArray<ObSqcTableLocationKey> &table_location_keys,
-    ObSqcTableLocationKey dml_location_key,
+    const common::ObIArray<SqcTabletAccessKey> &table_location_keys,
+    SqcTabletAccessKey dml_location_key,
     common::ObIArray<DASRuntimeTabletArray> &all_tablets)
 {
   int ret = common::OB_SUCCESS;
   DASRuntimeTabletArray tablets;
   int64_t idx = 0;
   CK(all_locations.count() == table_location_keys.count());
-  if (OB_SUCC(ret) && dml_location_key.table_location_key_ != OB_INVALID_ID) {
+  if (OB_SUCC(ret) && dml_location_key.table_ref_id_ != OB_INVALID_ID) {
     for ( ; idx < all_locations.count() && OB_SUCC(ret); ++idx) {
-      if (dml_location_key.table_location_key_ == table_location_keys.at(idx).table_location_key_
+      if (dml_location_key.table_ref_id_ == table_location_keys.at(idx).table_ref_id_
           && table_location_keys.at(idx).is_dml_) {
         if (OB_FAIL(tablets.push_back(all_locations.at(idx)))) {
         }
@@ -921,7 +921,7 @@ int ObPxPartitionLocationUtil::get_all_tables_tablets(
   for (int i = 0; i < scan_ops.count() && OB_SUCC(ret); ++i) {
     tablets.reset();
     for (int j = 0; j < all_locations.count() && OB_SUCC(ret); ++j) {
-      if (scan_ops.at(i)->get_table_loc_id() == table_location_keys.at(j).table_location_key_
+      if (scan_ops.at(i)->get_table_ref_id() == table_location_keys.at(j).table_ref_id_
           && !table_location_keys.at(j).is_dml_) {
         if (OB_FAIL(tablets.push_back(all_locations.at(j)))) {
         }
@@ -1586,7 +1586,7 @@ double ObPxSqcUtil::get_sqc_partition_ratio(ObExecContext *exec_ctx)
   if (OB_NOT_NULL(sqc_handle)) {
     ObPxInitSqcArgs &sqc_args = sqc_handle->get_sqc_init_arg();
     int64_t total_part_cnt = sqc_args.sqc_.get_total_part_count();
-    int64_t sqc_part_cnt = sqc_args.sqc_.get_access_table_locations().count();
+    int64_t sqc_part_cnt = sqc_args.sqc_.get_tablet_accesses().count();
     if (0 < total_part_cnt && 0 < sqc_part_cnt) {
       ratio = sqc_part_cnt * 1.0 / total_part_cnt;
     }
@@ -1791,7 +1791,7 @@ int ObSlaveMapUtil::build_partition_map_by_sqcs(
   for (int64_t i = 0; i < sqcs.count() && OB_SUCC(ret); i++) {
     ObPxSqcMeta &sqc = sqcs.at(i);
     locations.reset();
-    if (OB_FAIL(get_pkey_table_locations(child.get_pkey_table_loc_id(),
+    if (OB_FAIL(get_pkey_tablet_accesses(child.get_pkey_table_ref_id(),
         sqc, locations))) {
     }
     ARRAY_FOREACH_X(locations, loc_idx, loc_cnt, OB_SUCC(ret)) {
@@ -1846,7 +1846,7 @@ int ObSlaveMapUtil::build_affinitized_partition_map_by_sqcs(
     ObPxSqcMeta &sqc = sqcs.at(i);
     int64_t sqc_task_count = sqc.get_task_count();
     locations.reset();
-    if (OB_FAIL(get_pkey_table_locations(child.get_pkey_table_loc_id(),
+    if (OB_FAIL(get_pkey_tablet_accesses(child.get_pkey_table_ref_id(),
         sqc, locations))) {
     }
     if (locations.count() <= 0 || sqc_task_count <= 0) {
@@ -2051,14 +2051,14 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
                                            sqc.partition_random_affinitize());
       ObPxTabletInfo partition_row_info;
       locations.reset();
-      if (OB_FAIL(get_pkey_table_locations(child.get_pkey_table_loc_id(), sqc, locations))) {
+      if (OB_FAIL(get_pkey_tablet_accesses(child.get_pkey_table_ref_id(), sqc, locations))) {
       } else if (OB_FAIL(affinitize_rule.reserve(locations.count()))) {
       }
       int64_t tablet_idx = OB_INVALID_ID;
       ARRAY_FOREACH_X(locations, loc_idx, loc_cnt, OB_SUCC(ret)) {
         const DASRuntimeTabletAccess &location = *locations.at(loc_idx);
         if (NULL == table_schema) {
-          uint64_t table_id = location.loc_meta_->ref_table_id_;
+          uint64_t table_id = location.access_meta_->ref_table_id_;
           if (OB_FAIL(GCTX.schema_service_->get_runtime_schema_guard(
                       schema_guard))) {
           } else if (OB_FAIL(schema_guard.get_table_schema(
@@ -2164,23 +2164,23 @@ int ObSlaveMapUtil::build_pkey_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo
   return ret;
 }
 
-int ObSlaveMapUtil::get_pkey_table_locations(int64_t table_location_key,
+int ObSlaveMapUtil::get_pkey_tablet_accesses(int64_t table_ref_id,
     ObPxSqcMeta &sqc,
     DASRuntimeTabletIArray &pkey_locations)
 {
   int ret = OB_SUCCESS;
   pkey_locations.reset();
-  DASRuntimeTabletIArray &access_table_locations = sqc.get_access_table_locations_for_update();
-  ObIArray<ObSqcTableLocationIndex> &location_indexes = sqc.get_access_table_location_indexes();
+  DASRuntimeTabletIArray &tablet_accesses = sqc.get_tablet_accesses_for_update();
+  ObIArray<SqcTableAccessRange> &location_indexes = sqc.get_table_access_ranges();
   int64_t cnt = location_indexes.count();
   // from end to start is necessary!
   for (int i = cnt - 1; i >= 0 && OB_SUCC(ret); --i) {
-    if (table_location_key == location_indexes.at(i).table_location_key_) {
-      int64_t start = location_indexes.at(i).location_start_pos_;
-      int64_t end = location_indexes.at(i).location_end_pos_;
+    if (table_ref_id == location_indexes.at(i).table_ref_id_) {
+      int64_t start = location_indexes.at(i).access_start_pos_;
+      int64_t end = location_indexes.at(i).access_end_pos_;
       for (int j = start;j <= end && OB_SUCC(ret); ++j) {
-        if (j >= 0 && j < access_table_locations.count()) {
-          OZ(pkey_locations.push_back(access_table_locations.at(j)));
+        if (j >= 0 && j < tablet_accesses.count()) {
+          OZ(pkey_locations.push_back(tablet_accesses.at(j)));
         }
       }
       break;

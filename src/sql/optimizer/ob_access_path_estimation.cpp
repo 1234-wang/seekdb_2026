@@ -1267,13 +1267,13 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
                                                      ObTablePartitionInfo &valid_partition_info)
 {
   int ret = OB_SUCCESS;
-  valid_partition_info.set_table_location(table_partition_info.get_table_location());
+  valid_partition_info.set_table_access_plan(table_partition_info.get_table_access_plan());
   ObArray<int64_t> all_part_ids;
   ObArray<ObOptTableStat> part_stats;
-  const TableAccessTargets &table_loc = table_partition_info.get_access_targets();
-  const TabletAccessTargetIArray &all_partitions = table_loc.get_tablets();
-  TableAccessTargets &valid_table_loc = valid_partition_info.get_access_targets_for_update();
-  TabletAccessTargetIArray &valid_partitions = valid_table_loc.get_tablets_for_update();
+  const TableAccessTargets &table_access = table_partition_info.get_access_targets();
+  const TabletAccessTargetIArray &all_partitions = table_access.get_tablets();
+  TableAccessTargets &valid_table_access = valid_partition_info.get_access_targets_for_update();
+  TabletAccessTargetIArray &valid_partitions = valid_table_access.get_tablets_for_update();
   OPT_TRACE("partition_index_dive_limit is less than the count of partitions, "\
             "check whether there are empty partitions in table", table_partition_info.get_ref_table_id());
   OPT_TRACE_BEGIN_SECTION;
@@ -1282,7 +1282,7 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
       OB_UNLIKELY(all_partitions.empty())) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    valid_table_loc.set_table_identity(table_loc.get_table_ref_id(), table_loc.get_ref_table_id());
+    valid_table_access.set_table_identity(table_access.get_table_ref_id(), table_access.get_ref_table_id());
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_partitions.count(); ++i) {
     const TabletAccessTarget &part_loc = all_partitions.at(i);
@@ -2228,8 +2228,8 @@ int RangePartitionHelper::init(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   all_partition_is_valid_ = false;
-  const ObTableLocation &table_location = table_partition_info.get_table_location();
-  part_level_ = table_location.get_part_level();
+  const TableAccessPlan &table_access_plan = table_partition_info.get_table_access_plan();
+  part_level_ = table_access_plan.get_part_level();
   ref_table_id_ = ref_table_id;
   table_partition_info_ = &table_partition_info;
   if (OB_UNLIKELY(share::schema::PARTITION_LEVEL_MAX == part_level_)) {
@@ -2283,11 +2283,11 @@ int RangePartitionHelper::init(uint64_t table_id,
     const TabletAccessTargetIArray &part_loc_info_array =
         table_partition_info.get_access_targets().get_tablets();
     for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); i ++) {
-      const TabletAccessTarget &tablet_loc = part_loc_info_array.at(i);
+      const TabletAccessTarget &tablet_access = part_loc_info_array.at(i);
       if (share::schema::PARTITION_LEVEL_TWO == part_level_ &&
           OB_FAIL(add_var_to_array_no_dup(used_level_one_part_ids_,
-                                          static_cast<ObObjectID>(tablet_loc.get_first_level_part_id())))) {
-      } else if (OB_FAIL(used_tablet_ids_.push_back(tablet_loc.get_tablet_id()))) {
+                                          static_cast<ObObjectID>(tablet_access.get_first_level_part_id())))) {
+      } else if (OB_FAIL(used_tablet_ids_.push_back(tablet_access.get_tablet_id()))) {
       }
     }
   }
@@ -2376,7 +2376,7 @@ int RangePartitionHelper::get_scan_range_partitions(ObExecContext &exec_ctx,
                                           scan_range,
                                           part_projector_,
                                           gen_projector_,
-                                          table_partition_info_->get_table_location(),
+                                          table_partition_info_->get_table_access_plan(),
                                           tablet_ids,
                                           part_ids))) {
       }
@@ -2389,7 +2389,7 @@ int RangePartitionHelper::get_scan_range_partitions(ObExecContext &exec_ctx,
                                             scan_range,
                                             part_projector_,
                                             gen_projector_,
-                                            table_partition_info_->get_table_location(),
+                                            table_partition_info_->get_table_access_plan(),
                                             dummy,
                                             part_ids))) {
       } else if (OB_FAIL(ObOptimizerUtil::intersect(part_ids,
@@ -2404,7 +2404,7 @@ int RangePartitionHelper::get_scan_range_partitions(ObExecContext &exec_ctx,
                                                  scan_range,
                                                  sub_part_projector_,
                                                  sub_gen_projector_,
-                                                 table_partition_info_->get_table_location(),
+                                                 table_partition_info_->get_table_access_plan(),
                                                  tablet_ids,
                                                  sub_part_ids,
                                                  &part_ids))) {
@@ -2424,7 +2424,7 @@ int RangePartitionHelper::get_scan_range_partitions(ObExecContext &exec_ctx,
                                                     const ObNewRange &scan_range,
                                                     const ObIArray<int64_t> &part_projector,
                                                     const ObIArray<int64_t> &gen_projector,
-                                                    const ObTableLocation &table_location,
+                                                    const TableAccessPlan &table_access_plan,
                                                     ObIArray<ObTabletID> &tablet_ids,
                                                     ObIArray<ObObjectID> &partition_ids,
                                                     const ObIArray<ObObjectID> *level_one_part_ids/* = NULL */)
@@ -2447,7 +2447,7 @@ int RangePartitionHelper::get_scan_range_partitions(ObExecContext &exec_ctx,
   } else {
     ObNewRange *part_range_ptr = part_projector.empty() ? NULL : &part_range;
     ObNewRange *gen_range_ptr = gen_projector.empty() ? NULL : &gen_range;
-    if (OB_FAIL(table_location.get_partition_ids_by_range(exec_ctx,
+    if (OB_FAIL(table_access_plan.get_partition_ids_by_range(exec_ctx,
                                                           part_range_ptr,
                                                           gen_range_ptr,
                                                           tablet_ids,

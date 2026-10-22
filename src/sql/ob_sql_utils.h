@@ -66,7 +66,7 @@ class ObDMLStmt;
 class ObOpRawExpr;
 class OrderItem;
 class ObSqlExecutorCtx;
-class ObTableLocation;
+class TableAccessPlan;
 class ObQueryRange;
 class ObSqlExpression;
 class ObPhysicalPlan;

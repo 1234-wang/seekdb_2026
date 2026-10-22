@@ -1119,7 +1119,7 @@ SQL_UNITY_GROUPS = [
             "src/sql/optimizer/ob_sharding_info.cpp",
             "src/sql/optimizer/ob_skyline_prunning.cpp",
             "src/sql/optimizer/ob_storage_estimator.cpp",
-            "src/sql/optimizer/ob_table_location.cpp",
+            "src/sql/optimizer/table_access_plan.cpp",
             "src/sql/optimizer/ob_table_partition_info.cpp",
             "src/sql/optimizer/ob_update_log_plan.cpp",
             "src/sql/optimizer/ob_log_stat_collector.cpp",

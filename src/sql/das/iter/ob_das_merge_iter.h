@@ -147,7 +147,7 @@ public:
 
   /********* DAS REF BEGIN *********/
   common::ObIAllocator *get_das_alloc();
-  int create_das_task(const DASRuntimeTabletAccess *tablet_loc, ObDASScanOp *&scan_op, bool &reuse_op);
+  int create_das_task(const DASRuntimeTabletAccess *tablet_access, ObDASScanOp *&scan_op, bool &reuse_op);
   bool has_task() const;
   int32_t get_das_task_cnt() const;
   DASTaskIter begin_task_iter();

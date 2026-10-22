@@ -64,12 +64,12 @@ int ObPxSubCoord::pre_process()
     // ObOperator *op = NULL;
     if (OB_ISNULL(sqc_arg_.op_spec_root_)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(rebuild_sqc_access_table_locations())) {
+    } else if (OB_FAIL(rebuild_sqc_tablet_accesses())) {
     } else if (OB_FAIL(setup_op_input(*sqc_arg_.exec_ctx_,
                                       *sqc_arg_.op_spec_root_,
                                       sqc_ctx_,
-                                      sqc_arg_.sqc_.get_access_table_locations(),
-                                      sqc_arg_.sqc_.get_access_table_location_keys()))) {
+                                      sqc_arg_.sqc_.get_tablet_accesses(),
+                                      sqc_arg_.sqc_.get_tablet_access_keys()))) {
     }
   }
   if (OB_SUCC(ret) && !sqc_arg_.sqc_.get_pruning_table_locations().empty()) {
@@ -152,7 +152,7 @@ int ObPxSubCoord::init_exec_env(ObExecContext &exec_ctx)
 int ObPxSubCoord::get_tsc_or_dml_op_tablets(
     ObOpSpec &root,
     const DASRuntimeTabletIArray &tsc_locations,
-    const ObIArray<ObSqcTableLocationKey> &tsc_location_keys,
+    const ObIArray<SqcTabletAccessKey> &tsc_location_keys,
     common::ObIArray<const ObTableScanSpec*> &scan_ops,
     common::ObIArray<DASRuntimeTabletArray> &tablets_array)
 {
@@ -164,11 +164,11 @@ int ObPxSubCoord::get_tsc_or_dml_op_tablets(
     /*do nothing*/
   } else if (!dml_ops.empty() && 1 != dml_ops.count()) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(ObPxPartitionLocationUtil::get_all_tables_tablets(
+  } else if (OB_FAIL(PxTabletAccessUtil::get_all_tables_tablets(
         scan_ops,
         tsc_locations,
         tsc_location_keys,
-        !dml_ops.empty() ? tsc_location_keys.at(0) : ObSqcTableLocationKey(),
+        !dml_ops.empty() ? tsc_location_keys.at(0) : SqcTabletAccessKey(),
         tablets_array))) {
   }
   return ret;
@@ -178,7 +178,7 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
     ObOpSpec &root,
     ObSqcCtx &sqc_ctx,
     const DASRuntimeTabletIArray &tsc_locations,
-    const ObIArray<ObSqcTableLocationKey> &tsc_location_keys)
+    const ObIArray<SqcTabletAccessKey> &tsc_location_keys)
 {
   int ret = OB_SUCCESS;
   if (IS_PX_GI(root.get_type())) {
@@ -207,7 +207,7 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
                                                       tablets_array, sqc_ctx.partitions_info_))) {
           } else {
             gi_input->set_granule_pump(&sqc_ctx.gi_pump_);
-            gi_input->add_table_location_keys(scan_ops);
+            gi_input->add_tablet_access_keys(scan_ops);
             LOG_TRACE("setup gi op input", K(gi_input), K(&sqc_ctx.gi_pump_), K(gi_op->id_),
                       K(sqc_ctx.gi_pump_.get_task_array_map()), K(sqc.get_locations_order()));
           }
@@ -239,7 +239,7 @@ int ObPxSubCoord::pre_setup_op_input(ObExecContext &ctx,
     ObOpSpec &root,
     ObSqcCtx &sqc_ctx,
     const DASRuntimeTabletIArray &tsc_locations,
-    const ObIArray<ObSqcTableLocationKey> &tsc_location_keys)
+    const ObIArray<SqcTabletAccessKey> &tsc_location_keys)
 {
   int ret = OB_SUCCESS;
   if (IS_PX_GI(root.get_type())) {
@@ -269,7 +269,7 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
                                  ObOpSpec &root,
                                  ObSqcCtx &sqc_ctx,
                                  const DASRuntimeTabletIArray &tsc_locations,
-                                 const ObIArray<ObSqcTableLocationKey> &tsc_location_keys)
+                                 const ObIArray<SqcTabletAccessKey> &tsc_location_keys)
 {
   int ret = OB_SUCCESS;
   if (IS_PX_RECEIVE(root.get_type())) {
@@ -698,7 +698,7 @@ int ObPxSubCoord::start_ddl()
   ObExecContext *exec_ctx = sqc_arg_.exec_ctx_;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
   const ObPhysicalPlan *phy_plan = nullptr;
-  ObIArray<ObSqcTableLocationKey> &location_keys = sqc_arg_.sqc_.get_access_table_location_keys();
+  ObIArray<SqcTabletAccessKey> &location_keys = sqc_arg_.sqc_.get_tablet_access_keys();
   if (OB_UNLIKELY(nullptr != ddl_session_)) {
     ret = OB_INIT_TWICE;
   } else if (OB_ISNULL(exec_ctx)
@@ -763,25 +763,25 @@ int ObPxSubCoord::get_participants(ObPxSqcMeta &sqc,
                                    ObIArray<ObTabletID> &tablet_ids) const
 {
   int ret = OB_SUCCESS;
-  const DASRuntimeTabletIArray &locations = sqc.get_access_table_locations();
+  const DASRuntimeTabletIArray &locations = sqc.get_tablet_accesses();
   for (int64_t i = 0; OB_SUCC(ret) && i < locations.count(); ++i) {
-    DASRuntimeTabletAccess *tablet_loc = ObDASUtils::get_related_tablet_loc(*locations.at(i), table_id);
-    if (OB_ISNULL(tablet_loc)) {
+    DASRuntimeTabletAccess *tablet_access = ObDASUtils::get_related_tablet_access(*locations.at(i), table_id);
+    if (OB_ISNULL(tablet_access)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(add_var_to_array_no_dup(tablet_ids, tablet_loc->tablet_id_))) {
+    } else if (OB_FAIL(add_var_to_array_no_dup(tablet_ids, tablet_access->tablet_id_))) {
     }
   }
   return ret;
 }
 
-int ObPxSubCoord::rebuild_sqc_access_table_locations()
+int ObPxSubCoord::rebuild_sqc_tablet_accesses()
 {
   int ret = OB_SUCCESS;
-  DASRuntimeTabletIArray &access_locations = sqc_arg_.sqc_.get_access_table_locations_for_update();
-  ObIArray<ObSqcTableLocationKey> &location_keys = sqc_arg_.sqc_.get_access_table_location_keys();
+  DASRuntimeTabletIArray &access_locations = sqc_arg_.sqc_.get_tablet_accesses_for_update();
+  ObIArray<SqcTabletAccessKey> &location_keys = sqc_arg_.sqc_.get_tablet_access_keys();
   ObDASCtx &das_ctx = DAS_CTX(*sqc_arg_.exec_ctx_);
   // FIXME @yishen Performance?
-  DASRuntimeTableAccess *table_loc = NULL;
+  DASRuntimeTableAccess *table_access = NULL;
   if (!access_locations.empty()) {
     // do nothing
     // it means that it's rebuilded by pre_setup_op_input
@@ -793,31 +793,31 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
   } else {
     for (int i = 0; i < location_keys.count() && OB_SUCC(ret); ++i) {
       // dml location always at first
-      if (OB_ISNULL(table_loc) && location_keys.at(i).is_loc_uncertain_) {
-        OZ(ObTableLocation::build_full_local_table_loc(das_ctx,
+      if (OB_ISNULL(table_access) && location_keys.at(i).has_dynamic_tablets_) {
+        OZ(TableAccessPlan::build_full_table_access(das_ctx,
            sqc_arg_.exec_ctx_->get_allocator(),
-           location_keys.at(i).table_location_key_,
+           location_keys.at(i).table_ref_id_,
            location_keys.at(i).ref_table_id_,
-           table_loc));
+           table_access));
       }
       if (OB_SUCC(ret)) {
-        if (OB_ISNULL(table_loc) ||
-            location_keys.at(i).table_location_key_ != table_loc->get_table_location_key() ||
-            location_keys.at(i).ref_table_id_ != table_loc->get_ref_table_id()) {
-          table_loc = das_ctx.find_table_access(
-              location_keys.at(i).table_location_key_,
+        if (OB_ISNULL(table_access) ||
+            location_keys.at(i).table_ref_id_ != table_access->get_table_ref_id() ||
+            location_keys.at(i).ref_table_id_ != table_access->get_ref_table_id()) {
+          table_access = das_ctx.find_table_access(
+              location_keys.at(i).table_ref_id_,
               location_keys.at(i).ref_table_id_);
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(table_loc)) {
+      } else if (OB_ISNULL(table_access)) {
         ret = OB_ERR_UNEXPECTED;
       } else {
-        for (DASRuntimeTabletListIter tmp_node = table_loc->tablet_accesses_begin();
-             tmp_node != table_loc->tablet_accesses_end(); ++tmp_node) {
-          DASRuntimeTabletAccess *tablet_loc = *tmp_node;
-          if (tablet_loc->tablet_id_ == location_keys.at(i).tablet_id_) {
-            if (OB_FAIL(access_locations.push_back(tablet_loc))) {
+        for (DASRuntimeTabletListIter tmp_node = table_access->tablet_accesses_begin();
+             tmp_node != table_access->tablet_accesses_end(); ++tmp_node) {
+          DASRuntimeTabletAccess *tablet_access = *tmp_node;
+          if (tablet_access->tablet_id_ == location_keys.at(i).tablet_id_) {
+            if (OB_FAIL(access_locations.push_back(tablet_access))) {
             }
           }
         }

@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace sql {
 class ObPhysicalPlan;
 class ObPlanCacheCtx;
-class ObTableLocation;
+class TableAccessPlan;
 
 class ObPlanMatchHelper
 {
@@ -35,18 +35,18 @@ public:
                  const ObPhysicalPlan *plan,
                  bool &is_matched,
                  common::ObIArray<TableAccessTargets> &phy_tbl_infos,
-                 common::ObIArray<ObTableLocation> &out_tbl_locations) const;
+                 common::ObIArray<TableAccessPlan> &out_tbl_locations) const;
 
   /**
-   * @brief Get the table locations of all relational tables involved in LocationConstraint
+   * @brief Get the table locations of all relational tables involved in TableAccessConstraint
    * from the table location cached by Physical Plan
    *
    */
   int calc_table_locations(
-      const ObIArray<LocationConstraint> &loc_cons,
-      const common::ObIArray<ObTableLocation> &in_tbl_locations,
+      const ObIArray<TableAccessConstraint> &loc_cons,
+      const common::ObIArray<TableAccessPlan> &in_tbl_locations,
       const ObPlanCacheCtx &pc_ctx,
-      common::ObIArray<ObTableLocation> &out_tbl_locations,
+      common::ObIArray<TableAccessPlan> &out_tbl_locations,
       common::ObIArray<TableAccessTargets> &phy_tbl_infos) const;
 
 private:
@@ -55,16 +55,16 @@ private:
    *
    */
   int get_tbl_loc_with_key(
-      const TableLocationKey key,
-      const ObIArray<ObTableLocation> &table_locations,
-      const ObTableLocation *&ret_loc_ptr) const;
+      const TableAccessKey key,
+      const ObIArray<TableAccessPlan> &table_access_plans,
+      const TableAccessPlan *&ret_loc_ptr) const;
   /**
    * @brief Compare table location types
    *
    */
   int cmp_table_types(
-      const ObIArray<LocationConstraint> &loc_cons,
-      const common::ObIArray<ObTableLocation> &tbl_locs,
+      const ObIArray<TableAccessConstraint> &loc_cons,
+      const common::ObIArray<TableAccessPlan> &tbl_locs,
       const common::ObIArray<TableAccessTargets> &phy_tbl_infos,
       bool &is_same) const;
   /**
@@ -73,7 +73,7 @@ private:
    *
    */
   int check_partition_constraint(const ObPlanCacheCtx &pc_ctx,
-                                 const ObIArray<LocationConstraint> &loc_cons,
+                                 const ObIArray<TableAccessConstraint> &loc_cons,
                                  const common::ObIArray<TableAccessTargets> &phy_tbl_infos,
                                  bool &is_match) const;
   /**

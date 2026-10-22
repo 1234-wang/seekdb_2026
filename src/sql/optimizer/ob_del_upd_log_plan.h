@@ -97,7 +97,7 @@ public:
 
   int create_pdml_delete_plan(ObLogicalOperator *&top,
                               const ObExchangeInfo &exch_info,
-                              ObTablePartitionInfo *table_location,
+                              ObTablePartitionInfo *table_access_plan,
                               bool is_index_maintenance,
                               bool is_last_dml_op,
                               bool need_partition_id,
@@ -109,7 +109,7 @@ public:
                                   bool is_last_dml_op,
                                   bool need_partition_id,
                                   bool is_pdml_update_split,
-                                  ObTablePartitionInfo *table_location,
+                                  ObTablePartitionInfo *table_access_plan,
                                   IndexDMLInfo *index_dml_info);
 
   int candi_allocate_one_pdml_insert(bool is_index_maintenance,
@@ -120,7 +120,7 @@ public:
 
   int create_pdml_insert_plan(ObLogicalOperator *&top,
                               const ObExchangeInfo &exch_info,
-                              ObTablePartitionInfo *table_location,
+                              ObTablePartitionInfo *table_access_plan,
                               bool is_index_maintenance,
                               bool is_last_dml_op,
                               bool need_partition_id,
@@ -130,7 +130,7 @@ public:
 
   int create_online_ddl_plan(ObLogicalOperator *&top,
                              const ObExchangeInfo &exch_info,
-                             ObTablePartitionInfo *table_location,
+                             ObTablePartitionInfo *table_access_plan,
                              const ObIArray<OrderItem> &sort_keys,
                              const ObIArray<OrderItem> &sample_sort_keys,
                              const ObIArray<OrderItem> &px_coord_sort_keys,
@@ -153,7 +153,7 @@ public:
                                   bool is_last_dml_op,
                                   bool need_partition_id,
                                   bool is_pdml_update_split,
-                                  ObTablePartitionInfo *table_location,
+                                  ObTablePartitionInfo *table_access_plan,
                                   IndexDMLInfo *dml_info);
 
   int candi_allocate_one_pdml_update(bool is_index_maintenance,
@@ -161,7 +161,7 @@ public:
                                      IndexDMLInfo *index_dml_info);
   int create_pdml_update_plan(ObLogicalOperator *&top,
                               const ObExchangeInfo &exch_info,
-                              ObTablePartitionInfo *table_location,
+                              ObTablePartitionInfo *table_access_plan,
                               bool is_index_maintenance,
                               bool is_last_dml_op,
                               bool need_partition_id,
@@ -171,7 +171,7 @@ public:
                                   bool is_index_maintenance,
                                   bool is_last_dml_op,
                                   bool need_partition_id,
-                                  ObTablePartitionInfo *table_location,
+                                  ObTablePartitionInfo *table_access_plan,
                                   IndexDMLInfo *index_dml_info);
 
   int create_index_dml_info(const IndexDMLInfo &orgi_dml_info,

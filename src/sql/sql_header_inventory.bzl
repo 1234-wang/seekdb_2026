@@ -326,7 +326,7 @@ SQL_INTERFACE_CLOSURE_HEADERS = [
     "optimizer/ob_px_resource_analyzer.h",
     "optimizer/ob_raw_expr_check_dep.h",
     "optimizer/ob_sharding_info.h",
-    "optimizer/ob_table_location.h",
+    "optimizer/table_access_plan.h",
     "optimizer/ob_table_partition_info.h",
     "optimizer/stat/ob_basic_stats_estimator.h",
     "optimizer/stat/ob_dbms_stats_copy_table_stats.h",

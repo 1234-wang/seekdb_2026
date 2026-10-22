@@ -65,7 +65,7 @@ private:
                                      bool &is_single_part, int64_t &part_cnt);
   int add_estimation_tasks(const ObTableScanSpec &tsc_spec,
                            const ObCostTableScanSimpleInfo &cost_tsc_info,
-                           const int64_t schema_version, DASRuntimeTabletAccess *tablet_loc,
+                           const int64_t schema_version, DASRuntimeTabletAccess *tablet_access,
                            ObQueryRangeArray &ranges, ObIArray<ObBatchEstTasks *> &tasks);
   int construct_scan_range_batch(ObIAllocator &allocator, const ObQueryRangeArray &scan_ranges,
                                  ObSimpleBatch &batch);

@@ -56,7 +56,7 @@ public:
       is_partition_single_(false),
       is_subpartition_sinlge_(false)
   {}
-  ObShardingInfo(ObTableLocationType type)
+  ObShardingInfo(TableAccessShape type)
   : part_level_(share::schema::PARTITION_LEVEL_MAX),
     part_func_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
     subpart_func_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
@@ -200,11 +200,11 @@ public:
   static int extract_partition_key(const common::ObIArray<ObShardingInfo *> &input_shardings,
                                    ObIArray<ObSEArray<ObRawExpr*, 8>> &partition_key_list);
 
-  inline void set_location_type(ObTableLocationType location_type)
+  inline void set_location_type(TableAccessShape location_type)
   {
     location_type_ = location_type;
   }
-  inline ObTableLocationType get_location_type() const
+  inline TableAccessShape get_location_type() const
   {
     return location_type_;
   }
@@ -328,7 +328,7 @@ private:
   share::schema::ObPartitionFuncType part_func_type_;
   // Secondary partition type
   share::schema::ObPartitionFuncType subpart_func_type_;
-  ObTableLocationType location_type_;
+  TableAccessShape location_type_;
   // First-level partition count
   int64_t part_num_;
   // First-level partition key

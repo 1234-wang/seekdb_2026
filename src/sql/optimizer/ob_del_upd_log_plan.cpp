@@ -325,8 +325,8 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
     const ObIArray<ObRawExpr*> &real_filters = get_optimizer_context().is_online_ddl() ? empty_filters : filters;
     sharding_info = new(sharding_info) ObShardingInfo();
     table_partition_info = new(table_partition_info) ObTablePartitionInfo(allocator_);
-    ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
-    table_partition_info->get_table_location().set_check_no_partition(false);
+    TableAccessShape location_type = OB_TBL_LOCATION_UNINITIALIZED;
+    table_partition_info->get_table_access_plan().set_check_no_partition(false);
     if (OB_FAIL(calculate_table_location(stmt,
                                          real_filters,
                                          table_id,

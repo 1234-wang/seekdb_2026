@@ -99,14 +99,14 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
     if (OB_TMP_FAIL(ObQueryRetryCtrl::get_das_retry_func(task_op.errcode_, retry_func))) {
     } else if (retry_func != nullptr) {
       bool need_retry = false;
-      const DASRuntimeTabletAccess *tablet_loc = task_op.get_tablet_loc();
-      const DASTableAccessMeta *loc_meta = tablet_loc != nullptr ? tablet_loc->loc_meta_ : nullptr;
+      const DASRuntimeTabletAccess *tablet_access = task_op.get_tablet_access();
+      const DASTableAccessMeta *access_meta = tablet_access != nullptr ? tablet_access->access_meta_ : nullptr;
       retry_func(das_ref, task_op, need_retry);
       LOG_INFO("[DAS RETRY] check if need tablet level retry",
                KR(task_op.errcode_), K(need_retry), K(task_op.task_flag_),
                "continuous_retry_cnt", das_ctx.get_cur_retry_cnt(),
                "total_retry_cnt", das_ctx.get_total_retry_cnt(),
-               KPC(loc_meta), KPC(tablet_loc));
+               KPC(access_meta), KPC(tablet_access));
       if (need_retry &&
           task_op.get_inner_rescan() &&
           das_ctx.get_total_retry_cnt() > 100) { //hard code retry 100 times.
@@ -124,10 +124,10 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
         if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
         } else if (OB_FAIL(ObDASUtils::wait_das_retry(das_ctx.get_cur_retry_cnt()))) {
         } else if (OB_FAIL(das_ctx.validate_tablet_access(
-                       task_op.get_tablet_loc()->loc_meta_->ref_table_id_,
-                       task_op.get_tablet_loc()->tablet_id_))) {
+                       task_op.get_tablet_access()->access_meta_->ref_table_id_,
+                       task_op.get_tablet_access()->tablet_id_))) {
         } else {
-          LOG_INFO("[DAS RETRY] Start retrying the DAS task now", KPC(task_op.get_tablet_loc()));
+          LOG_INFO("[DAS RETRY] Start retrying the DAS task now", KPC(task_op.get_tablet_access()));
           das_task_wrapper.reuse();
           task_op.set_task_status(ObDasTaskStatus::UNSTART);
           if (OB_FAIL(das_task_wrapper.push_back_task(&task_op))) {
@@ -137,7 +137,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
             LOG_INFO("[DAS RETRY] DAS Task succeeds after multiple retries",
                      "continuous_retry_cnt", das_ctx.get_cur_retry_cnt(),
                      "total_retry_cnt", das_ctx.get_total_retry_cnt(),
-                     KPC(task_op.get_tablet_loc()));
+                     KPC(task_op.get_tablet_access()));
           } else {
             int64_t cur_retry_cnt = das_ctx.get_cur_retry_cnt();
             int64_t total_retry_cnt = das_ctx.get_total_retry_cnt();
@@ -146,7 +146,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
                        "and the execution may be blocked by a specific exception", KR(ret),
                        "continuous_retry_cnt", cur_retry_cnt,
                        "total_retry_cnt", das_ctx.get_total_retry_cnt(),
-                       KPC(task_op.get_tablet_loc()));
+                       KPC(task_op.get_tablet_access()));
             }
           }
         }

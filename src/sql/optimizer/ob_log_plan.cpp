@@ -794,7 +794,7 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
 {
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = optimizer_context_.get_exec_ctx();
-  ObSEArray<const ObTableLocation*, 1> tbl_loc_list;
+  ObSEArray<const TableAccessPlan*, 1> tbl_loc_list;
   ObSEArray<TableAccessTargets*, 1> phy_tbl_loc_info_list;
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(session_info)) {
@@ -806,7 +806,7 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
     if (OB_ISNULL(tbl_part_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tbl part info is NULL", K(ret), K(i), K(tbl_part_info_list.count()));
-    } else if (OB_FAIL(tbl_loc_list.push_back(&tbl_part_info->get_table_location()))) {
+    } else if (OB_FAIL(tbl_loc_list.push_back(&tbl_part_info->get_table_access_plan()))) {
     } else if (OB_FAIL(phy_tbl_loc_info_list.push_back(
                 &tbl_part_info->get_access_targets_for_update()))) {
     }
@@ -821,25 +821,25 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
 
 int ObLogPlan::validate_local_tablets(
     ObExecContext &exec_ctx,
-    const ObIArray<const ObTableLocation*> &table_locations,
+    const ObIArray<const TableAccessPlan*> &table_access_plans,
     ObIArray<TableAccessTargets*> &tablet_locations)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_locations.empty()
+  if (OB_UNLIKELY(!table_access_plans.empty()
                   && (!GCTX.self_addr().is_valid() || exec_ctx.get_addr() != GCTX.self_addr()))) {
     ret = OB_LOCATION_NOT_EXIST;
-  } else if (OB_UNLIKELY(table_locations.count() != tablet_locations.count())) {
+  } else if (OB_UNLIKELY(table_access_plans.count() != tablet_locations.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table location count does not match tablet location count", K(ret),
-             K(table_locations.count()), K(tablet_locations.count()));
+             K(table_access_plans.count()), K(tablet_locations.count()));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_locations.count(); ++i) {
-    const ObTableLocation *table_location = table_locations.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_access_plans.count(); ++i) {
+    const TableAccessPlan *table_access_plan = table_access_plans.at(i);
     TableAccessTargets *tablet_location = tablet_locations.at(i);
-    if (OB_ISNULL(table_location) || OB_ISNULL(tablet_location)) {
+    if (OB_ISNULL(table_access_plan) || OB_ISNULL(tablet_location)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table or tablet location is NULL", K(ret), K(i),
-                KP(table_location), KP(tablet_location));
+                KP(table_access_plan), KP(tablet_location));
     } else {
       const TabletAccessTargetIArray &tablets = tablet_location->get_tablets();
       for (int64_t j = 0; OB_SUCC(ret) && j < tablets.count(); ++j) {
@@ -8070,7 +8070,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     ObBitSet<256> output_deps;                       // output expr dependencies
     AllocGIContext gi_ctx;
     ObPxPipeBlockingCtx pipe_block_ctx(get_allocator());
-    ObLocationConstraintContext location_constraints;
+    TableAccessConstraintContext location_constraints;
     AllocBloomFilterContext bf_ctx;
     AllocOpContext alloc_op_ctx;
     SMART_VAR(ObBatchExecParamCtx, batch_exec_param_ctx) {
@@ -8764,8 +8764,8 @@ int ObLogPlan::add_global_table_partition_info(ObTablePartitionInfo *addr_table_
   int ret = OB_SUCCESS;
   bool is_found = false;
   if (OB_NOT_NULL(addr_table_partition_info) &&
-      addr_table_partition_info->get_table_location().use_das() &&
-      addr_table_partition_info->get_table_location().get_has_dynamic_exec_param()) {
+      addr_table_partition_info->get_table_access_plan().use_das() &&
+      addr_table_partition_info->get_table_access_plan().get_has_dynamic_exec_param()) {
     // table locations maintained in physical plan will include those for px/das static partition pruning
     // don't add those for das dynamic partition pruning which maintained independently
   } else {
@@ -8809,7 +8809,7 @@ int ObLogPlan::add_global_table_partition_info(ObTablePartitionInfo *addr_table_
  *    Strict pwj constraints: [0,1,2,3]
  *    Non-strict pwj constraints: [4,5]
  */
-int ObLogPlan::remove_duplicate_constraint(ObLocationConstraintContext &location_constraint,
+int ObLogPlan::remove_duplicate_constraint(TableAccessConstraintContext &location_constraint,
                                            ObSqlCtx &sql_ctx) const
 {
   int ret = OB_SUCCESS;
@@ -8831,11 +8831,11 @@ int ObLogPlan::remove_duplicate_constraint(ObLocationConstraintContext &location
  * Currently, the domain index implementation mocks some log_table_scan during plan generation, and the mocked log_table_scan directly uses the original
  * log_table_scan's table_id, leading to duplicate base table constraints.
  */
-int ObLogPlan::remove_duplicate_base_table_constraint(ObLocationConstraintContext &location_constraint) const
+int ObLogPlan::remove_duplicate_base_table_constraint(TableAccessConstraintContext &location_constraint) const
 {
   int ret = OB_SUCCESS;
-  ObLocationConstraint &base_constraints = location_constraint.base_table_constraints_;
-  ObLocationConstraint unique_constraint;
+  TableAccessConstraints &base_constraints = location_constraint.base_table_constraints_;
+  TableAccessConstraints unique_constraint;
   for (int64_t i = 0; OB_SUCC(ret) && i < base_constraints.count(); ++i) {
     bool find = false;
     int64_t j = 0;
@@ -8900,7 +8900,7 @@ int ObLogPlan::remove_duplicate_pwj_constraint(ObIArray<ObPwjConstraint *> &pwj_
   int ret = OB_SUCCESS;
   ObPwjConstraint *l_cons = NULL, *r_cons = NULL;
   ObBitSet<> removed_idx;
-  ObLocationConstraintContext::InclusionType inclusion_result = ObLocationConstraintContext::NotSubset;
+  TableAccessConstraintContext::InclusionType inclusion_result = TableAccessConstraintContext::NotSubset;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < pwj_constraints.count(); ++i) {
     if (OB_ISNULL(l_cons = pwj_constraints.at(i))) {
@@ -8913,13 +8913,13 @@ int ObLogPlan::remove_duplicate_pwj_constraint(ObIArray<ObPwjConstraint *> &pwj_
       for (int64_t j = i + 1; OB_SUCC(ret) && j < pwj_constraints.count(); ++j) {
         if (OB_ISNULL(r_cons = pwj_constraints.at(j))) {
           ret = OB_ERR_UNEXPECTED;
-        } else if (OB_FAIL(ObLocationConstraintContext::calc_constraints_inclusion(
+        } else if (OB_FAIL(TableAccessConstraintContext::calc_constraints_inclusion(
             l_cons, r_cons, inclusion_result))) {
-        } else if (ObLocationConstraintContext::LeftIsSuperior == inclusion_result) {
+        } else if (TableAccessConstraintContext::LeftIsSuperior == inclusion_result) {
           // Left containts all the elements of the right, remove j
           if (OB_FAIL(removed_idx.add_member(j))) {
           }
-        } else if (ObLocationConstraintContext::RightIsSuperior == inclusion_result) {
+        } else if (TableAccessConstraintContext::RightIsSuperior == inclusion_result) {
           // Right containts all the elements of the left, remove i
           if (OB_FAIL(removed_idx.add_member(i))) {
           }
@@ -8964,7 +8964,7 @@ ObJoinOrder* ObLogPlan::create_join_order(PathType type)
   return join_order;
 }
 // Sort the values in each partition in ascending order
-int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constraint) const
+int ObLogPlan::sort_pwj_constraint(TableAccessConstraintContext &location_constraint) const
 {
   int ret = OB_SUCCESS;
   ObIArray<ObPwjConstraint *> &strict_pwj_cons = location_constraint.strict_constraints_;
@@ -9140,7 +9140,7 @@ int ObLogPlan::check_location_need_multi_partition_dml(ObLogicalOperator &top,
   int ret = OB_SUCCESS;
   source_sharding = NULL;
   ObTablePartitionInfo *source_table_part = NULL;
-  ObTableLocationType source_loc_type = OB_TBL_LOCATION_UNINITIALIZED;
+  TableAccessShape source_loc_type = OB_TBL_LOCATION_UNINITIALIZED;
   is_multi_part_dml = false;
   is_result_local = false;
   if (OB_FAIL(get_source_table_info(top,
@@ -9696,8 +9696,8 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_scan->get_table_id())) ||
       OB_ISNULL(table_scan->get_strong_sharding())) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FALSE_IT(table_partition_info->get_table_location().set_use_das(table_scan->use_das()))) {
-  } else if (OB_FAIL(table_partition_info->get_table_location().set_is_das_empty_part(*opt_ctx->get_exec_ctx(),
+  } else if (OB_FALSE_IT(table_partition_info->get_table_access_plan().set_use_das(table_scan->use_das()))) {
+  } else if (OB_FAIL(table_partition_info->get_table_access_plan().set_is_das_empty_part(*opt_ctx->get_exec_ctx(),
                                                                                       *opt_ctx->get_params(),
                                                                                       dtc_params))) {
   } else if (!table_scan->use_das() || !table_scan->is_match_all()) {
@@ -9709,7 +9709,7 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
   } else if (!has_dppr) {
       // do nothing
   } else {
-    SMART_VAR(ObTableLocation, das_location) {
+    SMART_VAR(TableAccessPlan, das_location) {
       int64_t ref_table_id = table_scan->get_is_index_global() ?
                              table_scan->get_index_table_id() :
                              table_scan->get_ref_table_id();
@@ -9723,12 +9723,12 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
                                     dtc_params,
                                     false))) {
       } else if (OB_FALSE_IT(das_location.set_use_das(true))) {
-      } else if (OB_FALSE_IT(das_location.set_is_das_empty_part(table_partition_info->get_table_location().is_das_empty_part()))) {
+      } else if (OB_FALSE_IT(das_location.set_is_das_empty_part(table_partition_info->get_table_access_plan().is_das_empty_part()))) {
       } else if (das_location.is_all_partition()) {
         // do nothing
       } else {
         das_location.set_has_dynamic_exec_param(has_dppr);
-        table_partition_info->set_table_location(das_location);
+        table_partition_info->set_table_access_plan(das_location);
       }
     }
   }
@@ -9795,7 +9795,7 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
 }
 
 int ObLogPlan::collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
-                                                      TableLocRelInfo& rel_info)
+                                                      RelatedTableAccessInfo& rel_info)
 {
   int ret = OB_SUCCESS;
   bool is_all_table_id_inited = false;
@@ -9840,18 +9840,18 @@ int ObLogPlan::collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
 int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
 {
   int ret = OB_SUCCESS;
-  ObIArray<TableLocRelInfo> &loc_rel_infos = optimizer_context_.get_loc_rel_infos();
+  ObIArray<RelatedTableAccessInfo> &access_relations = optimizer_context_.get_access_relations();
   if (op.is_table_scan()) {
     ObLogTableScan &tsc_op = static_cast<ObLogTableScan&>(op);
     ObTablePartitionInfo *table_part_info = tsc_op.get_table_partition_info();
-    ObTableID table_loc_id = tsc_op.get_table_id();
+    ObTableID table_ref_id = tsc_op.get_table_id();
     ObTableID ref_table_id = tsc_op.get_ref_table_id();
-    if (OB_NOT_NULL(optimizer_context_.get_loc_rel_info_by_id(table_loc_id, ref_table_id))) {
+    if (OB_NOT_NULL(optimizer_context_.get_access_relation_by_id(table_ref_id, ref_table_id))) {
       ret = OB_ERR_UNEXPECTED;
     } else if (!tsc_op.get_is_index_global()) {
       //global index with data table has no related tablet info
-      TableLocRelInfo rel_info;
-      rel_info.table_loc_id_ = tsc_op.get_table_id();
+      RelatedTableAccessInfo rel_info;
+      rel_info.table_ref_id_ = tsc_op.get_table_id();
       rel_info.ref_table_id_ = tsc_op.get_real_ref_table_id();
       if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_real_index_table_id()))) {
       } else if (table_part_info != nullptr &&
@@ -9930,18 +9930,18 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
         }
       }
 
-      if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
+      if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_access_relations().push_back(rel_info))) {
       }
     } else if (tsc_op.get_is_index_global() && tsc_op.get_index_back()) {
       //for global index lookup
-      TableLocRelInfo rel_info;
-      rel_info.table_loc_id_ = tsc_op.get_table_id();
+      RelatedTableAccessInfo rel_info;
+      rel_info.table_ref_id_ = tsc_op.get_table_id();
       rel_info.ref_table_id_ = tsc_op.get_ref_table_id();
       if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_ref_table_id()))) {
       } else if (tsc_op.is_tsc_with_domain_id() && OB_FAIL(append_array_no_dup(rel_info.related_ids_, tsc_op.get_rowkey_domain_tids()))) {
       } else if (nullptr != tsc_op.get_global_index_back_table_partition_info() && OB_FAIL(rel_info.table_part_infos_.push_back(tsc_op.get_global_index_back_table_partition_info()))) {
       }
-      if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
+      if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_access_relations().push_back(rel_info))) {
       }
     }
   } else if (op.is_dml_operator()) {
@@ -9950,31 +9950,31 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
     const ObIArray<IndexDMLInfo *> &index_dml_infos = dml_op.get_index_dml_infos();
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
       const IndexDMLInfo &index_info = *index_dml_infos.at(i);
-      ObTableID table_loc_id = index_info.loc_table_id_;
+      ObTableID table_ref_id = index_info.loc_table_id_;
       ObTableID ref_table_id = index_info.ref_table_id_;
-      TableLocRelInfo *loc_rel_info = nullptr;
+      RelatedTableAccessInfo *access_relation = nullptr;
       if (index_info.is_primary_index_) {
-        if (OB_ISNULL(loc_rel_info = optimizer_context_.get_loc_rel_info_by_id(
-                                       table_loc_id, ref_table_id))) {
+        if (OB_ISNULL(access_relation = optimizer_context_.get_access_relation_by_id(
+                                       table_ref_id, ref_table_id))) {
           //init table location related info with the main table
-          TableLocRelInfo rel_info;
-          rel_info.table_loc_id_ = table_loc_id;
+          RelatedTableAccessInfo rel_info;
+          rel_info.table_ref_id_ = table_ref_id;
           rel_info.ref_table_id_ = ref_table_id;
           if (OB_FAIL(rel_info.related_ids_.push_back(ref_table_id))) {
-          } else if (OB_FAIL(loc_rel_infos.push_back(rel_info))) {
+          } else if (OB_FAIL(access_relations.push_back(rel_info))) {
           } else {
-            loc_rel_info = &loc_rel_infos.at(loc_rel_infos.count() - 1);
+            access_relation = &access_relations.at(access_relations.count() - 1);
           }
-        } else if (OB_FAIL(add_var_to_array_no_dup(loc_rel_info->related_ids_, ref_table_id))) {
+        } else if (OB_FAIL(add_var_to_array_no_dup(access_relation->related_ids_, ref_table_id))) {
         }
         if (OB_SUCC(ret) && table_part_info != nullptr
-            && table_part_info->get_table_id() == table_loc_id
+            && table_part_info->get_table_id() == table_ref_id
             && table_part_info->get_ref_table_id() == ref_table_id) {
-          if (OB_FAIL(add_var_to_array_no_dup(loc_rel_info->table_part_infos_, table_part_info))) {
+          if (OB_FAIL(add_var_to_array_no_dup(access_relation->table_part_infos_, table_part_info))) {
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(append_array_no_dup(loc_rel_info->related_ids_, index_info.related_index_ids_))) {
+          if (OB_FAIL(append_array_no_dup(access_relation->related_ids_, index_info.related_index_ids_))) {
           } else {
           }
         }
@@ -9985,44 +9985,44 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
     const ObIArray<IndexDMLInfo *> &index_dml_infos = for_upd_op.get_index_dml_infos();
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
       const IndexDMLInfo &index_info = *index_dml_infos.at(i);
-      ObTableID table_loc_id = index_info.loc_table_id_;
+      ObTableID table_ref_id = index_info.loc_table_id_;
       ObTableID ref_table_id = index_info.ref_table_id_;
-      TableLocRelInfo *loc_rel_info = nullptr;
+      RelatedTableAccessInfo *access_relation = nullptr;
       if (!index_info.is_primary_index_) {
         //do nothing
-      } else if (OB_ISNULL(loc_rel_info = optimizer_context_.get_loc_rel_info_by_id(
-          table_loc_id, ref_table_id))) {
+      } else if (OB_ISNULL(access_relation = optimizer_context_.get_access_relation_by_id(
+          table_ref_id, ref_table_id))) {
         //location related info is empty, means the TSC is global index scan, so ignore it
-      } else if (loc_rel_info->related_ids_.empty()) {
+      } else if (access_relation->related_ids_.empty()) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (loc_rel_info->related_ids_.at(0) == ref_table_id) {
+      } else if (access_relation->related_ids_.at(0) == ref_table_id) {
         //the depend table id is same with the source location table id
         //does not need to add the related table id to related ids
-      } else if (OB_FAIL(add_var_to_array_no_dup(loc_rel_info->related_ids_, ref_table_id))) {
+      } else if (OB_FAIL(add_var_to_array_no_dup(access_relation->related_ids_, ref_table_id))) {
       }
     }
   }
   return ret;
 }
 
-//restore the related table id to the loc_meta in source table location
+//restore the related table id to the access_meta in source table location
 int ObLogPlan::build_location_related_tablet_ids()
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < optimizer_context_.get_loc_rel_infos().count(); ++i) {
-    TableLocRelInfo &rel_info = optimizer_context_.get_loc_rel_infos().at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < optimizer_context_.get_access_relations().count(); ++i) {
+    RelatedTableAccessInfo &rel_info = optimizer_context_.get_access_relations().at(i);
     if (rel_info.related_ids_.count() <= 1) {
       //the first table id is the source table, <=1 mean no dependency table
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < rel_info.table_part_infos_.count(); ++j) {
         ObTablePartitionInfo *source_part_info = rel_info.table_part_infos_.at(j);
-        DASTableAccessMeta &source_loc_meta = source_part_info->get_table_location().get_loc_meta();
-        source_loc_meta.related_table_ids_.set_capacity(rel_info.related_ids_.count() - 1);
+        DASTableAccessMeta &source_access_meta = source_part_info->get_table_access_plan().get_access_meta();
+        source_access_meta.related_table_ids_.set_capacity(rel_info.related_ids_.count() - 1);
         for (int64_t k = 0; OB_SUCC(ret) && k < rel_info.related_ids_.count(); ++k) {
           //set related table ids to loc meta
           if (rel_info.related_ids_.at(k) == source_part_info->get_ref_table_id()) {
             //ignore itself, do nothing
-          } else if (OB_FAIL(source_loc_meta.related_table_ids_.push_back(rel_info.related_ids_.at(k)))) {
+          } else if (OB_FAIL(source_access_meta.related_table_ids_.push_back(rel_info.related_ids_.at(k)))) {
           }
         }
       }
@@ -10031,7 +10031,7 @@ int ObLogPlan::build_location_related_tablet_ids()
   optimizer_context_.get_exec_ctx()->get_das_ctx().clear_table_accesses();
   for (int64_t i = 0; OB_SUCC(ret) && i < optimizer_context_.get_table_partition_info().count(); ++i) {
     ObTablePartitionInfo *table_part_info = optimizer_context_.get_table_partition_info().at(i);
-    //need to call ObTableLocation::calculate_table_partition_ids() to
+    //need to call TableAccessPlan::calculate_table_partition_ids() to
     //reload the related index tablet ids in DASCtx
     //because in the generate_plan stage, only the tablet_id of the data table is calculated,
     //and the tablet_id of the related index table is not calculated
@@ -10044,9 +10044,9 @@ int ObLogPlan::build_location_related_tablet_ids()
     } else if (0 == table_part_info->get_access_targets().get_tablet_count()) {
       // partition count is 0 means no matching partition for data table, no need to calculate
       // related tablet ids for it.
-    } else if (!table_part_info->get_table_location().use_das() &&
-               OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(
-                       table_part_info->get_table_location(), *optimizer_context_.get_exec_ctx(), map))) {
+    } else if (!table_part_info->get_table_access_plan().use_das() &&
+               OB_FAIL(TableAccessTargetBuilder::build_related_tablet_info(
+                       table_part_info->get_table_access_plan(), *optimizer_context_.get_exec_ctx(), map))) {
     }
   }
   return ret;
@@ -10213,14 +10213,14 @@ int ObLogPlan::add_non_standard_comparison_explain_note()
  * Calculate the execution dependency partition wise join map based on deduplicated location constraints and set it to exec ctx
  * The calculation logic is similar to ObDistPlans::check_inner_constraints(), just omitting some checks already done during plan generation
  */
-int ObLogPlan::calc_and_set_exec_pwj_map(ObLocationConstraintContext &location_constraint) const
+int ObLogPlan::calc_and_set_exec_pwj_map(TableAccessConstraintContext &location_constraint) const
 {
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (location_constraint.strict_constraints_.count() > 0) {
-    ObIArray<LocationConstraint> &base_location_cons = location_constraint.base_table_constraints_;
+    ObIArray<TableAccessConstraint> &base_location_cons = location_constraint.base_table_constraints_;
     ObIArray<ObPwjConstraint *> &strict_cons = location_constraint.strict_constraints_;
     const int64_t tbl_count = location_constraint.base_table_constraints_.count();
     SMART_VAR(ObStrictPwjComparer, strict_pwj_comparer) {
@@ -10275,7 +10275,7 @@ int ObLogPlan::calc_and_set_exec_pwj_map(ObLocationConstraintContext &location_c
 }
 
 int ObLogPlan::check_pwj_cons(const ObPwjConstraint &pwj_cons,
-                              const ObIArray<LocationConstraint> &base_location_cons,
+                              const ObIArray<TableAccessConstraint> &base_location_cons,
                               ObStrictPwjComparer &pwj_comparer,
                               PWJTabletIdMap &pwj_map) const
 {
@@ -12701,7 +12701,7 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       // need_further_sort: if add topn
       // if there is filter or pushdown filter, vector will return more data than limit n, need to add a topn
       // ivf pq index always need top n to calculate vector distance
-      need_further_sort = table_scan->is_distributed() || table_scan->get_table_partition_info()->get_table_location().is_partitioned()
+      need_further_sort = table_scan->is_distributed() || table_scan->get_table_partition_info()->get_table_access_plan().is_partitioned()
                         || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
                         || vc_info.is_hnsw_bq_scan();

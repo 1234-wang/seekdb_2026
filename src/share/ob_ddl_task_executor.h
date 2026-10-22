@@ -25,7 +25,6 @@
 #include "lib/profile/ob_trace_id.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "lib/thread/thread_pool.h"
-#include "share/location_cache/ob_location_struct.h"
 #include "share/ob_errno.h"
 #include "share/ob_thread_pool.h"
 
