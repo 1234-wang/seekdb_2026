@@ -299,7 +299,6 @@ SQL_INTERFACE_CLOSURE_HEADERS = [
     "ob_end_trans_cb_packet_param.h",
     "ob_i_end_trans_callback.h",
     "ob_optimizer_trace_impl.h",
-    "ob_phy_table_location.h",
     "ob_sql_config_provider.h",
     "ob_sql_define.h",
     "ob_sql_temp_table.h",

@@ -251,8 +251,8 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
     } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, table_id,
                                                              tablet_ids,
                                                              partition_ids, estimate_res))) {
-      if (DAS_CTX(ctx).is_refresh_location_error(ret)) {
-        DAS_CTX(ctx).refresh_location_cache_by_errno(true, ret);
+      if (DAS_CTX(ctx).is_tablet_retry_error(ret)) {
+        DAS_CTX(ctx).record_access_error(ret);
         ++ retry_cnt;
         ob_usleep(1000L * 1000L); // retry interval 1s
       } else {

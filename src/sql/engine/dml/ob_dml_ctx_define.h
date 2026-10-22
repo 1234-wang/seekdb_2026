@@ -290,7 +290,7 @@ public:
   ExprFixedArray part_id_dep_exprs_;
   // Back-table query, to maintain structural consistency, the main table also needs a back-table query, the first insert returns the primary key of the main table
   ObDASScanCtDef das_scan_ctdef_;
-  ObDASTableLocMeta loc_meta_;
+  DASTableAccessMeta loc_meta_;
   bool is_part_table_;
   ObTabletID tablet_id_;
   int64_t rowkey_count_;
@@ -499,7 +499,7 @@ public:
                K_(loc_meta));
   ObExpr *calc_part_id_expr_;
   ObjectIDFixedArray hint_part_ids_;
-  ObDASTableLocMeta loc_meta_;
+  DASTableAccessMeta loc_meta_;
 };
 
 //insert compile info definition
@@ -564,7 +564,7 @@ public:
   ObExpr *calc_part_id_new_; //calc partition id for new_row
   ObjectIDFixedArray hint_part_ids_;
   bool is_enable_row_movement_;
-  ObDASTableLocMeta loc_meta_;
+  DASTableAccessMeta loc_meta_;
 };
 
 struct ObUpdCtDef : ObDMLBaseCtDef
@@ -705,7 +705,7 @@ public:
                K_(loc_meta));
   ObExpr *calc_part_id_expr_; //used to calc the partition id of the target row
   int64_t partition_cnt_; //the target table partition_cnt_
-  ObDASTableLocMeta loc_meta_;
+  DASTableAccessMeta loc_meta_;
 };
 
 struct ObLockCtDef : ObDMLBaseCtDef
@@ -757,7 +757,7 @@ public:
   TO_STRING_KV(KPC_(calc_part_id_expr),
                K_(loc_meta));
   ObExpr *calc_part_id_expr_; //used to calc the partition id of the target row
-  ObDASTableLocMeta loc_meta_;
+  DASTableAccessMeta loc_meta_;
 };
 
 struct ObDelCtDef : ObDMLBaseCtDef

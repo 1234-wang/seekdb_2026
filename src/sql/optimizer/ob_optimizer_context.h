@@ -338,7 +338,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   {
     ObTablePartitionInfo *table_part = nullptr;
     for (int64_t i = 0; OB_ISNULL(table_part) && i < table_partition_infos_.count(); ++i) {
-      const ObDASTableLocMeta &loc_meta = table_partition_infos_.at(i)->get_table_location().get_loc_meta();
+      const DASTableAccessMeta &loc_meta = table_partition_infos_.at(i)->get_table_location().get_loc_meta();
       if (table_loc_id == loc_meta.table_loc_id_ && ref_table_id == loc_meta.ref_table_id_) {
         table_part = table_partition_infos_.at(i);
       }

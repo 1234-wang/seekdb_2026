@@ -73,8 +73,8 @@ public:
                                     bool &need_check);
 private:
   int init_das_scan_rtdef();
-  int calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc);
-  int get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_scan_op);
+  int calc_lookup_tablet_loc(DASRuntimeTabletAccess *&tablet_loc);
+  int get_das_scan_op(DASRuntimeTabletAccess *tablet_loc, ObDASScanOp *&das_scan_op);
   // map fk column to the rowkey column of parent/parent index table
   int build_table_range(const ObIArray<ObForeignKeyColumn> &columns,
                         const ObExprPtrIArray &row,
@@ -113,8 +113,8 @@ public:
   const ObForeignKeyCheckerCtdef  &checker_ctdef_;
   // Foreign key check back-table construction for das-task use
   ObDASRef das_ref_;
-  ObDASTableLoc *table_loc_;
-  ObDASTabletLoc *local_tablet_loc_; // The table used for foreign key check is a non-partitioned table when used
+  DASRuntimeTableAccess *table_loc_;
+  DASRuntimeTabletAccess *local_tablet_loc_; // The table used for foreign key check is a non-partitioned table when used
   SeRowkeyDistCtx *se_rowkey_dist_ctx_;
   ObRowkey table_rowkey_;
   int64_t batch_distinct_fk_cnt_;

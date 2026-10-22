@@ -71,10 +71,10 @@ public:
     return map_;
   }
   int add_base_partition_order(int64_t pwj_group_id, const TabletIdArray &tablet_id_array,
-                               const DASTabletLocIArray &dst_locations, bool asc);
+                               const DASRuntimeTabletIArray &dst_locations, bool asc);
   int reorder_partition_as_base_order(int64_t pwj_group_id,
                                       const TabletIdArray &tablet_id_array,
-                                      DASTabletLocIArray &dst_locations);
+                                      DASRuntimeTabletIArray &dst_locations);
 private:
   ObArenaAllocator allocator_;
   hash::ObHashMap<int64_t, std::pair<ObIArray<int64_t> *, bool>, hash::NoPthreadDefendMode> map_;
@@ -180,15 +180,15 @@ private:
       uint64_t ref_table_id,
       ObTabletIdxMap &idx_map);
   static int reorder_all_partitions(
-      int64_t location_key, int64_t ref_table_id, const DASTabletLocList &src_locations,
-      DASTabletLocIArray &tsc_locations, bool asc, ObExecContext &exec_ctx,
+      int64_t location_key, int64_t ref_table_id, const DASRuntimeTabletList &src_locations,
+      DASRuntimeTabletIArray &tsc_locations, bool asc, ObExecContext &exec_ctx,
       ObBaseOrderMap &base_order_map, int64_t op_id,
       ObIArray<std::pair<int64_t, bool>> &locations_order);
   static int build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec*> &scan_ops,
       const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo);
 
   static int build_dfo_sqc(ObExecContext &ctx,
-                           const DASTabletLocList &locations,
+                           const DASRuntimeTabletList &locations,
                            ObDfo &dfo);
 
   /**
@@ -207,7 +207,7 @@ private:
                                        ObDfo &dfo,
                                        common::ObIArray<const ObTableScanSpec *> &scan_ops,
                                        const ObTableModifySpec* dml_op,
-                                       ObDASTableLoc *dml_loc);
+                                       DASRuntimeTableAccess *dml_loc);
   /**
    * Add the partition information (table_loc) involved in the
    * current phy_op to the corresponding SQC access location
@@ -215,7 +215,7 @@ private:
   static int set_sqcs_accessed_location(
       ObExecContext &ctx, int64_t base_table_location_key, ObDfo &dfo,
       ObBaseOrderMap &base_order_map,
-      const ObDASTableLoc *table_loc, const ObOpSpec *phy_op,
+      const DASRuntimeTableAccess *table_loc, const ObOpSpec *phy_op,
       ObIArray<std::pair<int64_t, bool>> &locations_order);
   /**
    * Get the access sequence of the partition of the current phy_op,
@@ -271,10 +271,10 @@ public:
    * OUT       tablets
    */
   static int get_all_tables_tablets(const common::ObIArray<const ObTableScanSpec*> &scan_ops,
-                                    const DASTabletLocIArray &all_locations,
+                                    const DASRuntimeTabletIArray &all_locations,
                                     const common::ObIArray<ObSqcTableLocationKey> &tsc_location_keys,
                                     ObSqcTableLocationKey dml_location_key,
-                                    common::ObIArray<DASTabletLocArray> &tablets);
+                                    common::ObIArray<DASRuntimeTabletArray> &tablets);
 };
 
 class ObPxTreeSerializer
@@ -875,7 +875,7 @@ private:
 
   static int get_pkey_table_locations(int64_t table_location_key,
       ObPxSqcMeta &sqc,
-      DASTabletLocIArray &pkey_locations);
+      DASRuntimeTabletIArray &pkey_locations);
 };
 
 using DTLChannelPredFunc = std::function<void(dtl::ObDtlChannel*)>;

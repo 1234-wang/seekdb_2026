@@ -55,7 +55,7 @@ public:
                               const ObDMLStmt &stmt,
                               const share::schema::ObTableSchema &table_schema,
                               const ObSQLSessionInfo &session,
-                              ObDASTableLocMeta &loc_meta);
+                              DASTableAccessMeta &loc_meta);
   int generate_das_result_output(const common::ObIArray<uint64_t> &output_cids,
                                  common::ObIArray<ObExpr *> &domain_id_expr,
                                  common::ObIArray<uint64_t> &domain_id_col_ids,

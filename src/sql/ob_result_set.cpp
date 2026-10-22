@@ -379,7 +379,7 @@ OB_INLINE int ObResultSet::inner_get_next_row(const common::ObNewRow *&row)
   }
   //Save the current execution state to determine whether to refresh location
   //and perform other necessary cleanup operations when the statement exits.
-  DAS_CTX(get_exec_context()).save_cur_exec_status(ret);
+  DAS_CTX(get_exec_context()).record_access_error(ret);
 
   return ret;
 }
@@ -840,7 +840,7 @@ int ObResultSet::do_close(int *client_ret)
   }
   //Save the current execution state to determine whether to refresh location
   //and perform other necessary cleanup operations when the statement exits.
-  DAS_CTX(get_exec_context()).save_cur_exec_status(ret);
+  DAS_CTX(get_exec_context()).record_access_error(ret);
   //NG_TRACE_EXT(result_set_close, OB_ID(ret), ret, OB_ID(arg1), prev_ret,
                //OB_ID(arg2), ins_ret, OB_ID(arg3), errcode_, OB_ID(async), async);
   return ret;  // All subsequent operations are completed through callback
@@ -1049,16 +1049,6 @@ int ObResultSet::init_cmd_exec_context(ObExecContext &exec_ctx)
     }
   }
   return ret;
-}
-// obmp_query before retrying the entire SQL, it may be necessary to call this interface to refresh Location, to avoid always sending to the wrong server
-void ObResultSet::refresh_location_cache_by_errno(bool is_nonblock, int err)
-{
-  DAS_CTX(get_exec_context()).refresh_location_cache_by_errno(is_nonblock, err);
-}
-
-void ObResultSet::force_refresh_location_cache(bool is_nonblock, int err)
-{
-  DAS_CTX(get_exec_context()).force_refresh_location_cache(is_nonblock, err);
 }
 // Tell mysql whether to pass an EndTransCallback
 bool ObResultSet::need_end_trans_callback() const

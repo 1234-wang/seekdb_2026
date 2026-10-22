@@ -113,8 +113,8 @@ int ObAdaptiveAutoDop::calculate_tsc_auto_dop(const ObOpSpec &spec, int64_t &tab
 }
 
 int ObAdaptiveAutoDop::choose_storage_estimation_partitions(const int64_t partition_limit,
-                                                            const DASTabletLocSEArray &tablet_locs,
-                                                            DASTabletLocSEArray &chosen_tablet_locs)
+                                                            const DASRuntimeTabletSEArray &tablet_locs,
+                                                            DASRuntimeTabletSEArray &chosen_tablet_locs)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> min_max_index;
@@ -151,12 +151,12 @@ int ObAdaptiveAutoDop::build_storage_estimation_tasks(
   int64_t &part_cnt)
 {
   int ret = OB_SUCCESS;
-  ObDASTableLoc *match_table_loc = nullptr;
+  DASRuntimeTableAccess *match_table_loc = nullptr;
   ObDASCtx &das_ctx = ctx_.get_das_ctx();
   const ObSimpleTableSchemaV2 *table_schema = nullptr;
   ObSqlCtx *sql_ctx = ctx_.get_sql_ctx();
   common::ObIAllocator &allocator = ctx_.get_allocator();
-  const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
+  const DASRuntimeTableList &table_locs = das_ctx.get_table_accesses();
   const int64_t index_id = cost_tsc_info.get_index_id();
   const int64_t MAX_EST_TASK_NUM = 10;
 
@@ -174,12 +174,12 @@ int ObAdaptiveAutoDop::build_storage_estimation_tasks(
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    const DASTabletLocList &tablet_locs = match_table_loc->get_tablet_locs();
+    const DASRuntimeTabletList &tablet_locs = match_table_loc->get_tablet_accesses();
     is_single_part = (1 == tablet_locs.size());
     part_cnt = tablet_locs.size();
     int64_t schema_version = table_schema->get_schema_version();
-    DASTabletLocSEArray tablet_targets;
-    DASTabletLocSEArray chosen_tablet_locs;
+    DASRuntimeTabletSEArray tablet_targets;
+    DASRuntimeTabletSEArray chosen_tablet_locs;
     if (OB_FAIL(tablet_targets.reserve(tablet_locs.size()))) {
     } else {
       FOREACH_X(tablet_loc, tablet_locs, OB_SUCC(ret))
@@ -205,7 +205,7 @@ int ObAdaptiveAutoDop::build_storage_estimation_tasks(
 int ObAdaptiveAutoDop::add_estimation_tasks(const ObTableScanSpec &tsc_spec,
                                             const ObCostTableScanSimpleInfo &cost_tsc_info,
                                             const int64_t schema_version,
-                                            ObDASTabletLoc *tablet_loc, ObQueryRangeArray &ranges,
+                                            DASRuntimeTabletAccess *tablet_loc, ObQueryRangeArray &ranges,
                                             ObIArray<ObBatchEstTasks *> &tasks)
 {
   int ret = OB_SUCCESS;

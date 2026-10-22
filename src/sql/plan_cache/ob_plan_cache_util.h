@@ -47,7 +47,6 @@ class ObPCVSet;
 class ObPhysicalPlan;
 struct ObSqlCtx;
 class ObTableLocation;
-class ObPhyTableLocation;
 class TableAccessTargets;
 class ObTablePartitionInfo;
 class ObPlanCacheValue;
@@ -928,7 +927,7 @@ public:
 
   // used for adding plan
   static int get_phy_locations(const common::ObIArray<ObTablePartitionInfo *> &partition_infos,
-                               //ObIArray<ObDASTableLoc> &phy_locations,
+                               //ObIArray<DASRuntimeTableAccess> &phy_locations,
                                ObIArray<TableAccessTargets> &phy_location_infos);
 
   static int build_table_locs(ObDASCtx &das_ctx,

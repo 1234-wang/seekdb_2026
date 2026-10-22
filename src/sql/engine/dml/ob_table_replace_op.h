@@ -134,10 +134,10 @@ protected:
 
   int calc_insert_tablet_loc(const ObInsCtDef &ins_ctdef,
                              ObInsRtDef &ins_rtdef,
-                             ObDASTabletLoc *&tablet_loc);
+                             DASRuntimeTabletAccess *&tablet_loc);
   int calc_delete_tablet_loc(const ObDelCtDef &del_ctdef,
                              ObDelRtDef &del_rtdef,
-                             ObDASTabletLoc *&tablet_loc);
+                             DASRuntimeTabletAccess *&tablet_loc);
 
   int inner_open_with_das();
 

@@ -133,7 +133,7 @@ DASOpResultIter ObDASRef::begin_result_iter()
   return DASOpResultIter(batched_tasks_.begin(), wild_datum_info_);
 }
 
-ObIDASTaskOp* ObDASRef::find_das_task(const ObDASTabletLoc *tablet_loc, ObDASOpType op_type)
+ObIDASTaskOp* ObDASRef::find_das_task(const DASRuntimeTabletAccess *tablet_loc, ObDASOpType op_type)
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *das_task = nullptr;
@@ -494,7 +494,7 @@ int ObDASRef::close_all_task()
   return ret;
 }
 
-int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
+int ObDASRef::create_das_task(const DASRuntimeTabletAccess *tablet_loc,
                               ObDASOpType op_type,
                               ObIDASTaskOp *&task_op)
 {

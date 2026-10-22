@@ -658,8 +658,8 @@ public:
 
   inline uint64_t get_ref_table_id() const { return loc_meta_.ref_table_id_; }
 
-  inline const ObDASTableLocMeta &get_loc_meta() const { return loc_meta_; }
-  inline ObDASTableLocMeta &get_loc_meta() { return loc_meta_; }
+  inline const DASTableAccessMeta &get_loc_meta() const { return loc_meta_; }
+  inline DASTableAccessMeta &get_loc_meta() { return loc_meta_; }
 
   bool is_partitioned() const { return is_partitioned_; }
 
@@ -682,7 +682,7 @@ public:
                                         ObIAllocator &allocator,
                                         uint64_t table_id,
                                         uint64_t ref_table_id,
-                                        ObDASTableLoc *&table_loc);
+                                        DASRuntimeTableAccess *&table_loc);
   int add_part_hint_ids(const ObIArray<ObObjectID> &part_ids) {
     return append_array_no_dup(part_hint_ids_, part_ids);
   }
@@ -1127,7 +1127,7 @@ private:
   share::schema::ObTableType table_type_;
   common::ObArenaAllocator inner_allocator_;
   common::ObIAllocator &allocator_; //used for deep copy other table location
-  ObDASTableLocMeta loc_meta_;
+  DASTableAccessMeta loc_meta_;
   ObPartLocCalcNode *calc_node_;//first-level partition location calculation node
   ObPartLocCalcNode *gen_col_node_;//query range node of columns dependented by generated column
   ObPartLocCalcNode *subcalc_node_;//secondary partition location calculation Node

@@ -110,7 +110,7 @@ OB_DEF_SERIALIZE(ObDASAttachSpec)
   if (has_attach_ctdef) {
     OB_UNIS_ENCODE(attach_loc_metas_.size());
     FOREACH_X(it, attach_loc_metas_, OB_SUCC(ret)) {
-      const ObDASTableLocMeta *loc_meta = *it;
+      const DASTableAccessMeta *loc_meta = *it;
       OB_UNIS_ENCODE(*loc_meta);
     }
     OZ(serialize_ctdef_tree(buf, buf_len, pos, attach_ctdef_));
@@ -127,7 +127,7 @@ OB_DEF_DESERIALIZE(ObDASAttachSpec)
     int64_t list_size = 0;
     OB_UNIS_DECODE(list_size);
     for (int i = 0; OB_SUCC(ret) && i < list_size; ++i) {
-      ObDASTableLocMeta *loc_meta = OB_NEWx(ObDASTableLocMeta, &allocator_, allocator_);
+      DASTableAccessMeta *loc_meta = OB_NEWx(DASTableAccessMeta, &allocator_, allocator_);
       if (OB_ISNULL(loc_meta)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(attach_loc_metas_.push_back(loc_meta))) {
@@ -148,7 +148,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASAttachSpec)
   if (has_attach_ctdef) {
     OB_UNIS_ADD_LEN(attach_loc_metas_.size());
     FOREACH(it, attach_loc_metas_) {
-      const ObDASTableLocMeta *loc_meta = *it;
+      const DASTableAccessMeta *loc_meta = *it;
       OB_UNIS_ADD_LEN(*loc_meta);
     }
     len += get_ctdef_tree_serialize_size(attach_ctdef_);
@@ -230,12 +230,12 @@ int ObDASAttachSpec::deserialize_ctdef_tree(const char *buf,
   return ret;
 }
 
-const ObDASTableLocMeta *ObDASAttachSpec::get_attach_loc_meta(int64_t table_location_id,
+const DASTableAccessMeta *ObDASAttachSpec::get_attach_loc_meta(int64_t table_location_id,
                                                               int64_t ref_table_id) const
 {
-  const ObDASTableLocMeta *loc_meta = nullptr;
+  const DASTableAccessMeta *loc_meta = nullptr;
   FOREACH_X(it, attach_loc_metas_, nullptr == loc_meta) {
-    const ObDASTableLocMeta *tmp_loc_meta = *it;
+    const DASTableAccessMeta *tmp_loc_meta = *it;
     if (tmp_loc_meta->table_loc_id_ == table_location_id &&
         tmp_loc_meta->ref_table_id_ == ref_table_id) {
       loc_meta = tmp_loc_meta;

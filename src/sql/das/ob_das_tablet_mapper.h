@@ -30,8 +30,8 @@ class ObNewRow;
 namespace sql
 {
 enum ObRoutePolicyType : int;
-struct ObDASTableLocMeta;
-struct ObDASTabletLoc;
+struct DASTableAccessMeta;
+struct DASRuntimeTabletAccess;
 class ObDASCtx;
 struct ValueItemExpr;
 typedef common::hash::ObHashMap<common::ObObjectID, common::ObObjectID, common::hash::NoPthreadDefendMode> ObPartitionIdMap;

@@ -2607,7 +2607,7 @@ int ObDmlCgService::generate_multi_upd_ctdef(const ObLogDelUpd &op,
 }
 
 int ObDmlCgService::generate_table_loc_meta(const IndexDMLInfo &index_dml_info,
-                                            ObDASTableLocMeta &loc_meta)
+                                            DASTableAccessMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cg_.opt_ctx_)) {
@@ -2876,7 +2876,7 @@ int ObDmlCgService::generate_rowkey_idx_for_foreign_key(const ObIArray<uint64_t>
 }
 
 int ObDmlCgService::generate_fk_table_loc_info(uint64_t index_table_id,
-                                               ObDASTableLocMeta &loc_meta,
+                                               DASTableAccessMeta &loc_meta,
                                                ObTabletID &tablet_id,
                                                bool &is_part_table)
 {
@@ -3194,7 +3194,7 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
   const ObTableSchema *rowkey_domain_schema = nullptr;
   ObDASScanCtDef *scan_ctdef = nullptr;
   ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
-  ObDASTableLocMeta *loc_meta = nullptr;
+  DASTableAccessMeta *loc_meta = nullptr;
 
   if (OB_ISNULL(schema_guard) || OB_INVALID_ID == rowkey_domain_tid) {
     ret = OB_ERR_UNEXPECTED;
@@ -3212,7 +3212,7 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
                                                         index_dml_info.column_exprs_,
                                                         *rowkey_domain_schema,
                                                         scan_ctdef))) {
-  } else if (OB_ISNULL(loc_meta = OB_NEWx(ObDASTableLocMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator()))) {
+  } else if (OB_ISNULL(loc_meta = OB_NEWx(DASTableAccessMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     scan_ctdef->ref_table_id_ = rowkey_domain_tid;

@@ -109,7 +109,7 @@ OB_SERIALIZE_MEMBER((ObDASRangesCostOp, ObIDASTaskOp),
                      timeout_us_);
 
 int ObDASSimpleUtils::split_multi_ranges(ObExecContext &exec_ctx,
-                                         ObDASTabletLoc *tablet_loc,
+                                         DASRuntimeTabletAccess *tablet_loc,
                                          const common::ObIArray<ObStoreRange> &ranges,
                                          const int64_t expected_task_count,
                                          ObArrayArray<ObStoreRange> &multi_range_split_array)
@@ -159,7 +159,7 @@ int ObDASSimpleUtils::split_multi_ranges(ObExecContext &exec_ctx,
 }
 
 int ObDASSimpleUtils::get_multi_ranges_cost(ObExecContext &exec_ctx,
-                                            ObDASTabletLoc *tablet_loc,
+                                            DASRuntimeTabletAccess *tablet_loc,
                                             const common::ObIArray<common::ObStoreRange> &ranges,
                                             int64_t &total_size)
 {

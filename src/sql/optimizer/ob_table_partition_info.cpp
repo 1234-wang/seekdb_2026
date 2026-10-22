@@ -103,7 +103,7 @@ int ObTablePartitionInfo::replace_final_location_key(ObExecContext &exec_ctx,
       //only use to calc local index and main table related tablet info
       //for the local index lookup,
       //need to use the local index id as the table_id for partition calculation
-      ObDASTableLocMeta &loc_meta = table_location_.get_loc_meta();
+      DASTableAccessMeta &loc_meta = table_location_.get_loc_meta();
       DASRelatedTabletMap *related_map = nullptr;
 
       loc_meta.related_table_ids_.reset();

@@ -84,7 +84,7 @@ int ObDASGlobalLookupIter::add_rowkey()
   ObObjectID first_partition_id = OB_INVALID_ID;
   ObTabletID tablet_id(OB_INVALID_ID);
   ObDASScanOp *das_scan_op = nullptr;
-  ObDASTabletLoc *tablet_loc = nullptr;
+  DASRuntimeTabletAccess *tablet_loc = nullptr;
   ObDASCtx *das_ctx = nullptr;
   bool reuse_das_op = false;
   OB_ASSERT(data_table_iter_->get_type() == DAS_ITER_MERGE);
@@ -99,7 +99,7 @@ int ObDASGlobalLookupIter::add_rowkey()
                                           tablet_id))) {
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(das_ctx->extended_tablet_loc(*lookup_rtdef_->table_loc_,
+    } else if (OB_FAIL(das_ctx->ensure_tablet_access(*lookup_rtdef_->table_loc_,
                                                     tablet_id,
                                                     tablet_loc,
                                                     partition_id,
@@ -259,8 +259,8 @@ int ObDASGlobalLookupIter::attach_related_taskinfo(ObDASScanOp &target_op, ObDAS
   } else if (attach_rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
     const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef*>(attach_rtdef->ctdef_);
     ObDASScanRtDef *scan_rtdef = static_cast<ObDASScanRtDef*>(attach_rtdef);
-    ObDASTableLoc *table_loc = scan_rtdef->table_loc_;
-    ObDASTabletLoc *tablet_loc = ObDASUtils::get_related_tablet_loc(
+    DASRuntimeTableAccess *table_loc = scan_rtdef->table_loc_;
+    DASRuntimeTabletAccess *tablet_loc = ObDASUtils::get_related_tablet_loc(
         *target_op.get_tablet_loc(), table_loc->loc_meta_->ref_table_id_);
     if (OB_ISNULL(tablet_loc)) {
       ret = OB_ERR_UNEXPECTED;

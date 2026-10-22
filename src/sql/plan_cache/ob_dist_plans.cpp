@@ -45,7 +45,7 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
   //need to clear all location info before calculate candi tablet locations
   //because get_phy_locations will build the related_tablet_map in ObDASCtx
   //and add candi table location into DASCtx
-  DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
+  DAS_CTX(pc_ctx.exec_ctx_).clear_table_accesses();
   if (OB_ISNULL(plan_set_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if ((plan_set_->is_multi_stmt_plan())) {

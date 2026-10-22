@@ -974,7 +974,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
 {
   int ret = OB_SUCCESS;
   ObSqlCtx &sql_ctx = pc_ctx.sql_ctx_;
-  //DASTableLocList table_locs(pc_ctx.exec_ctx_.get_allocator());
+  //DASRuntimeTableList table_locs(pc_ctx.exec_ctx_.get_allocator());
   ObArray<TableAccessTargets> table_targets;
   ObPhyPlanType plan_type = OB_PHY_PLAN_UNINITIALIZED;
   if (OB_ISNULL(plan_cache_value_) ||
@@ -1282,7 +1282,7 @@ int ObSqlPlanSet::build_table_locations(const ObIArray<ObTableLocation> &table_l
                      && !location.is_partitioned()
                      && !is_virtual_table(location.get_ref_table_id());
   }
-  das_ctx.clear_all_location_info();
+  das_ctx.clear_table_accesses();
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (build_directly) {
@@ -1302,7 +1302,7 @@ int ObSqlPlanSet::build_table_locations(const ObIArray<ObTableLocation> &table_l
     }
   }
   if (OB_FAIL(ret)) {
-    das_ctx.clear_all_location_info();
+    das_ctx.clear_table_accesses();
   }
   return ret;
 }
@@ -1313,7 +1313,7 @@ int ObSqlPlanSet::calc_phy_plan_type_v2(const ObPlanCacheCtx &pc_ctx,
 {
   int ret = OB_SUCCESS;
   ObDASCtx &das_ctx = pc_ctx.exec_ctx_.get_das_ctx();
-  const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
+  const DASRuntimeTableList &table_locs = das_ctx.get_table_accesses();
   int64_t N = table_locs.size();
   if (0 == N) {
     plan_type = OB_PHY_PLAN_LOCAL;
@@ -1322,7 +1322,7 @@ int ObSqlPlanSet::calc_phy_plan_type_v2(const ObPlanCacheCtx &pc_ctx,
     bool is_all_single_partition = true;
     FOREACH_X(table_loc, table_locs, is_all_single_partition)
     {
-      const DASTabletLocList &tablet_locs = (*table_loc)->get_tablet_locs();
+      const DASRuntimeTabletList &tablet_locs = (*table_loc)->get_tablet_accesses();
       if (tablet_locs.size() != 0) {
         is_all_empty = false;
       }
@@ -1351,7 +1351,7 @@ void ObSqlPlanSet::remove_all_plan()
 
 //add plan used
 int ObSqlPlanSet::get_phy_locations(const ObTablePartitionInfoArray &partition_infos,
-                                    //ObIArray<ObDASTableLoc> &table_locs,
+                                    //ObIArray<DASRuntimeTableAccess> &table_locs,
                                     ObIArray<TableAccessTargets> &table_targets)
 {
   int ret = OB_SUCCESS;

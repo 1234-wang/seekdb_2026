@@ -1062,7 +1062,7 @@ int ObMPQuery::check_readonly_stmt(ObMySQLResultSet &result)
     //Through setting /*+read_consistency()*/ hint
     //or specify session-level ob_read_consistency = 2
     // to set weak consistency read
-    const int64_t table_count = DAS_CTX(result.get_exec_context()).get_table_loc_list().size();
+    const int64_t table_count = DAS_CTX(result.get_exec_context()).get_table_accesses().size();
     if (0 == table_count) {
       //This case is special, jdbc will send a special statement select @@session.tx_read_only when sending the query statement;
       //For convenience of obtest testing, the restriction on the select statement for no table_locations needs to be removed

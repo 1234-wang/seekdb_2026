@@ -173,17 +173,17 @@ public:
     table_loc_ = nullptr;
     tablet_loc_ = nullptr;
   }
-  inline void set_tablet_loc(ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
-  inline ObDASTabletLoc *get_tablet_loc() { return tablet_loc_; }
-  inline ObDASTableLoc *get_table_loc() { return table_loc_; }
+  inline void set_tablet_loc(DASRuntimeTabletAccess *tablet_loc) { tablet_loc_ = tablet_loc; }
+  inline DASRuntimeTabletAccess *get_tablet_loc() { return tablet_loc_; }
+  inline DASRuntimeTableAccess *get_table_loc() { return table_loc_; }
   const ObTableModifySpec &get_spec() const
   {
     return static_cast<const ObTableModifySpec &>(spec_);
   }
   TO_STRING_KV(KPC_(table_loc), KPC_(tablet_loc));
 protected:
-  ObDASTableLoc *table_loc_;
-  ObDASTabletLoc *tablet_loc_; //for single table modify op
+  DASRuntimeTableAccess *table_loc_;
+  DASRuntimeTabletAccess *tablet_loc_; //for single table modify op
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifyOpInput);
 };

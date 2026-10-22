@@ -30,6 +30,7 @@ namespace common
 {
 class ObNewRowIterator;
 class ObISrsProvider;
+struct ObLobReadOptions;
 }  // namespace common
 namespace transaction
 {
@@ -144,10 +145,10 @@ public:
   const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   void set_task_id(const int64_t task_id) { task_id_ = task_id; }
   int64_t get_task_id() const { return task_id_; }
-  void set_tablet_loc(const ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
+  void set_tablet_loc(const DASRuntimeTabletAccess *tablet_loc) { tablet_loc_ = tablet_loc; }
   // tablet_loc_ will not be serialized, therefore it cannot be accessed during the execution phase
   // of DASTaskOp. It can only be touched through das_ref and data_access_service layer.
-  const ObDASTabletLoc *get_tablet_loc() const { return tablet_loc_; }
+  const DASRuntimeTabletAccess *get_tablet_loc() const { return tablet_loc_; }
   inline int64_t get_ref_table_id() const { return tablet_loc_->loc_meta_->ref_table_id_; }
   virtual int init_task_info(uint32_t row_extend_size) = 0;
   virtual const ObDASBaseCtDef *get_ctdef() const { return nullptr; }
@@ -264,7 +265,7 @@ protected:
   common::ObTabletID tablet_id_;
   // tablet_loc_ will not be serialized, therefore it cannot be accessed during the execution phase
   // of DASTaskOp. It can only be touched through das_ref and data_access_service layer.
-  const ObDASTabletLoc *tablet_loc_;
+  const DASRuntimeTabletAccess *tablet_loc_;
   common::ObIAllocator &op_alloc_;
   //In DML DAS Task,related_ctdefs_ means related local index ctdefs
   //In Scan DAS Task for normal secondary index, related_ctdefs_ have only one element, means the lookup ctdef
@@ -329,7 +330,7 @@ public:
   }
   int get_next_row();
   int next_result();
-  const ObDASTabletLoc *get_tablet_loc() const { return (*task_iter_)->get_tablet_loc(); }
+  const DASRuntimeTabletAccess *get_tablet_loc() const { return (*task_iter_)->get_tablet_loc(); }
   bool is_end() const { return task_iter_.is_end(); }
 private:
   int reset_wild_datums_ptr();

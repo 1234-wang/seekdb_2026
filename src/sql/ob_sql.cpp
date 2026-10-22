@@ -2800,7 +2800,7 @@ int ObSql::code_generate(
           if (!tl.use_das()) {
             const TableAccessTargets &table_targets = tbl_part_infos.at(i)->get_access_targets();
             if (OB_FAIL(das_ctx.add_table_access_targets(tl.get_loc_meta(), table_targets))) {
-            } else if (OB_UNLIKELY(das_ctx.get_table_loc_list().empty())) {
+            } else if (OB_UNLIKELY(das_ctx.get_table_accesses().empty())) {
               ret = OB_ERR_UNEXPECTED;
             }
           }

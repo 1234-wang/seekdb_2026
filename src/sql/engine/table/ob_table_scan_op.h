@@ -190,7 +190,7 @@ public:
   ObDASScanCtDef *lookup_ctdef_;
   //lookup_loc_meta_ used to calc the main table tablet location
   //when query access the global index and lookup the main table
-  ObDASTableLocMeta *lookup_loc_meta_;
+  DASTableAccessMeta *lookup_loc_meta_;
   //used for dynamic partition pruning
   ObTableLocation *das_dppr_tbl_;
   common::ObIAllocator &allocator_;
@@ -265,7 +265,7 @@ public:
     return key_ranges_.assign(range);
   }
 protected:
-  ObDASTabletLoc *tablet_loc_;
+  DASRuntimeTabletAccess *tablet_loc_;
   common::ObSEArray<common::ObNewRange, 1> key_ranges_;
   common::ObSEArray<common::ObSpatialMBR, 1> mbr_filters_;
   common::ObPosArray range_array_pos_;
@@ -510,7 +510,7 @@ protected:
   int init_table_scan_rtdef();
   int init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
                           ObDASScanRtDef &das_rtdef,
-                          const ObDASTableLocMeta *loc_meta);
+                          const DASTableAccessMeta *loc_meta);
   int init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *&attach_rtdef);
   int prepare_scan_range();
   int prepare_batch_scan_range();
@@ -600,8 +600,8 @@ protected:
   int prepare_das_task();
   int prepare_all_das_tasks();
   int prepare_pushdown_limit_param();
-  bool has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op);
-  int create_one_das_task(ObDASTabletLoc *tablet_loc);
+  bool has_das_scan_op(const DASRuntimeTabletAccess *tablet_loc, ObDASScanOp *&das_op);
+  int create_one_das_task(DASRuntimeTabletAccess *tablet_loc);
   int pushdown_normal_lookup_to_das(ObDASScanOp &target_op);
   int pushdown_attach_task_to_das(ObDASScanOp &target_op);
   int attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef);

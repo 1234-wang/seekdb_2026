@@ -162,7 +162,7 @@ OB_INLINE int ObTableReplaceOp::inner_open_with_das()
 {
   int ret = OB_SUCCESS;
   const ObExprFrameInfo *expr_frame_info = NULL;
-  ObDASTableLoc *table_loc = nullptr;
+  DASRuntimeTableAccess *table_loc = nullptr;
   bool use_response_snapshot = false;
   expr_frame_info = nullptr != MY_SPEC.expr_frame_info_
                                ? MY_SPEC.expr_frame_info_
@@ -392,7 +392,7 @@ int ObTableReplaceOp::final_insert_row_to_das()
     const ObInsCtDef &ins_ctdef = *(replace_ctdef.ins_ctdef_);
     ObReplaceRtDef &replace_rtdef = replace_rtdefs_.at(i);
     ObInsRtDef &ins_rtdef = replace_rtdef.ins_rtdef_;
-    ObDASTabletLoc *tablet_loc = nullptr;
+    DASRuntimeTabletAccess *tablet_loc = nullptr;
     ObChunkDatumStore::StoredRow *stored_row_ = nullptr;
     ++ins_rtdef.cur_row_num_;
     if (OB_FAIL(calc_insert_tablet_loc(ins_ctdef, ins_rtdef, tablet_loc))) {
@@ -415,7 +415,7 @@ int ObTableReplaceOp::insert_row_to_das(bool &is_skipped)
     const ObInsCtDef &ins_ctdef = *(replace_ctdef.ins_ctdef_);
     ObReplaceRtDef &replace_rtdef = replace_rtdefs_.at(i);
     ObInsRtDef &ins_rtdef = replace_rtdef.ins_rtdef_;
-    ObDASTabletLoc *tablet_loc = nullptr;
+    DASRuntimeTabletAccess *tablet_loc = nullptr;
     ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
     ++ins_rtdef.cur_row_num_;
     if (OB_FAIL(ObDMLService::init_heap_table_pk_for_ins(ins_ctdef, eval_ctx_))) {
@@ -438,7 +438,7 @@ int ObTableReplaceOp::delete_row_to_das(bool need_do_trigger)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.replace_ctdefs_.count(); ++i) {
     bool is_skipped = false;
-    ObDASTabletLoc *tablet_loc = nullptr;
+    DASRuntimeTabletAccess *tablet_loc = nullptr;
     const ObReplaceCtDef &replace_ctdef = *(MY_SPEC.replace_ctdefs_.at(i));
     const ObDelCtDef &del_ctdef = *(replace_ctdef.del_ctdef_);
     ObReplaceRtDef &replace_rtdef = replace_rtdefs_.at(i);
@@ -778,7 +778,7 @@ int ObTableReplaceOp::do_insert(ObConflictRowMap *primary_map)
 
 int ObTableReplaceOp::calc_insert_tablet_loc(const ObInsCtDef &ins_ctdef,
                                              ObInsRtDef &ins_rtdef,
-                                             ObDASTabletLoc *&tablet_loc)
+                                             DASRuntimeTabletAccess *&tablet_loc)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.use_dist_das_) {
@@ -786,12 +786,12 @@ int ObTableReplaceOp::calc_insert_tablet_loc(const ObInsCtDef &ins_ctdef,
       ObExpr *calc_part_id_expr = ins_ctdef.multi_ctdef_->calc_part_id_expr_;
       ObObjectID partition_id = OB_INVALID_ID;
       ObTabletID tablet_id;
-      ObDASTableLoc &table_loc = *ins_rtdef.das_rtdef_.table_loc_;
+      DASRuntimeTableAccess &table_loc = *ins_rtdef.das_rtdef_.table_loc_;
       if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr, eval_ctx_, partition_id, tablet_id))) {
       } else if (!ins_ctdef.multi_ctdef_->hint_part_ids_.empty()
           && !has_exist_in_array(ins_ctdef.multi_ctdef_->hint_part_ids_, partition_id)) {
         ret = OB_PARTITION_NOT_MATCH;
-      } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, tablet_id, tablet_loc))) {
+      } else if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, tablet_id, tablet_loc))) {
       }
     }
   } else {
@@ -803,7 +803,7 @@ int ObTableReplaceOp::calc_insert_tablet_loc(const ObInsCtDef &ins_ctdef,
 
 int ObTableReplaceOp::calc_delete_tablet_loc(const ObDelCtDef &del_ctdef,
                                              ObDelRtDef &del_rtdef,
-                                             ObDASTabletLoc *&tablet_loc)
+                                             DASRuntimeTabletAccess *&tablet_loc)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.use_dist_das_) {
@@ -811,9 +811,9 @@ int ObTableReplaceOp::calc_delete_tablet_loc(const ObDelCtDef &del_ctdef,
       ObExpr *calc_part_id_expr = del_ctdef.multi_ctdef_->calc_part_id_expr_;
       ObObjectID partition_id = OB_INVALID_ID;
       ObTabletID tablet_id;
-      ObDASTableLoc &table_loc = *del_rtdef.das_rtdef_.table_loc_;
+      DASRuntimeTableAccess &table_loc = *del_rtdef.das_rtdef_.table_loc_;
       if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr, eval_ctx_, partition_id, tablet_id))) {
-      } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, tablet_id, tablet_loc))) {
+      } else if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, tablet_id, tablet_loc))) {
       }
     }
   } else {

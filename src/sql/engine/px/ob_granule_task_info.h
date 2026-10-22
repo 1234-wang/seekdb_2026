@@ -41,7 +41,7 @@ public:
                OB_ISNULL(tablet_loc_) ? OB_INVALID_ID : tablet_loc_->tablet_id_.id());
 
   common::ObSEArray<common::ObNewRange, 1> ranges_;
-  ObDASTabletLoc *tablet_loc_;
+  DASRuntimeTabletAccess *tablet_loc_;
   int64_t task_id_;
   ObGranuleType granule_type_;
 };

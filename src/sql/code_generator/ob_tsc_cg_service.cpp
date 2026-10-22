@@ -1317,7 +1317,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
                                             const ObDMLStmt &stmt,
                                             const ObTableSchema &table_schema,
                                             const ObSQLSessionInfo &session,
-                                            ObDASTableLocMeta &loc_meta)
+                                            DASTableAccessMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
   const bool is_das_empty_part = loc_meta.das_empty_part_;
@@ -3343,7 +3343,7 @@ int ObTscCgService::generate_vec_id_lookup_ctdef(const ObLogTableScan &op,
     ObArray<ObExpr*> result_outputs;
     scan_ctdef->ref_table_id_ = vec_id_index_tid;
     aux_lookup_ctdef->children_cnt_ = 2;
-    ObDASTableLocMeta *scan_loc_meta = OB_NEWx(ObDASTableLocMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator());
+    DASTableAccessMeta *scan_loc_meta = OB_NEWx(DASTableAccessMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator());
     const int vid_rowkey_rowkey_cnt = 1;
     if (OB_ISNULL(scan_loc_meta)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3424,7 +3424,7 @@ int ObTscCgService::generate_doc_id_lookup_ctdef(const ObLogTableScan &op,
     ObArray<ObExpr*> result_outputs;
     scan_ctdef->ref_table_id_ = doc_id_index_tid;
     aux_lookup_ctdef->children_cnt_ = 2;
-    ObDASTableLocMeta *scan_loc_meta = OB_NEWx(ObDASTableLocMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator());
+    DASTableAccessMeta *scan_loc_meta = OB_NEWx(DASTableAccessMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator());
     if (OB_ISNULL(scan_loc_meta)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else if (OB_FAIL(generate_das_scan_ctdef(op, cg_ctx, *scan_ctdef, has_rowscn))) {
@@ -3721,8 +3721,8 @@ int ObTscCgService::generate_rowkey_domain_id_ctdef(
   } else {
     bool has_rowscn = false;
     scan_ctdef->ref_table_id_ = rowkey_domain_id_tid;
-    ObDASTableLocMeta *scan_loc_meta =
-      OB_NEWx(ObDASTableLocMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator());
+    DASTableAccessMeta *scan_loc_meta =
+      OB_NEWx(DASTableAccessMeta, &cg_.phy_plan_->get_allocator(), cg_.phy_plan_->get_allocator());
     share::ObDasSemanticIndexInfo &semantic_index_info = scan_ctdef->semantic_index_info_;
     if (OB_ISNULL(scan_loc_meta)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3776,7 +3776,7 @@ int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
 {
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = cg_.phy_plan_->get_allocator();
-  tsc_ctdef.lookup_loc_meta_ = OB_NEWx(ObDASTableLocMeta, &allocator, allocator);
+  tsc_ctdef.lookup_loc_meta_ = OB_NEWx(DASTableAccessMeta, &allocator, allocator);
   if (OB_ISNULL(tsc_ctdef.lookup_loc_meta_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(ObDASTaskFactory::alloc_das_ctdef(DAS_OP_TABLE_SCAN,

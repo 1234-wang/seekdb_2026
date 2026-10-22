@@ -177,7 +177,7 @@ common::ObIAllocator *ObDASMergeIter::get_das_alloc()
   return alloc;
 }
 
-int ObDASMergeIter::create_das_task(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&scan_op, bool &reuse_op)
+int ObDASMergeIter::create_das_task(const DASRuntimeTabletAccess *tablet_loc, ObDASScanOp *&scan_op, bool &reuse_op)
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
@@ -432,7 +432,7 @@ int ObDASMergeIter::update_output_tablet_id(ObIDASTaskOp *output_das_task)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(pdml_partition_id_) && OB_NOT_NULL(eval_ctx_) && OB_NOT_NULL(output_das_task)) {
-    const ObDASTabletLoc *tablet_loc = nullptr;
+    const DASRuntimeTabletAccess *tablet_loc = nullptr;
     int64_t output_id = OB_INVALID_ID;
     if (partition_id_calc_type_ > 0) {
       tablet_loc = output_das_task->get_tablet_loc();

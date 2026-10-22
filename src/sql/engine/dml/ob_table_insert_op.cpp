@@ -160,19 +160,19 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
 
 int ObTableInsertOp::calc_tablet_loc(const ObInsCtDef &ins_ctdef,
                                      ObInsRtDef &ins_rtdef,
-                                     ObDASTabletLoc *&tablet_loc)
+                                     DASRuntimeTabletAccess *&tablet_loc)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.use_dist_das_) {
     ObExpr *calc_part_id_expr = ins_ctdef.multi_ctdef_->calc_part_id_expr_;
     ObObjectID partition_id = OB_INVALID_ID;
     ObTabletID tablet_id;
-    ObDASTableLoc &table_loc = *ins_rtdef.das_rtdef_.table_loc_;
+    DASRuntimeTableAccess &table_loc = *ins_rtdef.das_rtdef_.table_loc_;
     if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr, eval_ctx_, partition_id, tablet_id))) {
     } else if (!ins_ctdef.multi_ctdef_->hint_part_ids_.empty()
         && !has_exist_in_array(ins_ctdef.multi_ctdef_->hint_part_ids_, partition_id)) {
       ret = OB_PARTITION_NOT_MATCH;
-    } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, tablet_id, tablet_loc))) {
+    } else if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, tablet_id, tablet_loc))) {
     }
   } else {
     //direct write insert row to storage
@@ -214,7 +214,7 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
       // insert each table with fetched row
       const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
       ObInsRtDef &ins_rtdef = rtdefs.at(j);
-      ObDASTabletLoc *tablet_loc = nullptr;
+      DASRuntimeTabletAccess *tablet_loc = nullptr;
       ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
       ++ins_rtdef.cur_row_num_;
       if (OB_FAIL(ObDMLService::init_heap_table_pk_for_ins(ins_ctdef, eval_ctx_))) {

@@ -274,8 +274,8 @@ OB_INLINE int ObTableUpdateOp::calc_multi_tablet_id(const ObUpdCtDef &upd_ctdef,
 
 OB_INLINE int ObTableUpdateOp::calc_tablet_loc(const ObUpdCtDef &upd_ctdef,
                                                ObUpdRtDef &upd_rtdef,
-                                               ObDASTabletLoc *&old_tablet_loc,
-                                               ObDASTabletLoc *&new_tablet_loc)
+                                               DASRuntimeTabletAccess *&old_tablet_loc,
+                                               DASRuntimeTabletAccess *&new_tablet_loc)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.use_dist_das_) {
@@ -291,14 +291,14 @@ OB_INLINE int ObTableUpdateOp::calc_tablet_loc(const ObUpdCtDef &upd_ctdef,
       }
     }
     if (OB_SUCC(ret)) {
-      ObDASTableLoc &table_loc = *upd_rtdef.dupd_rtdef_.table_loc_;
+      DASRuntimeTableAccess &table_loc = *upd_rtdef.dupd_rtdef_.table_loc_;
       if (old_tablet_id == new_tablet_id) {
-        if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, old_tablet_id, old_tablet_loc))) {
+        if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, old_tablet_id, old_tablet_loc))) {
         } else {
           new_tablet_loc = old_tablet_loc;
         }
-      } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, old_tablet_id, old_tablet_loc))) {
-      } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, new_tablet_id, new_tablet_loc))) {
+      } else if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, old_tablet_id, old_tablet_loc))) {
+      } else if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, new_tablet_id, new_tablet_loc))) {
       }
     }
   } else {
@@ -319,8 +319,8 @@ OB_INLINE int ObTableUpdateOp::update_row_to_das()
       //update each table with fetched row
       const ObUpdCtDef &upd_ctdef = *ctdefs.at(j);
       ObUpdRtDef &upd_rtdef = rtdefs.at(j);
-      ObDASTabletLoc *old_tablet_loc = nullptr;
-      ObDASTabletLoc *new_tablet_loc = nullptr;
+      DASRuntimeTabletAccess *old_tablet_loc = nullptr;
+      DASRuntimeTabletAccess *new_tablet_loc = nullptr;
       ObDMLModifyRowNode modify_row(this, &upd_ctdef, &upd_rtdef, ObDmlEventType::DE_UPDATING);
       bool is_skipped = false;
       ++upd_rtdef.cur_row_num_;

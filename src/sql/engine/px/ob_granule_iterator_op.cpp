@@ -798,7 +798,7 @@ int ObGranuleIteratorOp::gi_task_pause_process()
              K(ranges[0]));
     GIPrepareTaskMap *gi_prepare_map = nullptr;
     ObGranuleTaskInfo *old_gi_task_info = nullptr;
-    ObDASTabletLoc *tablet_loc = nullptr;
+    DASRuntimeTabletAccess *tablet_loc = nullptr;
     if (OB_FAIL(ctx_.get_gi_task_map(gi_prepare_map))) {
     } else if (OB_ISNULL(old_gi_task_info = gi_prepare_map->get(tsc_op_id_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1600,7 +1600,7 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
       cur_tablet_idx = ATOMIC_FAA(&args->cur_tablet_idx_, 1);
       if (cur_tablet_idx >= tablet_cnt) {
       } else {
-        DASTabletLocArray &tablet_array = args->tablet_arrays_.at(0);
+        DASRuntimeTabletArray &tablet_array = args->tablet_arrays_.at(0);
         is_pruning = false;
         if (OB_FAIL(do_join_filter_partition_pruning(
             tablet_array.at(cur_tablet_idx)->tablet_id_.id(), is_pruning))) {
@@ -1615,8 +1615,8 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
     if (OB_SUCC(ret)) {
       is_parallel_runtime_filtered_ = true;
       if (finish_tablet_idx == tablet_cnt) {
-        DASTabletLocArray pruning_remain_tablets;
-        DASTabletLocArray &tablet_array = args->tablet_arrays_.at(0);
+        DASRuntimeTabletArray pruning_remain_tablets;
+        DASRuntimeTabletArray &tablet_array = args->tablet_arrays_.at(0);
         for (int i = 0; OB_SUCC(ret) && i < tablet_array.count(); ++i) {
           if (!args->run_time_pruning_flags_.at(i)) {
             OZ(pruning_remain_tablets.push_back(tablet_array.at(i)));

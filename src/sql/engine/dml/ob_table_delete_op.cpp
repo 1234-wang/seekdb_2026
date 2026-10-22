@@ -200,17 +200,17 @@ OB_INLINE int ObTableDeleteOp::close_table_for_each()
 
 OB_INLINE int ObTableDeleteOp::calc_tablet_loc(const ObDelCtDef &del_ctdef,
                                                ObDelRtDef &del_rtdef,
-                                               ObDASTabletLoc *&tablet_loc)
+                                               DASRuntimeTabletAccess *&tablet_loc)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.use_dist_das_) {
     if (del_ctdef.multi_ctdef_ != nullptr) {
       ObExpr *calc_part_id_expr = del_ctdef.multi_ctdef_->calc_part_id_expr_;
-      ObDASTableLoc &table_loc = *del_rtdef.das_rtdef_.table_loc_;
+      DASRuntimeTableAccess &table_loc = *del_rtdef.das_rtdef_.table_loc_;
       ObObjectID partition_id = OB_INVALID_ID;
       ObTabletID tablet_id;
       if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr, eval_ctx_, partition_id, tablet_id))) {
-      } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, tablet_id, tablet_loc))) {
+      } else if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, tablet_id, tablet_loc))) {
       }
     }
   } else {
@@ -238,7 +238,7 @@ OB_INLINE int ObTableDeleteOp::delete_row_to_das()
       //delete each table with fetched row
       const ObDelCtDef &del_ctdef = *ctdefs.at(j);
       ObDelRtDef &del_rtdef = rtdefs.at(j);
-      ObDASTabletLoc *tablet_loc = nullptr;
+      DASRuntimeTabletAccess *tablet_loc = nullptr;
       ObDMLModifyRowNode modify_row(this, &del_ctdef, &del_rtdef, ObDmlEventType::DE_DELETING);
       bool is_skipped = false;
       if (OB_FAIL(ObDMLService::process_delete_row(del_ctdef, del_rtdef, is_skipped, *this))) {

@@ -10016,7 +10016,7 @@ int ObLogPlan::build_location_related_tablet_ids()
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < rel_info.table_part_infos_.count(); ++j) {
         ObTablePartitionInfo *source_part_info = rel_info.table_part_infos_.at(j);
-        ObDASTableLocMeta &source_loc_meta = source_part_info->get_table_location().get_loc_meta();
+        DASTableAccessMeta &source_loc_meta = source_part_info->get_table_location().get_loc_meta();
         source_loc_meta.related_table_ids_.set_capacity(rel_info.related_ids_.count() - 1);
         for (int64_t k = 0; OB_SUCC(ret) && k < rel_info.related_ids_.count(); ++k) {
           //set related table ids to loc meta
@@ -10028,7 +10028,7 @@ int ObLogPlan::build_location_related_tablet_ids()
       }
     }
   }
-  optimizer_context_.get_exec_ctx()->get_das_ctx().clear_all_location_info();
+  optimizer_context_.get_exec_ctx()->get_das_ctx().clear_table_accesses();
   for (int64_t i = 0; OB_SUCC(ret) && i < optimizer_context_.get_table_partition_info().count(); ++i) {
     ObTablePartitionInfo *table_part_info = optimizer_context_.get_table_partition_info().at(i);
     //need to call ObTableLocation::calculate_table_partition_ids() to

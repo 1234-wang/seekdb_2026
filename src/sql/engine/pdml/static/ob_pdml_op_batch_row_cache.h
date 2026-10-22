@@ -32,7 +32,7 @@ class ObNewRow;
 
 namespace sql
 {
-struct ObDASTabletLoc;
+struct DASRuntimeTabletAccess;
 class ObExecContext;
 // Single partition new engine data cache
 class ObPDMLOpRowIterator
@@ -128,7 +128,7 @@ class ObDMLOpDataWriter
 public:
   // Write data in bulk to the storage layer
   virtual int write_rows(ObExecContext &ctx,
-                         const ObDASTabletLoc *tablet_loc,
+                         const DASRuntimeTabletAccess *tablet_loc,
                          ObPDMLOpRowIterator &iterator) = 0;
 };
 

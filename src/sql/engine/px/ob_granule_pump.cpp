@@ -41,7 +41,7 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t cur_idx = gi_task_set_.at(pos).idx_;
-    info.tablet_loc_ = const_cast<ObDASTabletLoc *>(gi_task_set_.at(pos).tablet_loc_);
+    info.tablet_loc_ = const_cast<DASRuntimeTabletAccess *>(gi_task_set_.at(pos).tablet_loc_);
     info.ranges_.reset();
     info.granule_type_ = gi_task_set_.at(pos).granule_type_;
     for (int64_t i = pos; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
@@ -203,7 +203,7 @@ int ObGITaskSet::set_block_order(bool desc)
   return ret;
 }
 
-int ObGITaskSet::construct_taskset(const ObIArray<ObDASTabletLoc*> &taskset_tablets,
+int ObGITaskSet::construct_taskset(const ObIArray<DASRuntimeTabletAccess*> &taskset_tablets,
                                    const ObIArray<ObNewRange> &taskset_ranges,
                                    const ObIArray<int64_t> &taskset_idxs,
                                    ObGIRandomType random_type)
@@ -723,14 +723,14 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                      const ObTableScanSpec *tsc,
                                      int64_t table_id,
                                      int64_t op_id,
-                                     const common::ObIArray<ObDASTabletLoc*> &tablets,
+                                     const common::ObIArray<DASRuntimeTabletAccess*> &tablets,
                                      bool partition_granule,
                                      ObGITaskSet &task_set,
                                      ObGITaskSet::ObGIRandomType random_type)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObNewRange, 16> ranges;
-  DASTabletLocSEArray taskset_tablets;
+  DASRuntimeTabletSEArray taskset_tablets;
   ObSEArray<ObNewRange, 16> taskset_ranges;
   ObSEArray<int64_t, 16> taskset_idxs;
   bool range_independent = random_type == ObGITaskSet::GI_RANDOM_RANGE;
@@ -913,7 +913,7 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     LOG_WARN("conflict order config", K(random_type),
         K(ObGranuleUtil::desc_order(args.gi_attri_flag_)));
   }
-  const common::ObIArray<DASTabletLocArray> &tablet_arrays = args.tablet_arrays_;
+  const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays = args.tablet_arrays_;
   ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
     const ObTableScanSpec *tsc = scan_ops.at(idx);
     if (OB_ISNULL(tsc) || scan_ops.count() != tablet_arrays.count()) {
@@ -949,7 +949,7 @@ int ObRandomGranuleSplitter::split_granule(ObIAllocator &allocator, ObGranuleIte
                                            ObGranulePumpArgs &args, const ObTableScanSpec *tsc,
                                            int64_t op_id, ObGITaskSet &output_task_set,
                                            ObGITaskSet::ObGIRandomType random_type,
-                                           ObDASTabletLoc *tablet_loc,
+                                           DASRuntimeTabletAccess *tablet_loc,
                                            const ObIArray<ObNewRange> &ranges)
 {
   /* Be careful to access shared data(such as sqc handler, gi pump....) in this function, because
@@ -961,8 +961,8 @@ int ObRandomGranuleSplitter::split_granule(ObIAllocator &allocator, ObGranuleIte
   int ret = OB_SUCCESS;
   bool partition_granule = false;
   // each worker splits its long tail gi task separately, so at most 1 tablet here
-  common::ObSEArray<ObDASTabletLoc *, 1> tablets;
-  DASTabletLocSEArray taskset_tablets;
+  common::ObSEArray<DASRuntimeTabletAccess *, 1> tablets;
+  DASRuntimeTabletSEArray taskset_tablets;
   ObSEArray<ObNewRange, 16> taskset_ranges;
   ObSEArray<int64_t, 16> taskset_idxs;
   bool range_independent = random_type == ObGITaskSet::GI_RANDOM_RANGE;
@@ -1027,7 +1027,7 @@ int ObAccessAllGranuleSplitter::split_granule(ObGranulePumpArgs &args,
   if (OB_FAIL(ObGranulePump::find_task_array_item(gi_task_array_result, scan_ops,
                                                   check_task_exist, task_idx))) {
   }
-  const common::ObIArray<DASTabletLocArray> &tablet_arrays = args.tablet_arrays_;
+  const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays = args.tablet_arrays_;
   ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
     const ObTableScanSpec *tsc = scan_ops.at(idx);
     ObGITaskSet total_task_set;
@@ -1083,7 +1083,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
   ARRAY_FOREACH_X(taskset.gi_task_set_, idx, cnt, OB_SUCC(ret)) {
     if (cur_idx != taskset.gi_task_set_.at(idx).idx_) {
       cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different parition key in Affinitize
-      const ObDASTabletLoc &tablet_loc = *taskset.gi_task_set_.at(idx).tablet_loc_;
+      const DASRuntimeTabletAccess &tablet_loc = *taskset.gi_task_set_.at(idx).tablet_loc_;
       int64_t tablet_idx = -1;
       if (NULL == table_schema || table_schema->get_table_id() != tablet_loc.loc_meta_->ref_table_id_) {
         uint64_t table_id = tablet_loc.loc_meta_->ref_table_id_;
@@ -1130,7 +1130,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
         ret = OB_ERR_UNEXPECTED;
       }
       ARRAY_FOREACH(taskset.gi_task_set_, idx) {
-        const ObDASTabletLoc &tablet_key = *taskset.gi_task_set_.at(idx).tablet_loc_;
+        const DASRuntimeTabletAccess &tablet_key = *taskset.gi_task_set_.at(idx).tablet_loc_;
         if (tablet_id == tablet_key.tablet_id_.id()) {
           ObGITaskSet &real_task_set = taskset_array.at(task_id);
           if (OB_FAIL(real_task_set.gi_task_set_.push_back(taskset.gi_task_set_.at(idx)))) {
@@ -1155,7 +1155,7 @@ int ObNormalAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     if (OB_FAIL(gi_task_array_result.push_back(empty_task_array_item))) {
     }
   }
-  const common::ObIArray<DASTabletLocArray> &tablet_arrays = args.tablet_arrays_;
+  const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays = args.tablet_arrays_;
   ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
     const ObTableScanSpec *tsc = scan_ops.at(idx);
     ObGITaskSet total_task_set;
@@ -1215,7 +1215,7 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
   // `tablet_arrays`'s first element corresponds to the partition keys of the INSERT/REPLACE table, other elements correspond to the partition keys of the TSC table
   int64_t task_begin_idx = gi_task_array_result.count();
   int tsc_begin_idx = 0;
-  const common::ObIArray<DASTabletLocArray> &tablet_arrays = args.tablet_arrays_;
+  const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays = args.tablet_arrays_;
   if (OB_NOT_NULL(modify_op)) {
     expected_map_size++;
     tsc_begin_idx = 1; // Currently there can be at most one INSERT/REPLACE operator
@@ -1234,10 +1234,10 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
   // Validation: Validate whether the partition corresponding to REPLACE is logically the same as the partition corresponding to TSC
   if (OB_SUCC(ret)) {
     int tablet_count = tablet_arrays.at(0).count();
-    DASTabletLocArray tablets = tablet_arrays.at(0);
+    DASRuntimeTabletArray tablets = tablet_arrays.at(0);
     ARRAY_FOREACH(tablet_arrays, idx) {
       // Validate that the number of partition keys for each op is the same
-      DASTabletLocArray tablet_array = tablet_arrays.at(idx);
+      DASRuntimeTabletArray tablet_array = tablet_arrays.at(idx);
       if (OB_UNLIKELY(tablet_count != tablet_array.count())) {
         ret = OB_ERR_UNEXPECTED;
       }
@@ -1266,7 +1266,7 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
   }
   // Process the task division of tsc
   if(OB_SUCC(ret)) {
-    ObSEArray<DASTabletLocArray, 4> tsc_tablet_arrays;
+    ObSEArray<DASRuntimeTabletArray, 4> tsc_tablet_arrays;
     for (int i = tsc_begin_idx; i < tablet_arrays.count() && OB_SUCC(ret); i++) {
       if (OB_FAIL(tsc_tablet_arrays.push_back(tablet_arrays.at(i)))) {
       }
@@ -1290,7 +1290,7 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
 int ObPartitionWiseGranuleSplitter::split_insert_gi_task(ObGranulePumpArgs &args,
                                             const uint64_t insert_table_id,
                                             const int64_t row_key_count,
-                                            const common::ObIArray<ObDASTabletLoc*> &tablets,
+                                            const common::ObIArray<DASRuntimeTabletAccess*> &tablets,
                                             bool partition_granule,
                                             ObGITaskSet &task_set,
                                             ObGITaskSet::ObGIRandomType random_type)
@@ -1300,7 +1300,7 @@ int ObPartitionWiseGranuleSplitter::split_insert_gi_task(ObGranulePumpArgs &args
   // insert's every partition corresponding interval default is [min_rowkey,max_rowkey]
   ObNewRange each_partition_range;
   ObSEArray<ObNewRange, 4> ranges;
-  DASTabletLocSEArray taskset_tablets;
+  DASRuntimeTabletSEArray taskset_tablets;
   ObSEArray<ObNewRange, 4> taskset_ranges;
   ObSEArray<int64_t, 4> taskset_idxs;
   bool range_independent = random_type == ObGITaskSet::GI_RANDOM_RANGE;
@@ -1331,7 +1331,7 @@ int ObPartitionWiseGranuleSplitter::split_insert_gi_task(ObGranulePumpArgs &args
 
 int ObPartitionWiseGranuleSplitter::split_tsc_gi_task(ObGranulePumpArgs &args,
                                                   ObIArray<const ObTableScanSpec *> &scan_ops,
-                                                  const common::ObIArray<DASTabletLocArray> &tablet_arrays,
+                                                  const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays,
                                                   int64_t tsc_begin_idx,
                                                   int64_t task_begin_idx,
                                                   GITaskArrayMap &gi_task_array_result,
@@ -1381,7 +1381,7 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     if (OB_FAIL(gi_task_array_result.push_back(empty_task_array_item))) {
     }
   }
-  const common::ObIArray<DASTabletLocArray> &tablet_arrays = args.tablet_arrays_;
+  const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays = args.tablet_arrays_;
   ARRAY_FOREACH_X(scan_ops, idx, cnt, OB_SUCC(ret)) {
     const ObTableScanSpec *tsc = scan_ops.at(idx);
     const ObGranuleIteratorSpec *gi = static_cast<const ObGranuleIteratorSpec *>(tsc->get_parent());
@@ -1474,7 +1474,7 @@ int ObGranulePump::init_pump_args(ObExecContext *ctx, ObPxSqcMeta &sqc,
                                   const ObGranuleIteratorSpec *gi_op,
                                   const ObIArray<const ObTableScanSpec *> &scan_ops,
                                   const ObTableModifySpec *modify_op,
-                                  const common::ObIArray<DASTabletLocArray> &tablet_arrays,
+                                  const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays,
                                   common::ObIArray<ObPxTabletInfo> &partitions_info)
 {
   int ret = OB_SUCCESS;
@@ -1501,7 +1501,7 @@ int ObGranulePump::init_arg(
     ObExecContext *ctx,
     const ObGranuleIteratorSpec *gi_op,
     const ObIArray<const ObTableScanSpec*> &scan_ops,
-    const common::ObIArray<DASTabletLocArray> &tablet_arrays,
+    const common::ObIArray<DASRuntimeTabletArray> &tablet_arrays,
     common::ObIArray<ObPxTabletInfo> &partitions_info,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
@@ -1536,7 +1536,7 @@ int ObGranulePump::init_arg(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet array cnt is unexpected", K(tablet_arrays.count()));
       } else {
-        const DASTabletLocArray &array = tablet_arrays.at(0);
+        const DASRuntimeTabletArray &array = tablet_arrays.at(0);
         arg.cur_tablet_idx_ = 0;
         for (int i = 0; OB_SUCC(ret) && i < array.count(); ++i) {
           OZ(arg.run_time_pruning_flags_.push_back(false));
@@ -1584,7 +1584,7 @@ int ObGranulePump::regenerate_gi_task(ObGranulePumpArgs &args)
 }
 
 int ObGranulePump::split_granule(ObGranuleIteratorOp *gi_op, int64_t scan_op_id,
-                                             ObDASTabletLoc *tablet_loc,
+                                             DASRuntimeTabletAccess *tablet_loc,
                                              const ObIArray<ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;

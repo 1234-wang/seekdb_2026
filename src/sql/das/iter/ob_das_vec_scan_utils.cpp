@@ -226,8 +226,8 @@ int ObDasVecScanUtils::init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
     int64_t limit = limit_param.limit_;
 
     if (limit > 0 && OB_NOT_NULL(index_rtdef->table_loc_)) {
-      ObDASTableLoc *table_loc = index_rtdef->table_loc_;
-      uint64_t partiton = table_loc->get_tablet_locs().size();
+      DASRuntimeTableAccess *table_loc = index_rtdef->table_loc_;
+      uint64_t partiton = table_loc->get_tablet_accesses().size();
       if (partiton > 1) {
         limit_param.limit_ = 2 * ((limit / partiton) + 1 );
       }

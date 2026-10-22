@@ -270,12 +270,12 @@ public:
       attach_ctdef_(nullptr)
   {
   }
-  common::ObList<ObDASTableLocMeta*, common::ObIAllocator> attach_loc_metas_;
+  common::ObList<DASTableAccessMeta*, common::ObIAllocator> attach_loc_metas_;
   ObDASBaseCtDef *scan_ctdef_; //This ctdef represents the main task information executed by the DAS Task.
   common::ObIAllocator &allocator_;
   ObDASBaseCtDef *attach_ctdef_; //The attach_ctdef represents the task information that is bound to and executed on the DAS Task.
 
-  const ObDASTableLocMeta *get_attach_loc_meta(int64_t table_location_id, int64_t ref_table_id) const;
+  const DASTableAccessMeta *get_attach_loc_meta(int64_t table_location_id, int64_t ref_table_id) const;
   int set_calc_exprs(const ExprFixedArray &calc_exprs, const int64_t max_batch_size);
   const ExprFixedArray &get_result_output() const
   {

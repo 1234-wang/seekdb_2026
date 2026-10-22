@@ -191,8 +191,6 @@ public:
   const common::ObString& get_stmt_ps_sql() const { return ps_sql_; }
   common::ObString& get_stmt_ps_sql() { return ps_sql_; }
   int64_t get_query_string_id() const;
-  void refresh_location_cache_by_errno(bool is_nonblock, int err);
-  void force_refresh_location_cache(bool is_nonblock, int err);
   ////////////////////////////////////////////////////////////////
   // the following methods are used by the ob_sql module internally
   /// add a field columns
@@ -558,7 +556,7 @@ inline void ObResultSet::set_errcode(int code)
   errcode_ = code;
   //Save the current execution state to determine whether to refresh location
   //and perform other necessary cleanup operations when the statement exits.
-  DAS_CTX(get_exec_context()).save_cur_exec_status(code);
+  DAS_CTX(get_exec_context()).record_access_error(code);
 }
 
 inline int ObResultSet::add_field_column(const common::ObField &field)

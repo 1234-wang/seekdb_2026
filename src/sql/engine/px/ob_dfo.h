@@ -170,10 +170,10 @@ public:
   const dtl::ObDtlChannelInfo &get_sqc_channel_info_const() const { return sqc_ch_info_; }
   ObIArray<ObSqcTableLocationKey> &get_access_table_location_keys() { return access_table_location_keys_; }
   ObIArray<ObSqcTableLocationIndex> &get_access_table_location_indexes() { return access_table_location_indexes_; }
-  DASTabletLocIArray &get_access_table_locations_for_update() { return access_table_locations_; }
-  const DASTabletLocIArray &get_access_table_locations() const { return access_table_locations_; }
-  DASTabletLocIArray &get_extra_access_table_locations_for_update() { return extra_access_table_locations_; }
-  const DASTabletLocIArray &get_extra_access_table_locations() const { return extra_access_table_locations_; }
+  DASRuntimeTabletIArray &get_access_table_locations_for_update() { return access_table_locations_; }
+  const DASRuntimeTabletIArray &get_access_table_locations() const { return access_table_locations_; }
+  DASRuntimeTabletIArray &get_extra_access_table_locations_for_update() { return extra_access_table_locations_; }
+  const DASRuntimeTabletIArray &get_extra_access_table_locations() const { return extra_access_table_locations_; }
   void set_execution_id(uint64_t execution_id) { execution_id_ = execution_id; }
   void set_qc_id(uint64_t qc_id) { qc_id_ = qc_id; }
   void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
@@ -296,10 +296,10 @@ private:
   // The partition location information of the all table_scan op and dml op
   // used for px worker execution
   // no need serialize
-  DASTabletLocSEArray access_table_locations_;
+  DASRuntimeTabletSEArray access_table_locations_;
   // Additional tablet locations not scanned directly by this DFO, used by
   // PDML operations that also maintain global indexes.
-  DASTabletLocSEArray extra_access_table_locations_;
+  DASRuntimeTabletSEArray extra_access_table_locations_;
 
   ObPxTransmitDataChannelMsg transmit_channel_; // Used for quickly establishing QC-Task channel mode
   ObPxReceiveDataChannelMsg receive_channel_; // Used for quickly establishing QC-Task channel mode

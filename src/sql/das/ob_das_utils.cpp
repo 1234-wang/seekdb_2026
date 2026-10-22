@@ -49,8 +49,8 @@ int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext 
   }
   while (OB_SUCC(ret) && cur_parent_ctx != nullptr) {
     ObDASCtx &parent_das_ctx = cur_parent_ctx->get_das_ctx();
-    FOREACH_X(node, parent_das_ctx.get_table_loc_list(), OB_SUCC(ret)) {
-      ObDASTableLoc *table_loc = *node;
+    FOREACH_X(node, parent_das_ctx.get_table_accesses(), OB_SUCC(ret)) {
+      DASRuntimeTableAccess *table_loc = *node;
       if (table_loc->loc_meta_->ref_table_id_ == ref_table_id 
           && (table_loc->is_writing_ || !is_reading)
           && !table_loc->is_fk_check_ ) {
@@ -79,14 +79,14 @@ int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext 
   return ret;
 }
 
-ObDASTabletLoc *ObDASUtils::get_related_tablet_loc(const ObDASTabletLoc &tablet_loc,
+DASRuntimeTabletAccess *ObDASUtils::get_related_tablet_loc(const DASRuntimeTabletAccess &tablet_loc,
                                                    ObTableID related_table_id)
 {
-  ObDASTabletLoc *ret_tablet_loc = nullptr;
+  DASRuntimeTabletAccess *ret_tablet_loc = nullptr;
   if (related_table_id == tablet_loc.loc_meta_->ref_table_id_) {
-    ret_tablet_loc = const_cast<ObDASTabletLoc*>(&tablet_loc);
+    ret_tablet_loc = const_cast<DASRuntimeTabletAccess*>(&tablet_loc);
   } else {
-    for (ObDASTabletLoc *cur_node = tablet_loc.next_;
+    for (DASRuntimeTabletAccess *cur_node = tablet_loc.next_;
         cur_node != nullptr && cur_node != &tablet_loc;
         cur_node = cur_node->next_) {
       if (cur_node->loc_meta_->ref_table_id_ == related_table_id) {
@@ -98,17 +98,17 @@ ObDASTabletLoc *ObDASUtils::get_related_tablet_loc(const ObDASTabletLoc &tablet_
   return ret_tablet_loc;
 }
 
-int ObDASUtils::build_table_loc_meta(ObIAllocator &allocator,
-                                     const ObDASTableLocMeta &src,
-                                     ObDASTableLocMeta *&dst)
+int ObDASUtils::build_table_access_meta(ObIAllocator &allocator,
+                                     const DASTableAccessMeta &src,
+                                     DASTableAccessMeta *&dst)
 {
   int ret = OB_SUCCESS;
   dst = nullptr;
-  void *buf = allocator.alloc(sizeof(ObDASTableLocMeta));
+  void *buf = allocator.alloc(sizeof(DASTableAccessMeta));
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    dst = new(buf) ObDASTableLocMeta(allocator);
+    dst = new(buf) DASTableAccessMeta(allocator);
     if (OB_FAIL(dst->assign(src))) {
     }
   }

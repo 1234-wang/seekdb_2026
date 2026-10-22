@@ -311,7 +311,7 @@ int ObTableLockOp::write_rows_post_proc(int last_errno)
 
 int ObTableLockOp::calc_tablet_loc(const ObLockCtDef &lock_ctdef,
                                    ObLockRtDef &lock_rtdef,
-                                   ObDASTabletLoc *&tablet_loc)
+                                   DASRuntimeTabletAccess *&tablet_loc)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.use_dist_das_) {
@@ -319,15 +319,15 @@ int ObTableLockOp::calc_tablet_loc(const ObLockCtDef &lock_ctdef,
       ObExpr *calc_part_id_expr = lock_ctdef.multi_ctdef_->calc_part_id_expr_;
       ObObjectID partition_id = OB_INVALID_ID;
       ObTabletID tablet_id;
-      ObDASTableLoc &table_loc = *lock_rtdef.das_rtdef_.table_loc_;
+      DASRuntimeTableAccess &table_loc = *lock_rtdef.das_rtdef_.table_loc_;
       if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr, eval_ctx_, partition_id, tablet_id))) {
-      } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, tablet_id, tablet_loc))) {
+      } else if (OB_FAIL(DAS_CTX(ctx_).ensure_tablet_access(table_loc, tablet_id, tablet_loc))) {
       }
     }
   } else {
     //direct lock to storage
     tablet_loc = (MY_INPUT.get_tablet_loc() != nullptr ?
-        MY_INPUT.get_tablet_loc() : MY_INPUT.get_table_loc()->get_first_tablet_loc());
+        MY_INPUT.get_tablet_loc() : MY_INPUT.get_table_loc()->get_first_tablet_access());
   }
   return ret;
 }
@@ -347,7 +347,7 @@ int ObTableLockOp::lock_row_to_das()
     //lock each table with fetched row
     const ObLockCtDef &lock_ctdef = *ctdefs.at(0);
     ObLockRtDef &lock_rtdef = rtdefs.at(0);
-    ObDASTabletLoc *tablet_loc = nullptr;
+    DASRuntimeTabletAccess *tablet_loc = nullptr;
     bool is_skipped = false;
     ++lock_rtdef.cur_row_num_;
     if (OB_FAIL(ObDMLService::process_lock_row(lock_ctdef, lock_rtdef, is_skipped, *this))) {

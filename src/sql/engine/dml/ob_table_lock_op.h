@@ -119,7 +119,7 @@ protected:
   int lock_batch_to_das(const ObBatchRows *child_brs);
   int calc_tablet_loc(const ObLockCtDef &lock_ctdef,
                       ObLockRtDef &lock_rtdef,
-                      ObDASTabletLoc *&tablet_loc);
+                      DASRuntimeTabletAccess *&tablet_loc);
   int lock_one_row_post_proc();
   virtual int write_rows_post_proc(int last_errno) override;
   int submit_row_by_strategy();

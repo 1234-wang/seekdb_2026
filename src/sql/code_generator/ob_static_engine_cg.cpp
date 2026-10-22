@@ -6240,7 +6240,7 @@ int ObStaticEngineCG::add_output_datum_check_flag(ObOpSpec &spec)
 }
 
 int ObStaticEngineCG::generate_calc_part_id_expr(const ObRawExpr &src,
-                                                 const ObDASTableLocMeta *loc_meta,
+                                                 const DASTableAccessMeta *loc_meta,
                                                  ObExpr *&dst)
 {
   int ret = OB_SUCCESS;

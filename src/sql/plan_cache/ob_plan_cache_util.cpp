@@ -53,7 +53,7 @@ int ObPhyLocationGetter::get_phy_locations(const common::ObIArray<ObTablePartiti
                                            ObIArray<TableAccessTargets> &table_targets)
 {
   int ret = OB_SUCCESS;
-  //ObDASTableLoc table_loc;
+  //DASRuntimeTableAccess table_loc;
   int64_t N = partition_infos.count();
   if (OB_FAIL(table_targets.reserve(N))) {
   }
@@ -126,7 +126,7 @@ int ObPhyLocationGetter::build_table_locs(ObDASCtx &das_ctx,
     }
   }
   if (OB_FAIL(ret)) {
-    das_ctx.clear_all_location_info();
+    das_ctx.clear_table_accesses();
   }
 
   return ret;

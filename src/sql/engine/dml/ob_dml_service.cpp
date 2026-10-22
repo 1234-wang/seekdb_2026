@@ -837,7 +837,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
 
 int ObDMLService::insert_row(const ObInsCtDef &ins_ctdef,
                              ObInsRtDef &ins_rtdef,
-                             const ObDASTabletLoc *tablet_loc,
+                             const DASRuntimeTabletAccess *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
                              ObChunkDatumStore::StoredRow *&stored_row)
 {
@@ -859,7 +859,7 @@ int ObDMLService::insert_row(const ObInsCtDef &ins_ctdef,
 
 int ObDMLService::insert_row(const ObDASInsCtDef &ins_ctdef,
                              ObDASInsRtDef &ins_rtdef,
-                             const ObDASTabletLoc *tablet_loc,
+                             const DASRuntimeTabletAccess *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
                              const ExprFixedArray &new_row,
                              ObChunkDatumStore::StoredRow *&stored_row)
@@ -877,7 +877,7 @@ int ObDMLService::insert_row(const ObDASInsCtDef &ins_ctdef,
 
 int ObDMLService::delete_row(const ObDelCtDef &del_ctdef,
                              ObDelRtDef &del_rtdef,
-                             const ObDASTabletLoc *tablet_loc,
+                             const DASRuntimeTabletAccess *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
                              ObChunkDatumStore::StoredRow *&stored_row)
 {
@@ -899,7 +899,7 @@ int ObDMLService::delete_row(const ObDelCtDef &del_ctdef,
 }
 int ObDMLService::lock_row(const ObLockCtDef &lock_ctdef,
                            ObLockRtDef &lock_rtdef,
-                           const ObDASTabletLoc *tablet_loc,
+                           const DASRuntimeTabletAccess *tablet_loc,
                            ObDMLRtCtx &dml_rtctx)
 {
   int ret = OB_SUCCESS;
@@ -922,7 +922,7 @@ int ObDMLService::lock_row(const ObLockCtDef &lock_ctdef,
 
 int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
                            ObDASLockRtDef &dlock_rtdef,
-                           const ObDASTabletLoc *tablet_loc,
+                           const DASRuntimeTabletAccess *tablet_loc,
                            ObDMLRtCtx &das_rtctx,
                            const ExprFixedArray &old_row)
 {
@@ -938,8 +938,8 @@ int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
 
 int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
                                            ObUpdRtDef &upd_rtdef,
-                                           const ObDASTabletLoc *old_tablet_loc,
-                                           const ObDASTabletLoc *new_tablet_loc,
+                                           const DASRuntimeTabletAccess *old_tablet_loc,
+                                           const DASRuntimeTabletAccess *new_tablet_loc,
                                            ObDMLRtCtx &dml_rtctx,
                                            ObChunkDatumStore::StoredRow *&old_row,
                                            ObChunkDatumStore::StoredRow *&new_row)
@@ -998,8 +998,8 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
  **/
 int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                              ObUpdRtDef &upd_rtdef,
-                             const ObDASTabletLoc *old_tablet_loc,
-                             const ObDASTabletLoc *new_tablet_loc,
+                             const DASRuntimeTabletAccess *old_tablet_loc,
+                             const DASRuntimeTabletAccess *new_tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
                              ObChunkDatumStore::StoredRow *&old_row,
                              ObChunkDatumStore::StoredRow *&new_row,
@@ -1097,7 +1097,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
 
 int ObDMLService::update_row(const ObDASUpdCtDef &ctdef,
                              ObDASUpdRtDef &rtdef,
-                             const ObDASTabletLoc *tablet_loc,
+                             const DASRuntimeTabletAccess *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
                              const ExprFixedArray &full_row)
 {
@@ -1113,7 +1113,7 @@ int ObDMLService::update_row(const ObDASUpdCtDef &ctdef,
 
 int ObDMLService::delete_row(const ObDASDelCtDef &das_del_ctdef,
                              ObDASDelRtDef &das_del_rtdef,
-                             const ObDASTabletLoc *tablet_loc,
+                             const DASRuntimeTabletAccess *tablet_loc,
                              ObDMLRtCtx &das_rtctx,
                              const ExprFixedArray &old_row,
                              ObChunkDatumStore::StoredRow *&stored_row)
@@ -1207,7 +1207,7 @@ void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
 int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
                                      const ObDASDMLBaseCtDef &das_ctdef,
                                      ObDASDMLBaseRtDef &das_rtdef,
-                                     const ObDASTableLocMeta *loc_meta)
+                                     const DASTableAccessMeta *loc_meta)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(dml_rtctx.get_exec_ctx());
@@ -1222,11 +1222,11 @@ int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
   das_rtdef.sql_mode_ = my_session->get_sql_mode();
   das_rtdef.is_immediate_row_conflict_check_ =  my_session->enable_immediate_row_conflict_check();
   if (OB_ISNULL(das_rtdef.table_loc_ = dml_rtctx.op_.get_input()->get_table_loc())) {
-    das_rtdef.table_loc_ = das_ctx.get_table_loc_by_id(table_loc_id, ref_table_id);
+    das_rtdef.table_loc_ = das_ctx.find_table_access(table_loc_id, ref_table_id);
     if (OB_ISNULL(das_rtdef.table_loc_)) {
       if (OB_ISNULL(loc_meta)) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(das_ctx.extended_table_loc(*loc_meta, das_rtdef.table_loc_))) {
+      } else if (OB_FAIL(das_ctx.ensure_table_access(*loc_meta, das_rtdef.table_loc_))) {
       }
     }
   }
@@ -1307,7 +1307,7 @@ int ObDMLService::init_ins_rtdef(
 {
   int ret = OB_SUCCESS;
   dml_rtctx.get_exec_ctx().set_dml_event(ObDmlEventType::DE_INSERTING);
-  const ObDASTableLocMeta *loc_meta = get_table_loc_meta(ins_ctdef.multi_ctdef_);
+  const DASTableAccessMeta *loc_meta = get_table_loc_meta(ins_ctdef.multi_ctdef_);
   if (OB_FAIL(ObDASUtils::check_nested_sql_mutating(ins_ctdef.das_ctdef_.index_tid_, dml_rtctx.get_exec_ctx()))) {
   } else if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
                                        ins_ctdef.das_ctdef_,
@@ -1347,7 +1347,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
 {
   int ret = OB_SUCCESS;
   dml_rtctx.get_exec_ctx().set_dml_event(ObDmlEventType::DE_DELETING);
-  const ObDASTableLocMeta *loc_meta = get_table_loc_meta(del_ctdef.multi_ctdef_);
+  const DASTableAccessMeta *loc_meta = get_table_loc_meta(del_ctdef.multi_ctdef_);
     if (OB_FAIL(ObDASUtils::check_nested_sql_mutating(del_ctdef.das_ctdef_.index_tid_, dml_rtctx.get_exec_ctx()))) {
   } else if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
                                        del_ctdef.das_ctdef_,
@@ -1471,7 +1471,7 @@ int ObDMLService::init_upd_rtdef(
   ObIArray<ObForeignKeyChecker*> &fk_checkers)
 {
   int ret = OB_SUCCESS;
-  const ObDASTableLocMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
+  const DASTableAccessMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
   dml_rtctx.get_exec_ctx().set_dml_event(ObDmlEventType::DE_UPDATING);
   if (OB_FAIL(ObDASUtils::check_nested_sql_mutating(upd_ctdef.dupd_ctdef_.index_tid_, dml_rtctx.get_exec_ctx()))) {
   } else if (OB_FAIL(init_das_dml_rtdef(dml_rtctx,
@@ -1581,7 +1581,7 @@ int ObDMLService::init_das_ins_rtdef_for_update(ObDMLRtCtx &dml_rtctx,
 {
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
-  const ObDASTableLocMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
+  const DASTableAccessMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
   if (OB_FAIL(ObDASTaskFactory::alloc_das_rtdef(DAS_OP_TABLE_INSERT,
                                                 allocator,
                                                 upd_rtdef.dins_rtdef_))) {
@@ -1603,7 +1603,7 @@ int ObDMLService::init_das_del_rtdef_for_update(ObDMLRtCtx &dml_rtctx,
 {
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
-  const ObDASTableLocMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
+  const DASTableAccessMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
   if (OB_FAIL(ObDASTaskFactory::alloc_das_rtdef(DAS_OP_TABLE_DELETE,
                                                 allocator,
                                                 upd_rtdef.ddel_rtdef_))) {
@@ -1625,7 +1625,7 @@ int ObDMLService::init_das_lock_rtdef_for_update(ObDMLRtCtx &dml_rtctx,
 {
   int ret = OB_SUCCESS;
   ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
-  const ObDASTableLocMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
+  const DASTableAccessMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
   if (OB_FAIL(ObDASTaskFactory::alloc_das_rtdef(DAS_OP_TABLE_LOCK,
                                                 allocator,
                                                 upd_rtdef.dlock_rtdef_))) {
@@ -1642,7 +1642,7 @@ int ObDMLService::init_lock_rtdef(ObDMLRtCtx &dml_rtctx,
                                   int64_t wait_ts)
 {
   lock_rtdef.das_rtdef_.for_upd_wait_time_ = wait_ts;
-  const ObDASTableLocMeta *loc_meta = get_table_loc_meta(lock_ctdef.multi_ctdef_);
+  const DASTableAccessMeta *loc_meta = get_table_loc_meta(lock_ctdef.multi_ctdef_);
   return init_das_dml_rtdef(dml_rtctx, lock_ctdef.das_ctdef_, lock_rtdef.das_rtdef_, loc_meta);
 }
 
@@ -1705,7 +1705,7 @@ int ObDMLService::parallel_submit_das_task(ObDMLRtCtx &dml_rtctx, ObDasAggregate
 template <int N>
 int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
                                       ObDASDMLBaseRtDef &rtdef,
-                                      const ObDASTabletLoc *tablet_loc,
+                                      const DASRuntimeTabletAccess *tablet_loc,
                                       ObDMLRtCtx &dml_rtctx,
                                       const ExprFixedArray &row,
                                       ObExpr *trans_info_expr,
@@ -1781,7 +1781,7 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
   return ret;
 }
 
-int ObDMLService::add_related_index_info(const ObDASTabletLoc &tablet_loc,
+int ObDMLService::add_related_index_info(const DASRuntimeTabletAccess &tablet_loc,
                                          const DASDMLCtDefArray &related_ctdefs,
                                          DASDMLRtDefArray &related_rtdefs,
                                          ObIDASTaskOp &das_op)
@@ -1791,8 +1791,8 @@ int ObDMLService::add_related_index_info(const ObDASTabletLoc &tablet_loc,
   das_op.get_related_rtdefs().set_capacity(related_rtdefs.count());
   das_op.get_related_tablet_ids().set_capacity(related_ctdefs.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs.count(); ++i) {
-    ObDASTabletLoc *index_tablet_loc = ObDASUtils::get_related_tablet_loc(
-        const_cast<ObDASTabletLoc&>(tablet_loc), related_ctdefs.at(i)->index_tid_);
+    DASRuntimeTabletAccess *index_tablet_loc = ObDASUtils::get_related_tablet_loc(
+        const_cast<DASRuntimeTabletAccess&>(tablet_loc), related_ctdefs.at(i)->index_tid_);
     if (OB_ISNULL(index_tablet_loc)) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(das_op.get_related_ctdefs().push_back(related_ctdefs.at(i)))) {
@@ -1961,9 +1961,9 @@ int ObDMLService::check_local_index_affected_rows(int64_t table_affected_rows,
 }
 
 template <typename T>
-const ObDASTableLocMeta *ObDMLService::get_table_loc_meta(const T *multi_ctdef)
+const DASTableAccessMeta *ObDMLService::get_table_loc_meta(const T *multi_ctdef)
 {
-  const ObDASTableLocMeta *loc_meta = nullptr;
+  const DASTableAccessMeta *loc_meta = nullptr;
   if (multi_ctdef != nullptr) {
     loc_meta = &(multi_ctdef->loc_meta_);
   }
@@ -1996,7 +1996,7 @@ int ObDMLService::init_related_das_rtdef(ObDMLRtCtx &dml_rtctx,
 }
 
 int ObDMLService::check_dml_tablet_validity(ObDMLRtCtx &dml_rtctx,
-                                            const ObDASTabletLoc &tablet_loc,
+                                            const DASRuntimeTabletAccess &tablet_loc,
                                             const ExprFixedArray &row,
                                             const ObDMLBaseCtDef &dml_ctdef,
                                             ObDMLBaseRtDef &dml_rtdef)
