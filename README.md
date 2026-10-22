@@ -278,7 +278,7 @@ Use [seekdb-go](https://github.com/oceanbase/seekdb-go) to start a local seekdb 
 mkdir seekdb-go-example
 cd seekdb-go-example
 go mod init example.com/seekdb-demo
-go get github.com/oceanbase/seekdb-go@latest github.com/go-sql-driver/mysql@v1.9.3
+go get github.com/go-sql-driver/mysql@v1.9.3
 ```
 
 Save the following as `main.go`. It uses the endpoint returned by `ConnectionOptions` and closes the SQL connections before releasing the runtime handle:
@@ -338,11 +338,13 @@ func run() error {
 }
 ```
 
-Run it; the result is `1`:
+Run it; Go resolves seekdb-go and downloads the native bundle for your current platform. The result is `1`:
 
 ```bash
-go run .
+go run -mod=mod .
 ```
+
+This quickstart installs the SQL driver before adding the example source, then resolves the SDK during the build. A regular `go get` for seekdb-go or `go mod tidy` may download bundles for all supported platforms.
 
 [Full usage guide](https://github.com/oceanbase/seekdb-go#install) · [Supported platforms and requirements](https://github.com/oceanbase/seekdb-go/blob/main/docs/support.md)
 

@@ -264,7 +264,7 @@ node example.mjs
 mkdir seekdb-go-example
 cd seekdb-go-example
 go mod init example.com/seekdb-demo
-go get github.com/oceanbase/seekdb-go@latest github.com/go-sql-driver/mysql@v1.9.3
+go get github.com/go-sql-driver/mysql@v1.9.3
 ```
 
 以下の例を `main.go` として保存します。`ConnectionOptions` が返す接続先を使用し、ランタイムハンドルを解放する前に SQL 接続を閉じます：
@@ -324,11 +324,13 @@ func run() error {
 }
 ```
 
-実行すると `1` が出力されます：
+実行時に Go が seekdb-go を解決し、現在のプラットフォーム用のネイティブバンドルを取得します。結果は `1` です：
 
 ```bash
-go run .
+go run -mod=mod .
 ```
+
+この手順では、SQL ドライバーを先にインストールしてからソースを保存し、ビルド時に SDK を解決します。seekdb-go に対する通常の `go get` や `go mod tidy` は、全対応プラットフォームのバンドルも取得することがあります。
 
 [詳しい使い方](https://github.com/oceanbase/seekdb-go#install) · [対応プラットフォームと環境要件](https://github.com/oceanbase/seekdb-go/blob/main/docs/support.md)
 
