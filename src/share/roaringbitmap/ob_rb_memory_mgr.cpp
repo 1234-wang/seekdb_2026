@@ -18,11 +18,16 @@
 
 #include "ob_rb_memory_mgr.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/allocator/ob_memory_sanity.h"
 #include "lib/utility/ob_mod_define.h"
 #include "share/rc/ob_server_runtime.h"
 
 #include <cstddef>
 #include <limits>
+
+#if defined(ENABLE_SANITY)
+#include <sanity/sanity.h>
+#endif
 
 namespace oceanbase
 {
@@ -81,6 +86,26 @@ bool is_vector_bitmap_allocation(const lib::ObMemAttr &attr)
       && attr.label_[2] == 'B';
 }
 
+RoaringAllocationHeader read_roaring_header(const void *ptr)
+{
+  // Metadata stays poisoned while the allocation is exposed to CRoaring.
+  // The guard bypasses libc range checks, not compiler-instrumented scalar
+  // loads. Copy metadata through memcpy without exposing its shadow bytes.
+#if defined(ENABLE_SANITY)
+  SanityDisableCheckRangeGuard guard;
+  RoaringAllocationHeader allocation(nullptr, nullptr, 0, 0,
+      RoaringAllocationDomain::POOLED);
+  MEMCPY(&allocation, static_cast<const RoaringAllocationHeader *>(ptr) - 1,
+      sizeof(allocation));
+  abort_unless(allocation.is_valid());
+  return allocation;
+#else
+  const auto *header = static_cast<const RoaringAllocationHeader *>(ptr) - 1;
+  abort_unless(header->is_valid());
+  return *header;
+#endif
+}
+
 } // namespace
 
 static void *roaring_malloc(size_t size) {
@@ -93,7 +118,19 @@ static void *roaring_malloc(size_t size) {
     MemoryQuota *quota = nullptr;
     int64_t charged_size = 0;
     RoaringAllocationDomain domain = RoaringAllocationDomain::POOLED;
-    const size_t alloc_size = size + sizeof(RoaringAllocationHeader);
+    SanityAllocLayout layout;
+    size_t storage_size = size;
+    if (memory_sanity_enabled()) {
+      if (!memory_sanity_prepare_allocation(static_cast<int64_t>(size), 0, layout)) {
+        throw std::bad_alloc();
+      }
+      storage_size = static_cast<size_t>(layout.storage_size_);
+    }
+    if (storage_size > static_cast<size_t>(std::numeric_limits<int64_t>::max())
+            - sizeof(RoaringAllocationHeader)) {
+      throw std::bad_alloc();
+    }
+    const size_t alloc_size = storage_size + sizeof(RoaringAllocationHeader);
     lib::ObMemAttr last_mem_attr = lib::ObMallocHookAttrGuard::get_tl_mem_attr();
     if (OB_ISNULL(mem_mgr = get_rb_mem_mgr())) {
       int ret = OB_ERR_UNEXPECTED;
@@ -134,6 +171,11 @@ static void *roaring_malloc(size_t size) {
       RoaringAllocationHeader *header = new (alloc_ptr) RoaringAllocationHeader(
           mem_mgr, quota, size, charged_size, domain);
       res_ptr = header + 1;
+      if (memory_sanity_enabled()) {
+        // Hide both the header and backing-size slack, exposing only payload.
+        memory_sanity_poison(header, charged_size);
+        memory_sanity_mark_allocated(res_ptr, layout);
+      }
     }
   } else if (size > 0) {
     throw std::bad_alloc();
@@ -145,12 +187,23 @@ static void roaring_free(void *ptr) {
   if (ptr != nullptr) {
     RoaringAllocationHeader *header =
         static_cast<RoaringAllocationHeader *>(ptr) - 1;
-    abort_unless(header->is_valid());
-    ObRbMemMgr *mem_mgr = header->mem_mgr_;
-    MemoryQuota *quota = header->quota_;
-    const int64_t charged_size = header->charged_size_;
-    const RoaringAllocationDomain domain = header->domain_;
-    header->magic_ = 0;
+    const RoaringAllocationHeader allocation = read_roaring_header(ptr);
+    ObRbMemMgr *mem_mgr = allocation.mem_mgr_;
+    MemoryQuota *quota = allocation.quota_;
+    const int64_t charged_size = allocation.charged_size_;
+    const RoaringAllocationDomain domain = allocation.domain_;
+    {
+#if defined(ENABLE_SANITY)
+      SanityDisableCheckRangeGuard guard;
+      const uint64_t invalid_magic = 0;
+      MEMCPY(&header->magic_, &invalid_magic, sizeof(invalid_magic));
+#else
+      header->magic_ = 0;
+#endif
+    }
+    // A pooled slice can stay backed by a live block after free. Poison it
+    // immediately instead of relying on the block's eventual destruction.
+    memory_sanity_poison(header, charged_size);
     if (RoaringAllocationDomain::VECTOR_DIRECT == domain) {
       ob_free(header);
       mem_mgr->decr_vec_idx_used(static_cast<size_t>(charged_size));
@@ -172,9 +225,25 @@ static void *roaring_realloc(void *ptr, size_t size) {
   } else {
     RoaringAllocationHeader *header =
         static_cast<RoaringAllocationHeader *>(ptr) - 1;
-    abort_unless(header->is_valid());
-    const size_t orig_size = header->requested_size_;
-    if (orig_size > size) {
+    const RoaringAllocationHeader allocation = read_roaring_header(ptr);
+    const size_t orig_size = allocation.requested_size_;
+    if (orig_size >= size) {
+      if (memory_sanity_enabled()) {
+        SanityAllocLayout layout;
+        if (!memory_sanity_prepare_allocation(static_cast<int64_t>(size), 0, layout)) {
+          throw std::bad_alloc();
+        }
+        memory_sanity_poison(ptr, allocation.charged_size_ - sizeof(*header));
+        memory_sanity_mark_allocated(ptr, layout);
+      }
+      {
+#if defined(ENABLE_SANITY)
+        SanityDisableCheckRangeGuard guard;
+        MEMCPY(&header->requested_size_, &size, sizeof(size));
+#else
+        header->requested_size_ = size;
+#endif
+      }
       res = ptr;
     } else {
       res = roaring_malloc(size);
@@ -217,6 +286,18 @@ static void *roaring_aligned_malloc(size_t alignment, size_t size) {
       res = reinterpret_cast<void *>(real_location);
       size_t orig_ptr_stroage = real_location - sizeof(void *);
       *reinterpret_cast<void **>(orig_ptr_stroage) = orig_ptr;
+      if (memory_sanity_enabled()) {
+        SanityAllocLayout layout;
+        if (!memory_sanity_prepare_allocation(static_cast<int64_t>(size),
+                static_cast<int64_t>(alignment), layout)) {
+          roaring_free(orig_ptr);
+          throw std::bad_alloc();
+        }
+        // The saved base pointer and alignment padding are allocator metadata,
+        // not part of the caller's accessible range.
+        memory_sanity_poison(orig_ptr, size + offset);
+        memory_sanity_mark_allocated(res, layout);
+      }
     }
   }
   return res;
@@ -225,7 +306,16 @@ static void *roaring_aligned_malloc(size_t alignment, size_t size) {
 static void roaring_aligned_free(void *ptr) {
   if (ptr != nullptr) {
     size_t orig_ptr_stroage = reinterpret_cast<size_t>(ptr) - sizeof(void *);
-    roaring_free(*reinterpret_cast<void **>(orig_ptr_stroage));
+    void *orig_ptr = nullptr;
+    {
+#if defined(ENABLE_SANITY)
+      SanityDisableCheckRangeGuard guard;
+      MEMCPY(&orig_ptr, reinterpret_cast<void *>(orig_ptr_stroage), sizeof(orig_ptr));
+#else
+      orig_ptr = *reinterpret_cast<void **>(orig_ptr_stroage);
+#endif
+    }
+    roaring_free(orig_ptr);
   }
   return;
 }

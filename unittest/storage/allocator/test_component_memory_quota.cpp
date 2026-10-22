@@ -4,7 +4,9 @@
  */
 
 #include "gtest/gtest.h"
+#include <limits>
 #include <memory>
+#include <roaring/memory.h>
 #include "lib/alloc/alloc_func.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/rc/context.h"
@@ -116,6 +118,165 @@ private:
 };
 
 } // namespace
+
+TEST(TestRoaringMemoryAllocator, allocation_resize_and_alignment)
+{
+  MemoryQuota quota(1L << 20);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  TestRbMemMgrGuard rb_mem_mgr_guard;
+  for (const bool vector_allocation : {false, true}) {
+    oceanbase::lib::ObMallocHookAttrGuard attr_guard(oceanbase::lib::ObMemAttr(
+        vector_allocation ? "VIBSanityTest" : "RoaringTest"));
+    char *ptr = static_cast<char *>(::roaring_malloc(31));
+    ASSERT_NE(nullptr, ptr);
+    MEMSET(ptr, 42, 31);
+    char *smaller = static_cast<char *>(::roaring_realloc(ptr, 9));
+    ASSERT_EQ(ptr, smaller);
+    char *larger = static_cast<char *>(::roaring_realloc(smaller, 257));
+    ASSERT_NE(nullptr, larger);
+    for (int i = 0; i < 9; ++i) {
+      EXPECT_EQ(42, larger[i]);
+    }
+    MEMSET(larger, 17, 257);
+    EXPECT_EQ(larger, ::roaring_realloc(larger, 257));
+    ::roaring_free(larger);
+
+    char *zeroed = static_cast<char *>(::roaring_calloc(7, 3));
+    ASSERT_NE(nullptr, zeroed);
+    for (int i = 0; i < 21; ++i) {
+      EXPECT_EQ(0, zeroed[i]);
+    }
+    ::roaring_free(zeroed);
+    for (const size_t alignment : {1UL, 8UL, 16UL, 64UL, 256UL}) {
+      void *aligned = ::roaring_aligned_malloc(alignment, 13);
+      ASSERT_NE(nullptr, aligned);
+      EXPECT_EQ(0, reinterpret_cast<uintptr_t>(aligned) % alignment);
+      MEMSET(aligned, 7, 13);
+      ::roaring_aligned_free(aligned);
+    }
+    EXPECT_THROW(::roaring_calloc(std::numeric_limits<size_t>::max(), 2), std::bad_alloc);
+    EXPECT_THROW(::roaring_aligned_malloc(3, 13), std::bad_alloc);
+    EXPECT_EQ(0, quota.committed());
+    EXPECT_EQ(0, quota.reserved());
+    EXPECT_EQ(0, rb_mem_mgr_guard.mem_mgr().get_vec_idx_used());
+  }
+}
+
+TEST(TestRoaringMemoryAllocator, rejected_resize_preserves_original)
+{
+  MemoryQuota quota(1L << 20);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  TestRbMemMgrGuard rb_mem_mgr_guard;
+  oceanbase::lib::ObMallocHookAttrGuard attr_guard(oceanbase::lib::ObMemAttr("VIBSanityTest"));
+  char *ptr = static_cast<char *>(::roaring_malloc(31));
+  ASSERT_NE(nullptr, ptr);
+  MEMSET(ptr, 42, 31);
+  const int64_t charged_size = quota.committed();
+  quota.set_limit(charged_size);
+  EXPECT_THROW(::roaring_realloc(ptr, 257), std::bad_alloc);
+  for (int i = 0; i < 31; ++i) {
+    EXPECT_EQ(42, ptr[i]);
+  }
+  EXPECT_EQ(charged_size, quota.committed());
+  EXPECT_EQ(0, quota.reserved());
+  ::roaring_free(ptr);
+  EXPECT_EQ(0, quota.committed());
+  EXPECT_EQ(0, rb_mem_mgr_guard.mem_mgr().get_vec_idx_used());
+}
+
+#if defined(ENABLE_SANITY)
+TEST(TestRoaringMemorySanityDeathTest, header_and_requested_tail_are_inaccessible)
+{
+  MemoryQuota quota(1L << 20);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  TestRbMemMgrGuard rb_mem_mgr_guard;
+  for (const bool vector_allocation : {false, true}) {
+    oceanbase::lib::ObMallocHookAttrGuard attr_guard(oceanbase::lib::ObMemAttr(
+        vector_allocation ? "VIBSanityTest" : "RoaringTest"));
+    for (const size_t size : {1UL, 7UL, 8UL, 9UL, 31UL, 64UL}) {
+      char *ptr = static_cast<char *>(::roaring_malloc(size));
+      ASSERT_NE(nullptr, ptr);
+      MEMSET(ptr, 42, size);
+      EXPECT_DEATH({ static_cast<volatile char *>(ptr)[-1] = 1; },
+          "memory sanity check failed");
+      EXPECT_DEATH({ static_cast<volatile char *>(ptr)[size] = 1; },
+          "memory sanity check failed");
+      ::roaring_free(ptr);
+    }
+  }
+}
+
+TEST(TestRoaringMemorySanityDeathTest, freed_payload_is_poisoned_while_pool_block_is_alive)
+{
+  MemoryQuota quota(1L << 20);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  TestRbMemMgrGuard rb_mem_mgr_guard;
+  for (const bool vector_allocation : {false, true}) {
+    oceanbase::lib::ObMallocHookAttrGuard attr_guard(oceanbase::lib::ObMemAttr(
+        vector_allocation ? "VIBSanityTest" : "RoaringTest"));
+    char *live = static_cast<char *>(::roaring_malloc(31));
+    char *freed = static_cast<char *>(::roaring_malloc(31));
+    ASSERT_NE(nullptr, live);
+    ASSERT_NE(nullptr, freed);
+    // Free in the child immediately before the invalid access: death-test
+    // setup can otherwise allocate and reuse a freed jemalloc size class.
+    EXPECT_DEATH({
+      ::roaring_free(freed);
+      static_cast<volatile char *>(freed)[0] = 1;
+    }, "memory sanity check failed");
+    ::roaring_free(freed);
+    MEMSET(live, 42, 31);
+    ::roaring_free(live);
+  }
+}
+
+TEST(TestRoaringMemorySanityDeathTest, shrinking_realloc_moves_the_payload_boundary)
+{
+  MemoryQuota quota(1L << 20);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  TestRbMemMgrGuard rb_mem_mgr_guard;
+  for (const bool vector_allocation : {false, true}) {
+    oceanbase::lib::ObMallocHookAttrGuard attr_guard(oceanbase::lib::ObMemAttr(
+        vector_allocation ? "VIBSanityTest" : "RoaringTest"));
+    char *ptr = static_cast<char *>(::roaring_malloc(31));
+    ASSERT_NE(nullptr, ptr);
+    MEMSET(ptr, 42, 31);
+    ASSERT_EQ(ptr, ::roaring_realloc(ptr, 9));
+    EXPECT_EQ(42, ptr[8]);
+    EXPECT_DEATH({ static_cast<volatile char *>(ptr)[9] = 1; },
+        "memory sanity check failed");
+    EXPECT_DEATH({ static_cast<volatile char *>(ptr)[30] = 1; },
+        "memory sanity check failed");
+    ::roaring_free(ptr);
+  }
+}
+
+TEST(TestRoaringMemorySanityDeathTest, aligned_allocation_hides_padding_and_saved_pointer)
+{
+  MemoryQuota quota(1L << 20);
+  TestVectorQuotaResolverGuard resolver_guard(quota);
+  TestRbMemMgrGuard rb_mem_mgr_guard;
+  for (const bool vector_allocation : {false, true}) {
+    oceanbase::lib::ObMallocHookAttrGuard attr_guard(oceanbase::lib::ObMemAttr(
+        vector_allocation ? "VIBSanityTest" : "RoaringTest"));
+    for (const size_t alignment : {8UL, 64UL, 256UL}) {
+      char *ptr = static_cast<char *>(::roaring_aligned_malloc(alignment, 13));
+      ASSERT_NE(nullptr, ptr);
+      EXPECT_EQ(0, reinterpret_cast<uintptr_t>(ptr) % alignment);
+      MEMSET(ptr, 42, 13);
+      EXPECT_DEATH({ static_cast<volatile char *>(ptr)[-1] = 1; },
+          "memory sanity check failed");
+      EXPECT_DEATH({ static_cast<volatile char *>(ptr)[13] = 1; },
+          "memory sanity check failed");
+      EXPECT_DEATH({
+        ::roaring_aligned_free(ptr);
+        static_cast<volatile char *>(ptr)[0] = 1;
+      }, "memory sanity check failed");
+      ::roaring_aligned_free(ptr);
+    }
+  }
+}
+#endif
 
 TEST(TestVectorMemoryQuota, actual_bytes_and_dynamic_limit)
 {
