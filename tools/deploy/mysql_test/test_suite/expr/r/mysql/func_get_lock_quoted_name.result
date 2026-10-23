@@ -1,6 +1,0 @@
-SELECT GET_LOCK(CONCAT('quoted', CHAR(39), 'lock'), 0);
-GET_LOCK(CONCAT('quoted', CHAR(39), 'lock'), 0)
-1
-SELECT RELEASE_LOCK(CONCAT('quoted', CHAR(39), 'lock'));
-RELEASE_LOCK(CONCAT('quoted', CHAR(39), 'lock'))
-1
