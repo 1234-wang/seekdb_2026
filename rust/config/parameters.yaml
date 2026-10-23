@@ -309,7 +309,7 @@
   range: "[0B,]"
   section: OBSERVER
   edit_level: DYNAMIC_EFFECTIVE
-  description: "size of remaining memory at which cache eviction will be triggered. Range: [0,+∞)"
+  description: "Deprecated obmalloc option; has no effect with jemalloc or the system allocator."
 
 - name: memory_chunk_cache_size
   type: CAP
@@ -317,7 +317,7 @@
   range: "[0M,]"
   section: OBSERVER
   edit_level: DYNAMIC_EFFECTIVE
-  description: "the maximum size of memory cached by memory chunk cache. Range: [0M,], 0 stands for adaptive"
+  description: "Deprecated obmalloc option; has no effect with jemalloc or the system allocator."
 
 - name: enable_sql_operator_dump
   type: BOOL
@@ -378,7 +378,7 @@
   range: "[1, 10000]"
   section: OBSERVER
   edit_level: DYNAMIC_EFFECTIVE
-  description: "the min malloc times between two samples, which is not more than _max_malloc_sample_interval. 10000 means not to sample any malloc, Range: [1, 10000]"
+  description: "Deprecated obmalloc option; has no effect with jemalloc or the system allocator."
 
 - name: _max_malloc_sample_interval
   type: INT
@@ -386,7 +386,7 @@
   range: "[1, 10000]"
   section: OBSERVER
   edit_level: DYNAMIC_EFFECTIVE
-  description: "the max malloc times between two samples, which is not less than _min_malloc_sample_interval. 1 means to sample all malloc, Range: [1, 10000]"
+  description: "Deprecated obmalloc option; has no effect with jemalloc or the system allocator."
 
 - name: _enable_values_table_folding
   type: BOOL
@@ -499,12 +499,11 @@
   description: "the row number processed by vectorized sql engine within one batch. Range: [0, 65535]"
 
 - name: _ctx_memory_limit
-  type: STR_WITH_CHECKER
+  type: STR
   default: ""
   section: RUNTIME
   edit_level: DYNAMIC_EFFECTIVE
-  description: "specifies server runtime context memory limits."
-  checker: "common::ObCtxMemoryLimitChecker"
+  description: "Deprecated obmalloc option; has no effect with jemalloc or the system allocator."
 
 - name: _enable_convert_real_to_decimal
   type: BOOL
@@ -1966,7 +1965,7 @@
   default: "True"
   section: OBSERVER
   edit_level: DYNAMIC_EFFECTIVE
-  description: "specifies whether allow memleak to get the backtrace of malloc by light_backtrace"
+  description: "Deprecated obmalloc option; has no effect with jemalloc or the system allocator."
 
 - name: _enable_dbms_job_package
   type: BOOL
