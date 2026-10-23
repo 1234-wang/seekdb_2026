@@ -1,6 +1,6 @@
 # 编写与运行单元测试
 
-seekdb 使用 [Google Test](https://google.github.io/googletest/) 编写 C++ 单元测试。测试位于 `unittest/`，并按 CMake 模块组织为 `observer_tests`、`storage_tests`、`sql_tests` 等目标。
+seekdb 使用 [Google Test](https://google.github.io/googletest/) 编写 C++ 单元测试。测试位于 `unittest/`，按 CMake 模块组织；当前已注册的模块目标为 `storage_tests`。
 
 ## 配置测试构建
 
@@ -23,7 +23,6 @@ make -C build_release help | grep '_tests'
 编译受修改影响的模块，例如：
 
 ```bash
-make -C build_release observer_tests
 make -C build_release storage_tests
 ```
 
@@ -35,7 +34,7 @@ make -C build_release storage_tests
 
 ```bash
 ./build_release/unittest/run_tests.sh \
-  -R '^observer_tests_shard_[0-9]+$' \
+  -R '^storage_tests_shard_[0-9]+$' \
   --output-on-failure
 ```
 
@@ -44,7 +43,7 @@ make -C build_release storage_tests
 ```bash
 GTEST_FILTER='ComponentName.handles_invalid_input' \
   ./build_release/unittest/run_tests.sh \
-  -R '^observer_tests_shard_[0-9]+$' \
+  -R '^storage_tests_shard_[0-9]+$' \
   --output-on-failure
 ```
 

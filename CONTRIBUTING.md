@@ -37,9 +37,9 @@ The seekdb binary is generated at `build_release/src/observer/seekdb`.
 On Linux, CMake provides unit-test targets by module. Build the affected module and run its registered CTest shards, for example:
 
 ```bash
-make -C build_release observer_tests
+make -C build_release storage_tests
 ./build_release/unittest/run_tests.sh \
-  -R '^observer_tests_shard_[0-9]+$' \
+  -R '^storage_tests_shard_[0-9]+$' \
   --output-on-failure
 ```
 

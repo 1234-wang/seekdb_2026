@@ -1,6 +1,6 @@
 # Write and run unit tests
 
-seekdb uses [Google Test](https://google.github.io/googletest/) for C++ unit tests. Tests live under `unittest/` and are grouped into CMake module targets such as `observer_tests`, `storage_tests`, and `sql_tests`.
+seekdb uses [Google Test](https://google.github.io/googletest/) for C++ unit tests. Tests live under `unittest/` and are grouped into CMake module targets. The currently registered module target is `storage_tests`.
 
 ## Configure the test build
 
@@ -23,7 +23,6 @@ make -C build_release help | grep '_tests'
 Build the module affected by the change, for example:
 
 ```bash
-make -C build_release observer_tests
 make -C build_release storage_tests
 ```
 
@@ -35,7 +34,7 @@ The generated `run_tests.sh` wrapper invokes CTest with the environment and work
 
 ```bash
 ./build_release/unittest/run_tests.sh \
-  -R '^observer_tests_shard_[0-9]+$' \
+  -R '^storage_tests_shard_[0-9]+$' \
   --output-on-failure
 ```
 
@@ -44,7 +43,7 @@ To run one Google Test case, set `GTEST_FILTER` while keeping the module shard s
 ```bash
 GTEST_FILTER='ComponentName.handles_invalid_input' \
   ./build_release/unittest/run_tests.sh \
-  -R '^observer_tests_shard_[0-9]+$' \
+  -R '^storage_tests_shard_[0-9]+$' \
   --output-on-failure
 ```
 

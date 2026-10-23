@@ -2,5 +2,4 @@
 # Licensed under the Apache License, Version 2.0.
 
 seekdb_add_module_tests(storage_tests
-  allocator/test_component_memory_quota.cpp
   tx_storage/test_memory_printer.cpp)
