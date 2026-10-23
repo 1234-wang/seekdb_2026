@@ -6080,9 +6080,15 @@ int ObDbmsStats::async_gather_table_stats(sql::ObExecContext &ctx,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    const int64_t max_slice_cnt = 2000;  // maximum tables we can async gather stats at each iteration
+    int64_t max_slice_cnt = 2000;  // maximum tablets we can async gather stats at each iteration
     const int64_t MAX_BATCH = 3; 
+    const int64_t simulated_slice_cnt =
+        -EVENT_CALL(EventTable::EN_ASYNC_GATHER_MAX_SLICE_CNT);
+    if (simulated_slice_cnt > 0) {
+      max_slice_cnt = simulated_slice_cnt;
+    }
     ObSEArray<AsyncStatTable, 16> async_stat_tables;
+    ObSEArray<AsyncStatTable, 16> seen_stat_tables;
     int64_t total_part_cnt = 0;
     int64_t batch = 0;
     const int64_t initial_failed_count = task_info.failed_count_;
@@ -6092,9 +6098,18 @@ int ObDbmsStats::async_gather_table_stats(sql::ObExecContext &ctx,
       if (OB_FAIL(THIS_WORKER.check_status())) {
       } else if (OB_FAIL(ObBasicStatsEstimator::get_async_gather_stats_tables(ctx,
                                                                               max_slice_cnt,
+                                                                              true,
+                                                                              seen_stat_tables,
                                                                               total_part_cnt,
                                                                               async_stat_tables))) {
       } else {
+        // A skipped candidate does not advance its monitoring counters. Remember
+        // the exact keys so a later batch can reach lower-priority candidates
+        // without excluding other tablets from the same table.
+        for (int64_t i = 0; OB_SUCC(ret) && i < async_stat_tables.count(); ++i) {
+          if (OB_FAIL(seen_stat_tables.push_back(async_stat_tables.at(i)))) {
+          }
+        }
         task_info.task_table_count_ += async_stat_tables.count();
         for (int64_t i = 0; OB_SUCC(ret) && i < async_stat_tables.count(); ++i) {
           if (OB_FAIL(refresh_runtime_schema_guard(ctx))) {

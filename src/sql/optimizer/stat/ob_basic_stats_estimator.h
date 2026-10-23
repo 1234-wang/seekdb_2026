@@ -120,6 +120,8 @@ public:
 
   static int get_async_gather_stats_tables(ObExecContext &ctx,
                                            const int64_t max_table_cnt,
+                                           const bool only_collectable,
+                                           const ObIArray<AsyncStatTable> &seen_stat_tables,
                                            int64_t &total_part_cnt,
                                            ObIArray<AsyncStatTable> &stat_tables);
 
