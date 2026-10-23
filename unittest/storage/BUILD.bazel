@@ -9,7 +9,10 @@ seekdb_test_interface(
 
 seekdb_module_cc_test(
     name = "storage_tests",
-    srcs = ["allocator/test_component_memory_quota.cpp"],
+    srcs = [
+        "allocator/test_component_memory_quota.cpp",
+        "tx_storage/test_memory_printer.cpp",
+    ],
     test_hdrs = [],
     module_interface = ":storage_unit_test_interface",
     unity_size = 1,
