@@ -24,7 +24,7 @@
 #include "observer/ob_server_utils.h"
 #include "storage/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/compaction/ob_tablet_scheduler.h"
-#include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/storage_meta_service.h"
 
 #include <string>
 
@@ -91,11 +91,6 @@ int ObServerReloadConfig::operator()()
       }
   }
 
-  // syslog bandwidth limitation
-  share::ObTaskController::get().set_log_rate_limit(
-      config::syslog_io_bandwidth_limit());
-  share::ObTaskController::get().set_diag_per_error_limit(
-      config::diag_syslog_per_error_limit());
 
   lib::g_runtime_enabled = true;
 
@@ -108,7 +103,7 @@ int ObServerReloadConfig::operator()()
     int64_t reserved_size = 0;
     if (OB_TMP_FAIL(ObServerUtils::get_data_disk_info_in_config(data_disk_size,
                                                                 data_disk_percentage))) {
-    } else if (OB_TMP_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(reserved_size))) {
+    } else if (OB_TMP_FAIL(STORAGE_META_SERVICE.get_reserved_size(reserved_size))) {
     } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.resize_local_device(
         OB_STORAGE_OBJECT_MGR.get_total_macro_block_count()
             * OB_STORAGE_OBJECT_MGR.get_macro_block_size(),

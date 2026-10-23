@@ -6,7 +6,6 @@
 #include "gtest/gtest.h"
 #include "share/rc/ob_server_runtime.h"
 #include "storage/api/storage/runtime/ob_i_server_runtime.h"
-#include "storage/ob_super_block_struct.h"
 #include "storage/tx_storage/ob_memory_printer.h"
 #include "storage/tx_storage/ob_memstore_freezer.h"
 
@@ -25,14 +24,9 @@ public:
   int create_runtime(const oceanbase::omt::ObServerRuntimeMeta &) override
   { return OB_NOT_SUPPORTED; }
   void set_synced() override {}
-  int get_runtime_meta_for_ckpt(oceanbase::omt::ObServerRuntimeMeta &, bool &exist) override
-  { exist = false; return OB_NOT_SUPPORTED; }
   bool has_runtime() const override { return false; }
   int get_server_log_disk_size(int64_t &size) override
   { size = 0; return OB_NOT_SUPPORTED; }
-  ObServerRuntimeSuperBlock get_super_block() override
-  { return ObServerRuntimeSuperBlock(); }
-  void set_server_super_block(const ObServerRuntimeSuperBlock &) override {}
   bool is_hidden() override { return false; }
 };
 

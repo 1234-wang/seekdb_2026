@@ -1490,7 +1490,7 @@ int ObTabletMetaMemMgr::create_tablet(
     ObMetaDiskAddr addr;
     addr.set_none_addr();
     tablet_ptr.set_addr_with_reset_obj(addr);
-    // After restarting and replaying the slog, the tablet will load the pool when it is accessed for the first time.
+    // After loading local storage metadata, the tablet will load the pool when it is accessed for the first time.
     tablet_ptr.obj_.pool_ = &tablet_buffer_pool_;
     if (OB_FAIL(tablet_map_.set(key, tablet_ptr))) {
       LOG_WARN("fail to set tablet pointer", K(ret), K(key));
