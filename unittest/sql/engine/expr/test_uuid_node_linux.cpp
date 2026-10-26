@@ -27,6 +27,8 @@ struct Scenario
   unsigned long fail_ioctl = 0;
   bool loopback_only = false;
   bool non_ethernet = false;
+  int interface_count = 1;
+  bool deny_first_interface = false;
   int entropy_error = 0;
   bool empty_entropy = false;
   bool short_entropy = false;
@@ -86,11 +88,17 @@ extern "C" int __wrap_ioctl(int fd, unsigned long request, ...)
   }
   if (SIOCGIFCONF == request) {
     auto *ifc = static_cast<struct ifconf *>(value);
-    EXPECT_GE(ifc->ifc_len, static_cast<int>(sizeof(struct ifreq)));
-    ifc->ifc_len = sizeof(struct ifreq);
-    std::strcpy(ifc->ifc_req[0].ifr_name, "eth0");
+    EXPECT_GE(ifc->ifc_len, static_cast<int>(scenario.interface_count * sizeof(struct ifreq)));
+    ifc->ifc_len = scenario.interface_count * sizeof(struct ifreq);
+    for (int i = 0; i < scenario.interface_count; ++i) {
+      std::strcpy(ifc->ifc_req[i].ifr_name, i == 0 ? "eth0" : "eth1");
+    }
   } else if (SIOCGIFFLAGS == request) {
     auto *ifr = static_cast<struct ifreq *>(value);
+    if (scenario.deny_first_interface && 0 == std::strcmp(ifr->ifr_name, "eth0")) {
+      errno = EPERM;
+      return -1;
+    }
     ifr->ifr_flags = scenario.loopback_only ? IFF_LOOPBACK : 0;
   } else if (SIOCGIFHWADDR == request) {
     auto *ifr = static_cast<struct ifreq *>(value);
@@ -152,6 +160,21 @@ TEST_F(LinuxUuidNodeTest, interface_flags_denied) { scenario.fail_ioctl = SIOCGI
 TEST_F(LinuxUuidNodeTest, hardware_address_denied) { scenario.fail_ioctl = SIOCGIFHWADDR; expect_fallback(); }
 TEST_F(LinuxUuidNodeTest, loopback_only) { scenario.loopback_only = true; expect_fallback(); }
 TEST_F(LinuxUuidNodeTest, non_ethernet_address) { scenario.non_ethernet = true; expect_fallback(); }
+TEST_F(LinuxUuidNodeTest, no_interfaces) { scenario.interface_count = 0; expect_fallback(); }
+TEST_F(LinuxUuidNodeTest, continues_after_an_inaccessible_interface)
+{
+  scenario.interface_count = 2;
+  scenario.deny_first_interface = true;
+  unsigned char node[6] = {};
+  bool random = true;
+  int mac_error = 0;
+  ASSERT_EQ(0, oceanbase::sql::init_linux_uuid_node(node, random, mac_error));
+  EXPECT_FALSE(random);
+  EXPECT_EQ(0, mac_error);
+  EXPECT_EQ(0, std::memcmp(node, HARDWARE_NODE, sizeof(node)));
+  EXPECT_EQ(0, scenario.entropy_calls);
+  EXPECT_EQ(1, scenario.close_count);
+}
 TEST_F(LinuxUuidNodeTest, entropy_interrupted_and_short_reads)
 {
   scenario.fail_socket = true;
