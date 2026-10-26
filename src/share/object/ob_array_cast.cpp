@@ -559,6 +559,32 @@ int ObArrayCastUtils::string_cast_map(common::ObIAllocator &alloc,
   // Quote the normalized NULL key for JSON parsers that require quoted object keys.
   std::regex regex_null(R"((\{|,)\s*\"?(n|N)(u|U)(l|L)(l|L)\s*\"?\s*:)");
   src_text = std::regex_replace(src_text, regex_null, R"($1"NULL":)");
+  // MAP accepts case-insensitive NULL values, including nested array elements.
+  // Normalize only unquoted tokens; string contents and escaped quotes are data.
+  bool in_string = false;
+  bool escaped = false;
+  for (size_t i = 0; i < src_text.size(); ++i) {
+    const char ch = src_text[i];
+    if (in_string) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch == '\\') {
+        escaped = true;
+      } else if (ch == '"') {
+        in_string = false;
+      }
+    } else if (ch == '"') {
+      in_string = true;
+    } else if (is_null_string_start(ch)
+               && is_null_const_string(src_text.data() + i, src_text.data() + src_text.size())
+               && (i == 0 || is_whitespace(src_text[i - 1]) || src_text[i - 1] == ':'
+                   || src_text[i - 1] == '[' || src_text[i - 1] == ',')
+               && (is_whitespace(src_text[i + NULL_STR_LEN]) || src_text[i + NULL_STR_LEN] == ','
+                   || src_text[i + NULL_STR_LEN] == ']' || src_text[i + NULL_STR_LEN] == '}')) {
+      src_text.replace(i, NULL_STR_LEN, "null");
+      i += NULL_STR_LEN - 1;
+    }
+  }
   // parse text to json node
   const char *syntaxerr = NULL;
   uint64_t err_offset = 0;
