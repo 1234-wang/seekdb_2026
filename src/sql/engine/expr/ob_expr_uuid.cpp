@@ -211,16 +211,21 @@ int ObUUIDNode::init()
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
+      const int ioctl_errno = errno;
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF", K(ret), K(ioctl_errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
       bool mac_addr_found = false;
+      int last_ioctl_errno = 0;
+      const char *last_failed_ioctl = NULL;
       for (; it != end && OB_SUCC(ret); ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
         } else {
           strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
+          ifr.ifr_name[IFNAMSIZ - 1] = '\0';
           if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
             if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
               if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
@@ -228,17 +233,27 @@ int ObUUIDNode::init()
                 mac_addr_found = true;
                 break;
               } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
+                last_ioctl_errno = errno;
+                last_failed_ioctl = "SIOCGIFHWADDR";
+                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(last_ioctl_errno), K(it->ifr_name));
               }
             }
           } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
+            last_ioctl_errno = errno;
+            last_failed_ioctl = "SIOCGIFFLAGS";
+            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(last_ioctl_errno), K(it->ifr_name));
           }
         }
       }//end for
       if (OB_FAIL(ret)) {
       } else if (!mac_addr_found) {
         ret = OB_ERR_UNEXPECTED;
+        if (last_ioctl_errno != 0) {
+          LOG_WARN("failed to get UUID MAC address after interface ioctl errors",
+                   K(ret), K(last_failed_ioctl), K(last_ioctl_errno));
+        } else {
+          LOG_WARN("no usable non-loopback MAC address found for UUID node", K(ret));
+        }
       } else {
         is_inited_ = true;
       }
