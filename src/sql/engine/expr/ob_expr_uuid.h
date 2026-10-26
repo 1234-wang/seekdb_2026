@@ -36,8 +36,8 @@ private :
 
 struct ObUUIDNode
 {
-  ObUUIDNode();
-  int init();
+  explicit ObUUIDNode(bool initialize = true);
+  int init(bool force_random_fallback = false);
   unsigned char mac_addr_[6];
   bool is_inited_;
 };

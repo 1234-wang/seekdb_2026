@@ -205,6 +205,14 @@ cc_library(
     visibility = ["//src/sql:__subpackages__"],
 )
 
+cc_library(
+    name = "sql_uuid_test_headers",
+    hdrs = ["engine/expr/ob_expr_uuid.h"],
+    deps = [":sql_runtime_internal_headers"],
+    testonly = True,
+    visibility = ["//unittest:__subpackages__"],
+)
+
 _SQL_RUNTIME_UNITY_GROUPS = groups_without(
     SQL_UNITY_GROUPS,
     OPTIMIZER_GROUP_NAMES,

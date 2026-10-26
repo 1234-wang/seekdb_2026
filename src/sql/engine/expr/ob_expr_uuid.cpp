@@ -126,10 +126,13 @@ int ObBigEndian::put_uint32(unsigned char *b, uint32_t v)
   return ret;
 }
 
-ObUUIDNode::ObUUIDNode()
+ObUUIDNode::ObUUIDNode(bool initialize)
 {
   MEMSET(mac_addr_, 0, sizeof(mac_addr_));
   is_inited_ = false;
+  if (initialize) {
+    (void)init();
+  }
 }
 
 
@@ -137,7 +140,7 @@ ObUUIDNode::ObUUIDNode()
  * get and set mac address
  *
  */
-int ObUUIDNode::init()
+int ObUUIDNode::init(bool force_random_fallback)
 {
   int ret = OB_SUCCESS;
   is_inited_ = false;
@@ -256,6 +259,11 @@ int ObUUIDNode::init()
     close(sock);
   }
 #endif
+  if (force_random_fallback) {
+    ret = OB_SUCCESS;
+    mac_addr_found = false;
+    can_use_random_fallback = true;
+  }
   if (OB_SUCC(ret)) {
     if (mac_addr_found) {
       is_inited_ = true;
@@ -529,7 +537,7 @@ int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
 {
   int ret = OB_SUCCESS;
   unsigned char scratch[UuidCommon::LENGTH_UUID] = {0};
-  ObUUIDNode local_node;
+  ObUUIDNode local_node(false);
   const ObUUIDNode *node = uuid_node;
   if (OB_ISNULL(node)) {
     if (OB_FAIL(local_node.init())) {
