@@ -507,7 +507,6 @@ seekdb's hybrid retrieval + multi-model engine also fits classic AI workloads:
         <img src="https://img.shields.io/badge/Dify-✅-00A67E?style=flat-square&logo=dify" alt="Dify" />
     </a>
         <a href="https://github.com/langchain-ai/langgraph/pulls?q=is%3Apr+is%3Aclosed+oceanbase">
-
         <img src="https://img.shields.io/badge/LangGraph-✅-00A67E?style=flat-square&logo=langgraph" alt="LangGraph" />
     </a>
     <a href="https://github.com/coze-dev/coze-studio/pulls?q=is%3Apr+oceanbase+is%3Aclosed">
