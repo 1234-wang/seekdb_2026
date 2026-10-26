@@ -35,5 +35,6 @@ while ($loop < 128)
 # remains present. The resulting ANN filter must match the compact form.
 --disable_query_log
 --eval EXPLAIN SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
 --enable_query_log
 DROP TABLE t_competition_ann_duplicate_or;

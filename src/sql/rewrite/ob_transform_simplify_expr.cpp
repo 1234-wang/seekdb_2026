@@ -2823,6 +2823,8 @@ bool ObTransformSimplifyExpr::is_safe_to_deduplicate(const ObRawExpr &expr) cons
          && !expr.has_flag(CNT_ONETIME)
          && !expr.has_flag(CNT_CUR_TIME)
          && !expr.has_flag(CNT_PL_UDF)
+         && !expr.has_flag(CNT_VALUES)
+         && !expr.has_flag(CNT_ALIAS)
          && !expr.has_flag(CNT_PSEUDO_COLUMN)
          && !expr.has_flag(CNT_OP_PSEUDO_COLUMN);
 }

@@ -28,4 +28,7 @@ Outputs & filters:
       access([t_competition_ann_duplicate_or.__pk_increment], [t_competition_ann_duplicate_or.category], [t_competition_ann_duplicate_or.age], [t_competition_ann_duplicate_or.id]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false],
       range_key([t_competition_ann_duplicate_or.__pk_increment]), range(MIN ; MAX)always true
+id
+1
+2
 DROP TABLE t_competition_ann_duplicate_or;
