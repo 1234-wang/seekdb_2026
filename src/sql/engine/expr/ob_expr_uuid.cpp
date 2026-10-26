@@ -16,15 +16,20 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #ifdef __EMSCRIPTEN__
+#include <errno.h>
 #include <unistd.h>
 #elif defined(_WIN32)
 #include <winsock2.h>
 #include <windows.h>
+#include <bcrypt.h>
 #ifndef CONST
 #define CONST const
 #endif
 #include <iphlpapi.h>
 #else
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 #ifdef __APPLE__
@@ -33,8 +38,6 @@
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -47,6 +50,54 @@ namespace oceanbase
 {
 namespace sql
 {
+
+namespace
+{
+// Read random bytes from the operating system CSPRNG. The UUID node must not
+// use the time-seeded PRNG used for clock sequence initialization.
+int get_secure_random_bytes(unsigned char *buf, const size_t len, int &system_error)
+{
+  int ret = OB_SUCCESS;
+  system_error = 0;
+  if (OB_ISNULL(buf) || len == 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+#ifdef _WIN32
+    const NTSTATUS status = BCryptGenRandom(NULL, buf, static_cast<ULONG>(len), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    if (0 != status) {
+      ret = OB_ERR_UNEXPECTED;
+      system_error = static_cast<int>(status);
+    }
+#elif defined(__EMSCRIPTEN__)
+    if (getentropy(buf, len) != 0) {
+      ret = OB_ERR_UNEXPECTED;
+      system_error = errno;
+    }
+#else
+    const int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      system_error = errno;
+    } else {
+      size_t bytes_read = 0;
+      while (OB_SUCC(ret) && bytes_read < len) {
+        const ssize_t n = read(fd, buf + bytes_read, len - bytes_read);
+        if (n > 0) {
+          bytes_read += static_cast<size_t>(n);
+        } else if (n < 0 && EINTR == errno) {
+          // Retry interrupted reads.
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          system_error = (n == 0) ? EIO : errno;
+        }
+      }
+      close(fd);
+    }
+#endif
+  }
+  return ret;
+}
+}
 
 int ObBigEndian::put_uint16(unsigned char *b, uint16_t v)
 {
@@ -77,8 +128,8 @@ int ObBigEndian::put_uint32(unsigned char *b, uint32_t v)
 
 ObUUIDNode::ObUUIDNode()
 {
+  MEMSET(mac_addr_, 0, sizeof(mac_addr_));
   is_inited_ = false;
-  (void)init();
 }
 
 
@@ -90,50 +141,41 @@ int ObUUIDNode::init()
 {
   int ret = OB_SUCCESS;
   is_inited_ = false;
+  MEMSET(mac_addr_, 0, sizeof(mac_addr_));
+  bool mac_addr_found = false;
+  bool can_use_random_fallback = true;
+  int discovery_error = 0;
+  const char *discovery_step = "no usable MAC address";
 #ifdef __EMSCRIPTEN__
-  // Browsers expose no hardware MAC. Use a random UUID node and mark it as
-  // non-MAC with the multicast bit, as on the Android fallback below.
-  // Emscripten getentropy uses the host cryptographic random source.
-  if (getentropy(mac_addr_, sizeof(mac_addr_)) != 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to generate UUID node", K(ret), K(errno));
-  } else {
-    mac_addr_[0] |= 0x01;
-    is_inited_ = true;
-  }
+  // Browsers do not expose hardware MAC addresses; use the common fallback.
 #elif defined(_WIN32)
   ULONG buf_len = 15000;
   PIP_ADAPTER_ADDRESSES addresses = NULL;
-  bool mac_addr_found = false;
   addresses = (IP_ADAPTER_ADDRESSES *)malloc(buf_len);
   if (OB_ISNULL(addresses)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (GetAdaptersAddresses(AF_UNSPEC, 0, NULL, addresses, &buf_len) == NO_ERROR) {
+    can_use_random_fallback = false;
+  } else if (NO_ERROR == (discovery_error = static_cast<int>(
+               GetAdaptersAddresses(AF_UNSPEC, 0, NULL, addresses, &buf_len)))) {
     for (PIP_ADAPTER_ADDRESSES addr = addresses; addr && !mac_addr_found; addr = addr->Next) {
       if (addr->PhysicalAddressLength == 6 && addr->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
         MEMCPY(mac_addr_, addr->PhysicalAddress, 6);
         mac_addr_found = true;
       }
     }
-    if (!mac_addr_found) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      is_inited_ = true;
-    }
   } else {
-    ret = OB_ERR_UNEXPECTED;
+    discovery_step = "GetAdaptersAddresses";
   }
   if (addresses) { free(addresses); }
 #elif defined(__APPLE__)
   // macOS: Use getifaddrs to get network interface information
   struct ifaddrs *ifaddrs_list = nullptr;
   struct ifaddrs *ifa = nullptr;
-  bool mac_addr_found = false;
-  
   if (getifaddrs(&ifaddrs_list) != 0) {
-    ret = OB_ERR_UNEXPECTED;
+    discovery_error = errno;
+    discovery_step = "getifaddrs";
   } else {
-    for (ifa = ifaddrs_list; ifa != nullptr && OB_SUCC(ret) && !mac_addr_found; ifa = ifa->ifa_next) {
+    for (ifa = ifaddrs_list; ifa != nullptr && !mac_addr_found; ifa = ifa->ifa_next) {
       if (ifa->ifa_addr == nullptr) {
         continue;
       }
@@ -150,22 +192,14 @@ int ObUUIDNode::init()
       }
     }
     freeifaddrs(ifaddrs_list);
-    
-    if (OB_FAIL(ret)) {
-      // Error already logged
-    } else if (!mac_addr_found) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      is_inited_ = true;
-    }
   }
 #elif defined(__ANDROID__)
   // Android: Use getifaddrs with AF_PACKET + sockaddr_ll
   {
     struct ifaddrs *ifaddr = NULL;
-    bool mac_addr_found = false;
     if (getifaddrs(&ifaddr) == -1) {
-      ret = OB_ERR_UNEXPECTED;
+      discovery_error = errno;
+      discovery_step = "getifaddrs";
     } else {
       for (struct ifaddrs *ifa = ifaddr; ifa != NULL && !mac_addr_found; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr == NULL) continue;
@@ -179,24 +213,6 @@ int ObUUIDNode::init()
       }
       freeifaddrs(ifaddr);
     }
-    if (OB_SUCC(ret) && !mac_addr_found) {
-      // RFC 4122 section 4.5: when MAC address is unavailable (Android sandbox),
-      // use random bytes with the multicast bit set as the node ID.
-      int fd = open("/dev/urandom", O_RDONLY);
-      if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
-        mac_addr_[0] |= 0x01;  // set multicast bit
-        mac_addr_found = true;
-        LOG_INFO("using random UUID node ID (no MAC available on Android)");
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-      }
-      if (fd >= 0) {
-        close(fd);
-      }
-    }
-    if (OB_SUCC(ret) && mac_addr_found) {
-      is_inited_ = true;
-    }
   }
 #else
   // Linux: Use ioctl to get MAC address
@@ -205,47 +221,58 @@ int ObUUIDNode::init()
   char buf[1024];
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    discovery_error = errno;
+    discovery_step = "socket";
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      discovery_error = errno;
+      discovery_step = "SIOCGIFCONF";
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
-        if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
-          continue;
-        } else {
-          strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
-          if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
-            if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
-              if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
-                MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
-                mac_addr_found = true;
-                break;
-              } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
-              }
+      for (; it != end && !mac_addr_found; ++it) {
+        MEMSET(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
+        if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
+          if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
+            if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
+              MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
+              mac_addr_found = true;
+            } else {
+              discovery_error = errno;
+              discovery_step = "SIOCGIFHWADDR";
+              LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(discovery_error), K(it->ifr_name));
             }
-          } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
           }
+        } else {
+          discovery_error = errno;
+          discovery_step = "SIOCGIFFLAGS";
+          LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(discovery_error), K(it->ifr_name));
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
-      }
     }
     close(sock);
   }
 #endif
+  if (OB_SUCC(ret)) {
+    if (mac_addr_found) {
+      is_inited_ = true;
+    } else if (can_use_random_fallback) {
+      int entropy_error = 0;
+      if (OB_FAIL(get_secure_random_bytes(mac_addr_, sizeof(mac_addr_), entropy_error))) {
+        MEMSET(mac_addr_, 0, sizeof(mac_addr_));
+        LOG_ERROR("failed to generate secure random UUID node", K(ret), K(entropy_error));
+      } else {
+        // RFC 9562 section 6.10: mark a randomly generated node as multicast.
+        mac_addr_[0] |= 0x01;
+        is_inited_ = true;
+        LOG_WARN("MAC address discovery unavailable; using secure random UUID node",
+                 K(discovery_step), K(discovery_error));
+      }
+    }
+  }
   return ret;
 }
 
@@ -411,30 +438,35 @@ int ObExprUuid::init()
   //will be inited once when and only when server starts
   //so, please do not worry too much about the contention even we use ob_malloc here.
   int ret = OB_SUCCESS;
-  ObMemAttr mem_attr;
-  mem_attr.label_ = ObModIds::OB_SQL_EXPR;
-  uuid_node = static_cast<ObUUIDNode*>(ob_malloc(sizeof(ObUUIDNode), mem_attr));
-  if (OB_UNLIKELY(NULL == uuid_node)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory failed", K(ret));
-  } else if (OB_FAIL(uuid_node->init())) {
-    ob_free(uuid_node);//very important ! do not forget this !
-    uuid_node = NULL;//very important ! do not forget this !
+  if (OB_ISNULL(uuid_node)) {
+    ObMemAttr mem_attr;
+    mem_attr.label_ = ObModIds::OB_SQL_EXPR;
+    ObUUIDNode *node = static_cast<ObUUIDNode*>(ob_malloc(sizeof(ObUUIDNode), mem_attr));
+    if (OB_UNLIKELY(NULL == node)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("allocate memory failed", K(ret));
+    } else if (OB_FAIL(node->init())) {
+      ob_free(node);
+    } else {
+      // Publish only a fully initialized node.
+      uuid_node = node;
+    }
   }
   return ret;
 }
 
-int ObExprUuid::calc(unsigned char *scratch)
+int ObExprUuid::calc(unsigned char *scratch, const ObUUIDNode *node)
 {
   int ret = OB_SUCCESS;
+  const ObUUIDNode *active_node = (NULL == node) ? uuid_node : node;
   if (OB_ISNULL(scratch)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected error. pointer is null", K(ret), K(scratch));
-  } else if (OB_ISNULL(uuid_node) || OB_UNLIKELY(!(uuid_node->is_inited_))) {
+  } else if (OB_ISNULL(active_node) || OB_UNLIKELY(!(active_node->is_inited_))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected error. uuid node is not inited", K(ret), K(uuid_node));
+    LOG_ERROR("unexpected error. uuid node is not inited", K(ret), K(active_node));
   } else {
-    unsigned char *mac_addr = uuid_node->mac_addr_;
+    const unsigned char *mac_addr = active_node->mac_addr_;
     uint64_t time = 0;
     uint16_t seq = 0;
     if (OB_FAIL(ObUUIDTime::get_time(time, seq))) {
@@ -496,27 +528,23 @@ int ObExprUuid::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
 int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator calc_buf("ServerUuid");
   unsigned char scratch[UuidCommon::LENGTH_UUID] = {0};
-  bool need_reset = false;
-  if (OB_ISNULL(uuid_node)) {
-    need_reset = true;
-    if (OB_ISNULL(uuid_node = static_cast<ObUUIDNode*>(calc_buf.alloc(sizeof(ObUUIDNode))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (OB_FAIL(uuid_node->init())) {
+  ObUUIDNode local_node;
+  const ObUUIDNode *node = uuid_node;
+  if (OB_ISNULL(node)) {
+    if (OB_FAIL(local_node.init())) {
+    } else {
+      node = &local_node;
     }
   }
   if (OB_FAIL(ret)) {
-    //do nothing
+    // Keep the global UUID node untouched if local initialization fails.
   } else if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != UuidCommon::LENGTH_UUID)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(calc(scratch))) {
+  } else if (OB_FAIL(calc(scratch, node))) {
   } else if (OB_FAIL(UuidCommon::bin2uuid(server_uuid, scratch))) {
   } else {/*do nothing*/}
 
-  if (need_reset) {
-    uuid_node = NULL;
-  }
   return ret;
 }
 

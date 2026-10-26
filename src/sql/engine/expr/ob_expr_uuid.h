@@ -94,7 +94,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 protected:
-  static int calc(unsigned char *scratch);
+  static int calc(unsigned char *scratch, const ObUUIDNode *node = NULL);
 private:
   static ObUUIDNode *uuid_node;
   //disallow copy
