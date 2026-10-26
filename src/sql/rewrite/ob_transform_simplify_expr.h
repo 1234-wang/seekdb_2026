@@ -177,9 +177,17 @@ private:
                                          bool is_left);
 
   int get_opposite_op(ObItemType type, ObItemType& opposit_type);
-  int remove_duplicate_exprs(ObQueryCtx* query_ctx, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
-  int recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObRawExpr* &expr, bool &trans_happened);
+  int remove_duplicate_exprs(ObQueryCtx* query_ctx,
+                             ObIArray<ObRawExpr*> &conditions,
+                             bool &trans_happened,
+                             const bool deterministic_only = false);
+  int recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx,
+                                       ObRawExpr* &expr,
+                                       bool &trans_happened,
+                                       const bool deterministic_only = false);
   int do_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObIArray<ObRawExpr*> &exprs);
+  int do_remove_duplicate_exprs_by_hash(ObQueryCtx &query_ctx, ObIArray<ObRawExpr*> &exprs);
+  bool is_safe_to_deduplicate(const ObRawExpr &expr) const;
   int pull_similar_expr(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
   int recursive_pull_similar(ObDMLStmt *stmt, ObRawExpr* &expr, bool &trans_happened);
   int do_pull_similar(ObDMLStmt *stmt,

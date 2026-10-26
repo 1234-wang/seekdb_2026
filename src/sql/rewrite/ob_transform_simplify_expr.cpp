@@ -62,6 +62,21 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
   UNUSED(parent_stmts);
   if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (stmt->has_vec_approx()) {
+    // Approximate vector queries intentionally keep their statement shape.
+    // Only apply the idempotent A AND/OR A => A rule here, and only to
+    // deterministic predicates, so evaluation counts for volatile expressions
+    // remain unchanged.
+    if (OB_FAIL(remove_duplicate_exprs(stmt->get_query_ctx(),
+                                       stmt->get_condition_exprs(),
+                                       is_happened,
+                                       true))) {
+    } else {
+      trans_happened |= is_happened;
+    }
+    if (OB_SUCC(ret) && trans_happened && OB_FAIL(add_transform_hint(*stmt))) {
+    }
+    return ret;
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(flatten_stmt_exprs(stmt, is_happened))) {
@@ -2595,7 +2610,8 @@ int ObTransformSimplifyExpr::get_opposite_op(ObItemType type, ObItemType& opposi
 
 int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
                                                     ObIArray<ObRawExpr*> &conditions,
-                                                    bool &trans_happened)
+                                                    bool &trans_happened,
+                                                    const bool deterministic_only)
 {
   /* basic case
   * A and A -> A
@@ -2604,17 +2620,25 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
   int ret = OB_SUCCESS;
   const int64_t param_count = conditions.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < param_count; i++) {
-    if (OB_FAIL(recursive_remove_duplicate_exprs(*query_ctx, conditions.at(i), trans_happened))) {
+    if (OB_FAIL(recursive_remove_duplicate_exprs(*query_ctx,
+                                                 conditions.at(i),
+                                                 trans_happened,
+                                                 deterministic_only))) {
     }
   }
   if (OB_SUCC(ret)) {
     //select * from t1 where c1 > 1 and c1 > 1
     //like above stmt, and expr in level 0 is process here
     ObSEArray<ObRawExpr *, 4> param_conds;
-    if (param_count <= 1 || param_count > 100) {
-      /* use too much resource and need add lots of constraints */
+    if (param_count <= 1) {
+      /* do nothing */
     } else if (OB_FAIL(param_conds.assign(conditions))) {
-    } else if (OB_FAIL(do_remove_duplicate_exprs(*query_ctx, param_conds))) {
+    } else if (deterministic_only
+               && OB_FAIL(do_remove_duplicate_exprs_by_hash(*query_ctx, param_conds))) {
+    } else if (param_count > 100) {
+      /* use too much resource and need add lots of constraints */
+    } else if (!deterministic_only
+               && OB_FAIL(do_remove_duplicate_exprs(*query_ctx, param_conds))) {
     } else if (param_conds.count() == conditions.count()) {
       //do nothing
     } else {
@@ -2635,7 +2659,8 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
 
 int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx,
                                                               ObRawExpr* &expr,
-                                                              bool &trans_happened)
+                                                              bool &trans_happened,
+                                                              const bool deterministic_only)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr) ||
@@ -2647,7 +2672,8 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(recursive_remove_duplicate_exprs(query_ctx,
                                                               expr->get_param_expr(i),
-                                                              trans_happened)))) {
+                                                              trans_happened,
+                                                              deterministic_only)))) {
       }
     }
     if (OB_FAIL(ret)) {
@@ -2655,10 +2681,14 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
     } else if (expr->get_expr_type() == T_OP_OR || expr->get_expr_type() == T_OP_AND) {
       ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
       ObSEArray<ObRawExpr *, 4> param_conds;
-      if (op_expr->get_param_count() > 100) {
+      const int64_t param_count = op_expr->get_param_count();
+      if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
+      } else if (deterministic_only
+                 && OB_FAIL(do_remove_duplicate_exprs_by_hash(query_ctx, param_conds))) {
+      } else if (param_count > 100) {
         /* use too much resource and need add lots of constraints */
-      } else if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
-      } else if (OB_FAIL(do_remove_duplicate_exprs(query_ctx, param_conds))) {
+      } else if (!deterministic_only
+                 && OB_FAIL(do_remove_duplicate_exprs(query_ctx, param_conds))) {
       } else if (param_conds.count() == op_expr->get_param_count()) {
         //do nothing
       } else if (param_conds.count() == 1) {
@@ -2712,6 +2742,89 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
     }
   }
   return ret;
+}
+
+int ObTransformSimplifyExpr::do_remove_duplicate_exprs_by_hash(
+    ObQueryCtx &query_ctx,
+    ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<uint64_t, ObRawExpr *> seen_exprs;
+  ObSEArray<ObRawExpr *, 4> unique_exprs;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(seen_exprs.create(exprs.count() * 2, ObModIds::OB_SQL_COMPILE))) {
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObRawExpr *expr = exprs.at(i);
+    ObRawExpr *seen_expr = NULL;
+    bool is_duplicate = false;
+    const uint64_t expr_hash = OB_ISNULL(expr) ? 0 : expr->hash(0);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (!is_safe_to_deduplicate(*expr)) {
+      // Preserve every evaluation of volatile, stateful, or side-effecting
+      // expressions, even when their syntax is identical.
+    } else if (OB_FAIL(seen_exprs.get_refactored(expr_hash, seen_expr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = seen_exprs.set_refactored(expr_hash, expr);
+      }
+    } else if (OB_ISNULL(seen_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      ObQuestionmarkEqualCtx cmp_ctx(true);
+      if (expr->same_as(*seen_expr, &cmp_ctx)) {
+        is_duplicate = true;
+        if (!cmp_ctx.equal_pairs_.empty()
+            && OB_FAIL(append(ctx_->equal_param_constraints_, cmp_ctx.equal_pairs_))) {
+        }
+      } else {
+        // Keep hash collisions correct. The common path is O(n); only a real
+        // collision scans the expressions already retained in that bucket.
+        for (int64_t j = 0; OB_SUCC(ret) && !is_duplicate
+             && j < unique_exprs.count(); ++j) {
+          ObRawExpr *candidate = unique_exprs.at(j);
+          if (OB_ISNULL(candidate)) {
+            ret = OB_ERR_UNEXPECTED;
+          } else if (candidate->hash(0) == expr_hash
+                     && is_safe_to_deduplicate(*candidate)) {
+            ObQuestionmarkEqualCtx collision_cmp_ctx(true);
+            if (expr->same_as(*candidate, &collision_cmp_ctx)) {
+              is_duplicate = true;
+              if (!collision_cmp_ctx.equal_pairs_.empty()
+                  && OB_FAIL(append(ctx_->equal_param_constraints_,
+                                    collision_cmp_ctx.equal_pairs_))) {
+              }
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !is_duplicate && OB_FAIL(unique_exprs.push_back(expr))) {
+    }
+  }
+  if (OB_SUCC(ret) && unique_exprs.count() != exprs.count()
+      && OB_FAIL(exprs.assign(unique_exprs))) {
+  }
+  if (seen_exprs.created()) {
+    const int tmp_ret = seen_exprs.destroy();
+    if (OB_SUCCESS != tmp_ret) {
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  UNUSED(query_ctx);
+  return ret;
+}
+
+bool ObTransformSimplifyExpr::is_safe_to_deduplicate(const ObRawExpr &expr) const
+{
+  return expr.is_deterministic()
+         && !expr.has_flag(CNT_SUB_QUERY)
+         && !expr.has_flag(CNT_ONETIME)
+         && !expr.has_flag(CNT_CUR_TIME)
+         && !expr.has_flag(CNT_PL_UDF)
+         && !expr.has_flag(CNT_PSEUDO_COLUMN)
+         && !expr.has_flag(CNT_OP_PSEUDO_COLUMN);
 }
 
 int ObTransformSimplifyExpr::pull_similar_expr(ObDMLStmt *stmt,
