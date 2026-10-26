@@ -6,6 +6,8 @@
   <img alt="seekdb logo" src="images/logo.svg" width="420">
 </picture>
 
+OB-P:YCNIDJmJdiJIYpQdZlb3NA
+
 # **Write. Search. Fork. The State Store for AI Agents.**
 
 <p>
@@ -46,8 +48,6 @@
         <img alt="YouTube" src="https://img.shields.io/badge/YouTube-red?logo=youtube">
     </a>
 </p>
-
-OB-P:YCNIDJmJdiJIYpQdZlb3NA
 
 MySQL-compatible · Embedded or Server · Hybrid Vector + Full-text Search · COW Sandbox
 
