@@ -101,6 +101,22 @@ public:
                                const ParseNode *&ret_node);
   int resolve_inlist(ObInListInfo &inlist_infos);
 private:
+  // Count the distinct values of an IN list.
+  //
+  // The inlist rewrite turns a long IN list into `expr = ANY(values table)`, and
+  // the rewritten predicate can no longer be pushed down as a range filter.
+  // Duplicated constants do not make a list expensive, so the rewrite threshold
+  // is compared with the number of distinct values rather than with the number
+  // of elements.
+  //
+  // Only lists whose elements are all constants can be analyzed. For any other
+  // list `distinct_cnt` is set to the number of elements, so the caller keeps
+  // the previous behavior.
+  static int get_in_list_distinct_cnt(common::ObIAllocator &alloc,
+                                      const ParseNode &in_list,
+                                      const ParamStore *param_store,
+                                      const bool is_prepare_stmt,
+                                      int64_t &distinct_cnt);
   static int get_inlist_rewrite_info(const ParseNode &in_list,
                                      const int64_t column_cnt,
                                      int64_t col_idx,

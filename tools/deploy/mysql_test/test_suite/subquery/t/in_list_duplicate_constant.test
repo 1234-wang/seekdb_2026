@@ -1,0 +1,35 @@
+#owner: seekdb
+#owner group: SQL
+# tags: optimizer
+#description: duplicated constants of an in list must not trigger the inlist rewrite
+#
+# The inlist rewrite turns a long IN list into `expr = ANY(values table)`, and
+# the rewritten predicate can no longer be pushed down as a range filter. A
+# list that only repeats a few distinct values must keep the plain IN form,
+# otherwise semantically equivalent predicates end up with different plans.
+
+--disable_warnings
+drop table if exists t_in_list_dup;
+--enable_warnings
+
+create table t_in_list_dup(a int primary key, b int);
+insert into t_in_list_dup values (1,10),(2,20),(3,30),(4,40),(5,50);
+
+# the repeated constants do not count, the list keeps the plain IN form and the
+# primary key ranges are still extracted
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a in (1,2,3,1,2,3,1);
+select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a in (1,2,3,1,2,3,1) order by a;
+select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a not in (1,2,3,1,2,3,1) order by a;
+
+# a list of distinct constants is still rewritten into a values table
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a in (1,2,3,4,5,6);
+
+# parameter markers are unknown when the statement is prepared, the rewrite is
+# not skipped for them and the results stay correct
+prepare stmt_dup from 'select a from t_in_list_dup where a in (?, ?, ?) order by a';
+set @a = 1, @b = 1, @c = 2;
+execute stmt_dup using @a, @b, @c;
+set @a = 3, @b = 4, @c = 3;
+execute stmt_dup using @a, @b, @c;
+
+drop table t_in_list_dup;
