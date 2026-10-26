@@ -37,7 +37,8 @@ const char *VALID_PROVIDERS[] = {
   "SILICONFLOW",
   "COHERE",
   "HUNYUAN-OPENAI",
-  "OPENAI"
+  "OPENAI",
+  "OLLAMA"
 };
 
 #define EXTRACT_JSON_ELEM_STR(json_key, member) \
@@ -62,6 +63,25 @@ const char *VALID_PROVIDERS[] = {
     LOG_WARN("unknown json key param", K(ret), K(elem.first)); \
   }
 
+// Integer-valued endpoint params. Only a JSON integer is accepted (a quoted
+// string such as "8" is rejected on type), and the value must fall inside the
+// caller-supplied bounds.
+#define EXTRACT_JSON_ELEM_INT(json_key, member) \
+      if (elem.first.case_compare(json_key) == 0) { \
+        if (elem.second->json_type() != ObJsonNodeType::J_INT) { \
+          ret = OB_AI_FUNC_PARAM_VALUE_INVALID; \
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, elem.first.length(), elem.first.ptr()); \
+          LOG_WARN("invalid json type", K(ret), K(elem.first), K(elem.second->json_type())); \
+        } else if (elem.second->get_int() < ObAiModelEndpointInfo::MIN_MAX_CONCURRENCY \
+                   || elem.second->get_int() > ObAiModelEndpointInfo::MAX_MAX_CONCURRENCY) { \
+          ret = OB_AI_FUNC_PARAM_VALUE_INVALID; \
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, elem.first.length(), elem.first.ptr()); \
+          LOG_WARN("invalid json value", K(ret), K(elem.first), K(elem.second->get_int())); \
+        } else { \
+          member = elem.second->get_int(); \
+        } \
+      } else
+
 int ObAiModelEndpointInfo::parse_from_json_base(common::ObArenaAllocator &allocator, const ObString &name, const ObIJsonBase &params_jbase)
 {
   int ret = OB_SUCCESS;
@@ -73,6 +93,23 @@ int ObAiModelEndpointInfo::parse_from_json_base(common::ObArenaAllocator &alloca
   return ret;
 }
 
+namespace {
+// ob_write_string() rejects a NULL ObString with OB_ERR_NULL_VALUE, but every
+// optional endpoint field (access_key / request_model_name / ...) is stored as
+// NULL when unset. Treat NULL and empty alike.
+int deep_copy_endpoint_string(common::ObIAllocator &allocator,
+                              const common::ObString &src,
+                              common::ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  if (src.empty()) {
+    dst.reset();
+  } else if (OB_FAIL(ob_write_string(allocator, src, dst))) {
+  }
+  return ret;
+}
+} // namespace
+
 int ObAiModelEndpointInfo::deep_copy(
     common::ObIAllocator &allocator,
     const ObAiModelEndpointInfo &other)
@@ -80,17 +117,18 @@ int ObAiModelEndpointInfo::deep_copy(
   int ret = OB_SUCCESS;
   reset();
   endpoint_id_ = other.endpoint_id_;
-  if (OB_FAIL(ob_write_string(allocator, other.name_, name_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.scope_, scope_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.ai_model_name_, ai_model_name_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.url_, url_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.access_key_, access_key_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.provider_, provider_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.request_model_name_, request_model_name_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.parameters_, parameters_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.request_transform_fn_, request_transform_fn_))) {
-  } else if (OB_FAIL(ob_write_string(allocator, other.response_transform_fn_, response_transform_fn_))) {
+  if (OB_FAIL(deep_copy_endpoint_string(allocator, other.name_, name_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.scope_, scope_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.ai_model_name_, ai_model_name_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.url_, url_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.access_key_, access_key_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.provider_, provider_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.request_model_name_, request_model_name_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.parameters_, parameters_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.request_transform_fn_, request_transform_fn_))) {
+  } else if (OB_FAIL(deep_copy_endpoint_string(allocator, other.response_transform_fn_, response_transform_fn_))) {
   }
+  max_concurrency_ = other.max_concurrency_;
   return ret;
 }
 
@@ -112,7 +150,7 @@ int ObAiModelEndpointInfo::check_valid() const
   } else if (url_.empty()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, strlen("url"), "url");
-  } else if (access_key_.empty()) {
+  } else if (access_key_.empty() && provider_.case_compare("OLLAMA") != 0) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, strlen("access_key"), "access_key");
     LOG_WARN("access_key is empty", K(ret), K(*this));
@@ -131,6 +169,10 @@ int ObAiModelEndpointInfo::check_valid() const
   } else if (!response_transform_fn_.empty()) {
     ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("response_transform_fn"), "response_transform_fn");
+  } else if (0 != max_concurrency_
+             && (max_concurrency_ < MIN_MAX_CONCURRENCY || max_concurrency_ > MAX_MAX_CONCURRENCY)) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("max_concurrency"), "max_concurrency");
   }
   return ret;
 }
@@ -165,6 +207,7 @@ int ObAiModelEndpointInfo::merge_delta_endpoint(common::ObArenaAllocator &alloca
       EXTRACT_JSON_ELEM_STR("parameters", parameters_)
       EXTRACT_JSON_ELEM_STR("request_transform_fn", request_transform_fn_)
       EXTRACT_JSON_ELEM_STR("response_transform_fn", response_transform_fn_)
+      EXTRACT_JSON_ELEM_INT("max_concurrency", max_concurrency_)
       EXTRACT_JSON_ELEM_END()
     }
     iter.next();
@@ -192,7 +235,11 @@ int ObAiModelEndpointInfo::encrypt_access_key_(ObIAllocator &allocator, const Ob
 int ObAiModelEndpointInfo::decrypt_access_key_(ObIAllocator &allocator, const ObString &encrypted_access_key, ObString &unencrypted_access_key) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_write_string(allocator, encrypted_access_key, unencrypted_access_key))) {
+  if (encrypted_access_key.empty()) {
+    // Providers such as Ollama need no credential; a NULL ObString would make
+    // ob_write_string() fail with OB_ERR_NULL_VALUE, so short-circuit here.
+    unencrypted_access_key.reset();
+  } else if (OB_FAIL(ob_write_string(allocator, encrypted_access_key, unencrypted_access_key))) {
   }
   return ret;
 }
