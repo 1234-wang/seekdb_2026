@@ -161,6 +161,13 @@ void CtxLock::unlock_access()
 {
   access_lock_.unlock();
 }
+void CtxLock::unlock_for_dump()
+{
+  access_lock_.unlock();
+  flush_redo_lock_.unlock();
+  ctx_lock_.unlock();
+}
+
 void CtxLock::unlock_ctx()
 {
   const int64_t lock_start_ts = lock_start_ts_;
