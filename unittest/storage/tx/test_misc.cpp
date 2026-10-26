@@ -149,6 +149,41 @@ TEST_F(TestObTxMisc, replay_old_redo_does_not_regress_recovered_tx_ctx)
   ctx.is_inited_ = false;
 }
 
+TEST_F(TestObTxMisc, replay_takeover_aborts_table_lock_transaction)
+{
+  ObTxCtx ctx;
+  ObTxBufferNode table_lock_node;
+  const ObString lock_data = ObString::make_string("runtime_lock");
+
+  ctx.exec_info_.state_ = ObTxState::REDO_COMPLETE;
+  ctx.runtime_state_.clear_force_abort();
+  EXPECT_FALSE(ctx.should_abort_replayed_transaction_());
+
+  ASSERT_EQ(OB_SUCCESS,
+            table_lock_node.init(ObTxDataSourceType::TABLE_LOCK,
+                                 lock_data,
+                                 SCN::invalid_scn(),
+                                 ObTxSEQ(),
+                                 nullptr));
+  ASSERT_EQ(OB_SUCCESS,
+            ctx.exec_info_.multi_data_source_.push_back(table_lock_node));
+
+  // A REDO_COMPLETE table-lock transaction has no live owner after restart.
+  // It must be aborted even though a normal REDO_COMPLETE transaction resumes
+  // commit recovery.
+  EXPECT_TRUE(ctx.should_abort_replayed_transaction_());
+
+  ctx.exec_info_.state_ = ObTxState::INIT;
+  EXPECT_TRUE(ctx.should_abort_replayed_transaction_());
+
+  ctx.exec_info_.state_ = ObTxState::REDO_COMPLETE;
+  ctx.exec_info_.multi_data_source_.reset();
+  EXPECT_FALSE(ctx.should_abort_replayed_transaction_());
+
+  ctx.runtime_state_.set_force_abort();
+  EXPECT_TRUE(ctx.should_abort_replayed_transaction_());
+}
+
 }//end of unittest
 }//end of oceanbase
 

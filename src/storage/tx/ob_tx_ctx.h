@@ -163,6 +163,8 @@ public:
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
   int check_tx_status();
+  // Called only after replay is drained and local log append is enabled.
+  int takeover_from_replay();
   int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
   int check_with_tx_data(ObITxDataCheckFunctor &fn);
@@ -470,7 +472,8 @@ private:
   int replay_undo_action_to_tx_table_(ObUndoAction &undo_action, const share::SCN op_scn);
   int decide_state_log_barrier_type_(const ObTxLogType &state_log_type,
                                      logservice::ObReplayBarrierType &final_barrier_type);
-  bool is_contain_mds_type_(const ObTxDataSourceType target_type);
+  bool is_contain_mds_type_(const ObTxDataSourceType target_type) const;
+  bool should_abort_replayed_transaction_() const;
   int submit_multi_data_source_();
   int submit_multi_data_source_(ObTxLogBlock &log_block);
 
