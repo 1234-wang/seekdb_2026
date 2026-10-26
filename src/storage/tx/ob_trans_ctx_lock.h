@@ -75,6 +75,10 @@ CtxLock() : ctx_lock_(), access_lock_(), flush_redo_lock_(),
   int wrlock_flush_redo();
   int rdlock_flush_redo();
   void unlock_ctx();
+  // Release a lock that was acquired only to dump diagnostic state. Deferred
+  // unlock work (commit callback delivery, ELR reference reversion, opid
+  // advance) is intentionally skipped and left to the next real unlock.
+  void unlock_for_dump();
   void unlock_access();
   int try_wrlock_flush_redo();
   int try_rdlock_flush_redo();
