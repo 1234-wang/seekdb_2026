@@ -544,37 +544,6 @@ uint32_t ObCharset::locate(ObCollationType collation_type,
   return result;
 }
 
-static OB_INLINE bool try_fast_string_compare(
-    const ObCollationType collation_type,
-    const char *str1, const int64_t str1_len,
-    const char *str2, const int64_t str2_len,
-    int &result)
-{
-  bool compared = false;
-  if (OB_UNLIKELY(str1_len < 0 || str2_len < 0
-      || (nullptr == str1 && str1_len != 0)
-      || (nullptr == str2 && str2_len != 0))) {
-    // Leave invalid input and its diagnostics to the existing slow path.
-  } else if (CS_TYPE_BINARY == collation_type) {
-    // Binary collation has no padding or character weights, for either
-    // strcmp or strcmpsp. Preserve the original comparison result exactly.
-    const int64_t len = MIN(str1_len, str2_len);
-    const int cmp = len == 0 ? 0 : MEMCMP(str1, str2, len);
-    result = cmp != 0 ? cmp : static_cast<int>(str1_len - str2_len);
-    compared = true;
-  } else if ((CS_TYPE_UTF8MB4_GENERAL_CI == collation_type
-              || CS_TYPE_UTF8MB4_BIN == collation_type
-              || CS_TYPE_UTF8MB4_UNICODE_CI == collation_type)
-      && str1_len == str2_len
-      && (str1_len == 0 || str1 == str2 || MEMCMP(str1, str2, str1_len) == 0)) {
-    // Identical bytes are equal under all three supported UTF-8 collations.
-    // Unequal strings still use the full collation and padding rules below.
-    result = 0;
-    compared = true;
-  }
-  return compared;
-}
-
 int ObCharset::strcmp(ObCollationType collation_type,
                       const char *str1,
                       int64_t str1_len,
@@ -582,8 +551,7 @@ int ObCharset::strcmp(ObCollationType collation_type,
                       int64_t str2_len)
 {
   int result = 0;
-  if (try_fast_string_compare(collation_type, str1, str1_len, str2, str2_len, result)) {
-  } else if (is_argument_valid(collation_type, str1, str1_len, str2, str2_len)) {
+  if (is_argument_valid(collation_type, str1, str1_len, str2, str2_len)) {
     const ObCharsetInfo *cs = get_charset(collation_type);
     const bool t_is_prefix = false;
     result = cs->coll->strnncoll(cs,
@@ -603,8 +571,7 @@ int ObCharset::strcmpsp(ObCollationType collation_type,
                         bool cmp_endspace)
 {
   int result = 0;
-  if (try_fast_string_compare(collation_type, str1, str1_len, str2, str2_len, result)) {
-  } else if (is_argument_valid(collation_type, str1, str1_len, str2, str2_len)) {
+  if (is_argument_valid(collation_type, str1, str1_len, str2, str2_len)) {
     const ObCharsetInfo *cs = get_charset(collation_type);
     result = cs->coll->strnncollsp(cs,
                                 reinterpret_cast<const unsigned char *>(str1),
