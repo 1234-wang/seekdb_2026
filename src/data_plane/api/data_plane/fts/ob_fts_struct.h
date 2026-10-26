@@ -51,7 +51,10 @@ private:
   ObObjMeta meta_;
 };
 
-typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
+// Per-document/query scratch state owned by the caller. Tokenizers, optimizer
+// and retrieval code construct these maps on the stack and consume them
+// synchronously, without publishing the map to other workers.
+typedef common::hash::ObHashMap<ObFTWord, int64_t, common::hash::NoPthreadDefendMode> ObFTWordMap;
 
 class ObAddWordFlag final
 {
