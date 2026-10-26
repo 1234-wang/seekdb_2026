@@ -205,7 +205,10 @@ cc_library(
     deps = _OBSERVER_HEADER_NATIVE_DEPS,
     features = ["layering_check"],
     tags = ["manual"],
-    visibility = ["//src/wasm:__pkg__"],
+    visibility = [
+        "//src/wasm:__pkg__",
+        "//unittest:__subpackages__",
+    ],
 )
 
 
@@ -242,6 +245,7 @@ grouped_unity_cc_library(
     split_unity_groups = True,
     features = ["layering_check"],
     tags = ["manual"],
+    visibility = ["//unittest:__subpackages__"],
 )
 
 # SQL owns the retrieval lifecycle facade; this composition object owns the

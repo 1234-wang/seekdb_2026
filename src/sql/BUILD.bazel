@@ -202,7 +202,10 @@ cc_library(
     ],
     implementation_deps = _SQL_PRIVATE_HEADER_SHARE_DEPS,
     tags = ["manual"],
-    visibility = ["//src/sql:__subpackages__"],
+    visibility = [
+        "//src/sql:__subpackages__",
+        "//unittest:__subpackages__",
+    ],
 )
 
 _SQL_RUNTIME_UNITY_GROUPS = groups_without(
@@ -421,5 +424,8 @@ cc_library(
         ":sql_runtime_simd",
     ],
     tags = ["manual"],
-    visibility = ["//src/observer:__pkg__"],
+    visibility = [
+        "//src/observer:__pkg__",
+        "//unittest:__subpackages__",
+    ],
 )

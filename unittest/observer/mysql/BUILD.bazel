@@ -1,0 +1,26 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//bazel:defs.bzl", "cc_library")
+
+package(default_testonly = True)
+
+cc_library(
+    name = "pl_composite_protocol_cases",
+    srcs = ["test_pl_composite_protocol.cpp"],
+    alwayslink = True,
+    deps = [
+        "//bazel/third_party:gtest",
+        "//src/observer:observer_internal_interface",
+        "//src/observer:observer_runtime",
+        "//src/sql:sql_objects",
+        "//src/pl:pl_runtime",
+        "//rust:sql_nio",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+cc_test(
+    name = "test_pl_composite_protocol",
+    linkstatic = True,
+    deps = [":pl_composite_protocol_cases"],
+    target_compatible_with = ["@platforms//os:linux"],
+)

@@ -199,6 +199,7 @@ grouped_unity_cc_library(
     split_unity_groups = True,
     features = ["layering_check"],
     tags = ["manual"],
+    visibility = ["//unittest:__subpackages__"],
 )
 
 grouped_unity_cc_library(
