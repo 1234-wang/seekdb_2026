@@ -2375,14 +2375,19 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       expr->get_param_expr(0) = child;
       trans_happened = true;
     } else {
-      // size of not is even
+            // size of not is even
       // not(not c1 > 1)) -> c1>1
       ObRawExpr *temp = NULL;
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(cur, temp, *expr_factory))) {
       } else if (OB_ISNULL(temp)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
+                            *expr_factory, expr, temp, ctx_->session_info_))) {
       } else {
+        // NOT yields int32, while predicates such as LIKE yield int64. Keep the
+        // replaced expression's result type so formalizing the parent does not
+        // invalidate casts already added to the other operands (#1477).
         expr = temp;
         is_valid = false;
         trans_happened = true;
