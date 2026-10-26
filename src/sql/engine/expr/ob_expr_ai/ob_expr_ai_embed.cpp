@@ -54,14 +54,13 @@ int ObExprAIEmbed::calc_result_typeN(ObExprResType &type,
   } else {
     types_stack[MODEL_IDX].set_calc_type(ObVarcharType);
     types_stack[MODEL_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-    if (ob_is_text_tc(types_stack[CONTENT_IDX].get_type())) {
-      // lob content is read out at eval time, keep the original type here
+    if (!ob_is_text_tc(types_stack[CONTENT_IDX].get_type())) {
+      types_stack[CONTENT_IDX].set_calc_type(ObVarcharType);
+      types_stack[CONTENT_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else {
-    types_stack[CONTENT_IDX].set_calc_type(ObVarcharType);
-    types_stack[CONTENT_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      // lob content is read out at eval time, keep the original type here
     }
-    if (OB_FAIL(ret)) {
-    } else if (param_num == 3) {
+    if (param_num == 3) {
       if (ob_is_integer_type(types_stack[DIM_IDX].get_type())) {
         types_stack[DIM_IDX].set_calc_type(ObIntType);
         types_stack[DIM_IDX].set_precision(10);
@@ -72,10 +71,10 @@ int ObExprAIEmbed::calc_result_typeN(ObExprResType &type,
       }
     }
     if (OB_SUCC(ret)) {
-    type.set_varchar();
-    type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    type.set_collation_level(CS_LEVEL_COERCIBLE);
-  }
+      type.set_varchar();
+      type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      type.set_collation_level(CS_LEVEL_COERCIBLE);
+    }
   }
   return ret;
 }
