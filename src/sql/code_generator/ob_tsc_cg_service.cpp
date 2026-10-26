@@ -3753,6 +3753,23 @@ int ObTscCgService::generate_rowkey_domain_id_ctdef(
   return ret;
 }
 
+int ObTscCgService::check_relevance_projection(ObDASBaseCtDef *scan_ctdef, bool &has_relevance_proj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_ctdef)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (has_relevance_proj) {
+  } else if (ObDASOpType::DAS_OP_IR_SCAN == scan_ctdef->op_type_
+             && static_cast<ObDASIRScanCtDef *>(scan_ctdef)->need_proj_relevance_score()) {
+    has_relevance_proj = true;
+  } else if (ObDASOpType::DAS_OP_IR_SCAN != scan_ctdef->op_type_) {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_relevance_proj && i < scan_ctdef->children_cnt_; ++i) {
+      ret = SMART_CALL(check_relevance_projection(scan_ctdef->children_[i], has_relevance_proj));
+    }
+  }
+  return ret;
+}
+
 int ObTscCgService::check_lookup_iter_type(ObDASBaseCtDef *scan_ctdef, bool &need_proj_relevance_score) {
   int ret = OB_SUCCESS;
   ObDASIRScanCtDef *ctdef = NULL;
@@ -3897,7 +3914,13 @@ int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
       }
     }
 
+    bool has_relevance_proj = false;
     if (OB_FAIL(ret)) {
+    } else if (lookup_ctdef->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP
+               && OB_FAIL(check_relevance_projection(scan_ctdef, has_relevance_proj))) {
+    } else if (lookup_ctdef->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP && !has_relevance_proj) {
+      // nothing to project from the index side, the looked up rows provide all columns; positional
+      // projection would also be wrong once filters are pushed into the lookup
     } else if (lookup_ctdef->op_type_ == ObDASOpType::DAS_OP_INDEX_PROJ_LOOKUP) {
       ObDASIndexProjLookupCtDef *cache_lookup_ctdef = static_cast<ObDASIndexProjLookupCtDef* >(lookup_ctdef);
       if (OB_ISNULL(cache_lookup_ctdef)) {

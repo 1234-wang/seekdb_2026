@@ -12034,7 +12034,8 @@ int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &scan_mat
   } else if (OB_FAIL(prepare_text_retrieval_info(table_scan->get_real_ref_table_id(),
                                                  table_scan->get_index_table_id(),
                                                  match_against,
-                                                 table_scan->get_text_retrieval_info()))) {
+                                                 table_scan->get_text_retrieval_info(),
+                                                 true /*allow_skip_relevance*/))) {
   } else {
     ObTextRetrievalInfo &tr_info = table_scan->get_text_retrieval_info();
     tr_info.match_expr_ = match_against;
@@ -12172,7 +12173,8 @@ int ObLogPlan::prepare_text_retrieval_merge(const ObIArray<ObRawExpr *> &merge_m
 int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
                                            const uint64_t index_table_id,
                                            ObMatchFunRawExpr *match_against,
-                                           ObTextRetrievalInfo &tr_info)
+                                           ObTextRetrievalInfo &tr_info,
+                                           const bool allow_skip_relevance)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard *schema_guard = NULL;
@@ -12252,7 +12254,7 @@ int ObLogPlan::prepare_text_retrieval_info(const uint64_t ref_table_id,
       }
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || !allow_skip_relevance) {
   } else if (NATURAL_LANGUAGE_MODE != match_against->get_mode_flag()
              || match_against->is_es_match()) {
     // boolean / phrase modes decide matching documents with the per-token state
