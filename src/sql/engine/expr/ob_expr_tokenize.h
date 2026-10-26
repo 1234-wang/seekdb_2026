@@ -71,6 +71,9 @@ private:
     mutable ObArenaAllocator allocator_;
     ObString parser_name_;
     ObString properties_;
+    // The parsed parser property. It is parsed once and then reused, so that
+    // the JSON properties are not rebuilt and reparsed on every call.
+    storage::ObFTParserProperty parser_property_;
     ObObjMeta meta_;
     ObString fulltext_;
     enum OUTPUT_MODE
