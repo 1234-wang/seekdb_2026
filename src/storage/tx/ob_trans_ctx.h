@@ -21,7 +21,6 @@
 #include "lib/lock/ob_small_spin_lock.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "lib/utility/ob_unify_serialize.h"
-#include "lib/oblog/ob_trace_log.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/list/ob_dlink_node.h"
 #include "ob_trans_define.h"
@@ -88,7 +87,7 @@ class ObTransCtx: public share::ObLightHashLink<ObTransCtx>
 public:
   ObTransCtx()
       : trans_expired_time_(0), ctx_create_time_(0),
-      trans_service_(NULL), tlog_(NULL),
+      trans_service_(NULL),
       ls_tx_ctx_mgr_(NULL),
       session_id_(UINT32_MAX),
       stc_(0), part_trans_action_(ObPartTransAction::UNKNOWN),
@@ -134,7 +133,7 @@ public:
   void set_exiting() { is_exiting_ = true; }
   bool is_exiting() const { return is_exiting_; }
   int64_t get_trans_expired_time() const { return trans_expired_time_; }
-  
+
   const ObTransID &get_trans_id() const { return trans_id_; }
   int64_t get_ctx_create_time() const { return ctx_create_time_; }
   int64_t get_trans_start_time() const { return ctx_create_time_; }// TODO: return real trans start time
@@ -149,7 +148,7 @@ public:
   // thread unsafe
   VIRTUAL_TO_STRING_KV(KP(this), K_(ref),
                        K_(trans_id),
-                       
+
                        K_(is_exiting),
                        K_(trans_expired_time),
                        K_(trans_need_wait_wrap),
@@ -157,8 +156,7 @@ public:
                        K_(ctx_create_time));
 protected:
   void set_exiting_();
-  void print_trace_log_();
-  void print_trace_log_if_necessary_();
+  void print_diagnostic_state_if_necessary_();
   bool is_trans_expired_() const { return ObClockGenerator::getRealClock() >= trans_expired_time_; }
   bool is_slow_query_() const;
   void set_stc_(const MonotonicTs stc);
@@ -211,7 +209,7 @@ protected:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransCtx);
 protected:
-  
+
   ObTransID trans_id_;
 
   common::ObAddr addr_;
@@ -220,8 +218,6 @@ protected:
   int64_t ctx_create_time_;
   ObTransService *trans_service_;
   mutable CtxLock lock_;
-  ObTransTraceLog trace_log_;
-  ObTransTraceLog *tlog_;
   ObLSTxCtxMgr *ls_tx_ctx_mgr_;
   uint32_t session_id_;
   // set stc only by set_stc_xxx, and
