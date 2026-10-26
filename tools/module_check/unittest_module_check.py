@@ -28,6 +28,9 @@ INCLUDE_PATTERN = re.compile(
     r'^[ \t]*#[ \t]*include[ \t]*(?:"([^"]+)"|<([^>]+)>)'
 )
 IF_ZERO_PATTERN = re.compile(r"^[ \t]*#[ \t]*if[ \t]+0[ \t]*(?://.*)?$")
+ELIF_ZERO_PATTERN = re.compile(
+    r"^[ \t]*#[ \t]*elif[ \t]+0[ \t]*(?://.*)?$"
+)
 IF_PATTERN = re.compile(r"^[ \t]*#[ \t]*(if|ifdef|ifndef)\b")
 ELIF_PATTERN = re.compile(r"^[ \t]*#[ \t]*(elif|else)\b")
 ENDIF_PATTERN = re.compile(r"^[ \t]*#[ \t]*endif\b")
@@ -231,24 +234,26 @@ def _source_without_comments(source: str) -> str:
 
 def iter_active_includes(source: str) -> Iterator[Tuple[int, str]]:
     """Yield direct includes outside comments and literal #if 0 blocks."""
-    active_stack: List[Tuple[bool, bool]] = []
+    active_stack: List[bool] = []
     active = True
     in_block_comment = False
     for line_number, raw_line in enumerate(source.splitlines(), 1):
         line, in_block_comment = _strip_comments(raw_line, in_block_comment)
         if IF_ZERO_PATTERN.match(line):
-            active_stack.append((active, True))
+            active_stack.append(active)
             active = False
             continue
         if IF_PATTERN.match(line):
-            active_stack.append((active, False))
+            active_stack.append(active)
             continue
         if ELIF_PATTERN.match(line) and active_stack:
-            parent_active, literal_zero = active_stack[-1]
-            active = parent_active if literal_zero else active
+            # Unknown conditions remain potentially active, but literal zero
+            # branches never contribute dependencies. Restore the parent state
+            # for each sibling so an inactive elif cannot hide a later else.
+            active = active_stack[-1] and not ELIF_ZERO_PATTERN.match(line)
             continue
         if ENDIF_PATTERN.match(line) and active_stack:
-            parent_active, _ = active_stack.pop()
+            parent_active = active_stack.pop()
             active = parent_active
             continue
         if not active:

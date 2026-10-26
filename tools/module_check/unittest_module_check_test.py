@@ -127,6 +127,30 @@ class UnitTestModuleCheckTest(unittest.TestCase):
         )
         self.assertEqual((), self.violations())
 
+    def test_literal_elif_zero_includes_are_ignored(self):
+        for condition in ("0", "defined(FEATURE)"):
+            with self.subTest(condition=condition):
+                source = (
+                    '#if %s\n#include "sql/first.h"\n'
+                    '#elif 0  // deliberately disabled\n'
+                    '#include "storage/disabled.h"\n'
+                    '#else\n#include "sql/fallback.h"\n#endif\n'
+                ) % condition
+                includes = list(checker.iter_active_includes(source))
+                expected = [(6, "sql/fallback.h")]
+                if condition != "0":
+                    expected.insert(0, (2, "sql/first.h"))
+                self.assertEqual(expected, includes)
+
+    def test_elif_zero_preserves_inactive_parent(self):
+        source = (
+            '#if 0\n#if FEATURE\n#include "storage/first.h"\n'
+            '#elif 0\n#include "storage/second.h"\n'
+            '#else\n#include "storage/third.h"\n#endif\n#endif\n'
+            '#include "sql/active.h"\n'
+        )
+        self.assertEqual([(10, "sql/active.h")], list(checker.iter_active_includes(source)))
+
     def test_peer_build_dependency_is_rejected_but_runtime_is_allowed(self):
         self.write("unittest/sql/test_ok.cpp", '#include "sql/ok.h"\n')
         self.write(
