@@ -3763,7 +3763,9 @@ int ObTscCgService::check_lookup_iter_type(ObDASBaseCtDef *scan_ctdef, bool &nee
   } else {
     if (scan_ctdef->op_type_ == ObDASOpType::DAS_OP_IR_SCAN) {
       ctdef = static_cast<ObDASIRScanCtDef*>(scan_ctdef);
-      if (OB_NOT_NULL(ctdef) && ctdef->need_proj_relevance_score()) {
+      // the text retrieval iterator tree is always looked up with the index projecting lookup,
+      // also when no relevance score is calculated
+      if (OB_NOT_NULL(ctdef)) {
         need_proj_relevance_score = true;
       }
     }
