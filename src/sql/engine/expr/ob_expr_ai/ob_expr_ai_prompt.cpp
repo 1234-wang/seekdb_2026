@@ -35,6 +35,12 @@ static bool is_text_lob_type(const ObObjType type, const ObCollationType cs_type
   return ob_is_text_tc(type) && !ob_is_blob(type, cs_type);
 }
 
+// a blob value is a byte string as well, it is read through the lob reader
+static bool is_lob_type(const ObObjType type)
+{
+  return ob_is_text_tc(type);
+}
+
 ObExprAIPrompt::ObExprAIPrompt(common::ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,
                     T_FUN_SYS_AI_PROMPT,
@@ -59,13 +65,14 @@ int ObExprAIPrompt::calc_result_typeN(ObExprResType &type,
   if (ob_is_string_tc(template_type.get_type())) {
     types_stack[0].set_calc_type(ObVarcharType);
     types_stack[0].set_collation_type(CS_TYPE_UTF8MB4_BIN);
-  } else if (is_text_lob_type(template_type.get_type(), template_type.get_collation_type())) {
+  } else if (is_lob_type(template_type.get_type())) {
     // the lob template is read at runtime, so the lob type is kept
-    types_stack[0].set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    if (is_text_lob_type(template_type.get_type(), template_type.get_collation_type())) {
+      types_stack[0].set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    }
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid template type", K(ret), K(template_type.get_type()));
-    LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ai_prompt, template must be a string type");
   }
 
   for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
@@ -73,15 +80,16 @@ int ObExprAIPrompt::calc_result_typeN(ObExprResType &type,
     if (ob_is_string_tc(arg_type)) {
       types_stack[i].set_calc_type(ObVarcharType);
       types_stack[i].set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    } else if (is_text_lob_type(types_stack[i].get_type(), types_stack[i].get_collation_type())) {
+    } else if (is_lob_type(types_stack[i].get_type())) {
       // the lob argument is read at runtime, so the lob type is kept
-      types_stack[i].set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      if (is_text_lob_type(types_stack[i].get_type(), types_stack[i].get_collation_type())) {
+        types_stack[i].set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      }
     } else if (ob_is_json(arg_type)) {
       // the json argument is kept as a json value
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("invalid data type", K(ret), K(arg_type));
-      LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ai_prompt, argument must be a string or json type");
     }
   }
 
@@ -110,7 +118,7 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid template argument", K(ret), K(arg0->datum_meta_.type_));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_prompt, template is null");
-  } else if (is_text_lob_type(arg0->datum_meta_.type_, arg0->datum_meta_.cs_type_)) {
+  } else if (is_lob_type(arg0->datum_meta_.type_)) {
     // the template may be stored as a lob, the real data has to be read
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(ctx.exec_ctx_, tmp_allocator,
                 *template_datum, arg0->datum_meta_, arg0->obj_meta_.has_lob_header(), template_str))) {
@@ -143,8 +151,7 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       } else if (datum->is_null()) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("invalid data type", K(ret), K(arg->datum_meta_.type_));
-        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "ai_prompt, argument is null");
-      } else if (is_text_lob_type(arg->datum_meta_.type_, arg->datum_meta_.cs_type_)) {
+      } else if (is_lob_type(arg->datum_meta_.type_)) {
         // the argument may be stored as a lob, the real data has to be read
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(ctx.exec_ctx_, tmp_allocator,
                     *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), arg_str))) {
