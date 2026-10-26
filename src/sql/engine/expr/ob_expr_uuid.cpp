@@ -25,6 +25,8 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
@@ -45,6 +47,40 @@ namespace oceanbase
 {
 namespace sql
 {
+
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__ANDROID__)
+// RFC 4122 permits a randomly generated node identifier when a hardware
+// address is unavailable.  Restricted containers can deny both interface
+// enumeration and SIOCGIFHWADDR, so keep UUID generation usable there too.
+static int generate_random_uuid_node(unsigned char *node)
+{
+  int ret = OB_SUCCESS;
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to open random source for UUID node", K(ret), K(errno));
+  } else {
+    int64_t offset = 0;
+    while (offset < 6) {
+      const ssize_t n = read(fd, node + offset, 6 - offset);
+      if (n <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to read random source for UUID node", K(ret), K(errno), K(offset));
+        break;
+      }
+      offset += n;
+    }
+    close(fd);
+    if (OB_SUCC(ret)) {
+      // The multicast bit marks this as a locally generated node id rather
+      // than a real IEEE 802 MAC address.
+      node[0] |= 0x01;
+      LOG_INFO("using random UUID node ID because no MAC address is available");
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObBigEndian::put_uint16(unsigned char *b, uint16_t v)
 {
@@ -192,13 +228,12 @@ int ObUUIDNode::init()
   char buf[1024];
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("socket failed; trying random UUID node", K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF; trying random UUID node", K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
@@ -223,14 +258,22 @@ int ObUUIDNode::init()
           }
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
+      if (!mac_addr_found) {
+        ret = generate_random_uuid_node(mac_addr_);
       } else {
         is_inited_ = true;
       }
     }
     close(sock);
+    if (OB_SUCC(ret) && !is_inited_) {
+      is_inited_ = true;
+    }
+  }
+  if (OB_SUCC(ret) && !is_inited_) {
+    ret = generate_random_uuid_node(mac_addr_);
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
   }
 #endif
   return ret;
