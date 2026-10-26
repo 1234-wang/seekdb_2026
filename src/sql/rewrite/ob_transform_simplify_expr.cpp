@@ -2630,13 +2630,11 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
     //select * from t1 where c1 > 1 and c1 > 1
     //like above stmt, and expr in level 0 is process here
     ObSEArray<ObRawExpr *, 4> param_conds;
-    if (param_count <= 1) {
-      /* do nothing */
+    if (param_count <= 1 || (!deterministic_only && param_count > 100)) {
+      /* Keep the resource guard for the general, pairwise simplifier. */
     } else if (OB_FAIL(param_conds.assign(conditions))) {
     } else if (deterministic_only
                && OB_FAIL(do_remove_duplicate_exprs_by_hash(*query_ctx, param_conds))) {
-    } else if (param_count > 100) {
-      /* use too much resource and need add lots of constraints */
     } else if (!deterministic_only
                && OB_FAIL(do_remove_duplicate_exprs(*query_ctx, param_conds))) {
     } else if (param_conds.count() == conditions.count()) {
@@ -2682,11 +2680,11 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
       ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
       ObSEArray<ObRawExpr *, 4> param_conds;
       const int64_t param_count = op_expr->get_param_count();
-      if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
+      if (!deterministic_only && param_count > 100) {
+        /* Keep the resource guard for the general, pairwise simplifier. */
+      } else if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
       } else if (deterministic_only
                  && OB_FAIL(do_remove_duplicate_exprs_by_hash(query_ctx, param_conds))) {
-      } else if (param_count > 100) {
-        /* use too much resource and need add lots of constraints */
       } else if (!deterministic_only
                  && OB_FAIL(do_remove_duplicate_exprs(query_ctx, param_conds))) {
       } else if (param_conds.count() == op_expr->get_param_count()) {
@@ -2759,12 +2757,13 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs_by_hash(
     ObRawExpr *expr = exprs.at(i);
     ObRawExpr *seen_expr = NULL;
     bool is_duplicate = false;
-    const uint64_t expr_hash = OB_ISNULL(expr) ? 0 : expr->hash(0);
+    uint64_t expr_hash = 0;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
     } else if (!is_safe_to_deduplicate(*expr)) {
       // Preserve every evaluation of volatile, stateful, or side-effecting
       // expressions, even when their syntax is identical.
+    } else if (OB_FAIL(hash_dedup_expr(expr, expr_hash))) {
     } else if (OB_FAIL(seen_exprs.get_refactored(expr_hash, seen_expr))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = seen_exprs.set_refactored(expr_hash, expr);
@@ -2773,7 +2772,9 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs_by_hash(
       ret = OB_ERR_UNEXPECTED;
     } else {
       ObQuestionmarkEqualCtx cmp_ctx(true);
-      if (expr->same_as(*seen_expr, &cmp_ctx)) {
+      const bool same_expr = expr->same_as(*seen_expr, &cmp_ctx);
+      if (OB_FAIL(cmp_ctx.err_code_)) {
+      } else if (same_expr) {
         is_duplicate = true;
         if (!cmp_ctx.equal_pairs_.empty()
             && OB_FAIL(append(ctx_->equal_param_constraints_, cmp_ctx.equal_pairs_))) {
@@ -2786,14 +2787,19 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs_by_hash(
           ObRawExpr *candidate = unique_exprs.at(j);
           if (OB_ISNULL(candidate)) {
             ret = OB_ERR_UNEXPECTED;
-          } else if (candidate->hash(0) == expr_hash
-                     && is_safe_to_deduplicate(*candidate)) {
+          } else if (is_safe_to_deduplicate(*candidate)) {
+            uint64_t candidate_hash = 0;
             ObQuestionmarkEqualCtx collision_cmp_ctx(true);
-            if (expr->same_as(*candidate, &collision_cmp_ctx)) {
-              is_duplicate = true;
-              if (!collision_cmp_ctx.equal_pairs_.empty()
-                  && OB_FAIL(append(ctx_->equal_param_constraints_,
-                                    collision_cmp_ctx.equal_pairs_))) {
+            if (OB_FAIL(hash_dedup_expr(candidate, candidate_hash))) {
+            } else if (candidate_hash == expr_hash) {
+              const bool same_candidate = expr->same_as(*candidate, &collision_cmp_ctx);
+              if (OB_FAIL(collision_cmp_ctx.err_code_)) {
+              } else if (same_candidate) {
+                is_duplicate = true;
+                if (!collision_cmp_ctx.equal_pairs_.empty()
+                    && OB_FAIL(append(ctx_->equal_param_constraints_,
+                                      collision_cmp_ctx.equal_pairs_))) {
+                }
               }
             }
           }
@@ -2813,6 +2819,34 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs_by_hash(
     }
   }
   UNUSED(query_ctx);
+  return ret;
+}
+
+int ObTransformSimplifyExpr::hash_dedup_expr(const ObRawExpr *expr, uint64_t &expr_hash)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (expr->is_const_raw_expr()) {
+    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(expr);
+    expr_hash = common::do_hash(expr->get_expr_type(), expr_hash);
+    expr_hash = expr->get_result_type().hash(expr_hash);
+    // same_as compares parameter values, whereas the ordinary expression hash
+    // includes parameter positions. Equal predicates at different positions
+    // must reach the same bucket, with equality constraints guarding reuse.
+    expr_hash = common::do_hash(T_QUESTIONMARK == expr->get_expr_type()
+                                ? const_expr->get_param() : const_expr->get_value(),
+                              expr_hash);
+  } else if (0 == expr->get_param_count()) {
+    expr_hash = expr->hash(expr_hash);
+  } else {
+    expr_hash = common::do_hash(expr->get_expr_type(), expr_hash);
+    expr_hash = expr->get_result_type().hash(expr_hash);
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(hash_dedup_expr(expr->get_param_expr(i), expr_hash)))) {
+      }
+    }
+  }
   return ret;
 }
 

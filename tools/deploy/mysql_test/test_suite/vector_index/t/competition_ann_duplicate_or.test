@@ -37,4 +37,23 @@ while ($loop < 128)
 --eval EXPLAIN SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
 --eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
 --enable_query_log
+
+# Cross both the old 100-item guard and the proposed 256-item ANN ceiling.
+while ($loop < 1024)
+{
+  --let $predicate = $predicate OR age > 1000
+  --inc $loop
+}
+--disable_query_log
+--eval EXPLAIN SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
+--enable_query_log
+
+# Reuse one parameterized shape with a changed final value. The extra branch
+# must survive, even after an earlier execution deduplicated equal values.
+--disable_query_log
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate OR age > 1000 ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 6
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate OR age > 49 ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 6
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate OR age > 1000 ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 6
+--enable_query_log
 DROP TABLE t_competition_ann_duplicate_or;

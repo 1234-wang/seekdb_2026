@@ -17,6 +17,7 @@ INSERT INTO t_competition_ann_duplicate_or VALUES
   (4, 3, 40, '[0,0,1]'),
   (5, 2, 50, '[0.5,0.5,0]'),
   (6, 4, 60, '[0.2,0.2,0.6]');
+Query Plan
 =================================================================================================
 |ID|OPERATOR                               |NAME                          |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------------------------
@@ -28,6 +29,32 @@ Outputs & filters:
       access([t_competition_ann_duplicate_or.__pk_increment], [t_competition_ann_duplicate_or.category], [t_competition_ann_duplicate_or.age], [t_competition_ann_duplicate_or.id]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false],
       range_key([t_competition_ann_duplicate_or.__pk_increment]), range(MIN ; MAX)always true
+id
+1
+2
+Query Plan
+=================================================================================================
+|ID|OPERATOR                               |NAME                          |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t_competition_ann_duplicate_or|2       |3           |
+=================================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t_competition_ann_duplicate_or.id]), filter([t_competition_ann_duplicate_or.category = 1 OR t_competition_ann_duplicate_or.age > 1000]), rowset=16
+      access([t_competition_ann_duplicate_or.__pk_increment], [t_competition_ann_duplicate_or.category], [t_competition_ann_duplicate_or.age], [t_competition_ann_duplicate_or.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      range_key([t_competition_ann_duplicate_or.__pk_increment]), range(MIN ; MAX)always true
+id
+1
+2
+id
+1
+2
+id
+1
+2
+5
+6
 id
 1
 2
