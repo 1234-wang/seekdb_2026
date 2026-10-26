@@ -114,6 +114,11 @@ function mirror_create {
   fi
 
   [[ -f "$BASE_DIR/tools/deploy/obd/.seekdb_obd_plugin_version" ]] && obs_version=$(cat $BASE_DIR/tools/deploy/obd/.seekdb_obd_plugin_version)
+  
+  # Directory preparation succeeded, but mirror creation has not run yet.
+  # Reset the flag so an obd failure cannot be mistaken for success.
+  success=0
+
   obs_mirror_info=$(obd_exec mirror create -n $COMPONENT -p "$mirror_path" -V "$obs_version"  -t $tag -f) && success=1
   if [[ "$success" != "1" ]]
   then
