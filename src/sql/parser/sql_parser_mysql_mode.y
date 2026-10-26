@@ -274,7 +274,7 @@ END_P SET_VAR DELIMITER
 //-----------------------------reserved keyword end-------------------------------------------------
 %token <non_reserved_keyword>
 //-----------------------------non_reserved keyword begin-------------------------------------------
-        ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
+        ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI AI_SPLIT_DOCUMENT ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY 
@@ -292,7 +292,7 @@ END_P SET_VAR DELIMITER
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
         DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT
-        DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT_TABLE
+        DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT DICT_TABLE
         DIFF DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DYNAMIC_PARTITION_POLICY
 
@@ -302,7 +302,7 @@ END_P SET_VAR DELIMITER
 
         FAIL FAILOVER FAST FAULTS FILE_BLOCK_SIZE FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FORK FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID FILTER
-        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
+        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION FULLTEXT_DICT
 
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUP_CONCAT GROUPING GTS
         GLOBAL_NAME GLOBAL_ALIAS
@@ -537,7 +537,7 @@ END_P SET_VAR DELIMITER
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> opt_rebuild_column_store
 %type <node> vec_index_params vec_index_param vec_index_param_value opt_with_vector_index_parameters
-%type <node> json_table_expr rb_iterate_expr unnest_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def 
+%type <node> json_table_expr rb_iterate_expr unnest_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def ai_split_document_expr
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_clause table_values_clause_with_order_by_and_limit values_row_list row_value
@@ -6859,7 +6859,12 @@ table_option_list_space_seperated
 ;
 
 table_option:
-TABLE_MODE opt_equal_mark STRING_VALUE
+FULLTEXT_DICT opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FULLTEXT_DICT, 1, $3);
+}
+| TABLE_MODE opt_equal_mark STRING_VALUE
 {
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_MODE, 1, $3);
@@ -12974,6 +12979,10 @@ tbl_name
 {
   $$ = $1;
 }
+| ai_split_document_expr
+{
+  $$ = $1;
+}
 | '(' table_references ')'
 {
   $$ = $2;
@@ -18445,6 +18454,12 @@ alter_with_opt_hint SYSTEM REFRESH MEMORY STAT
   malloc_non_terminal_node($$, result->malloc_pool_, T_REFRESH_MEMORY_STAT, 1, NULL);
 }
 |
+alter_with_opt_hint SYSTEM REFRESH FULLTEXT DICT relation_factor
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REFRESH_FULLTEXT_DICT, 1, $6);
+}
+|
 alter_with_opt_hint SYSTEM WASH MEMORY FRAGMENTATION
 {
   (void)($1);
@@ -21024,6 +21039,45 @@ JSON_TABLE '(' simple_expr ',' literal mock_jt_on_error_on_empty COLUMNS '(' jt_
 }
 ;
 
+ai_split_document_expr:
+  AI_SPLIT_DOCUMENT '(' opt_expr_as_list ')'
+{
+  ParseNode *params = NULL;
+  if (NULL != $3) {
+    merge_nodes(params, result, T_EXPR_LIST, $3);
+  }
+  ParseNode *func_name = NULL;
+  make_name_node(func_name, result->malloc_pool_, "ai_split_document");
+  ParseNode *func_expr = NULL;
+  malloc_non_terminal_node(func_expr, result->malloc_pool_, T_FUN_SYS, 2, func_name, params);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, func_expr, NULL);
+}
+| AI_SPLIT_DOCUMENT '(' opt_expr_as_list ')' relation_name
+{
+  ParseNode *params = NULL;
+  if (NULL != $3) {
+    merge_nodes(params, result, T_EXPR_LIST, $3);
+  }
+  ParseNode *func_name = NULL;
+  make_name_node(func_name, result->malloc_pool_, "ai_split_document");
+  ParseNode *func_expr = NULL;
+  malloc_non_terminal_node(func_expr, result->malloc_pool_, T_FUN_SYS, 2, func_name, params);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, func_expr, $5);
+}
+| AI_SPLIT_DOCUMENT '(' opt_expr_as_list ')' AS relation_name
+{
+  ParseNode *params = NULL;
+  if (NULL != $3) {
+    merge_nodes(params, result, T_EXPR_LIST, $3);
+  }
+  ParseNode *func_name = NULL;
+  make_name_node(func_name, result->malloc_pool_, "ai_split_document");
+  ParseNode *func_expr = NULL;
+  malloc_non_terminal_node(func_expr, result->malloc_pool_, T_FUN_SYS, 2, func_name, params);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_COLLECTION_EXPRESSION, 2, func_expr, $6);
+}
+;
+
 mock_jt_on_error_on_empty:
 {
   ParseNode *emp_node = NULL;
@@ -22004,6 +22058,7 @@ ACCESS_INFO
 |       ADMIN
 |       AFTER
 |       AI
+|       AI_SPLIT_DOCUMENT
 |       AGAINST
 |       AGGREGATE
 |       ALGORITHM
@@ -22175,6 +22230,7 @@ ACCESS_INFO
 |       DESCRIPTION
 |       DEMAND
 |       DIAGNOSTICS
+|       DICT
 |       DICT_TABLE
 |       DIFF
 |       DIRECTORY
@@ -22265,6 +22321,7 @@ ACCESS_INFO
 |       FREQUENCY
 |       FUNCTION
 |       FULL %prec HIGHER_PARENS
+|       FULLTEXT_DICT
 |       GENERAL
 |       GEOMETRY
 |       GEOMCOLLECTION
