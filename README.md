@@ -553,6 +553,7 @@ seekdb's hybrid retrieval + multi-model engine also fits classic AI workloads:
 ## 🛠️ Development
 
 ### Build from Source
+OB-P:rFKZb24StSUHCb_tPr-Sfg
 
 Before building, please install the required toolchain and dependencies for your operating system. See [Install Toolchain](docs/developer-guide/en/toolchain.md) for detailed instructions.
 
