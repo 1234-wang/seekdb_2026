@@ -1,0 +1,27 @@
+# owner: database-competition
+# owner group: SQL
+# tags: sql,resolver,subquery
+# description: IFNULL with a boolean scalar subquery and a double negated LIKE must not report an internal error.
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+--echo # the reported failure: an even number of negations
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE "x")));
+
+--echo # control case: one negation
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(1 LIKE "x"));
+
+--echo # control case: a literal instead of a scalar subquery
+SELECT 1 FROM dual WHERE IFNULL(FALSE, !(!(1 LIKE "x")));
+
+--echo # three and four negations
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(!(1 LIKE "x"))));
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(!(!(1 LIKE "x")))));
+
+--echo # coalesce is not affected
+SELECT 1 FROM dual WHERE COALESCE((SELECT FALSE), !(!(1 LIKE "x")));
+
+--echo # the reported statement returns no rows
+SELECT COUNT(*) AS row_count FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE "x")));

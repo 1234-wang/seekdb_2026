@@ -408,6 +408,7 @@ psmall_test=[
 'subquery.rqg_subquery_semijoin_mismatch',
 'subquery.rqg_subquery_semijoin_nested_timeout',
 'subquery.spf_bug13044302',
+'subquery.spf_bug1477_ifnull_subquery_cast',
 'subquery.subquery_sj_firstmatch',
 'subquery.subquery_sj_innodb',
 'substring_index',
