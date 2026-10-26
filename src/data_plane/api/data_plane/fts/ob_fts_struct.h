@@ -51,7 +51,20 @@ private:
   ObObjMeta meta_;
 };
 
-typedef common::hash::ObHashMap<ObFTWord, int64_t> ObFTWordMap;
+// Each map is local to document/query tokenization. Neither its buckets nor
+// its node allocator are shared between workers, so per-token bucket latches
+// and allocator spinlocks are unnecessary.
+using FTWordMapNode = common::hash::HashMapTypes<ObFTWord, int64_t>::AllocType;
+using FTWordMapNodeAllocator = common::hash::SimpleAllocer<
+    FTWordMapNode,
+    common::hash::NodeNumTraits<FTWordMapNode>::NODE_NUM,
+    common::hash::NoPthreadDefendMode>;
+typedef common::hash::ObHashMap<ObFTWord,
+                              int64_t,
+                              common::hash::NoPthreadDefendMode,
+                              common::hash::hash_func<ObFTWord>,
+                              common::hash::equal_to<ObFTWord>,
+                              FTWordMapNodeAllocator> ObFTWordMap;
 
 class ObAddWordFlag final
 {
