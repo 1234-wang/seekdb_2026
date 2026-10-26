@@ -416,7 +416,8 @@ int ObSRTaaTIterImpl::load_next_hash_map()
           if (OB_FAIL(map->set_or_update(id, cur_relevance, add))) {
           }
         } else {
-          if (OB_FAIL(map->set_refactored(id, 1.0, 0 /* overwrite */))) {
+          // An ID-only union may encounter the same document in many terms.
+          if (OB_FAIL(map->set_refactored(id, 1.0, 1 /* overwrite */))) {
           }
         }
       }
