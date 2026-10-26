@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -33,8 +34,15 @@ def version_source(template, status_file, output):
         "BUILD_INFO": "",
     }
     source = Path(template).read_text(encoding="utf-8")
-    for key, value in values.items():
-        source = source.replace("@" + key + "@", value)
+
+    def replace_value(match):
+        value = values.get(match.group(1))
+        if value is None:
+            return match.group(0)
+        return value.replace("\\", "\\\\").replace('"', '\\"')
+
+    # Replace only template tokens, never tokens introduced by a Git ref.
+    source = re.sub(r"@([A-Z_]+)@", replace_value, source)
     with open(output, "w", encoding="utf-8", newline="\n") as stream:
         stream.write(source)
 
