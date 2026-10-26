@@ -1,0 +1,145 @@
+# Regression for issue #1534: implied integer bounds must not be evaluated for
+# every candidate of an approximate vector query.
+--disable_warnings
+drop table if exists t_ann_ranges;
+--enable_warnings
+create table t_ann_ranges (
+  id int primary key,
+  embedding vector(3) not null,
+  age int,
+  other_age int,
+  key idx_age(age)
+) organization heap;
+insert into t_ann_ranges values
+  (1, '[1,0,0]', -10, 1),
+  (2, '[2,0,0]', 1, 20),
+  (3, '[3,0,0]', 5, 3),
+  (4, '[4,0,0]', 9, 40),
+  (5, '[5,0,0]', 10, 5),
+  (6, '[6,0,0]', 20, 60),
+  (7, '[7,0,0]', null, 7),
+  (8, '[8,0,0]', null, null),
+  (9, '[9,0,0]', 30, 9);
+create vector index idx_vec on t_ann_ranges(embedding)
+  with (distance=l2, type=hnsw, lib=vsag, sync_mode=immediate);
+
+--echo # The filter is reduced, while the vector index and tight range remain.
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and (age < 20 and (age <= 25 and age < 30))
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and (age < 20 and (age <= 25 and age < 30))
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select id from t_ann_ranges where age < 10
+order by l2_distance(embedding, '[0,0,0]') limit 9;
+
+--echo # A tighter predicate may appear last; equal endpoints retain strictness.
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age <= 20 and age <= 10 and age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age <= 20 and age <= 10 and age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 20 and age <= 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+
+--echo # Normalize reversed operands and simplify lower bounds independently.
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where 20 > age and 10 > age and age >= 1 and age >= 5 and age > 5
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where 20 > age and 10 > age and age >= 1 and age >= 5 and age > 5
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+
+--echo # Different columns, OR branches, and contradictory bounds remain valid.
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and other_age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 or age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age > 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where (age < 10 and age < 20) or age is null
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+
+--echo # NO_REWRITE retains both bounds.
+explain basic select /*+ no_rewrite index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+
+--echo # The session-level transformation switch also retains both bounds.
+set @old_transformation = @@ob_enable_transformation;
+set ob_enable_transformation = 0;
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+set ob_enable_transformation = @old_transformation;
+
+--echo # Cached parameterized plans must revalidate the bound implication.
+prepare range_stmt from 'select /*+ index(t idx_age) */ id from t_ann_ranges t where age < ? and age < ? order by l2_distance(embedding, ''[0,0,0]'') approximate limit 9';
+set @a = 10, @b = 20;
+execute range_stmt using @a, @b;
+set @a = 20, @b = 5;
+execute range_stmt using @a, @b;
+set @a = 10, @b = null;
+execute range_stmt using @a, @b;
+set @a = null, @b = 20;
+execute range_stmt using @a, @b;
+set @a = 20, @b = 10;
+execute range_stmt using @a, @b;
+set @a = '20', @b = '5';
+execute range_stmt using @a, @b;
+set @a = 18446744073709551615, @b = 10;
+execute range_stmt using @a, @b;
+deallocate prepare range_stmt;
+
+prepare strict_stmt from 'select /*+ index(t idx_age) */ id from t_ann_ranges t where age <= ? and age < ? order by l2_distance(embedding, ''[0,0,0]'') approximate limit 9';
+set @a = 10, @b = 10;
+execute strict_stmt using @a, @b;
+set @a = 10, @b = 20;
+execute strict_stmt using @a, @b;
+set @a = 20, @b = 10;
+execute strict_stmt using @a, @b;
+deallocate prepare strict_stmt;
+
+--echo # Reuse an automatically parameterized SQL shape with reversed limits.
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 20 and age < 5
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+
+--echo # Casts, unsigned endpoints, and non-integer endpoints are left alone.
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where cast(age as unsigned) < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 18446744073709551615 and age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10.5 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+
+--echo # The same bounds also work without a scalar-index pre-filter.
+explain basic select /*+ index(t idx_vec) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+select /*+ index(t idx_vec) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+
+--echo # Simplification must not move an outer filter below the ANN Top-K.
+select id from (
+  select /*+ index(t idx_age) */ id, age from t_ann_ranges t
+  where age < 10 and age < 20
+  order by l2_distance(embedding, '[0,0,0]') approximate limit 3
+) v where age >= 5 order by id;
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 2 offset 2;
+drop table t_ann_ranges;
