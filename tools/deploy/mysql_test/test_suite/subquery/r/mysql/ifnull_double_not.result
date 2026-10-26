@@ -64,6 +64,14 @@ SELECT id FROM ifnull_double_not
 WHERE IFNULL((SELECT NULL), !(!(!(!(value LIKE 'x'))))) ORDER BY id;
 id
 1
+SELECT id FROM ifnull_double_not
+WHERE id > 0 AND IFNULL((SELECT FALSE), !(!(value LIKE 'x'))) ORDER BY id;
+id
+SELECT id FROM ifnull_double_not
+WHERE IFNULL((SELECT NULL), !(!(value LIKE 'x'))) OR id = 2 ORDER BY id;
+id
+1
+2
 # Repeated prepared execution with different values and NULLs.
 PREPARE stmt FROM 'SELECT id FROM ifnull_double_not WHERE IFNULL((SELECT ?), !(!(value LIKE ?))) ORDER BY id';
 SET @fallback = NULL, @pattern = 'x';
@@ -89,3 +97,82 @@ id
 4
 DEALLOCATE PREPARE stmt;
 DROP TABLE ifnull_double_not;
+# Predicate simplification must retain LIKE prefix ranges, including AND/OR.
+DROP TABLE IF EXISTS not_like_range;
+CREATE TABLE not_like_range (v VARCHAR(32) COLLATE utf8mb4_bin PRIMARY KEY, id INT);
+INSERT INTO not_like_range VALUES ('abc', 1), ('abcd', 2), ('xyz', 3);
+EXPLAIN BASIC SELECT /*+ INDEX(t PRIMARY) */ v FROM not_like_range t
+WHERE v LIKE 'abc%';
+Query Plan
+==========================
+|ID|OPERATOR        |NAME|
+--------------------------
+|0 |TABLE RANGE SCAN|t   |
+==========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.v]),filter(nil),rowset=16
+      access([t.v]),partitions(p0)
+      is_index_back=false,is_global_index=false,
+      range_key([t.v]),range[abc ; abc<FF><repeat 125 times>],
+      range_cond([(T_OP_LIKE,t.v,cast('abc%',VARCHAR(1048576)),'\\')])
+EXPLAIN BASIC SELECT /*+ INDEX(t PRIMARY) */ v FROM not_like_range t
+WHERE !(!(v LIKE 'abc%'));
+Query Plan
+==========================
+|ID|OPERATOR        |NAME|
+--------------------------
+|0 |TABLE RANGE SCAN|t   |
+==========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.v]),filter(nil),rowset=16
+      access([t.v]),partitions(p0)
+      is_index_back=false,is_global_index=false,
+      range_key([t.v]),range[abc ; abc<FF><repeat 125 times>],
+      range_cond([(T_OP_LIKE,t.v,cast('abc%',VARCHAR(1048576)),'\\')])
+EXPLAIN BASIC SELECT /*+ INDEX(t PRIMARY) */ v FROM not_like_range t
+WHERE !(!(v LIKE 'abc%')) AND id > 0;
+Query Plan
+==========================
+|ID|OPERATOR        |NAME|
+--------------------------
+|0 |TABLE RANGE SCAN|t   |
+==========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.v]),filter([t.id > 0]),rowset=16
+      access([t.v],[t.id]),partitions(p0)
+      is_index_back=false,is_global_index=false,filter_before_indexback[false],
+      range_key([t.v]),range[abc ; abc<FF><repeat 125 times>],
+      range_cond([(T_OP_LIKE,t.v,cast('abc%',VARCHAR(1048576)),'\\')])
+EXPLAIN BASIC SELECT /*+ INDEX(t PRIMARY) */ v FROM not_like_range t
+WHERE !(!(v LIKE 'abc%')) OR !(!(v LIKE 'xyz%'));
+Query Plan
+==========================
+|ID|OPERATOR        |NAME|
+--------------------------
+|0 |TABLE RANGE SCAN|t   |
+==========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.v]),filter(nil),rowset=16
+      access([t.v]),partitions(p0)
+      is_index_back=false,is_global_index=false,
+      range_key([t.v]),range[abc ; abc<FF><repeat 125 times>],[xyz ; xyz<FF><repeat 125 times>],
+      range_cond([(T_OP_LIKE,t.v,cast('abc%',VARCHAR(1048576)),'\\') OR (T_OP_LIKE,t.v,cast('xyz%',VARCHAR(1048576)),'\\')])
+SELECT v FROM not_like_range WHERE !(!(v LIKE 'abc%')) ORDER BY v;
+v
+abc
+abcd
+SELECT v FROM not_like_range WHERE !(!(v LIKE 'abc%')) AND id > 0 ORDER BY v;
+v
+abc
+abcd
+SELECT v FROM not_like_range
+WHERE !(!(v LIKE 'abc%')) OR !(!(v LIKE 'xyz%')) ORDER BY v;
+v
+abc
+abcd
+xyz
+DROP TABLE not_like_range;
