@@ -1,0 +1,32 @@
+# Test transaction lifecycle after removing the per-transaction TraceLog
+# state: explicit commit, explicit rollback, savepoint rollback and
+# autocommit must keep working and produce the expected visible rows.
+
+--disable_warnings
+drop table if exists tx_ctx_lifecycle_t;
+--enable_warnings
+
+create table tx_ctx_lifecycle_t(id int primary key, v int);
+
+begin;
+insert into tx_ctx_lifecycle_t values (1, 100);
+commit;
+
+begin;
+insert into tx_ctx_lifecycle_t values (2, 200);
+rollback;
+
+begin;
+insert into tx_ctx_lifecycle_t values (3, 300);
+savepoint sp1;
+insert into tx_ctx_lifecycle_t values (4, 400);
+rollback to savepoint sp1;
+commit;
+
+insert into tx_ctx_lifecycle_t values (5, 500);
+
+select id, v from tx_ctx_lifecycle_t order by id;
+
+--disable_warnings
+drop table if exists tx_ctx_lifecycle_t;
+--enable_warnings
