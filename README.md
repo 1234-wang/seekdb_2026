@@ -1,4 +1,3 @@
-OB-P:bgy04OxnaOq9jhraWrRB9g
 
 <div align="center">
 
