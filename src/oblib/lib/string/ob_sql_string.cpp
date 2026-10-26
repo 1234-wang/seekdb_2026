@@ -80,6 +80,30 @@ int ObSqlString::append(const ObString &str)
   return append(str.ptr(), str.length());
 }
 
+int ObSqlString::append_escaped_identifier(const ObString &identifier)
+{
+  int ret = OB_SUCCESS;
+  int64_t start = 0;
+  const int64_t length = identifier.length();
+  if (length < 0 || (length > 0 && OB_ISNULL(identifier.ptr()))) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < length; ++i) {
+    if ('`' == identifier.ptr()[i]) {
+      // Include the original delimiter in this span, then append its escape.
+      if (OB_FAIL(append(identifier.ptr() + start, i - start + 1))) {
+      } else if (OB_FAIL(append("`"))) {
+      } else {
+        start = i + 1;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && start < length) {
+    ret = append(identifier.ptr() + start, length - start);
+  }
+  return ret;
+}
+
 int ObSqlString::append_fmt(const char *fmt, ...)
 {
   int ret = OB_SUCCESS;
