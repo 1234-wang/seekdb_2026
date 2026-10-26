@@ -55,6 +55,9 @@ public:
   int append(const char *str);
   int append(const char *str, const int64_t len);
   int append(const ObString &str);
+  // Append identifier contents, doubling the selected quote. The caller adds
+  // the surrounding identifier quotes and any fixed prefix.
+  int append_escaped_identifier(const ObString &str, const char quote = '`');
   int append_fmt(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
   int assign(const char *str);
