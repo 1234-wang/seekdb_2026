@@ -11,7 +11,7 @@
 <p>
     <a href="https://github.com/oceanbase/seekdb/stargazers">
         <img alt="GitHub Stars" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" /> 
-    </a>
+    </a> 
     <a href="https://github.com/oceanbase/seekdb/releases">
         <img alt="Latest Release" src="https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue" />
     </a>
