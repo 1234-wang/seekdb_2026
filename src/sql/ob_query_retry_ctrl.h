@@ -275,7 +275,6 @@ private:
   // processors for inner SQL error codes only
   static void inner_schema_error_proc(ObRetryParam &v);
   static void inner_try_lock_row_conflict_proc(ObRetryParam &v);
-  static void inner_access_timeout_proc(ObRetryParam &v);
   static void inner_access_error_proc(ObRetryParam &v);
   static void inner_unreadable_access_error_proc(ObRetryParam &v);
   static void inner_peer_server_status_uncertain_proc(ObRetryParam &v);

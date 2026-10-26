@@ -90,7 +90,7 @@ private:
   }
   bool is_retryable(int ret)
   {
-    return OB_NOT_MASTER == ret || OB_NOT_INIT == ret || OB_TIMEOUT == ret || OB_EAGAIN == ret || OB_LS_NOT_EXIST == ret || OB_SERVER_RUNTIME_NOT_READY == ret || OB_LOG_STREAM_ACCESS_NOT_EXIST == ret;
+    return OB_NOT_MASTER == ret || OB_NOT_INIT == ret || OB_TIMEOUT == ret || OB_EAGAIN == ret || OB_LS_NOT_EXIST == ret || OB_SERVER_RUNTIME_NOT_READY == ret;
   }
 
 private:

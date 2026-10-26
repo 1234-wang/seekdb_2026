@@ -658,14 +658,6 @@ void ObQueryRetryCtrl::inner_try_lock_row_conflict_proc(ObRetryParam &v)
   retry_obj.test(lock_conflict);
 }
 
-void ObQueryRetryCtrl::inner_access_timeout_proc(ObRetryParam &v)
-{
-  // Internal table access failures retain their existing statement retry delay.
-  ObRetryObject retry_obj(v);
-  ObCommonRetryIndexLongWaitPolicy retry_long_wait;
-  retry_obj.test(retry_long_wait);
-}
-
 void ObQueryRetryCtrl::inner_access_error_proc(ObRetryParam &v)
 {
   const uint64_t *trace_id = ObCurTraceId::get();
@@ -815,7 +807,6 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, schema_error_proc,  empty_proc,                                           nullptr);
 
   /* tablet access */
-  ERR_RETRY_FUNC("ACCESS", OB_ACCESS_SOURCE_UNAVAILABLE,       unreadable_access_error_proc, inner_unreadable_access_error_proc, ObDASRetryCtrl::tablet_access_retry_proc);
   ERR_RETRY_FUNC("ACCESS", OB_LOG_STREAM_ACCESS_NOT_READY,    unreadable_access_error_proc, inner_unreadable_access_error_proc, ObDASRetryCtrl::tablet_access_retry_proc);
   ERR_RETRY_FUNC("ACCESS", OB_NO_READABLE_REPLICA,             unreadable_access_error_proc, inner_unreadable_access_error_proc, ObDASRetryCtrl::tablet_access_retry_proc);
   ERR_RETRY_FUNC("ACCESS", OB_NOT_MASTER,                      access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
@@ -833,11 +824,8 @@ int ObQueryRetryCtrl::init()
   // OB_TABLET_NOT_EXIST may be caused by old version schema or an outdated tablet target.
   // Just use access_error_proc to retry sql and a new schema guard will be obtained during the retry process.
   ERR_RETRY_FUNC("ACCESS", OB_TABLET_NOT_EXIST,                access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-  ERR_RETRY_FUNC("ACCESS", OB_LOG_STREAM_ACCESS_NOT_EXIST,           access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
   ERR_RETRY_FUNC("ACCESS", OB_PARTITION_IS_BLOCKED,            access_error_proc,        inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
   ERR_RETRY_FUNC("ACCESS", OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST, access_error_proc,inner_access_error_proc,                            ObDASRetryCtrl::tablet_access_retry_proc);
-
-  ERR_RETRY_FUNC("ACCESS", OB_ACCESS_TARGET_TIMEOUT,           access_error_proc,        inner_access_timeout_proc,                      ObDASRetryCtrl::tablet_access_retry_proc);
 
 
 

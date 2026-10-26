@@ -273,8 +273,7 @@ public:
   void set_index_maintenance(bool is_index_maintenance)
   { is_index_maintenance_ = is_index_maintenance; }
   bool is_index_maintenance() const { return is_index_maintenance_; }
-  // update split into del+ins, ins's table access is uncertain, need full table update
-  // 
+  // PDML row movement or upsert can write to tablets outside the source access set.
   void set_has_dynamic_tablets(bool uncertain) { has_dynamic_tablets_ = uncertain; }
   bool has_dynamic_tablets() const { return has_dynamic_tablets_; }
   void set_pdml_update_split(bool is_pdml_update_split) { is_pdml_update_split_ = is_pdml_update_split; }
@@ -417,8 +416,7 @@ protected:
   bool is_index_maintenance_; // Enabled PDML, and the current operator is responsible for index table maintenance
   bool need_barrier_; // row movement scenario to avoid insert, delete operating on the same row at the same time, need to add barrier
   bool is_first_dml_op_; // The first dml op can form a partition wise structure with tsc, which can save one exchange
-  // update split into del+ins, ins's table access is uncertain, need full table update
-  // 
+  // Prepare all possible target tablets for PDML row movement or upsert.
   bool has_dynamic_tablets_;
   bool is_pdml_update_split_; // Mark whether delete, insert op are split from update
   int64_t das_dop_; // zero marks not use parallel_das_dml

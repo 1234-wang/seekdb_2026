@@ -47,8 +47,7 @@ int ObDASCtx::validate_tablet_access(uint64_t ref_table_id,
 bool ObDASCtx::is_tablet_retry_error(int err_no) const
 {
   return is_master_changed_error(err_no)
-      || is_partition_change_error(err_no)
-      || is_access_target_timeout_error(err_no);
+      || is_partition_change_error(err_no);
 }
 
 void ObDASCtx::set_retry_info(const ObQueryRetryInfo *retry_info)

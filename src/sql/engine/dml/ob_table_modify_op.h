@@ -141,7 +141,7 @@ public:
       uint64_t gi_above_                        : 1;
       uint64_t is_returning_                    : 1;
       uint64_t is_pdml_index_maintain_          : 1; // indicates whether the current dml operator is the operator used for index maintenance in pdml (index maintain)
-      uint64_t has_dynamic_tablets_        : 1; // Target access partition access uncertain, need full table scan
+      uint64_t has_dynamic_tablets_             : 1; // Prepare all possible target tablets for PDML row movement or upsert.
       uint64_t use_dist_das_                    : 1;
       uint64_t is_pdml_update_split_            : 1; // Mark whether delete, insert op is split from update
       uint64_t check_fk_batch_                  : 1; // mark if the foreign key constraint can be checked in batch    

@@ -102,11 +102,6 @@ inline bool is_duplicate_key_err(int err)
   return ret;
 }
 
-inline bool is_access_target_timeout_error(int err)
-{
-  return OB_ACCESS_TARGET_TIMEOUT == err;
-}
-
 inline bool is_partition_change_error(int err)
 {
   bool ret = false;
@@ -115,7 +110,6 @@ inline bool is_partition_change_error(int err)
     case OB_ACCESS_TARGET_NOT_EXIST:
     case OB_PARTITION_IS_STOPPED:
     case OB_PARTITION_IS_BLOCKED:
-    case OB_LOG_STREAM_ACCESS_NOT_EXIST:
     case OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST:
     case OB_LS_NOT_EXIST:
     case OB_TABLET_NOT_EXIST:
@@ -165,7 +159,6 @@ inline bool is_master_changed_error(int err)
 {
   bool ret = false;
   switch (err) {
-    case OB_ACCESS_SOURCE_UNAVAILABLE:
     case OB_LOG_STREAM_ACCESS_NOT_READY:
     case OB_NOT_MASTER:
     case OB_RS_NOT_MASTER:
