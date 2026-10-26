@@ -11,7 +11,7 @@ SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(!(!(1 LIKE "x")))));
 SELECT 1 FROM dual WHERE IFNULL((SELECT NULL), !(!(-2)));
 SELECT 1 FROM dual WHERE IFNULL((SELECT NULL), !(!(0)));
 
-CREATE TABLE t_ifnull_double_not (id INT PRIMARY KEY, val VARCHAR(8));
+CREATE TABLE t_ifnull_double_not (id INT PRIMARY KEY, val VARCHAR(8), KEY idx_val(val));
 INSERT INTO t_ifnull_double_not VALUES (1, 'x'), (2, 'y'), (3, NULL);
 SELECT id FROM t_ifnull_double_not
 WHERE IFNULL((SELECT NULL), !(!(val LIKE 'x'))) ORDER BY id;
@@ -25,4 +25,13 @@ SELECT id FROM t_ifnull_double_not
 WHERE IFNULL((SELECT NULL), !(!(val IS NULL))) ORDER BY id;
 SELECT id FROM t_ifnull_double_not
 WHERE IFNULL((SELECT NULL), !(!(val LIKE 'x'))) IS NULL ORDER BY id;
+SELECT id FROM t_ifnull_double_not WHERE !(!(val LIKE 'x%')) ORDER BY id;
+SELECT id FROM t_ifnull_double_not WHERE !(!(val LIKE 'x%')) AND id > 0 ORDER BY id;
+SELECT id FROM t_ifnull_double_not WHERE !(!(val LIKE 'x%')) OR val LIKE 'y%' ORDER BY id;
+EXPLAIN BASIC SELECT /*+ INDEX(t_ifnull_double_not idx_val) */ id FROM t_ifnull_double_not
+WHERE !(!(val LIKE 'x%'));
+EXPLAIN BASIC SELECT /*+ INDEX(t_ifnull_double_not idx_val) */ id FROM t_ifnull_double_not
+WHERE !(!(val LIKE 'x%')) AND id > 0;
+EXPLAIN BASIC SELECT /*+ INDEX(t_ifnull_double_not idx_val) */ id FROM t_ifnull_double_not
+WHERE !(!(val LIKE 'x%')) OR val LIKE 'y%';
 DROP TABLE t_ifnull_double_not;

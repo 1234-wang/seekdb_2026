@@ -2321,13 +2321,24 @@ int ObTransformSimplifyExpr::recursive_push_not(ObRawExpr *&expr,
     //do nothing
   } else if (OB_FAIL(do_push_not(expr, push_expr_map, trans_happened))) {
   }
+  // Scalar parents such as IFNULL retain their operand type contract.
+  // Logical operands need only truth values; keep predicates visible to range extraction.
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
     ObRawExpr *&child_expr = expr->get_param_expr(i);
+    ObRawExpr *original_child = child_expr;
     if (OB_ISNULL(child_expr)) {
       ret = OB_ERR_UNEXPECTED;
     } else if (!child_expr->has_flag(CNT_NOT)) {
       //do nothing
     } else if (OB_FAIL(SMART_CALL(recursive_push_not(child_expr, push_expr_map, trans_happened)))) {
+    } else if (child_expr != original_child &&
+               expr->get_expr_type() != T_OP_AND &&
+               expr->get_expr_type() != T_OP_OR &&
+               expr->get_expr_type() != T_OP_XOR &&
+               expr->get_expr_type() != T_OP_NOT &&
+               expr->get_expr_type() != T_OP_BOOL &&
+               OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
+                   *ctx_->expr_factory_, original_child, child_expr, ctx_->session_info_))) {
     } else {/*do nothing*/}
   }
   return ret;
@@ -2377,15 +2388,11 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
     } else {
       // size of not is even
       // not(not c1 > 1)) -> c1>1
-      // Keep the NOT result type: a boolean-valued child (for example LIKE)
-      // can have a different integer width, affecting parent operand casts.
       ObRawExpr *temp = NULL;
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(cur, temp, *expr_factory))) {
       } else if (OB_ISNULL(temp)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
-      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
-                            *expr_factory, expr, temp, ctx_->session_info_))) {
       } else {
         expr = temp;
         is_valid = false;
