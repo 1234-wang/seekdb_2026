@@ -67,4 +67,24 @@ SELECT id FROM docs WHERE MATCH(body) AGAINST('uniquetoken');
 SELECT id, ROUND(MATCH(body) AGAINST('uniquetoken database'), 10) AS score
 FROM docs WHERE MATCH(body) AGAINST('uniquetoken database') ORDER BY score DESC, id LIMIT 3;
 
+# More than 256 distinct tokens select TaaT even when scores are projected.
+# Overlapping alpha/beta postings exercise in-place score aggregation; missing
+# terms keep the same result set while exercising empty posting partitions.
+SET @long_query='alpha beta';
+--disable_query_log
+let $j=1;
+while ($j <= 300)
+{
+  eval SET @long_query=CONCAT(@long_query, ' missingtoken', $j);
+  inc $j;
+}
+--enable_query_log
+PREPARE long_fts FROM 'SELECT COUNT(*), SUM(id) FROM docs WHERE MATCH(body) AGAINST(?)';
+EXECUTE long_fts USING @long_query;
+EXECUTE long_fts USING @long_query;
+DEALLOCATE PREPARE long_fts;
+PREPARE long_scores FROM 'SELECT id, ROUND(MATCH(body) AGAINST(?), 10) AS score FROM docs WHERE MATCH(body) AGAINST(?) ORDER BY score DESC, id LIMIT 5';
+EXECUTE long_scores USING @long_query, @long_query;
+DEALLOCATE PREPARE long_scores;
+
 DROP DATABASE fts_query_hotpath;
