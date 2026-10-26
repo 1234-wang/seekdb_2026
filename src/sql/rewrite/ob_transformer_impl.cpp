@@ -92,7 +92,7 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
   } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
   } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::OPTIMIZER_GROUP_BY_PLACEMENT, enable_group_by_placement_transform))) {
   } else {
-    ctx_->is_group_by_placement_enabled_ = enable_group_by_placement_transform;
+    ctx_->is_groupby_placement_enabled_ = enable_group_by_placement_transform;
   }
 
   if (OB_FAIL(ret)) {
