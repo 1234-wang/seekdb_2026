@@ -1,0 +1,146 @@
+# The absorbed OR and its parity column must disappear from the ANN plan.
+EXPLAIN BASIC SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+Query Plan
+=================================================
+|ID|OPERATOR                               |NAME|
+-------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t   |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.category = 1]), rowset=N
+      access([t.__pk_increment],[t.category],[t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+id
+1
+2
+5
+# Conjunct/disjunct order and unrelated required conditions do not matter.
+EXPLAIN BASIC SELECT id FROM t WHERE (parity='even' OR category=1) AND id>1 AND category=1 ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+Query Plan
+==================================================
+|ID|OPERATOR                               |NAME |
+--------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(id)|
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.id > 1],[t.category = 1]), rowset=N
+      access([t.__pk_increment],[t.category],[t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false],
+      range_key([t.id],[t.shadow_pk_0]), range(1,MAX ; MAX,MAX)
+SELECT id FROM t WHERE (parity='even' OR category=1) AND id>1 AND category=1 ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+id
+2
+5
+# Reproduce the issue's balanced tree containing 1024 repeated OR branches.
+Query Plan
+=================================================
+|ID|OPERATOR                               |NAME|
+-------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t   |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.category = 1]), rowset=N
+      access([t.__pk_increment],[t.category],[t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+id
+1
+2
+5
+# Cached plans must retain the OR when the formerly equal constants differ.
+SELECT id FROM t WHERE category=1 AND (category=2 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+id
+1
+SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+id
+1
+2
+5
+# Explicit parameters may change equality and NULL status between executions.
+PREPARE ann_absorption FROM 'SELECT id FROM t WHERE category=? AND (category=? OR parity=''even'') ORDER BY l2_distance(v,''[0,0,0]'') APPROXIMATE LIMIT 10';
+SET @required=1, @alternative=1;
+EXECUTE ann_absorption USING @required, @alternative;
+id
+1
+2
+5
+SET @alternative=2;
+EXECUTE ann_absorption USING @required, @alternative;
+id
+1
+SET @alternative=NULL;
+EXECUTE ann_absorption USING @required, @alternative;
+id
+1
+SET @required=NULL, @alternative=1;
+EXECUTE ann_absorption USING @required, @alternative;
+id
+SET @required=1;
+EXECUTE ann_absorption USING @required, @alternative;
+id
+1
+2
+5
+DEALLOCATE PREPARE ann_absorption;
+# Without a required P, neither the OR nor rows passing only Q may be removed.
+SELECT id FROM t WHERE category=1 OR parity='even' ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+id
+1
+2
+3
+4
+5
+# NO_REWRITE keeps the original filter.
+EXPLAIN BASIC SELECT /*+ NO_REWRITE */ id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+Query Plan
+=================================================
+|ID|OPERATOR                               |NAME|
+-------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t   |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.category = 1],[t.category = 1 OR t.parity = 'even']), rowset=N
+      access([t.__pk_increment],[t.category],[t.parity],[t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false],
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+# Expressions with function calls or numeric conversions are left intact.
+EXPLAIN BASIC SELECT id FROM t WHERE category=1 AND (category=1 OR RAND()>0) ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+Query Plan
+=================================================
+|ID|OPERATOR                               |NAME|
+-------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t   |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.category = 1],[t.category = 1 OR RAND() > cast(0, DOUBLE(-1, -1))]), rowset=N
+      access([t.__pk_increment],[t.category],[t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false],
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+EXPLAIN BASIC SELECT id FROM t WHERE category=1 AND (category=1 OR category='not_an_integer') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+Query Plan
+=================================================
+|ID|OPERATOR                               |NAME|
+-------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t   |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.category = 1],[t.category = 1 OR cast(t.category, DECIMAL(11, 0)) = cast('not_an_integer', DECIMAL(1, -1))]), rowset=N
+      access([t.__pk_increment],[t.category],[t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false,false],
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
+Warnings:
+Warning	1292	Truncated incorrect DECIMAL value: 'not_an_integer'
+# The exact-search control returns the same rows, including a NULL Q.
+SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') LIMIT 10;
+id
+1
+2
+5

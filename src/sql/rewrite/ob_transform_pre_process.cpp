@@ -19,6 +19,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/expr/ob_expr_arg_case.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/pl/ob_pl_resolver.h"
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
@@ -55,7 +56,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         trans_happened |= is_happened;
         OPT_TRACE("flatten condition:", is_happened);
       }
-    }  
+    }
+    if (OB_SUCC(ret) && stmt->has_vec_approx() &&
+        nullptr == stmt->get_stmt_hint().get_no_rewrite_hint()) {
+      if (OB_FAIL(remove_ann_absorbed_conditions(stmt, is_happened))) {
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("remove absorbed ANN conditions:", is_happened);
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_gen_straight_join_leading(stmt, is_happened))) {
       } else {
@@ -3688,6 +3697,110 @@ int ObTransformPreProcess::check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<
         if (OB_ISNULL(exec_param)) {
           ret = OB_ERR_UNEXPECTED;
         } else if (OB_FAIL(exec_param->clear_flag(BE_USED))) {
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+namespace
+{
+// Only compare bare columns with constants of compatible types. In particular,
+// dropping an absorbed branch must not drop a function call, subquery, assignment
+// or a conversion that can report an error/warning.
+bool is_ann_absorption_atom(const ObRawExpr *expr)
+{
+  bool is_safe = false;
+  if (nullptr != expr && expr->get_param_count() == 2 &&
+      (T_OP_EQ == expr->get_expr_type() || T_OP_NSEQ == expr->get_expr_type() ||
+       T_OP_NE == expr->get_expr_type() || T_OP_LT == expr->get_expr_type() ||
+       T_OP_LE == expr->get_expr_type() || T_OP_GT == expr->get_expr_type() ||
+       T_OP_GE == expr->get_expr_type())) {
+    const ObRawExpr *column = expr->get_param_expr(0);
+    const ObRawExpr *value = expr->get_param_expr(1);
+    if (nullptr != column && nullptr != value) {
+      if (value->is_column_ref_expr()) {
+        const ObRawExpr *tmp = column;
+        column = value;
+        value = tmp;
+      }
+      if (column->is_column_ref_expr() &&
+          !static_cast<const ObColumnRefRawExpr *>(column)->is_virtual_generated_column() &&
+          value->is_const_raw_expr() &&
+          !value->has_flag(CNT_DYNAMIC_PARAM) &&
+          !value->has_flag(CNT_VOLATILE_CONST)) {
+        is_safe = (ob_is_integer_type(column->get_data_type()) &&
+                   ob_is_integer_type(value->get_data_type())) ||
+                  (ob_is_string_type(column->get_data_type()) &&
+                   ob_is_string_type(value->get_data_type()) &&
+                   column->get_collation_type() == value->get_collation_type());
+      }
+    }
+  }
+  return is_safe;
+}
+}
+
+int ObTransformPreProcess::remove_ann_absorbed_conditions(ObDMLStmt *stmt,
+                                                        bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObSEArray<ObRawExpr *, 8> required_atoms;
+  // Bound planning work independently of the size of an expanded predicate.
+  const int64_t max_required_atoms = 64;
+  const int64_t max_comparisons = 16384;
+  int64_t comparisons = 0;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ObIArray<ObRawExpr *> &conditions = stmt->get_condition_exprs();
+    // flatten_conditions() has already split the outer AND. Keep the required
+    // atoms separate so 1,024 copies of (P OR Q) need only linear work for P.
+    for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count() &&
+                        required_atoms.count() < max_required_atoms; ++i) {
+      if (OB_ISNULL(conditions.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (is_ann_absorption_atom(conditions.at(i)) &&
+                 OB_FAIL(required_atoms.push_back(conditions.at(i)))) {
+      }
+    }
+    for (int64_t i = conditions.count() - 1; OB_SUCC(ret) && i >= 0 &&
+                        !required_atoms.empty() && comparisons < max_comparisons; --i) {
+      ObRawExpr *condition = conditions.at(i);
+      bool is_safe = true;
+      bool absorbed = false;
+      if (OB_ISNULL(condition)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (T_OP_OR != condition->get_expr_type()) {
+        // A required atom must remain in the conjunction.
+      } else {
+        for (int64_t j = 0; is_safe && j < condition->get_param_count(); ++j) {
+          is_safe = is_ann_absorption_atom(condition->get_param_expr(j));
+        }
+        ObQuestionmarkEqualCtx cmp_ctx(true);
+        for (int64_t j = 0; OB_SUCC(ret) && is_safe && !absorbed &&
+                            j < condition->get_param_count() && comparisons < max_comparisons; ++j) {
+          for (int64_t k = 0; OB_SUCC(ret) && !absorbed &&
+                              k < required_atoms.count() && comparisons < max_comparisons; ++k) {
+            cmp_ctx.equal_pairs_.reset();
+            ++comparisons;
+            absorbed = required_atoms.at(k)->same_as(*condition->get_param_expr(j), &cmp_ctx);
+            if (OB_FAIL(cmp_ctx.err_code_)) {
+            } else if (absorbed &&
+                       OB_FAIL(append(ctx_->equal_param_constraints_, cmp_ctx.equal_pairs_))) {
+            }
+          }
+        }
+        // P AND (P OR Q) = P, including SQL UNKNOWN. Equality between different
+        // auto-parameter positions is a plan-cache constraint, not an assumption
+        // that can be reused when a later execution supplies different values.
+        if (OB_SUCC(ret) && absorbed) {
+          if (OB_FAIL(conditions.remove(i))) {
+          } else {
+            trans_happened = true;
+          }
         }
       }
     }

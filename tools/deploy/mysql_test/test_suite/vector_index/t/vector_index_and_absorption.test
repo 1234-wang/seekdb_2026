@@ -1,0 +1,85 @@
+# Regression for #1535: simplify P AND (P OR Q) before ANN planning.
+--disable_query_log
+--disable_warnings
+DROP DATABASE IF EXISTS vector_index_and_absorption;
+--enable_warnings
+CREATE DATABASE vector_index_and_absorption DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE vector_index_and_absorption;
+SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  category INT,
+  parity VARCHAR(8),
+  v VECTOR(3),
+  VECTOR INDEX idx(v) WITH (distance=l2,type=hnsw,lib=vsag,sync_mode=immediate)
+) ORGANIZATION HEAP;
+INSERT INTO t VALUES
+  (1,1,'even','[1,0,0]'),
+  (2,1,'odd','[2,0,0]'),
+  (3,2,'even','[3,0,0]'),
+  (4,NULL,'even','[4,0,0]'),
+  (5,1,NULL,'[5,0,0]'),
+  (6,NULL,NULL,'[6,0,0]');
+--enable_query_log
+
+--echo # The absorbed OR and its parity column must disappear from the ANN plan.
+--replace_regex /rowset=[0-9]+/rowset=N/ /], /],/
+EXPLAIN BASIC SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+
+--echo # Conjunct/disjunct order and unrelated required conditions do not matter.
+--replace_regex /rowset=[0-9]+/rowset=N/ /], /],/
+EXPLAIN BASIC SELECT id FROM t WHERE (parity='even' OR category=1) AND id>1 AND category=1 ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+SELECT id FROM t WHERE (parity='even' OR category=1) AND id>1 AND category=1 ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+
+--echo # Reproduce the issue's balanced tree containing 1024 repeated OR branches.
+--disable_query_log
+let $expanded = (category=1 OR parity='even');
+let $levels = 10;
+while ($levels)
+{
+  let $expanded = ($expanded) AND ($expanded);
+  dec $levels;
+}
+--replace_regex /rowset=[0-9]+/rowset=N/ /], /],/
+eval EXPLAIN BASIC SELECT id FROM t WHERE category=1 AND ($expanded) ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+eval SELECT id FROM t WHERE category=1 AND ($expanded) ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+--enable_query_log
+
+--echo # Cached plans must retain the OR when the formerly equal constants differ.
+SELECT id FROM t WHERE category=1 AND (category=2 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+
+--echo # Explicit parameters may change equality and NULL status between executions.
+PREPARE ann_absorption FROM 'SELECT id FROM t WHERE category=? AND (category=? OR parity=''even'') ORDER BY l2_distance(v,''[0,0,0]'') APPROXIMATE LIMIT 10';
+SET @required=1, @alternative=1;
+EXECUTE ann_absorption USING @required, @alternative;
+SET @alternative=2;
+EXECUTE ann_absorption USING @required, @alternative;
+SET @alternative=NULL;
+EXECUTE ann_absorption USING @required, @alternative;
+SET @required=NULL, @alternative=1;
+EXECUTE ann_absorption USING @required, @alternative;
+SET @required=1;
+EXECUTE ann_absorption USING @required, @alternative;
+DEALLOCATE PREPARE ann_absorption;
+
+--echo # Without a required P, neither the OR nor rows passing only Q may be removed.
+SELECT id FROM t WHERE category=1 OR parity='even' ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+
+--echo # NO_REWRITE keeps the original filter.
+--replace_regex /rowset=[0-9]+/rowset=N/ /], /],/
+EXPLAIN BASIC SELECT /*+ NO_REWRITE */ id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+
+--echo # Expressions with function calls or numeric conversions are left intact.
+--replace_regex /rowset=[0-9]+/rowset=N/ /], /],/
+EXPLAIN BASIC SELECT id FROM t WHERE category=1 AND (category=1 OR RAND()>0) ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+--replace_regex /rowset=[0-9]+/rowset=N/ /], /],/
+EXPLAIN BASIC SELECT id FROM t WHERE category=1 AND (category=1 OR category='not_an_integer') ORDER BY l2_distance(v,'[0,0,0]') APPROXIMATE LIMIT 10;
+
+--echo # The exact-search control returns the same rows, including a NULL Q.
+SELECT id FROM t WHERE category=1 AND (category=1 OR parity='even') ORDER BY l2_distance(v,'[0,0,0]') LIMIT 10;
+--disable_query_log
+USE test;
+DROP DATABASE vector_index_and_absorption;
+--enable_query_log
