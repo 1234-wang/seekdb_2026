@@ -27,14 +27,15 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -74,6 +75,38 @@ int ObBigEndian::put_uint32(unsigned char *b, uint32_t v)
   }
   return ret;
 }
+
+#ifndef _WIN32
+// RFC 4122 section 4.5 / RFC 9562 section 6.10: when no MAC is available, use a random
+// 48-bit node id with the multicast bit set so it never collides with a real MAC.
+int ObUUIDNode::gen_random_node(unsigned char *node)
+{
+  int ret = OB_SUCCESS;
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("open /dev/urandom failed", K(ret), K(errno));
+  } else {
+    int64_t got = 0;
+    while (OB_SUCC(ret) && got < 6) {
+      ssize_t n = read(fd, node + got, 6 - got);
+      if (n > 0) {
+        got += n;
+      } else if (n < 0 && errno == EINTR) {
+        // retry
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("read /dev/urandom failed", K(ret), K(n), K(errno));
+      }
+    }
+    close(fd);
+    if (OB_SUCC(ret)) {
+      node[0] |= 0x01;
+    }
+  }
+  return ret;
+}
+#endif
 
 ObUUIDNode::ObUUIDNode()
 {
@@ -180,18 +213,11 @@ int ObUUIDNode::init()
       freeifaddrs(ifaddr);
     }
     if (OB_SUCC(ret) && !mac_addr_found) {
-      // RFC 4122 section 4.5: when MAC address is unavailable (Android sandbox),
-      // use random bytes with the multicast bit set as the node ID.
-      int fd = open("/dev/urandom", O_RDONLY);
-      if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
-        mac_addr_[0] |= 0x01;  // set multicast bit
+      if (OB_SUCC(gen_random_node(mac_addr_))) {
         mac_addr_found = true;
         LOG_INFO("using random UUID node ID (no MAC available on Android)");
       } else {
         ret = OB_ERR_UNEXPECTED;
-      }
-      if (fd >= 0) {
-        close(fd);
       }
     }
     if (OB_SUCC(ret) && mac_addr_found) {
@@ -244,6 +270,15 @@ int ObUUIDNode::init()
       }
     }
     close(sock);
+  }
+  if (!is_inited_) {
+    // MAC discovery failed (e.g. restricted container) or found nothing: use a random node id.
+    LOG_WARN("failed to get MAC address, fall back to random UUID node id", K(ret));
+    if (OB_FAIL(gen_random_node(mac_addr_))) {
+      LOG_ERROR("failed to generate random UUID node id", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
 #endif
   return ret;
