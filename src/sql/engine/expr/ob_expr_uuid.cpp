@@ -25,7 +25,6 @@
 #endif
 #include <iphlpapi.h>
 #else
-#include <sys/ioctl.h>
 #include <net/if.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
@@ -33,11 +32,10 @@
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
+#include "sql/engine/expr/ob_uuid_node.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/time/ob_time_utility.h"
 using namespace oceanbase::common;
@@ -89,16 +87,22 @@ ObUUIDNode::ObUUIDNode()
 int ObUUIDNode::init()
 {
   int ret = OB_SUCCESS;
+  // Publish mac_addr_ and is_inited_ only after a complete node is ready.
+  // A failed attempt leaves a zero address and is_inited_ == false.
   is_inited_ = false;
+  MEMSET(mac_addr_, 0, sizeof(mac_addr_));
 #ifdef __EMSCRIPTEN__
   // Browsers expose no hardware MAC. Use a random UUID node and mark it as
   // non-MAC with the multicast bit, as on the Android fallback below.
   // Emscripten getentropy uses the host cryptographic random source.
-  if (getentropy(mac_addr_, sizeof(mac_addr_)) != 0) {
+  unsigned char node[UUID_NODE_LEN];
+  if (getentropy(node, sizeof(node)) != 0) {
+    const int saved_errno = errno;
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to generate UUID node", K(ret), K(errno));
+    LOG_WARN("failed to generate UUID node", K(ret), K(saved_errno));
   } else {
-    mac_addr_[0] |= 0x01;
+    node[0] = static_cast<unsigned char>(node[0] | 0x01);
+    MEMCPY(mac_addr_, node, UUID_NODE_LEN);
     is_inited_ = true;
   }
 #elif defined(_WIN32)
@@ -160,90 +164,79 @@ int ObUUIDNode::init()
     }
   }
 #elif defined(__ANDROID__)
-  // Android: Use getifaddrs with AF_PACKET + sockaddr_ll
+  // Android: getifaddrs with AF_PACKET. Enumeration failure used to skip the
+  // random fallback because it required OB_SUCC(ret). Discovery is best-effort.
   {
     struct ifaddrs *ifaddr = NULL;
     bool mac_addr_found = false;
+    unsigned char discovered[UUID_NODE_LEN];
+    int discovery_errno = 0;
+    MEMSET(discovered, 0, sizeof(discovered));
     if (getifaddrs(&ifaddr) == -1) {
-      ret = OB_ERR_UNEXPECTED;
+      discovery_errno = errno;
+      LOG_WARN("getifaddrs failed while reading UUID MAC address", K(discovery_errno));
     } else {
       for (struct ifaddrs *ifa = ifaddr; ifa != NULL && !mac_addr_found; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == NULL) continue;
-        if (ifa->ifa_addr->sa_family != AF_PACKET) continue;
-        if (ifa->ifa_flags & IFF_LOOPBACK) continue;
-        struct sockaddr_ll *sll = (struct sockaddr_ll *)ifa->ifa_addr;
-        if (sll->sll_halen == 6) {
-          MEMCPY(mac_addr_, sll->sll_addr, 6);
-          mac_addr_found = true;
+        if (ifa->ifa_addr == NULL) {
+          continue;
+        } else if (ifa->ifa_addr->sa_family != AF_PACKET) {
+          continue;
+        } else if ((ifa->ifa_flags & IFF_LOOPBACK) != 0) {
+          continue;
+        } else {
+          struct sockaddr_ll *sll = (struct sockaddr_ll *)ifa->ifa_addr;
+          if (sll->sll_halen == UUID_NODE_LEN && uuid_node_mac_usable(sll->sll_addr)) {
+            MEMCPY(discovered, sll->sll_addr, UUID_NODE_LEN);
+            mac_addr_found = true;
+          }
         }
       }
       freeifaddrs(ifaddr);
     }
-    if (OB_SUCC(ret) && !mac_addr_found) {
-      // RFC 4122 section 4.5: when MAC address is unavailable (Android sandbox),
-      // use random bytes with the multicast bit set as the node ID.
-      int fd = open("/dev/urandom", O_RDONLY);
-      if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
-        mac_addr_[0] |= 0x01;  // set multicast bit
-        mac_addr_found = true;
-        LOG_INFO("using random UUID node ID (no MAC available on Android)");
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-      }
-      if (fd >= 0) {
-        close(fd);
-      }
-    }
-    if (OB_SUCC(ret) && mac_addr_found) {
+    unsigned char node[UUID_NODE_LEN];
+    bool used_random = false;
+    const int node_ret = finish_uuid_node(mac_addr_found, discovered, node, &used_random, NULL);
+    if (node_ret != 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to initialize UUID node", K(ret), "entropy_errno", node_ret,
+                K(discovery_errno));
+    } else {
+      MEMCPY(mac_addr_, node, UUID_NODE_LEN);
       is_inited_ = true;
+      if (used_random) {
+        LOG_WARN("MAC address unavailable, UUID node initialized from CSPRNG",
+                 K(discovery_errno), "node0", static_cast<int32_t>(mac_addr_[0]));
+      }
     }
   }
 #else
-  // Linux: Use ioctl to get MAC address
-  struct ifreq ifr;
-  struct ifconf ifc;
-  char buf[1024];
-  int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-  if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
-  } else {
-    ifc.ifc_len = sizeof(buf);
-    ifc.ifc_buf = buf;
-    if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
+  // Linux ioctl discovery is best-effort. socket/SIOCGIFCONF/SIOCGIFHWADDR
+  // failure, loopback-only, and all-zero hardware addresses fall back to a
+  // cached CSPRNG node. errno is recorded in the discovery result at the
+  // failing call. Entropy failure stays fatal and does not publish a node.
+  {
+    UuidMacDiscovery discovery;
+    unsigned char node[UUID_NODE_LEN];
+    bool used_random = false;
+    MEMSET(&discovery, 0, sizeof(discovery));
+    const int node_ret = acquire_linux_uuid_node(node, &used_random, &discovery, NULL, NULL);
+    if (node_ret != 0) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to initialize UUID node", K(ret), "entropy_errno", node_ret,
+                "discovery_errno", discovery.discovery_errno,
+                "hw_errno", discovery.hw_errno,
+                KCSTRING(discovery.failed_ifname));
     } else {
-      ifreq *it = ifc.ifc_req;
-      ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
-        if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
-          continue;
-        } else {
-          strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
-          if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
-            if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
-              if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
-                MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
-                mac_addr_found = true;
-                break;
-              } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
-              }
-            }
-          } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
-          }
-        }
-      }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
+      MEMCPY(mac_addr_, node, UUID_NODE_LEN);
+      is_inited_ = true;
+      if (used_random) {
+        LOG_WARN("MAC address unavailable, UUID node initialized from CSPRNG",
+                 "discovery_errno", discovery.discovery_errno,
+                 "hw_errno", discovery.hw_errno,
+                 KCSTRING(discovery.failed_ifname),
+                 "node0", static_cast<int32_t>(mac_addr_[0]));
       }
     }
-    close(sock);
   }
 #endif
   return ret;
@@ -495,6 +488,11 @@ int ObExprUuid::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
 
 int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
 {
+  // Static initialization calls this before daemon() and before ObExprUuid::init().
+  // The ObUUIDNode below is temporary and is discarded. A CSPRNG fallback node is
+  // cached in fill_random_uuid_node(), so this UUID and later SQL UUID() values
+  // share one id and the post-fork child inherits it. Clock sequence still comes
+  // from ObUUIDTime and is not the node seed.
   int ret = OB_SUCCESS;
   ObArenaAllocator calc_buf("ServerUuid");
   unsigned char scratch[UuidCommon::LENGTH_UUID] = {0};

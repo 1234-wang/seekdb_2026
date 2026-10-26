@@ -36,6 +36,15 @@ load(
 
 package(default_visibility = ["//visibility:private"])
 
+filegroup(
+    name = "uuid_node_sources",
+    srcs = [
+        "engine/expr/ob_uuid_node.cpp",
+        "engine/expr/ob_uuid_node.h",
+    ],
+    visibility = ["//unittest/sql:__pkg__"],
+)
+
 _SQL_RUNTIME_ONLY_SHARE_DEPS = [
     "//src/share:checksum_persistence",
     "//src/share:cluster_metadata_persistence",
