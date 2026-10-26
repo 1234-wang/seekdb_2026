@@ -2375,7 +2375,7 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       expr->get_param_expr(0) = child;
       trans_happened = true;
     } else {
-            // size of not is even
+      // size of not is even
       // not(not c1 > 1)) -> c1>1
       ObRawExpr *temp = NULL;
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(cur, temp, *expr_factory))) {
