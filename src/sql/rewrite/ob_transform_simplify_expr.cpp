@@ -2654,26 +2654,67 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
       //do nothing
     } else if (expr->get_expr_type() == T_OP_OR || expr->get_expr_type() == T_OP_AND) {
       ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
+      bool skip_dedup = false;
       ObSEArray<ObRawExpr *, 4> param_conds;
-      if (op_expr->get_param_count() > 100) {
-        /* use too much resource and need add lots of constraints */
-      } else if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
-      } else if (OB_FAIL(do_remove_duplicate_exprs(query_ctx, param_conds))) {
-      } else if (param_conds.count() == op_expr->get_param_count()) {
-        //do nothing
-      } else if (param_conds.count() == 1) {
-        ObRawExpr *temp = NULL;
-        if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_conds.at(0), temp, *ctx_->expr_factory_))) {
-        }  else if (OB_ISNULL(temp)) {
-          ret = OB_ERR_UNEXPECTED;
-        } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+      if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
+      } else if (T_OP_OR == expr->get_expr_type()) {
+        // Eliminate boolean literals of OR before deduplication:
+        //   X OR FALSE is equivalent to X, and X OR TRUE is equivalent to TRUE.
+        // This keeps large OR lists (e.g. one condition repeated many times
+        // together with an always-false predicate) from skipping dedup entirely.
+        ObRawExpr *bool_replacement = NULL;
+        bool bool_changed = false;
+        if (OB_FAIL(remove_or_bool_literals(param_conds, bool_replacement, bool_changed))) {
+        } else if (!bool_changed) {
+          // do nothing
+        } else if (NULL != bool_replacement) {
+          if (OB_FAIL(bool_replacement->formalize(ctx_->session_info_))) {
+          } else {
+            expr = bool_replacement;
+            trans_happened = true;
+            skip_dedup = true;
+          }
+        } else if (1 == param_conds.count()) {
+          ObRawExpr *temp = NULL;
+          if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_conds.at(0), temp, *ctx_->expr_factory_))) {
+          } else if (OB_ISNULL(temp)) {
+            ret = OB_ERR_UNEXPECTED;
+          } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+          } else {
+            expr = temp;
+            trans_happened = true;
+            skip_dedup = true;
+          }
+        } else if (OB_FAIL(op_expr->set_param_exprs(param_conds))) {
         } else {
-          expr = temp;
-          trans_happened = true; 
+          trans_happened = true;
         }
-      } else if (OB_FAIL(op_expr->set_param_exprs(param_conds))) {
-      } else {
-        trans_happened = true; 
+      }
+      if (OB_SUCC(ret) && !skip_dedup) {
+        ObSEArray<ObRawExpr *, 4> dedup_conds;
+        // same_as() rejects unequal operands in O(1) via the pre-computed
+        // expression hash (is_hash_different), so pairwise comparison is cheap
+        // and the operand-count cap can stay high.
+        if (op_expr->get_param_count() > 1000) {
+          /* use too much resource and need add lots of constraints */
+        } else if (OB_FAIL(dedup_conds.assign(op_expr->get_param_exprs()))) {
+        } else if (OB_FAIL(do_remove_duplicate_exprs(query_ctx, dedup_conds))) {
+        } else if (dedup_conds.count() == op_expr->get_param_count()) {
+          //do nothing
+        } else if (dedup_conds.count() == 1) {
+          ObRawExpr *temp = NULL;
+          if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(dedup_conds.at(0), temp, *ctx_->expr_factory_))) {
+          }  else if (OB_ISNULL(temp)) {
+            ret = OB_ERR_UNEXPECTED;
+          } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+          } else {
+            expr = temp;
+            trans_happened = true;
+          }
+        } else if (OB_FAIL(op_expr->set_param_exprs(dedup_conds))) {
+        } else {
+          trans_happened = true;
+        }
       }
     }
   }
@@ -2709,6 +2750,60 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
           cmp_ctx.equal_pairs_.reset();
         }
       }
+    }
+  }
+  return ret;
+}
+
+bool ObTransformSimplifyExpr::is_bool_literal_expr(const ObRawExpr *expr, bool &value)
+{
+  value = false;
+  bool is_literal = false;
+  if (OB_ISNULL(expr) || expr->get_expr_type() != T_BOOL || !expr->is_const_raw_expr()) {
+    // not a boolean literal
+  } else {
+    const ObObj &val = static_cast<const ObConstRawExpr *>(expr)->get_value();
+    if (!val.is_null() && (val.is_true() || val.is_false())) {
+      value = val.is_true();
+      is_literal = true;
+    }
+  }
+  return is_literal;
+}
+
+int ObTransformSimplifyExpr::remove_or_bool_literals(ObIArray<ObRawExpr*> &params,
+                                                     ObRawExpr* &replacement,
+                                                     bool &changed)
+{
+  int ret = OB_SUCCESS;
+  replacement = NULL;
+  changed = false;
+  ObRawExpr *true_expr = NULL;
+  ObRawExpr *false_expr = NULL;
+  for (int64_t i = params.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    bool value = false;
+    if (!is_bool_literal_expr(params.at(i), value)) {
+      // do nothing
+    } else if (value) {
+      // X OR TRUE is equivalent to TRUE
+      true_expr = params.at(i);
+      break;
+    } else {
+      // X OR FALSE is equivalent to X
+      false_expr = (NULL == false_expr) ? params.at(i) : false_expr;
+      if (OB_FAIL(params.remove(i))) {
+      } else {
+        changed = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (NULL != true_expr) {
+      replacement = true_expr;
+      changed = true;
+    } else if (params.empty() && NULL != false_expr) {
+      // FALSE OR FALSE is equivalent to FALSE
+      replacement = false_expr;
     }
   }
   return ret;
