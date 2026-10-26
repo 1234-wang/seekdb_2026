@@ -1,0 +1,85 @@
+drop table if exists inlist_duplicate_literals;
+create table inlist_duplicate_literals(id int primary key, c int, s varchar(8));
+insert into inlist_duplicate_literals values
+(1, 1, 'a'),
+(2, 2, 'b'),
+(3, 3, 'c'),
+(4, null, null);
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+from inlist_duplicate_literals where c in (1, 1, 2, 2, 1) order by id;
+Query Plan
+====================================================================
+|ID|OPERATOR       |NAME                     |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |TABLE FULL SCAN|inlist_duplicate_literals|2       |3           |
+====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([inlist_duplicate_literals.id]), filter([inlist_duplicate_literals.c IN (1, 2)]), rowset=16
+      access([inlist_duplicate_literals.id], [inlist_duplicate_literals.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([inlist_duplicate_literals.id]), range(MIN ; MAX)always true
+select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+from inlist_duplicate_literals where c in (1, 1, 2, 2, 1) order by id;
+id
+1
+2
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+from inlist_duplicate_literals where c in (1, 2, 3, 4, 1) order by id;
+Query Plan
+================================================================================
+|ID|OPERATOR                   |NAME                     |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |SORT                       |                         |4       |5           |
+|1 |└─HASH JOIN                |                         |4       |5           |
+|2 |  ├─SUBPLAN SCAN           |VIEW2                    |4       |2           |
+|3 |  │ └─HASH DISTINCT        |                         |4       |2           |
+|4 |  │   └─VALUES TABLE ACCESS|VALUES_TABLE1            |5       |1           |
+|5 |  └─TABLE FULL SCAN        |inlist_duplicate_literals|4       |3           |
+================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([inlist_duplicate_literals.id]), filter(nil), rowset=16
+      sort_keys([inlist_duplicate_literals.id, ASC])
+  1 - output([inlist_duplicate_literals.id]), filter(nil), rowset=16
+      equal_conds([inlist_duplicate_literals.c = VIEW2.column_0]), other_conds(nil)
+  2 - output([VIEW2.column_0]), filter(nil), rowset=16
+      access([VIEW2.column_0])
+  3 - output([VALUES_TABLE1.column_0]), filter(nil), rowset=16
+      distinct([VALUES_TABLE1.column_0])
+  4 - output([VALUES_TABLE1.column_0]), filter(nil)
+      access([VALUES_TABLE1.column_0])
+  5 - output([inlist_duplicate_literals.id], [inlist_duplicate_literals.c]), filter(nil), rowset=16
+      access([inlist_duplicate_literals.id], [inlist_duplicate_literals.c]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([inlist_duplicate_literals.id]), range(MIN ; MAX)always true
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+from inlist_duplicate_literals where s in ('a', 'a', 'b', 'b', 'a') order by id;
+Query Plan
+================================================================================
+|ID|OPERATOR                   |NAME                     |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |SORT                       |                         |2       |5           |
+|1 |└─HASH JOIN                |                         |2       |5           |
+|2 |  ├─SUBPLAN SCAN           |VIEW2                    |2       |1           |
+|3 |  │ └─HASH DISTINCT        |                         |2       |1           |
+|4 |  │   └─VALUES TABLE ACCESS|VALUES_TABLE1            |5       |1           |
+|5 |  └─TABLE FULL SCAN        |inlist_duplicate_literals|4       |3           |
+================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([inlist_duplicate_literals.id]), filter(nil), rowset=16
+      sort_keys([inlist_duplicate_literals.id, ASC])
+  1 - output([inlist_duplicate_literals.id]), filter(nil), rowset=16
+      equal_conds([inlist_duplicate_literals.s = VIEW2.column_0]), other_conds(nil)
+  2 - output([VIEW2.column_0]), filter(nil), rowset=16
+      access([VIEW2.column_0])
+  3 - output([VALUES_TABLE1.column_0]), filter(nil), rowset=16
+      distinct([VALUES_TABLE1.column_0])
+  4 - output([VALUES_TABLE1.column_0]), filter(nil)
+      access([VALUES_TABLE1.column_0])
+  5 - output([inlist_duplicate_literals.id], [inlist_duplicate_literals.s]), filter(nil), rowset=16
+      access([inlist_duplicate_literals.id], [inlist_duplicate_literals.s]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([inlist_duplicate_literals.id]), range(MIN ; MAX)always true
+drop table inlist_duplicate_literals;
