@@ -1,0 +1,64 @@
+--disable_warnings
+drop table if exists t_ann_absorption;
+--enable_warnings
+
+create table t_ann_absorption (
+  id int primary key,
+  embedding vector(3) not null,
+  category int,
+  parity varchar(8),
+  key idx_category(category)
+) organization heap;
+insert into t_ann_absorption values
+  (1, '[1,0,0]', 1, 'even'),
+  (2, '[2,0,0]', 1, null),
+  (3, '[3,0,0]', 2, 'even'),
+  (4, '[4,0,0]', null, 'even'),
+  (5, '[5,0,0]', 1, 'odd'),
+  (6, '[6,0,0]', 2, null),
+  (7, '[7,0,0]', null, null),
+  (8, '[8,0,0]', 1, 'even');
+create vector index idx_vec on t_ann_absorption(embedding)
+  with (distance=l2, type=hnsw, lib=vsag, sync_mode=immediate);
+
+select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+
+select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+  and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+
+--replace_regex /, $/,/
+explain basic select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+  and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+
+select /*+ no_rewrite index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+
+--replace_regex /, $/,/
+explain basic select /*+ no_rewrite index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+
+select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') limit 4;
+
+prepare ann_absorption from
+"select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = ? and (category = ? or parity = ?)
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4";
+set @outer_category = 1, @inner_category = 1, @parity = 'even';
+execute ann_absorption using @outer_category, @inner_category, @parity;
+set @outer_category = 2;
+execute ann_absorption using @outer_category, @inner_category, @parity;
+set @outer_category = 1, @inner_category = 2;
+execute ann_absorption using @outer_category, @inner_category, @parity;
+deallocate prepare ann_absorption;
+
+drop table t_ann_absorption;
