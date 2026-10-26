@@ -35,6 +35,8 @@
 #include <linux/if_packet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#else
+#include <sys/random.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -203,19 +205,18 @@ int ObUUIDNode::init()
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
+  bool mac_addr_found = false;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("socket failed, cannot look up MAC address", K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF", K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
       for (; it != end && OB_SUCC(ret); ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
@@ -236,14 +237,22 @@ int ObUUIDNode::init()
           }
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
-      }
     }
     close(sock);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (mac_addr_found) {
+    is_inited_ = true;
+  } else if (getentropy(mac_addr_, sizeof(mac_addr_)) != 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to generate random UUID node", K(ret), K(errno));
+  } else {
+    // RFC 4122 section 4.5: when no MAC address is available (e.g. a sandbox
+    // without network interfaces), use a random node ID with the multicast
+    // bit set so it can never collide with a real MAC address.
+    mac_addr_[0] |= 0x01;
+    is_inited_ = true;
+    LOG_WARN("no usable MAC address found, using random UUID node ID");
   }
 #endif
   return ret;
