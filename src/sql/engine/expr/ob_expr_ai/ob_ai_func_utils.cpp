@@ -18,6 +18,7 @@
 #include "ob_ai_func_utils.h"
 #include "ob_ai_func_client.h"
 #include "query/engine/expr/ob_ai_model_resolver.h"
+#include <cmath>
 
 namespace oceanbase 
 {
@@ -175,6 +176,11 @@ int ObOpenAIUtils::ObOpenAIComplete::parse_output(common::ObIAllocator &allocato
       ret = OB_INVALID_DATA;
     } else {
       result = hit[0];
+      // response content must not be empty
+      if (result->json_type() == ObJsonNodeType::J_STRING &&
+          static_cast<ObJsonString *>(result)->get_str().empty()) {
+        ret = OB_INVALID_DATA;
+      }
     }
   }
   return ret;
@@ -227,20 +233,59 @@ int ObOpenAIUtils::ObOpenAIEmbed::parse_output(common::ObIAllocator &allocator,
     ObJsonArray *result_array = nullptr;
     ObJsonNode *data_node = nullptr;
     if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(allocator, result_array))) {
-    } else if (OB_ISNULL(data_node = http_response->get_value("data"))) {
+    } else if (OB_ISNULL(data_node = http_response->get_value("data")) ||
+               data_node->json_type() != ObJsonNodeType::J_ARRAY) {
       ret = OB_INVALID_DATA;
     } else {
       ObJsonArray *data_array = static_cast<ObJsonArray *>(data_node);
-      ObJsonNode *embedding_node = nullptr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < data_array->element_count(); i++) {
-        if (OB_ISNULL(embedding_node = data_array->get_value(i))) {
+      const int64_t count = data_array->element_count();
+      // Restore the out-of-order response: each item in "data" carries an
+      // "index" field that maps it back to the original input position.
+      // If "index" is absent, fall back to the positional order.
+      ObArray<ObJsonNode *> index_to_embedding;
+      for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+        ObJsonNode *embedding_node = data_array->get_value(i);
+        if (OB_ISNULL(embedding_node)) {
           ret = OB_INVALID_DATA;
         } else if (embedding_node->json_type() != ObJsonNodeType::J_OBJECT) {
           ret = OB_INVALID_DATA;
         } else {
           ObJsonObject *embedding_obj = static_cast<ObJsonObject *>(embedding_node);
+          ObJsonNode *index_node = embedding_obj->get_value("index");
           ObJsonNode *embedding = embedding_obj->get_value("embedding");
+          int64_t idx = i;
+          if (OB_ISNULL(embedding) || embedding->json_type() != ObJsonNodeType::J_ARRAY) {
+            ret = OB_INVALID_DATA;
+          } else if (OB_NOT_NULL(index_node)) {
+            if (index_node->json_type() != ObJsonNodeType::J_INT) {
+              ret = OB_INVALID_DATA;
+            } else {
+              idx = static_cast<ObJsonInt *>(index_node)->get_int();
+            }
+          }
+          if (OB_SUCC(ret) && (idx < 0 || idx >= count)) {
+            ret = OB_INVALID_DATA;
+          }
+          // make sure slot idx exists, fill with nullptr
+          while (OB_SUCC(ret) && index_to_embedding.count() <= idx) {
+            if (OB_FAIL(index_to_embedding.push_back(nullptr))) {
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_NOT_NULL(index_to_embedding.at(idx))) {
+              // duplicate index
+              ret = OB_INVALID_DATA;
+            } else {
+              index_to_embedding.at(idx) = embedding;
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+          ObJsonNode *embedding = index_to_embedding.at(i);
           if (OB_ISNULL(embedding)) {
+            // missing index, response is incomplete
             ret = OB_INVALID_DATA;
           } else if (OB_FAIL(result_array->append(embedding))) {
           }
@@ -361,12 +406,9 @@ int ObOllamaUtils::ObOllamaEmbed::get_body(common::ObIAllocator &allocator,
     } else if (OB_FAIL(body_obj->add("model", model_str))) {
     } else if (OB_FAIL(ObAIFuncJsonUtils::transform_array_to_json_array(allocator, contents, input_array))) {
     } else if (OB_FAIL(body_obj->add("input", input_array))) {
+    } else if (OB_FAIL(ObAIFuncJsonUtils::compact_json_object(allocator, config, body_obj))) {
     } else {
       body = body_obj;
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObAIFuncJsonUtils::compact_json_object(allocator, config, body))) {
-      }
     }
   }
   return ret;
@@ -1063,6 +1105,8 @@ int ObAIFuncUtils::get_complete_provider(ObIAllocator &allocator, const ObString
     complete_provider = OB_NEWx(ObOpenAIUtils::ObOpenAIComplete, &allocator);
   } else if (ob_provider_check(provider, ObAIFuncProviderUtils::DASHSCOPE)) {
     complete_provider = OB_NEWx(ObDashscopeUtils::ObDashscopeComplete, &allocator);
+  } else if (ob_provider_check(provider, ObAIFuncProviderUtils::OLLAMA)) {
+    complete_provider = OB_NEWx(ObOllamaUtils::ObOllamaComplete, &allocator);
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this provider current is");
@@ -1086,6 +1130,8 @@ int ObAIFuncUtils::get_embed_provider(ObIAllocator &allocator, const ObString &p
     embed_provider = OB_NEWx(ObOpenAIUtils::ObOpenAIEmbed, &allocator);
   } else if (ob_provider_check(provider, ObAIFuncProviderUtils::DASHSCOPE)) {
     embed_provider = OB_NEWx(ObDashscopeUtils::ObDashscopeEmbed, &allocator);
+  } else if (ob_provider_check(provider, ObAIFuncProviderUtils::OLLAMA)) {
+    embed_provider = OB_NEWx(ObOllamaUtils::ObOllamaEmbed, &allocator);
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this provider current is");
@@ -1303,6 +1349,9 @@ int ObAIFuncModel::call_completion(ObString &prompt, ObJsonObject *config, ObStr
   } else if (OB_FAIL(client.send_post(*allocator_, endpoint_info_.get_url(), headers, body, response))) {
   } else if (OB_FAIL(complete_provider->parse_output(*allocator_, response, result_base))) {
   } else if (OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(*allocator_, result_base, result_str))) {
+  } else if (result_str.empty()) {
+    // response content must not be empty
+    ret = OB_INVALID_DATA;
   } else {
     result = result_str;
   }
@@ -1432,6 +1481,36 @@ int ObAIFuncModel::call_dense_embedding_vector(ObArray<ObString> &contents, ObJs
 }
 
 
+namespace {
+// Validate every element of an embedding vector is a finite number.
+int check_embedding_elements_valid(common::ObIAllocator &allocator,
+                                   const common::ObIJsonBase &embedding_jbase)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(allocator);
+  const ObJsonArray *array = static_cast<const ObJsonArray *>(&embedding_jbase);
+  for (int64_t i = 0; OB_SUCC(ret) && i < array->element_count(); i++) {
+    const ObJsonNode *element = array->get_value(i);
+    if (OB_ISNULL(element)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (element->json_type() == ObJsonNodeType::J_DOUBLE) {
+      double value = static_cast<const ObJsonDouble *>(element)->value();
+      if (!std::isfinite(value)) {
+        ret = OB_INVALID_ARGUMENT;
+      }
+    } else if (element->json_type() != ObJsonNodeType::J_INT &&
+               element->json_type() != ObJsonNodeType::J_UINT &&
+               element->json_type() != ObJsonNodeType::J_DECIMAL) {
+      ret = OB_INVALID_ARGUMENT;
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, embedding element is invalid");
+  }
+  return ret;
+}
+} // anonymous namespace
+
 int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, ObJsonObject *config, ObArray<ObString> &results)
 {
   int ret = OB_SUCCESS;
@@ -1475,9 +1554,13 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
         ObIJsonBase *j_base = result_array->get_value(i);
         if (OB_ISNULL(j_base)) {
           ret = OB_ERR_UNEXPECTED;
+        } else if (j_base->json_type() != ObJsonNodeType::J_ARRAY) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, result is not an array");
         } else if (dimension > 0 && static_cast<ObJsonArray *>(j_base)->element_count() != dimension) {
           ret = OB_INVALID_ARGUMENT;
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, result dimension is not equal to dimension");
+        } else if (OB_FAIL(check_embedding_elements_valid(*allocator_, *j_base))) {
         } else if (OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(*allocator_, j_base, result_str))) {
         } else {
           results.push_back(result_str);
@@ -1593,7 +1676,10 @@ bool ObAIFuncPromptObjectUtils::is_valid_prompt_object(ObJsonObject *prompt_obje
       ObJsonNode *node = args_array->get_value(i);
       if (OB_ISNULL(node)) {  
         is_valid = false;
-      } else if (node->json_type() != ObJsonNodeType::J_STRING && node->json_type() != ObJsonNodeType::J_OBJECT) {
+      } else if (node->json_type() != ObJsonNodeType::J_STRING &&
+                 node->json_type() != ObJsonNodeType::J_OBJECT &&
+                 node->json_type() != ObJsonNodeType::J_ARRAY) {
+        // args can be string, nested prompt object or json array
         is_valid = false;
       }
     }
@@ -1618,13 +1704,29 @@ int ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(ObIAllocator &al
     uint64_t args_count = args_array->element_count();
     int64_t max_result_len = template_str.length();
     char *result_buf = NULL;
+    ObArray<ObString> arg_replacement_strs;
+    // serialize every arg into its replacement text and compute the result length
     for (uint64_t i = 0; OB_SUCC(ret) && i < args_count; i++) {
       ObJsonNode *arg_node = args_array->get_value(i);
-      if (OB_NOT_NULL(arg_node) && arg_node->json_type() == ObJsonNodeType::J_STRING) {
-        ObJsonString *arg_str = static_cast<ObJsonString *>(arg_node);
-        max_result_len += arg_str->get_str().length();
-      } else {
+      if (OB_ISNULL(arg_node)) {
         ret = OB_INVALID_ARGUMENT;
+      } else if (arg_node->json_type() == ObJsonNodeType::J_STRING) {
+        ObJsonString *arg_str = static_cast<ObJsonString *>(arg_node);
+        ObString arg_value = arg_str->get_str();
+        if (OB_FAIL(arg_replacement_strs.push_back(arg_value))) {
+        } else {
+          max_result_len += arg_value.length();
+        }
+      } else {
+        // serialize json node (object/array/number/boolean/null) compactly
+        ObJsonBuffer j_buf(&allocator);
+        ObString serialized_str;
+        if (OB_FAIL(arg_node->print(j_buf, false))) {
+        } else if (OB_FAIL(ob_write_string(allocator, j_buf.string(), serialized_str))) {
+        } else if (OB_FAIL(arg_replacement_strs.push_back(serialized_str))) {
+        } else {
+          max_result_len += serialized_str.length();
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -1665,21 +1767,13 @@ int ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(ObIAllocator &al
             }
             
             if (valid_index && index >= 0 && static_cast<uint64_t>(index) < args_count) {
-              ObJsonNode *arg_node = args_array->get_value(static_cast<uint64_t>(index));
-              if (OB_NOT_NULL(arg_node) && arg_node->json_type() == ObJsonNodeType::J_STRING) {
-                ObJsonString *arg_str = static_cast<ObJsonString *>(arg_node);
-                ObString arg_value = arg_str->get_str();
-                
-                if (result_pos + arg_value.length() <= max_result_len) {
-                  MEMCPY(result_buf + result_pos, arg_value.ptr(), arg_value.length());
-                  result_pos += arg_value.length();
-                } else {
-                  ret = OB_BUF_NOT_ENOUGH;
-                }
+              ObString arg_value = arg_replacement_strs.at(index);
+              if (result_pos + arg_value.length() <= max_result_len) {
+                MEMCPY(result_buf + result_pos, arg_value.ptr(), arg_value.length());
+                result_pos += arg_value.length();
               } else {
-                //do nothing
+                ret = OB_BUF_NOT_ENOUGH;
               }
-              
               i = end_pos;
             } else {
               ret = OB_INVALID_ARGUMENT;

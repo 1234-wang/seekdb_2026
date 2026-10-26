@@ -25,3 +25,26 @@ cc_test(
     ],
     target_compatible_with = ["@platforms//os:linux"],
 )
+
+cc_library(
+    name = "tx_ctx_no_trace_log_cases",
+    srcs = ["test_tx_ctx_no_trace_log.cpp"],
+    alwayslink = True,
+    deps = [
+        "//bazel/third_party:gtest",
+        "//src/storage:tx_replay_test_headers",
+    ],
+)
+
+cc_test(
+    name = "test_tx_ctx_no_trace_log",
+    size = "small",
+    linkstatic = True,
+    # liboceanbase supplies the C++ runtime; select rules_cc's $ORIGIN rpath.
+    features = ["-static_cpp_runtime", "-static_link_cpp_runtimes"],
+    deps = [
+        ":tx_ctx_no_trace_log_cases",
+        "//src/observer:liboceanbase",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+)
