@@ -538,6 +538,18 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
   } else {
     if (func.contain_geometry_values_ || func.contain_fulltext_search_ || func.contain_vec_index_approx_) {
       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
+      // The rewrite rules are disabled for approximate vector index queries because
+      // they may change the access path chosen by the vector index. Expression
+      // simplification is safe for that: it only removes duplicated and implied
+      // predicates, which keeps the pre-filter of the approximate scan from
+      // evaluating a needlessly long filter expression for every candidate row.
+      if (func.contain_vec_index_approx_
+          && !func.contain_geometry_values_
+          && !func.contain_fulltext_search_) {
+        uint64_t ann_enable_list = 0;
+        ObTransformRule::add_trans_type(ann_enable_list, SIMPLIFY_EXPR);
+        disable_list &= (~ann_enable_list);
+      }
     }
     if (func.contain_enum_set_values_) {
       uint64_t enum_set_enable_list = 0;

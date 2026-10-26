@@ -1,0 +1,38 @@
+#owner: Seven2SeVen233
+#owner group: oceanbase
+#description: approximate vector index query prunes implied range predicates in the filter
+--echo # Approximate vector index implied range predicate pruning
+
+--disable_warnings
+drop table if exists t_ann_prune;
+--enable_warnings
+
+create table t_ann_prune(c1 int, c2 int, c3 vector(3), primary key(c1), vector index idx_ann_prune(c3) with (distance=l2, type=hnsw, lib=vsag));
+insert into t_ann_prune values(1, 10, '[0.0,0.0,0.0]');
+insert into t_ann_prune values(2, 20, '[1.0,0.0,0.0]');
+insert into t_ann_prune values(3, 30, '[2.0,0.0,0.0]');
+insert into t_ann_prune values(4, 40, '[3.0,0.0,0.0]');
+insert into t_ann_prune values(5, 50, '[4.0,0.0,0.0]');
+insert into t_ann_prune values(6, 60, '[5.0,0.0,0.0]');
+
+--echo # weaker upper bounds are implied by the tightest one
+select c1 from t_ann_prune where c2 > 0 and c2 > 1 and c2 > 2 and c2 > 3 order by l2_distance(c3, [0.0,0.0,0.0]) APPROXIMATE limit 2;
+
+--echo # a strict bound and an inclusive bound on the same value keep the strict one
+select c1 from t_ann_prune where c2 > 0 and c2 >= 0 order by l2_distance(c3, [0.0,0.0,0.0]) APPROXIMATE limit 1;
+
+--echo # pruning does not change the rows returned by a filtered approximate scan
+select c1 from t_ann_prune where c2 < 40 and c2 < 80 and c2 < 120 order by l2_distance(c3, [0.0,0.0,0.0]) APPROXIMATE limit 10;
+
+--echo # two equivalent equalities are not both pruned
+select count(*) from t_ann_prune where c2 = 20 and 20 = c2;
+
+--echo # a contradictory filter is left alone
+select count(*) from t_ann_prune where c2 > 30 and c2 < 20;
+
+--echo # conditions combined by or are left alone
+select count(*) from t_ann_prune where c2 < 30 or c2 < 50;
+
+--disable_warnings
+drop table if exists t_ann_prune;
+--enable_warnings

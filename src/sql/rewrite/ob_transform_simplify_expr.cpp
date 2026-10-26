@@ -2262,6 +2262,7 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
   bool push_not_happend = false;
   bool remove_duplicate_happend = false;
   bool pull_similar_happend = false;
+  bool remove_implied_range_happend = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (conditions.count() == 0) {
@@ -2271,8 +2272,10 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
                                             conditions,
                                             remove_duplicate_happend))) {
   } else if (OB_FAIL(pull_similar_expr(stmt, conditions, pull_similar_happend))) {
+  } else if (OB_FAIL(remove_implied_range_exprs(conditions, remove_implied_range_happend))) {
   } else {
-    trans_happened =  push_not_happend | remove_duplicate_happend | pull_similar_happend;
+    trans_happened =  push_not_happend | remove_duplicate_happend | pull_similar_happend
+                      | remove_implied_range_happend;
     if (trans_happened) {
       for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
         if (OB_ISNULL(conditions.at(i))) {
@@ -2283,6 +2286,7 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
       OPT_TRACE("   push_not_happend:", push_not_happend);
       OPT_TRACE("   remove_duplicate_happend:", remove_duplicate_happend);
       OPT_TRACE("   pull_similar_happend:", pull_similar_happend);
+      OPT_TRACE("   remove_implied_range_happend:", remove_implied_range_happend);
     }
   }
   return ret;
@@ -3373,6 +3377,348 @@ int ObTransformSimplifyExpr::add_constraint_for_convert_case_when_by_then(ObIArr
     } else {
       ObExprConstraint true_cons(true_exprs.at(i), PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE);
       if (OB_FAIL(ctx_->expr_constraints_.push_back(true_cons))) {
+      }
+    }
+  }
+  return ret;
+}
+
+namespace {
+
+int compare_range_bound(const ObObj &lhs, const ObObj &rhs, int &cmp)
+{
+  int ret = OB_SUCCESS;
+  if (lhs.get_type() != rhs.get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected different bound types", K(ret), K(lhs), K(rhs));
+  } else if (OB_FAIL(lhs.compare(rhs, cmp))) {
+    LOG_WARN("failed to compare range bounds", K(ret), K(lhs), K(rhs));
+  }
+  return ret;
+}
+
+bool is_same_range_column(ObRawExpr *lhs, ObRawExpr *rhs)
+{
+  bool is_same = false;
+  if (NULL != lhs && NULL != rhs
+      && T_REF_COLUMN == lhs->get_expr_type()
+      && T_REF_COLUMN == rhs->get_expr_type()) {
+    const ObColumnRefRawExpr *left_column = static_cast<const ObColumnRefRawExpr *>(lhs);
+    const ObColumnRefRawExpr *right_column = static_cast<const ObColumnRefRawExpr *>(rhs);
+    is_same = left_column->get_table_id() == right_column->get_table_id()
+              && left_column->get_column_id() == right_column->get_column_id();
+  }
+  return is_same;
+}
+
+// Transfer one comparison on a column into the bounds it requires on that column.
+void get_range_predicate_bounds(const ObItemType cmp_type,
+                                const ObObj &value,
+                                bool &has_lower,
+                                ObObj &lower_bound,
+                                bool &lower_inclusive,
+                                bool &has_upper,
+                                ObObj &upper_bound,
+                                bool &upper_inclusive)
+{
+  has_lower = false;
+  lower_inclusive = false;
+  has_upper = false;
+  upper_inclusive = false;
+  switch (cmp_type) {
+    case T_OP_GT:
+      has_lower = true;
+      lower_bound = value;
+      lower_inclusive = false;
+      break;
+    case T_OP_GE:
+      has_lower = true;
+      lower_bound = value;
+      lower_inclusive = true;
+      break;
+    case T_OP_LT:
+      has_upper = true;
+      upper_bound = value;
+      upper_inclusive = false;
+      break;
+    case T_OP_LE:
+      has_upper = true;
+      upper_bound = value;
+      upper_inclusive = true;
+      break;
+    case T_OP_EQ:
+      has_lower = true;
+      lower_bound = value;
+      lower_inclusive = true;
+      has_upper = true;
+      upper_bound = value;
+      upper_inclusive = true;
+      break;
+    default:
+      break;
+  }
+}
+
+} // namespace
+
+int ObTransformSimplifyExpr::extract_range_predicate(ObRawExpr *expr,
+                                                     ObRawExpr *&column,
+                                                     ObItemType &cmp_type,
+                                                     ObObj &value,
+                                                     bool &is_range_pred)
+{
+  int ret = OB_SUCCESS;
+  column = NULL;
+  cmp_type = T_INVALID;
+  is_range_pred = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr or transform ctx", K(ret), K(expr), K(ctx_));
+  } else if (2 != expr->get_param_count()) {
+    // not a binary comparison
+  } else {
+    const ObItemType type = expr->get_expr_type();
+    if (T_OP_LT != type && T_OP_LE != type && T_OP_GT != type
+        && T_OP_GE != type && T_OP_EQ != type) {
+      // only plain comparisons can be used to derive simple column bounds
+    } else {
+      ObRawExpr *left = expr->get_param_expr(0);
+      ObRawExpr *right = expr->get_param_expr(1);
+      ObRawExpr *col_expr = NULL;
+      ObRawExpr *const_expr = NULL;
+      bool reverse = false;
+      if (OB_ISNULL(left) || OB_ISNULL(right)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null comparison param", K(ret), K(expr));
+      } else if (T_REF_COLUMN == left->get_expr_type()
+                 && T_REF_COLUMN != right->get_expr_type()) {
+        col_expr = left;
+        const_expr = right;
+      } else if (T_REF_COLUMN == right->get_expr_type()
+                 && T_REF_COLUMN != left->get_expr_type()) {
+        col_expr = right;
+        const_expr = left;
+        reverse = true;
+      }
+      if (OB_SUCC(ret) && NULL != col_expr) {
+        ObObj const_value;
+        bool got_result = false;
+        bool has_warning = false;
+        if (OB_FAIL(ObTransformUtils::calc_const_expr_result(const_expr, ctx_,
+                                                            const_value, got_result,
+                                                            &has_warning))) {
+          LOG_WARN("failed to calc const result", K(ret), KPC(const_expr));
+        } else if (!got_result || has_warning || const_value.is_null()
+                   || ObIntType != const_value.get_type()) {
+          // only integer constants are handled, anything else stays untouched
+        } else {
+          if (reverse) {
+            if (T_OP_LT == type) {
+              cmp_type = T_OP_GT;
+            } else if (T_OP_LE == type) {
+              cmp_type = T_OP_GE;
+            } else if (T_OP_GT == type) {
+              cmp_type = T_OP_LT;
+            } else if (T_OP_GE == type) {
+              cmp_type = T_OP_LE;
+            } else {
+              cmp_type = T_OP_EQ;
+            }
+          } else {
+            cmp_type = type;
+          }
+          column = col_expr;
+          value = const_value;
+          is_range_pred = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::remove_implied_range_exprs(ObIArray<ObRawExpr*> &conditions,
+                                                        bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  // The combined bounds of a conjunct are compared pairwise, so keep the amount
+  // of analyzed predicates bounded.
+  const int64_t max_predicate_count = 256;
+  const int64_t condition_count = conditions.count();
+  ObSEArray<int64_t, 8> positions;
+  ObSEArray<ObRawExpr *, 8> columns;
+  ObSEArray<ObItemType, 8> cmp_types;
+  ObSEArray<ObObj, 8> bound_values;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null transform ctx", K(ret));
+  } else if (condition_count <= 1 || condition_count > max_predicate_count) {
+    // nothing to prune
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < condition_count; ++i) {
+      ObRawExpr *column = NULL;
+      ObItemType cmp_type = T_INVALID;
+      ObObj value;
+      bool is_range_pred = false;
+      if (OB_ISNULL(conditions.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null condition", K(ret), K(i));
+      } else if (OB_FAIL(extract_range_predicate(conditions.at(i), column,
+                                                 cmp_type, value, is_range_pred))) {
+        LOG_WARN("failed to extract range predicate", K(ret), K(i));
+      } else if (!is_range_pred) {
+        // not a simple range predicate
+      } else if (OB_FAIL(positions.push_back(i))
+                 || OB_FAIL(columns.push_back(column))
+                 || OB_FAIL(cmp_types.push_back(cmp_type))
+                 || OB_FAIL(bound_values.push_back(value))) {
+        LOG_WARN("failed to record range predicate", K(ret), K(i));
+      }
+    }
+    const int64_t predicate_count = columns.count();
+    if (OB_SUCC(ret) && predicate_count > 1) {
+      ObSEArray<int64_t, 8> implied;
+      for (int64_t i = 0; OB_SUCC(ret) && i < predicate_count; ++i) {
+        if (OB_FAIL(implied.push_back(0))) {
+          LOG_WARN("failed to push implied flag", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < predicate_count; ++i) {
+        bool has_lower = false;
+        bool lower_inclusive = false;
+        bool has_upper = false;
+        bool upper_inclusive = false;
+        bool has_other_predicate = false;
+        ObObj lower_bound;
+        ObObj upper_bound;
+        for (int64_t j = 0; OB_SUCC(ret) && j < predicate_count; ++j) {
+          bool cur_has_lower = false;
+          bool cur_lower_inclusive = false;
+          bool cur_has_upper = false;
+          bool cur_upper_inclusive = false;
+          ObObj cur_lower;
+          ObObj cur_upper;
+          if (j == i || !is_same_range_column(columns.at(i), columns.at(j))) {
+            // the bounds are only combined for one column
+          } else {
+            has_other_predicate = true;
+            get_range_predicate_bounds(cmp_types.at(j), bound_values.at(j),
+                                       cur_has_lower, cur_lower, cur_lower_inclusive,
+                                       cur_has_upper, cur_upper, cur_upper_inclusive);
+            int cmp = 0;
+            if (cur_has_lower) {
+              if (!has_lower) {
+                has_lower = true;
+                lower_bound = cur_lower;
+                lower_inclusive = cur_lower_inclusive;
+              } else if (OB_FAIL(compare_range_bound(cur_lower, lower_bound, cmp))) {
+                LOG_WARN("failed to compare lower bounds", K(ret));
+              } else if (cmp > 0 || (0 == cmp && !cur_lower_inclusive)) {
+                lower_bound = cur_lower;
+                lower_inclusive = cur_lower_inclusive;
+              }
+            }
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else if (cur_has_upper) {
+              if (!has_upper) {
+                has_upper = true;
+                upper_bound = cur_upper;
+                upper_inclusive = cur_upper_inclusive;
+              } else if (OB_FAIL(compare_range_bound(cur_upper, upper_bound, cmp))) {
+                LOG_WARN("failed to compare upper bounds", K(ret));
+              } else if (cmp < 0 || (0 == cmp && !cur_upper_inclusive)) {
+                upper_bound = cur_upper;
+                upper_inclusive = cur_upper_inclusive;
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret) && has_other_predicate) {
+          bool is_empty_range = false;
+          bool pred_has_lower = false;
+          bool pred_lower_inclusive = false;
+          bool pred_has_upper = false;
+          bool pred_upper_inclusive = false;
+          bool is_implied = true;
+          ObObj pred_lower;
+          ObObj pred_upper;
+          int cmp = 0;
+          if (has_lower && has_upper) {
+            if (OB_FAIL(compare_range_bound(lower_bound, upper_bound, cmp))) {
+              LOG_WARN("failed to compare combined bounds", K(ret));
+            } else if (cmp > 0 || (0 == cmp && (!lower_inclusive || !upper_inclusive))) {
+              // the other predicates alone can never be satisfied
+              is_empty_range = true;
+            }
+          }
+          if (OB_FAIL(ret) || is_empty_range) {
+            // do nothing
+          } else {
+            get_range_predicate_bounds(cmp_types.at(i), bound_values.at(i),
+                                       pred_has_lower, pred_lower, pred_lower_inclusive,
+                                       pred_has_upper, pred_upper, pred_upper_inclusive);
+            if (pred_has_lower) {
+              if (!has_lower) {
+                is_implied = false;
+              } else if (OB_FAIL(compare_range_bound(lower_bound, pred_lower, cmp))) {
+                LOG_WARN("failed to compare lower bounds", K(ret));
+              } else if (cmp < 0 || (0 == cmp && !pred_lower_inclusive && lower_inclusive)) {
+                is_implied = false;
+              }
+            }
+            if (OB_FAIL(ret) || !is_implied) {
+              // do nothing
+            } else if (pred_has_upper) {
+              if (!has_upper) {
+                is_implied = false;
+              } else if (OB_FAIL(compare_range_bound(upper_bound, pred_upper, cmp))) {
+                LOG_WARN("failed to compare upper bounds", K(ret));
+              } else if (cmp > 0 || (0 == cmp && !pred_upper_inclusive && upper_inclusive)) {
+                is_implied = false;
+              }
+            }
+          }
+          bool is_same_bound = false;
+          if (OB_SUCC(ret) && !is_empty_range) {
+            int same_cmp = 0;
+            is_same_bound = pred_has_lower == has_lower && pred_has_upper == has_upper;
+            if (!is_same_bound) {
+              // one of the two predicate lists has bounds the other does not have
+            } else if (pred_has_lower
+                       && OB_FAIL(compare_range_bound(pred_lower, lower_bound, same_cmp))) {
+              LOG_WARN("failed to compare lower bounds", K(ret));
+            } else if (pred_has_lower
+                       && (0 != same_cmp || pred_lower_inclusive != lower_inclusive)) {
+              is_same_bound = false;
+            } else if (pred_has_upper
+                       && OB_FAIL(compare_range_bound(pred_upper, upper_bound, same_cmp))) {
+              LOG_WARN("failed to compare upper bounds", K(ret));
+            } else if (pred_has_upper
+                       && (0 != same_cmp || pred_upper_inclusive != upper_inclusive)) {
+              is_same_bound = false;
+            }
+          }
+          // Two equivalent predicates imply each other, pruning both of them would
+          // remove the filter completely, so only strictly weaker ones are removed.
+          if (OB_SUCC(ret) && is_implied && !is_empty_range && !is_same_bound) {
+            implied.at(i) = 1;
+          }
+        }
+      }
+      int64_t removed_count = 0;
+      for (int64_t i = predicate_count - 1; OB_SUCC(ret) && i >= 0; --i) {
+        if (1 == implied.at(i)) {
+          if (OB_FAIL(conditions.remove(positions.at(i)))) {
+            LOG_WARN("failed to remove implied condition", K(ret), K(i));
+          } else {
+            ++removed_count;
+          }
+        }
+      }
+      if (OB_SUCC(ret) && removed_count > 0) {
+        trans_happened = true;
       }
     }
   }

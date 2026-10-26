@@ -181,6 +181,12 @@ private:
   int recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObRawExpr* &expr, bool &trans_happened);
   int do_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObIArray<ObRawExpr*> &exprs);
   int pull_similar_expr(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
+  int remove_implied_range_exprs(ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
+  int extract_range_predicate(ObRawExpr *expr,
+                              ObRawExpr *&column,
+                              ObItemType &cmp_type,
+                              ObObj &value,
+                              bool &is_range_pred);
   int recursive_pull_similar(ObDMLStmt *stmt, ObRawExpr* &expr, bool &trans_happened);
   int do_pull_similar(ObDMLStmt *stmt,
                       ObRawExpr* &expr,
