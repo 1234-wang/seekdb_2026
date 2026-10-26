@@ -1,62 +1,62 @@
-<div align对齐="center"分隔符align对齐="center""居中""居中""居中">分隔符align="center">“居中”“居中”“居中”>分隔符align="center">“居中”“居中”“居中”>分隔符align="center">“居中”“居中”“居中”>分隔符align="center">“居中”“居中”“居中”>分隔符align="center">“居中”“居中”“居中”>分隔符align="center">“居中”“居中”“居中”>分隔符align="center">“居中”“居中”“居中”>分隔符align="center">
+<div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" width="420"><源媒体="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: dark)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: dark)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" 宽度="420">源媒体="(prefers-color-scheme: dark)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" 宽度="420"><源媒体=="420" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" width="420"><源媒体="(prefers-color-scheme: dark)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: dark)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: dark)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" 宽度="420">
-  <source media媒体媒体媒体媒体媒体媒体媒体媒体媒体媒体媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" width="420"><源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: light)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: light)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420">源媒体="(prefers-color-scheme: light)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420"><源媒体媒体媒体媒体媒体媒体媒体媒体媒体媒体媒体媒体媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" width="420"><源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: light)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420"><源媒体="(prefers-color-scheme: light)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420">源媒体="(prefers-color-scheme: light)"srcset"https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original"width"420">源媒体="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" 宽度="420">
+  <source media="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" width="420">
+  <source media="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" width="420">
   <img alt="seekdb logo" src="images/logo.svg" width="420">
-</picture></图片>
+</picture>
 
-# **Write. Search. Fork. The State Store for AI Agents.**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**# **编写。搜索。分支。AI 代理的状态存储库。**
+# **Write. Search. Fork. The State Store for AI Agents.**
 
 <p>
     <a href="https://github.com/oceanbase/seekdb/stargazers">
-        <img alt="GitHub Stars" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" /><imgalt="GitHub Star 数量" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt="GitHub Star 数量" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt="GitHub Star 数量" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt="GitHub Star 数量" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt="GitHub Star 数量" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />imgalt=“GitHub Star 数量” src=“https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow” />
+        <img alt="GitHub Stars" src="https://img.shields.io/github/stars/oceanbase/seekdb?style=flat-square&logo=github&color=yellow" />
     </a>
     <a href="https://github.com/oceanbase/seekdb/releases">
-        <img alt="Latest Release" src="https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue" /><imgalt="最新版本" src="https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue" />imgalt="最新版本" src="https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue" />imgalt=“最新版本” src=“https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue” />imgalt=“最新版本” src=“https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue” />imgalt=“最新版本” src=“https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue” />
+        <img alt="Latest Release" src="https://img.shields.io/github/v/release/oceanbase/seekdb?style=flat-square&color=blue" />
     </a>
     <a href="https://github.com/oceanbase/seekdb/commits">
-        <img alt="Commit Activity" src="https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green" /><imgalt="提交活动" src="https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green" />imgalt="提交活动" src="https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green" />imgalt="提交活动" src="https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green" />imgalt="提交活动" src="https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green" />imgalt=“提交活动” src=“https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green” />imgalt=“提交活动” src=“https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green” />imgalt=“提交活动” src=“https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green” />imgalt=“提交活动” src=“https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green” />
+        <img alt="Commit Activity" src="https://img.shields.io/github/commit-activity/m/oceanbase/seekdb?style=flat-square&color=green" />
     </a>
     <a href="https://github.com/oceanbase/seekdb/graphs/contributors">
-        <img alt="Contributors" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" /><imgalt="贡献者" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" /><imgalt="贡献者" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" /><imgalt="贡献者" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" /><imgalt="贡献者" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" /><imgalt="贡献者" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" /><imgalt="贡献者" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" /><imgalt="贡献者" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" />
+        <img alt="Contributors" src="https://img.shields.io/github/contributors/oceanbase/seekdb?style=flat-square&color=orange" />
     </a>
     <a href="https://github.com/oceanbase/seekdb/issues">
         <img alt="Issues" src="https://img.shields.io/github/issues/oceanbase/seekdb?style=flat-square" />
     </a>
     <a href="https://github.com/oceanbase/seekdb/blob/HEAD/LICENSE">
-        <img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><<imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /><imgalt="许可证" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" />
+        <img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" />
     </a>
     <a href="https://pepy.tech/projects/pyseekdb">
-        <img alt="Downloads" src="https://static.pepy.tech/badge/pyseekdb" /><imgalt="下载" src="https://static.pepy.tech/badge/pyseekdb" /><imgalt="下载" src="https://static.pepy.tech/badge/pyseekdb" /><imgalt="下载" src="https://static.pepy.tech/badge/pyseekdb" />
+        <img alt="Downloads" src="https://static.pepy.tech/badge/pyseekdb" />
     </a>
     <a href="https://discord.gg/74cF8vbNEs">
-        <img alt="Join Discord" src="https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&style=flat-square" /><imgalt="加入Discord" src="https://img.shields.io/badge/Discord-加入聊天-5865F2?logo=discord&style=flat-square" /><imgalt="加入Discord" src="https://img.shields.io/badge/Discord-加入聊天-5865F2?logo=discord&style=flat-square" /><imgalt="加入Discord" src="https://img.shields.io/badge/Discord-加入聊天-5865F2?logo=discord&style=flat-square" />
+        <img alt="Join Discord" src="https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&style=flat-square" />
     </a>
     <a href="https://docs.seekdb.ai/">
-        <img alt="Documentation" src="https://img.shields.io/badge/Docs-seekdb.ai-4285F4?style=flat-square&logo=read-the-docs&logoColor=white" /><imgalt="文档" src="https://img.shields.io/badge/Docs-seekdb.ai-4285F4?style=flat-square&logo=read-the-docs&logoColor=white" />imgalt="文档" src="https://img.shields.io/badge/Docs-seekdb.ai-4285F4?style=flat-square&logo=read-the-docs&logoColor=white" />
+        <img alt="Documentation" src="https://img.shields.io/badge/Docs-seekdb.ai-4285F4?style=flat-square&logo=read-the-docs&logoColor=white" />
     </a>
     <a href="https://deepwiki.com/oceanbase/seekdb">
-        <img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg" /><imgalt="向DeepWiki提问" src="https://deepwiki.com/badge.svg" /><imgalt="向DeepWiki提问" src="https://deepwiki.com/badge.svg" /><imgalt="向DeepWiki提问" src="https://deepwiki.com/badge.svg" />
+        <img alt="Ask DeepWiki" src="https://deepwiki.com/badge.svg" />
     </a>
     <a href="https://www.linkedin.com/company/oceanbase" target="_blank" rel="noopener noreferrer">
-        <img src="https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff" alt="follow on LinkedIn"><imgsrc="https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff" alt="在LinkedIn上关注">
+        <img src="https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff" alt="follow on LinkedIn">
     </a>
     <a href="https://www.youtube.com/@OceanBaseDB">
         <img alt="YouTube" src="https://img.shields.io/badge/YouTube-red?logo=youtube">
     </a>
 </p>
 
-MySQL-compatible · Embedded or Server · Hybrid Vector + Full-text Search · COW Sandbox兼容MySQL · 嵌入式或服务器版 · 混合向量+全文检索 · COW沙箱
+MySQL-compatible · Embedded or Server · Hybrid Vector + Full-text Search · COW Sandbox
 
 ⚡ 1,523 QPS streaming write+search (10× Milvus, 3× Elasticsearch)<br>
 🌿 FORK/MERGE sandboxes for safe agent exploration<br>
 🔍 Vector + full-text + scalar in one SQL query<br>
 🐬 Full ACID, MySQL protocol, works with LangChain/LlamaIndex/Dify
 
-**English** | [中文版](README_CN.md) | [日本語](README_JP.md)**英语** | [中文版](README_CN.md) | [日语](README_JP.md)
+**English** | [中文版](README_CN.md) | [日本語](README_JP.md)
 
-[30-Second Try](#30-second-try) · [Quick Start](#quick-start) · [Embedded SDKs](#embedded-sdks) · [Why seekdb](#why-seekdb-for-agents) · [Ecosystem](#ecosystem--integrations) · [Contributing贡献指南](#development)
+[30-Second Try](#30-second-try) · [Quick Start](#quick-start) · [Embedded SDKs](#embedded-sdks) · [Why seekdb](#why-seekdb-for-agents) · [Ecosystem](#ecosystem--integrations) · [Contributing](#development)
 
 <sub>If you find seekdb useful, consider giving it a <a href="https://github.com/oceanbase/seekdb/stargazers">star</a> — it helps others discover the project.</sub>
 
@@ -550,11 +550,11 @@ seekdb's hybrid retrieval + multi-model engine also fits classic AI workloads:
 
 <a id="development"></a>
 
-## 🛠️ Development##️ 开发
+## 🛠️ Development
 
-### Build from Source###从源码构建
+### Build from Source
 
-Before building, please install the required toolchain and dependencies for your operating system. See [Install Toolchain](docs/developer-guide/en/toolchain.md) for detailed instructions.在构建之前，请为您的操作系统安装所需的工具链和依赖项。详情请参阅[安装工具链](docs/developer-guide/en/toolchain.md)中的详细说明。
+Before building, please install the required toolchain and dependencies for your operating system. See [Install Toolchain](docs/developer-guide/en/toolchain.md) for detailed instructions.
 
 ```bash
 # Clone the repository
@@ -568,14 +568,14 @@ cd ~/seekdb
 ./bin/seekdb
 ```
 
-In this example, the working directory is $HOME/seekdb, please use a fresh directory for testing. Please see the [Developer Guide](docs/developer-guide/en/README.md) for detailed instructions.在本示例中，工作目录为 $HOME/seekdb，请使用一个全新的目录进行测试。有关详细说明，请参阅[开发者指南](docs/developer-guide/en/README.md)。在本示例中，工作目录为 $HOME/seekdb，请使用一个全新的目录进行测试。请参阅[开发者指南]（docs/developer-guide/en/README.md)以获取详细说明。有关详细说明，请参阅开发者指南。在本示例中，工作目录为 $HOME/seekdb，请使用一个全新的目录进行测试。请参阅[开发者指南]（docs/developer-guide/en/README.md)以获取详细说明。有关详细说明，请参阅开发者指南。在本示例中，工作目录为 $HOME/seekdb，请使用一个全新的目录进行测试。请参阅（docs/developer-guide/en/README.md)以获取详细说明。有关详细说明，请参阅开发者指南。
+In this example, the working directory is $HOME/seekdb, please use a fresh directory for testing. Please see the [Developer Guide](docs/developer-guide/en/README.md) for detailed instructions.
 
-### Contributing###贡献
+### Contributing
 
-We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) to get started.我们欢迎贡献！请参阅我们的[贡献指南](CONTRIBUTING.md)以开始。我们欢迎贡献！请参阅我们的[贡献指南]（CONTRIBUTING.md)以开始。我们欢迎贡献！请参阅我们的[贡献指南]（CONTRIBUTING.md)以开始。我们欢迎贡献！请参阅我们的（CONTRIBUTING.md)以开始。
+We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) to get started.
 
 <a href="https://github.com/oceanbase/seekdb/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="Contributors" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" /><imgsrc="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="贡献者" />
+  <img src="https://contrib.rocks/image?repo=oceanbase/seekdb&max=400" alt="Contributors" />
 </a>
 
 ---
@@ -583,15 +583,15 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) to get s
 ## 📈 Star History
 
 <a href="https://star-history.com/#oceanbase/seekdb&Date">
-  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" /><imgalt="恒星历史图表" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" />
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=oceanbase/seekdb&type=Date" width="720" />
 </a>
 
-If seekdb is useful to you, **a star helps others find it.** ⭐如果 seekdb 对您有所帮助，**一个赞可以帮助更多人发现它。**⭐如果 seekdb 对您有所帮助，**一个赞可以帮助更多人发现它。**⭐如果 seekdb 对您有所帮助，**一个赞可以帮助更多人发现它。**⭐如果 seekdb 对您有所帮助，**一个赞可以帮助更多人发现它。**⭐如果 seekdb 对您有所帮助，**一个赞可以帮助更多人发现它。**⭐如果 seekdb 对您有所帮助，**一个赞可以帮助更多人发现它。**⭐
+If seekdb is useful to you, **a star helps others find it.** ⭐
 
 ---
 
 ## 📄 License
 
-seekdb is built by the [OceanBase](https://en.oceanbase.com/) team — the same database engine running in production at Alipay, Taobao, DiDi, Xiaomi, and more. Fully open-source under the [Apache License, Version 2.0](LICENSE).seekdb 由[OceanBase]团队打造——该数据库引擎已在支付宝、淘宝、滴滴、小米等众多企业生产环境中稳定运行。它完全遵循Apache 许可证 2.0 版本开源发布。seekdb 由[OceanBase](https://en.oceanbase.com/)团队打造——该数据库引擎已在支付宝、淘宝、滴滴、小米等众多企业生产环境中稳定运行。它完全遵循Apache 许可证 2.0 版本开源发布。seekdb 由[OceanBase](https://en.oceanbase.com/)团队打造——该数据库引擎已在支付宝、淘宝、滴滴、小米等众多企业生产环境中稳定运行。它完全遵循Apache 许可证 2.0 版本开源发布。seekdb 由团队打造——该数据库引擎已在支付宝、淘宝、滴滴、小米等众多企业生产环境中稳定运行。它完全遵循Apache 许可证 2.0 版本开源发布。
+seekdb is built by the [OceanBase](https://en.oceanbase.com/) team — the same database engine running in production at Alipay, Taobao, DiDi, Xiaomi, and more. Fully open-source under the [Apache License, Version 2.0](LICENSE).
 
 OB-P:8NHk6lPgAsqVZgK8fnttxA
