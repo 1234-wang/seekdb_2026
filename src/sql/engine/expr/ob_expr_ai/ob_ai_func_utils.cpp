@@ -313,15 +313,18 @@ int ObOllamaUtils::ObOllamaComplete::get_body(common::ObIAllocator &allocator,
   if (model.empty() || content.empty()) { 
     ret = OB_INVALID_ARGUMENT;
   } else {
-    // {"model": "llama3.1", "prompt": "What is the capital of France?"}
+    // {"model": "llama3.1", "prompt": "What is the capital of France?", "stream": false}
     ObJsonObject *body_obj = nullptr;
     ObJsonString *model_str = nullptr;
     ObJsonString *content_str = nullptr;
+    ObJsonBoolean *stream_obj = nullptr;
     if (OB_FAIL(ObAIFuncJsonUtils::get_json_object(allocator, body_obj))) {
     } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_string(allocator, model, model_str))) {
     } else if (OB_FAIL(body_obj->add("model", model_str))) {
     } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_string(allocator, content, content_str))) {
     } else if (OB_FAIL(body_obj->add("prompt", content_str))) {
+    } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_boolean(allocator, false, stream_obj))) {
+    } else if (OB_FAIL(body_obj->add("stream", stream_obj))) {
     } else if (OB_FAIL(ObAIFuncJsonUtils::compact_json_object(allocator, config, body_obj))) {
     } else {
       body = body_obj;
