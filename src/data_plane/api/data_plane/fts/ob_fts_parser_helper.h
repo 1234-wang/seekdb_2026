@@ -161,6 +161,23 @@ public:
       common::ObIAllocator *allocator,
       const common::ObString &parser_name,
       const common::ObString &parser_properties);
+
+  /**
+   * initialize fulltext parse helper with an already parsed parser property.
+   *
+   * Use this overload when the caller has already parsed the parser
+   * properties, so that they are not parsed a second time.
+   *
+   * @param[in] allocator
+   * @param[in] parser_name, which consists of two parts name and version.
+   * @param[in] parser_property, the already parsed parser property.
+   *
+   * @return error code
+   */
+  int init(
+      common::ObIAllocator *allocator,
+      const common::ObString &parser_name,
+      const ObFTParserProperty &parser_property);
   /**
    * Split document into multiple words
    *
@@ -217,6 +234,7 @@ private:
       common::ObIAllocator &allocator,
       ObAddWord &add_word);
   int set_add_word_flag(const ObIFTParserDesc &ftparser_desc);
+  int init_with_parsed_property(common::ObIAllocator *allocator);
 private:
   common::ObIAllocator *allocator_;
   const ObIFTParserDesc *parser_desc_;

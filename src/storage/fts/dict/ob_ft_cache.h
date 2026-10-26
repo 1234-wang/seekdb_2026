@@ -47,8 +47,13 @@ public:
   bool operator==(const ObIKVCacheKey &other) const override
   {
     const ObDictCacheKey &other_key = reinterpret_cast<const ObDictCacheKey &>(other);
+    // The range id is part of the key: every range of a dictionary is stored as
+    // its own cache entry, so it has to be taken into account when the keys are
+    // compared. It is part of the hash as well, otherwise two different ranges
+    // of the same dictionary could be treated as the same entry.
     return (&other == this)
-           || ((other_key.name_ == name_) && (other_key.dict_type_ == dict_type_));
+           || ((other_key.name_ == name_) && (other_key.dict_type_ == dict_type_)
+               && (other_key.range_id_ == range_id_));
   }
 
   uint64_t hash() const override

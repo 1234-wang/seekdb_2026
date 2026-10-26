@@ -35,10 +35,18 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_json_func_helper.h" // file not self-contained, there're logs inside.
 
+#include <atomic>
+
 namespace oceanbase
 {
 namespace sql
 {
+namespace
+{
+// The charset whose IK dictionary has already been loaded into the dictionary
+// tables, or -1 when no dictionary has been loaded yet.
+std::atomic<int64_t> g_loaded_dic_charset(-1);
+} // namespace
 ObExprTokenize::ObExprTokenize(common::ObIAllocator &alloc)
     : ObStringExprOperator(alloc,
                            T_FUN_TOKENIZE,
@@ -86,11 +94,9 @@ int ObExprTokenize::tokenize_fulltext(const TokenizeParam &param,
   int64_t doc_len = 0;
   storage::ObFTWordMap token_map;
 
-  ObArenaAllocator tmp_parse_alloc(ObMemAttr("Tmp buffer"));
-
   if (TokenizeParam::OUTPUT_MODE::DEFAULT != mode && TokenizeParam::OUTPUT_MODE::ALL != mode) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(tokenize_helper.init(&allocator, param.parser_name_, param.properties_))) {
+  } else if (OB_FAIL(tokenize_helper.init(&allocator, param.parser_name_, param.parser_property_))) {
   } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr("FTWordMap")))) {
   } else if (
       (0 != param.fulltext_.length())
@@ -375,17 +381,13 @@ int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
 int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &properties)
 {
   int ret = OB_SUCCESS;
-  storage::ObFTParserJsonProps parser_properties;
-
-  if (OB_FAIL(parser_properties.init())) {
-  } else if (OB_FAIL(parser_properties.parse_from_valid_str(properties))) {
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser properties invalid.");
-  } else if (OB_FAIL(parser_properties.rebuild_props_for_ddl(parser_name_,
-                                                             ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                                             true))) {
-  } else if (OB_FAIL(parser_properties.to_format_json(allocator_, properties_))) {
+  // The parser name and the parser properties are static configuration. Parse
+  // them once and reuse the result, the parse is cached by the parser name and
+  // the raw properties.
+  if (OB_FAIL(storage::ObFTParserProperty::get_cached_property(parser_name_,
+                                                                 properties,
+                                                                 parser_property_))) {
   }
-
   return ret;
 }
 
@@ -394,16 +396,27 @@ int ObExprTokenize::TokenizeParam::try_load_dictionary_for_ik()
   int ret = OB_SUCCESS;
   bool need_to_load_dic = false;
   storage::ObDicLoaderHandle dic_loader_handle;
+  const ObCharsetType charset = ObCharset::charset_type_by_coll(meta_.get_collation_type());
   if (OB_FAIL(share::ObFtsIndexBuilderUtil::check_need_to_load_dic(
           parser_name_, need_to_load_dic))) {
-  } else if (need_to_load_dic) {
+  } else if (need_to_load_dic
+             && g_loaded_dic_charset.load(std::memory_order_acquire)
+                    == static_cast<int64_t>(charset)) {
+    // The dictionary has already been loaded for this charset. Looking the
+    // dictionary loader up again takes the global write lock of the loader,
+    // which is far too expensive for the tokenize hot path.
+    need_to_load_dic = false;
+  }
+  if (OB_SUCC(ret) && need_to_load_dic) {
     if (OB_FAIL(storage::ObGenDicLoader::get_instance().get_dic_loader(
                     ObString::make_string(storage::ObFTSLiteral::PARSER_NAME_IK), // currently only ik, use parser_name_ without version suffix
-                    ObCharset::charset_type_by_coll(meta_.get_collation_type()),
+                    charset,
                     dic_loader_handle))) {
     } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans())) {
+    } else {
+      g_loaded_dic_charset.store(static_cast<int64_t>(charset), std::memory_order_release);
     }
   }
   return ret;

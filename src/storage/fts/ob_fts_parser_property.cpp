@@ -20,6 +20,7 @@
 #include "common/json_type/ob_json_parse.h"
 #include "common/json_type/ob_json_tree.h"
 #include "lib/list/ob_dlist.h"
+#include "lib/lock/ob_spin_lock.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
@@ -1078,6 +1079,139 @@ ObFTParserProperty::ObFTParserProperty()
       min_ngram_token_size_(ObFTSLiteral::FT_DEFAULT_MIN_NGRAM_SIZE),
       max_ngram_token_size_(ObFTSLiteral::FT_DEFAULT_MAX_NGRAM_SIZE)
 {
+}
+
+namespace
+{
+// The parser name and the parser properties are static configuration, but
+// parsing them costs a JSON parse plus a rebuild of the default properties.
+// The tokenize function parses them on every call, so the parsed result is
+// cached here and reused whenever the same configuration comes again.
+constexpr int64_t FTS_PARSER_PROP_CACHE_SLOT_NUM = 8;
+constexpr int64_t FTS_PARSER_PROP_CACHE_KEY_MAX_LEN = 512;
+
+class FtsParserPropCache final
+{
+public:
+  static FtsParserPropCache &instance()
+  {
+    static FtsParserPropCache cache;
+    return cache;
+  }
+
+  int get(const ObString &parser_name,
+          const ObString &parser_properties,
+          ObFTParserProperty &property)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(parser_name.length() >= FTS_PARSER_PROP_CACHE_KEY_MAX_LEN
+                    || parser_properties.length() >= FTS_PARSER_PROP_CACHE_KEY_MAX_LEN)) {
+      // The key is too long to be cached, just compute it.
+      ret = compute_property(parser_name, parser_properties, property);
+    } else {
+      {
+        common::ObSpinLockGuard guard(lock_);
+        for (int64_t i = 0; i < slot_num_; ++i) {
+          if (slots_[i].used_ && slots_[i].match(parser_name, parser_properties)) {
+            property = slots_[i].property_;
+            return OB_SUCCESS;
+          }
+        }
+      }
+      ret = compute_property(parser_name, parser_properties, property);
+      if (OB_SUCC(ret)) {
+        common::ObSpinLockGuard guard(lock_);
+        store(parser_name, parser_properties, property);
+      }
+    }
+    return ret;
+  }
+
+private:
+  struct Slot
+  {
+    char parser_name[FTS_PARSER_PROP_CACHE_KEY_MAX_LEN];
+    char parser_properties[FTS_PARSER_PROP_CACHE_KEY_MAX_LEN];
+    int64_t parser_name_len;
+    int64_t parser_properties_len;
+    ObFTParserProperty property_;
+    bool used_;
+
+    bool match(const ObString &name, const ObString &props) const
+    {
+      if (parser_name_len != name.length() || parser_properties_len != props.length()) {
+        return false;
+      }
+      if (parser_name_len > 0 && 0 != MEMCMP(parser_name, name.ptr(), parser_name_len)) {
+        return false;
+      }
+      if (parser_properties_len > 0
+          && 0 != MEMCMP(parser_properties, props.ptr(), parser_properties_len)) {
+        return false;
+      }
+      return true;
+    }
+  };
+
+  FtsParserPropCache() : slot_num_(0), next_slot_(0) {}
+
+  static int compute_property(const ObString &parser_name,
+                               const ObString &parser_properties,
+                               ObFTParserProperty &property)
+  {
+    int ret = OB_SUCCESS;
+    ObFTParserJsonProps props;
+    ObFTParser parser;
+    ObArenaAllocator alloc;
+    ObString rebuilt_properties;
+
+    if (OB_FAIL(props.init())) {
+    } else if (OB_FAIL(props.parse_from_valid_str(parser_properties))) {
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser properties invalid.");
+    } else if (OB_FAIL(props.rebuild_props_for_ddl(parser_name,
+                                                   ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                                   true))) {
+    } else if (OB_FAIL(props.to_format_json(alloc, rebuilt_properties))) {
+    } else if (OB_FAIL(parser.parse_from_str(parser_name.ptr(), parser_name.length()))) {
+    } else if (OB_FAIL(property.parse_for_parser_helper(parser, rebuilt_properties))) {
+    }
+    return ret;
+  }
+
+  void store(const ObString &parser_name,
+             const ObString &parser_properties,
+             const ObFTParserProperty &property)
+  {
+    Slot &slot = slots_[next_slot_];
+    next_slot_ = (next_slot_ + 1) % FTS_PARSER_PROP_CACHE_SLOT_NUM;
+    if (slot_num_ < FTS_PARSER_PROP_CACHE_SLOT_NUM) {
+      ++slot_num_;
+    }
+    slot.parser_name_len = parser_name.length();
+    if (slot.parser_name_len > 0) {
+      MEMCPY(slot.parser_name, parser_name.ptr(), slot.parser_name_len);
+    }
+    slot.parser_properties_len = parser_properties.length();
+    if (slot.parser_properties_len > 0) {
+      MEMCPY(slot.parser_properties, parser_properties.ptr(), slot.parser_properties_len);
+    }
+    slot.property_ = property;
+    slot.used_ = true;
+  }
+
+private:
+  common::ObSpinLock lock_;
+  Slot slots_[FTS_PARSER_PROP_CACHE_SLOT_NUM];
+  int64_t slot_num_;
+  int64_t next_slot_;
+};
+} // namespace
+
+int ObFTParserProperty::get_cached_property(const ObString &parser_name,
+                                             const ObString &parser_properties,
+                                             ObFTParserProperty &property)
+{
+  return FtsParserPropCache::instance().get(parser_name, parser_properties, property);
 }
 
 int ObFTParserJsonProps::tokenize_array_to_props_json(ObIAllocator &allocator,
