@@ -2,9 +2,9 @@ call dbms_scheduler.disable('ASYNC_GATHER_STATS_JOB_PROC');
 alter system set_tp tp_no = 369, error_code = 2, frequency = 1;
 drop table if exists ag_locked;
 drop table if exists ag_unlocked;
+create table ag_unlocked(c1 bigint primary key);
 create table ag_locked(c1 bigint primary key)
 partition by hash(c1) partitions 7;
-create table ag_unlocked(c1 bigint primary key);
 call dbms_stats.gather_table_stats(
 'TEST', 'AG_LOCKED', granularity=>'GLOBAL');
 call dbms_stats.set_table_prefs(

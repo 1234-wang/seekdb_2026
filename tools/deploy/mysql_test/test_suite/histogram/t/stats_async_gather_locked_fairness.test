@@ -18,9 +18,9 @@ drop table if exists ag_locked;
 drop table if exists ag_unlocked;
 --enable_warnings
 
+create table ag_unlocked(c1 bigint primary key);
 create table ag_locked(c1 bigint primary key)
   partition by hash(c1) partitions 7;
-create table ag_unlocked(c1 bigint primary key);
 
 call dbms_stats.gather_table_stats(
   'TEST', 'AG_LOCKED', granularity=>'GLOBAL');

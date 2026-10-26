@@ -6088,9 +6088,10 @@ int ObDbmsStats::async_gather_table_stats(sql::ObExecContext &ctx,
       max_slice_cnt = simulated_slice_cnt;
     }
     ObSEArray<AsyncStatTable, 16> async_stat_tables;
-    ObSEArray<AsyncStatTable, 16> seen_stat_tables;
     int64_t total_part_cnt = 0;
     int64_t batch = 0;
+    int64_t last_table_id = 0;
+    int64_t last_tablet_id = 0;
     const int64_t initial_failed_count = task_info.failed_count_;
     do {
       async_stat_tables.reuse();
@@ -6099,17 +6100,11 @@ int ObDbmsStats::async_gather_table_stats(sql::ObExecContext &ctx,
       } else if (OB_FAIL(ObBasicStatsEstimator::get_async_gather_stats_tables(ctx,
                                                                               max_slice_cnt,
                                                                               true,
-                                                                              seen_stat_tables,
+                                                                              last_table_id,
+                                                                              last_tablet_id,
                                                                               total_part_cnt,
                                                                               async_stat_tables))) {
       } else {
-        // A skipped candidate does not advance its monitoring counters. Remember
-        // the exact keys so a later batch can reach lower-priority candidates
-        // without excluding other tablets from the same table.
-        for (int64_t i = 0; OB_SUCC(ret) && i < async_stat_tables.count(); ++i) {
-          if (OB_FAIL(seen_stat_tables.push_back(async_stat_tables.at(i)))) {
-          }
-        }
         task_info.task_table_count_ += async_stat_tables.count();
         for (int64_t i = 0; OB_SUCC(ret) && i < async_stat_tables.count(); ++i) {
           if (OB_FAIL(refresh_runtime_schema_guard(ctx))) {
