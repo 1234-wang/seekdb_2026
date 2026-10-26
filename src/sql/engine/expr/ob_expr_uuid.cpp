@@ -23,7 +23,11 @@
 #endif
 #include <iphlpapi.h>
 #else
+#include <errno.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <net/if.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
@@ -31,8 +35,8 @@
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
+#else
+#include <net/if_arp.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -88,6 +92,7 @@ int ObUUIDNode::init()
 {
   int ret = OB_SUCCESS;
   is_inited_ = false;
+  MEMSET(mac_addr_, 0, sizeof(mac_addr_));
 #ifdef _WIN32
   ULONG buf_len = 15000;
   PIP_ADAPTER_ADDRESSES addresses = NULL;
@@ -186,52 +191,86 @@ int ObUUIDNode::init()
     }
   }
 #else
-  // Linux: Use ioctl to get MAC address
-  struct ifreq ifr;
-  struct ifconf ifc;
-  char buf[1024];
+  // Prefer a usable hardware address, but network discovery is optional.
+  struct ifconf ifc = {};
+  struct ifreq interfaces[32] = {};
+  bool mac_addr_found = false;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    const int socket_errno = errno;
+    LOG_WARN("UUID node socket failed; trying random node", K(socket_errno));
   } else {
-    ifc.ifc_len = sizeof(buf);
-    ifc.ifc_buf = buf;
+    ifc.ifc_len = sizeof(interfaces);
+    ifc.ifc_req = interfaces;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      const int ioctl_errno = errno;
+      LOG_WARN("UUID node SIOCGIFCONF failed; trying random node", K(ioctl_errno));
     } else {
-      ifreq *it = ifc.ifc_req;
-      ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
-        if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
-          continue;
-        } else {
-          strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
-          if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
-            if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
-              if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
-                MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
-                mac_addr_found = true;
-                break;
-              } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
-              }
-            }
+      const int interface_count = ifc.ifc_len / sizeof(struct ifreq);
+      for (int i = 0; i < interface_count && !mac_addr_found; ++i) {
+        struct ifreq ifr = {};
+        MEMCPY(ifr.ifr_name, interfaces[i].ifr_name, IFNAMSIZ - 1);
+        ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+        if (ioctl(sock, SIOCGIFFLAGS, &ifr) < 0) {
+          const int ioctl_errno = errno;
+          LOG_WARN("UUID node SIOCGIFFLAGS failed", K(ioctl_errno), K(ifr.ifr_name));
+        } else if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
+          if (ioctl(sock, SIOCGIFHWADDR, &ifr) < 0) {
+            const int ioctl_errno = errno;
+            LOG_WARN("UUID node SIOCGIFHWADDR failed", K(ioctl_errno), K(ifr.ifr_name));
           } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
+            const unsigned char *addr = reinterpret_cast<const unsigned char *>(ifr.ifr_hwaddr.sa_data);
+            const unsigned char empty_addr[6] = {};
+            if (ifr.ifr_hwaddr.sa_family == ARPHRD_ETHER && !(addr[0] & 0x01)
+                && MEMCMP(addr, empty_addr, sizeof(empty_addr)) != 0) {
+              MEMCPY(mac_addr_, addr, sizeof(mac_addr_));
+              mac_addr_found = true;
+            }
           }
         }
-      }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
       }
     }
     close(sock);
   }
+  if (!mac_addr_found) {
+    // RFC 9562 section 6.10 (RFC 4122 section 4.5): use a cryptographic
+    // random node with the multicast bit set when an IEEE 802 address is unavailable.
+    unsigned char random_node[sizeof(mac_addr_)] = {};
+    int random_fd = -1;
+    do {
+      random_fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    } while (random_fd < 0 && errno == EINTR);
+    if (random_fd < 0) {
+      const int open_errno = errno;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("UUID node has no usable MAC and cannot open /dev/urandom", K(ret), K(open_errno));
+    } else {
+      size_t bytes_read = 0;
+      while (OB_SUCC(ret) && bytes_read < sizeof(random_node)) {
+        const ssize_t count = read(random_fd, random_node + bytes_read, sizeof(random_node) - bytes_read);
+        if (count > 0) {
+          bytes_read += count;
+        } else if (count == 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected EOF reading UUID node from /dev/urandom", K(ret), K(bytes_read));
+        } else {
+          const int read_errno = errno;
+          if (read_errno != EINTR) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("failed reading UUID node from /dev/urandom", K(ret), K(read_errno), K(bytes_read));
+          }
+        }
+      }
+      close(random_fd);
+      if (OB_SUCC(ret)) {
+        random_node[0] |= 0x01;
+        MEMCPY(mac_addr_, random_node, sizeof(mac_addr_));
+        mac_addr_found = true;
+        LOG_INFO("using random UUID node ID (no usable MAC available on Linux)");
+      }
+    }
+  }
+  is_inited_ = OB_SUCC(ret) && mac_addr_found;
 #endif
   return ret;
 }
