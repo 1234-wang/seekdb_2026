@@ -1,0 +1,20 @@
+"""Module-level SQL unit-test binary.
+
+Every `.cpp` under this directory is compiled into one sharded Google Test
+executable. The entry point lives in `unittest/all_tests_main.cpp`; never add a
+`main()` here. New tests land under the module that owns the code under test:
+`unittest/<module>/` must match a key in
+`//bazel/architecture:module_policy.bzl` `UNITTEST_MODULE_ROOTS`.
+"""
+
+load("//bazel:defs.bzl", "seekdb_module_cc_test")
+
+package(default_visibility = ["//visibility:private"])
+
+seekdb_module_cc_test(
+    name = "sql_tests",
+    srcs = glob(["**/*.cpp"]),
+    test_hdrs = glob(["**/*.h"], allow_empty = True),
+    module_interface = "//src/sql:sql_unit_test_interface",
+    shard_count = 1,
+)
