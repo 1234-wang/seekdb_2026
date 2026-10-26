@@ -18,6 +18,7 @@
 #include "ob_expr_ai_embed.h"
 #include "query/ai/ob_ai_endpoint_resolver.h"
 #include "share/rc/ob_server_runtime.h"
+#include "share/json/ob_json_helper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -74,6 +75,51 @@ int ObExprAIEmbed::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
+// Validate the dense embedding returned by the model before it is handed back to the
+// statement: the contract of AI_EMBED is a JSON array of numbers whose length matches the
+// requested dimension (or any positive length when the caller did not pin the dimension).
+static int validate_dense_embedding(ObIAllocator &allocator,
+                                    const ObString &embedding_str,
+                                    const int64_t expected_dimension)
+{
+  int ret = OB_SUCCESS;
+  ObIJsonBase *json_base = nullptr;
+  if (OB_UNLIKELY(embedding_str.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "ai_embed, model returned an empty embedding");
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
+                                                      embedding_str,
+                                                      ObJsonInType::JSON_TREE,
+                                                      ObJsonInType::JSON_TREE,
+                                                      json_base))) {
+    LOG_WARN("failed to parse embedding json", K(ret), K(embedding_str));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "ai_embed, model returned an invalid embedding json");
+  } else if (OB_ISNULL(json_base) || json_base->json_type() != ObJsonNodeType::J_ARRAY) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "ai_embed, embedding result must be a json array");
+  } else {
+    ObJsonArray *vector_array = static_cast<ObJsonArray *>(json_base);
+    const int64_t vector_size = vector_array->element_count();
+    if (vector_size <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "ai_embed, embedding vector must not be empty");
+    } else if (expected_dimension > 0 && vector_size != expected_dimension) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                     "ai_embed, embedding vector size does not match the requested dimension");
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < vector_size; i++) {
+      ObIJsonBase *element = vector_array->get_value(i);
+      if (OB_ISNULL(element) || !share::ObJsonHelper::is_number_type(element)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, embedding vector must contain numbers only");
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) 
 {
   INIT_SUCC(ret);
@@ -83,8 +129,7 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
   if (expr.arg_cnt_ == 3 ? OB_FAIL(expr.eval_param_value(ctx, arg_model_id, arg_content, arg_dim))
                          : OB_FAIL(expr.eval_param_value(ctx, arg_model_id, arg_content))) {
   } else if (arg_model_id->is_null() || arg_content->is_null()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, model id or content is null");
+    // NULL propagates: a missing input must not abort the whole row scan.
     res.set_null();
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -107,7 +152,7 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     ObJsonInt *dim_json = nullptr;
     ObJsonObject *config = nullptr;
     if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(arg_dim)) {
+    } else if (OB_NOT_NULL(arg_dim) && !arg_dim->is_null()) {
       dim = arg_dim->get_int();
       if (dim <= 0) {
         ret = OB_INVALID_ARGUMENT;
@@ -128,6 +173,7 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       ObAIFuncModel model(temp_allocator, *info, *endpoint_info);
       ObString result;
       if (OB_FAIL(model.call_dense_embedding(content, config, result))) {
+      } else if (OB_FAIL(validate_dense_embedding(temp_allocator, result, dim))) {
       } else if (OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
       }
     }
