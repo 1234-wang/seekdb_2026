@@ -62,7 +62,6 @@ bool tx_desc_contains_savepoint(transaction::ObTxDesc *desc,
                                 const common::ObString &savepoint);
 bool tx_desc_is_ended(transaction::ObTxDesc *desc);
 bool tx_desc_is_timed_out(transaction::ObTxDesc *desc);
-void dump_tx_desc_trace(transaction::ObTxDesc *desc);
 
 enum class ObTxCommitTimeoutState
 {

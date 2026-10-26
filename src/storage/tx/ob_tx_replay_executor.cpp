@@ -292,7 +292,7 @@ void ObTxReplayExecutor::finish_replay_(const int retcode)
       }
     }
     if (OB_SUCCESS != retcode) {
-      ctx_->print_trace_log();
+      TRANS_LOG(WARN, "[Replay Tx] replay failed, dump tx ctx state", KPC(ctx_));
     }
     ls_tx_srv_->revert_tx_ctx(ctx_);
   }
