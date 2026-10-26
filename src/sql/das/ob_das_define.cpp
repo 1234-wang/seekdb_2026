@@ -66,7 +66,6 @@ OB_SERIALIZE_MEMBER(DASTableAccessMeta,
 
 OB_SERIALIZE_MEMBER(DASRuntimeTabletAccess,
                     tablet_id_,
-                    reserved_flags_,
                     partition_id_,
                     first_level_part_id_);
 

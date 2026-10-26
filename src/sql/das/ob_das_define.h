@@ -155,7 +155,6 @@ public:
     : tablet_id_(),
       access_meta_(nullptr),
       next_(this),
-      reserved_flags_(0),
       partition_id_(OB_INVALID_ID),
       first_level_part_id_(OB_INVALID_ID)
   { }
@@ -175,8 +174,6 @@ public:
   common::ObTabletID tablet_id_; //the data_object_id corresponding to partition_id
   const DASTableAccessMeta *access_meta_; // References access metadata; not serialized.
   DASRuntimeTabletAccess *next_; // Links related base-table and local-index tablet accesses.
-  // Retain the reserved V1 wire slot; no per-tablet access-refresh state.
-  uint64_t reserved_flags_;
   // partition id of this tablet
   uint64_t partition_id_;
   // first level part id of this tablet, only valid for subpartitioned table.
@@ -275,9 +272,8 @@ public:
       uint64_t is_writing_                      : 1; //mark this table is writing
       uint64_t is_reading_                      : 1; //mark this table is reading
       uint64_t rebuild_reference_               : 1; //mark whether rebuild the related reference
-      uint64_t                                 : 1; // reserved V1 flag bit
       uint64_t is_fk_check_                     : 1; //mark this table is used for foreign key checking
-      uint64_t reserved_                        : 59;
+      uint64_t reserved_                        : 60;
     };
   };
 

@@ -75,13 +75,13 @@ int ObLobRetryUtil::prepare_retry(ObLobAccessParam &param,
   int ret = OB_SUCCESS;
   ObLobLocatorV2 *lob_locator = param.lob_locator_;
   ObMemLobExternHeader *extern_header = NULL;
-  bool has_retry_info = false;
+  bool has_location_info = false;
   if (OB_NOT_NULL(lob_locator) && OB_SUCC(lob_locator->get_extern_header(extern_header))) {
-    has_retry_info = extern_header->flags_.has_retry_info_;
+    has_location_info = extern_header->flags_.has_location_info_;
   }
 
-  if (!has_retry_info) {
-    // Locators without retry metadata require no retry preparation.
+  if (!has_location_info) {
+    // Locators without tablet metadata require no retry preparation.
   } else if (OB_FAIL(data_plane::ObDataAccessRetry::wait(retry_cnt))) {
   } else {
     ObMemLobLocationInfo *location_info = nullptr;
