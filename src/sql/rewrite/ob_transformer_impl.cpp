@@ -253,7 +253,7 @@ int ObTransformerImpl::do_after_transform(ObDMLStmt *stmt, const ObSQLSessionInf
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(finalize_exec_params(stmt))) {
   } else if (OB_FAIL(add_trans_happended_hints(*query_ctx, *ctx_))) {
-  } else if (OB_FAIL(add_param_and_expr_constraints(*exec_ctx, *trans_ctx, *stmt))) {
+  } else if (OB_FAIL(add_param_and_expr_constraints(*exec_ctx, *ctx_, *stmt))) {
   } else if (OB_FAIL(adjust_global_dependency_tables(stmt))) {
   } else if (OB_FAIL(verify_all_stmt_exprs(stmt))) {
   } else if (OB_FAIL(verify_all_expr_types(stmt, session))) {
@@ -285,7 +285,7 @@ int ObTransformerImpl::get_all_stmts(ObDMLStmt *stmt,
       if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
-        if (OB_FAIL(SMART_CALL(get_all_stmts(child_stmts.at(i))))) {
+        if (OB_FAIL(SMART_CALL(get_all_stmts(child_stmts.at(i), all_stmts)))) {
         }
       }
     }
@@ -426,8 +426,8 @@ int ObTransformerImpl::update_enable_types(TRANSFORM_TYPE type,
       // deduction. If only these rules happen, we do NOT reset predicate deduction.
       /*do nothing*/
     } else {
-      // Any other rewrite rule indicates progress in a different direction, so
-      // we re-enable predicate deduction and reset its budget.
+      // Any other rewrite rule indicates progress in a different direction, so we
+      // re-enable predicate deduction and reset its budget.
       ObTransformRule::add_trans_type(enable_types, PREDICATE_MOVE_AROUND);
       enable_cnt_array.at(PREDICATE_MOVE_AROUND) = PREDICATE_MOVE_AROUND_RESET_CNT;
     }
