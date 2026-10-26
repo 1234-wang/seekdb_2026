@@ -381,23 +381,37 @@ int ObFTRangeDict::match_with_hit(const ObString &single_word,
 int ObFTRangeDict::find_first_char_range(const ObString &single_word, ObIFTDict *&dict) const
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  for (int i = 0; OB_SUCC(ret) && !found && i < range_dicts_.size(); ++i) {
+  // The ranges are built from the sorted dictionary and do not overlap, so the
+  // candidate range is the last one whose start word is not greater than the
+  // given word. Locate it with a binary search instead of scanning all the
+  // ranges, which is on the per-character hot path of the IK parser.
+  int64_t low = 0;
+  int64_t high = range_dicts_.size() - 1;
+  int64_t candidate = -1;
+  while (low <= high) {
+    const int64_t mid = (low + high) / 2;
     if (ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                          range_dicts_[i].start_.get_word(),
+                          range_dicts_[mid].start_.get_word(),
                           single_word)
-            <= 0
-        && ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                             range_dicts_[i].end_.get_word(),
-                             single_word)
-               >= 0) {
-      dict = range_dicts_[i].dict_;
-      found = true;
+        <= 0) {
+      candidate = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
     }
   }
-  if (!found) {
+
+  if (candidate < 0) {
     // not found, dis match
     ret = OB_ENTRY_NOT_EXIST;
+  } else if (ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                               range_dicts_[candidate].end_.get_word(),
+                               single_word)
+             < 0) {
+    // out of the range boundary
+    ret = OB_ENTRY_NOT_EXIST;
+  } else {
+    dict = range_dicts_[candidate].dict_;
   }
   return ret;
 }

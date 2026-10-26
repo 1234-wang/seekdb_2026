@@ -138,6 +138,22 @@ public:
   ~ObFTParserProperty() = default;
   int parse_for_parser_helper(const ObFTParser &parser, const ObString &json_str);
 
+  /**
+   * @brief Parse the parser properties and cache the result.
+   *
+   * The parser name and the parser properties are static configuration, but
+   * parsing them costs a JSON parse plus a rebuild of the default properties.
+   * This is on the hot path of the tokenize function, so the parsed result is
+   * cached and reused for the same configuration.
+   *
+   * @param parser_name the inner parser name, e.g. "ik.1"
+   * @param parser_properties the raw parser properties, may be empty
+   * @param property the parsed parser property
+   */
+  static int get_cached_property(const ObString &parser_name,
+                                 const ObString &parser_properties,
+                                 ObFTParserProperty &property);
+
   bool is_equal(const ObFTParserProperty &other) const
   {
     return min_token_size_ == other.min_token_size_ && max_token_size_ == other.max_token_size_

@@ -336,16 +336,45 @@ int ObFTParseHelper::init(
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(parser_name_.parse_from_str(parser_name.ptr(), parser_name.length()))) {
   } else if (OB_FAIL(parser_property_.parse_for_parser_helper(parser_name_, parser_properties))) {
-  } else if (OB_FAIL(parser_name_.get_desc(parser_desc_))) {
+  } else if (OB_FAIL(init_with_parsed_property(allocator))) {
+  }
+  if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObFTParseHelper::init(
+    common::ObIAllocator *allocator,
+    const common::ObString &parser_name,
+    const ObFTParserProperty &parser_property)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+  } else if (OB_ISNULL(allocator) || OB_UNLIKELY(parser_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(parser_name_.parse_from_str(parser_name.ptr(), parser_name.length()))) {
+  } else {
+    parser_property_ = parser_property;
+    ret = init_with_parsed_property(allocator);
+  }
+  if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObFTParseHelper::init_with_parsed_property(common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(parser_name_.get_desc(parser_desc_))) {
   } else if (OB_ISNULL(parser_desc_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(set_add_word_flag(*parser_desc_))) {
   } else {
     allocator_ = allocator;
     is_inited_ = true;
-  }
-  if (OB_FAIL(ret) && OB_UNLIKELY(!is_inited_)) {
-    reset();
   }
   return ret;
 }
