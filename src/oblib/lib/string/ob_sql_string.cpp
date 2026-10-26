@@ -80,6 +80,33 @@ int ObSqlString::append(const ObString &str)
   return append(str.ptr(), str.length());
 }
 
+int ObSqlString::append_quoted_identifier(const ObString &identifier, const ObString &prefix)
+{
+  int ret = OB_SUCCESS;
+  const ObString parts[] = {prefix, identifier};
+  if (OB_FAIL(append("`"))) {
+  }
+  for (int64_t part = 0; OB_SUCC(ret) && part < 2; ++part) {
+    const ObString &str = parts[part];
+    int64_t start = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < str.length(); ++i) {
+      if ('`' == str.ptr()[i]) {
+        if (OB_FAIL(append(str.ptr() + start, i - start + 1))) {
+        } else if (OB_FAIL(append("`"))) {
+        }
+        start = i + 1;
+      }
+    }
+    if (OB_SUCC(ret) && start < str.length()) {
+      ret = append(str.ptr() + start, str.length() - start);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ret = append("`");
+  }
+  return ret;
+}
+
 int ObSqlString::append_fmt(const char *fmt, ...)
 {
   int ret = OB_SUCCESS;
