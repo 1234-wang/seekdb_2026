@@ -1,0 +1,19 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
+cc_test(
+    name = "test_uuid_node_fallback",
+    size = "small",
+    srcs = [
+        "test_uuid_node_fallback.cpp",
+        "//src/sql:uuid_node_sources",
+    ],
+    copts = [
+        "-std=gnu++20",
+        "-Isrc",
+        "-I.",
+        "-DOB_UUID_NODE_TEST",
+    ],
+    linkopts = ["-pthread"],
+    deps = ["//bazel/third_party:gtest"],
+    target_compatible_with = ["@platforms//os:linux"],
+)
