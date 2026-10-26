@@ -140,3 +140,19 @@ Use the actual generated port if it differs.
 ```
 
 This command stops the local instance and removes the deployment data created by this example. Do not point it at data that must be retained.
+
+
+## Telemetry
+
+seekdb reports anonymous telemetry once during startup:
+
+- The instance keeps its telemetry state in `run/telemetry.json`, relative to the instance base directory.
+- `content.id` is a 36-character UUID derived from the machine ID, the base directory, and, inside a container, a container scope ID. Starting the instance from another directory produces a different UUID.
+- The report is posted to `https://openwebapi.oceanbase.com/api/web/oceanbase/report` and marked as delivered in the `sent` field, so a report that could not be delivered is retried on the next startup.
+
+Two environment variables control this behavior:
+
+- `TELEMETRY_ENABLED=false` disables reporting. The instance still writes `run/telemetry.json`.
+- `SEEKDB_TELEMETRY_INSTANCE_ID` sets the container scope ID used in the derivation, which distinguishes instances that share the same machine ID and base directory.
+
+To report again after a successful delivery, remove `run/telemetry.json` and restart the instance.
