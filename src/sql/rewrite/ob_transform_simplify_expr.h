@@ -177,6 +177,10 @@ private:
                                          bool is_left);
 
   int get_opposite_op(ObItemType type, ObItemType& opposit_type);
+  int remove_integer_add_zero(ObIArray<ObRawExpr*> &conditions,
+                              bool &trans_happened);
+  int recursive_remove_integer_add_zero(ObRawExpr *&expr,
+                                        bool &trans_happened);
   int remove_duplicate_exprs(ObQueryCtx* query_ctx, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
   int recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObRawExpr* &expr, bool &trans_happened);
   int do_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObIArray<ObRawExpr*> &exprs);
