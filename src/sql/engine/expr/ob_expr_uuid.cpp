@@ -186,51 +186,96 @@ int ObUUIDNode::init()
     }
   }
 #else
-  // Linux: Use ioctl to get MAC address
+  // Linux: Use ioctl to get MAC address, with RFC 4122 / RFC 9562 random node fallback
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
+  bool mac_addr_found = false;
+  int last_errno = 0;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    last_errno = errno;
+    LOG_WARN("socket failed during UUID node MAC discovery, falling back to random node ID", K(last_errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      last_errno = errno;
+      LOG_WARN("ioctl SIOCGIFCONF failed during UUID node MAC discovery, falling back to random node ID", K(last_errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
       for (; it != end && OB_SUCC(ret); ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
         } else {
           strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
+          ifr.ifr_name[IFNAMSIZ - 1] = '\0';
           if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
             if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
               if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
-                MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
-                mac_addr_found = true;
-                break;
+                const unsigned char *hw = reinterpret_cast<const unsigned char *>(ifr.ifr_hwaddr.sa_data);
+                bool non_zero = false;
+                for (int i = 0; i < 6; ++i) {
+                  if (hw[i] != 0) {
+                    non_zero = true;
+                    break;
+                  }
+                }
+                if (non_zero) {
+                  MEMCPY(mac_addr_, hw, 6);
+                  mac_addr_found = true;
+                  break;
+                }
               } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
+                last_errno = errno;
+                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(last_errno), K(it->ifr_name));
               }
             }
           } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
+            last_errno = errno;
+            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(last_errno), K(it->ifr_name));
           }
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
-      }
     }
     close(sock);
+  }
+  if (OB_SUCC(ret) && !mac_addr_found) {
+    // RFC 4122 section 4.5 / RFC 9562 section 6.10: when no physical MAC address
+    // is available in restricted Linux containers or sandboxes, generate a 48-bit
+    // cryptographic random node ID and set the IEEE 802 multicast bit (0x01).
+    unsigned char random_node[6] = {0};
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("open /dev/urandom failed for UUID node fallback", K(ret), K(errno), K(last_errno));
+    } else {
+      ssize_t total_read = 0;
+      while (total_read < 6) {
+        ssize_t n = read(fd, random_node + total_read, static_cast<size_t>(6 - total_read));
+        if (n > 0) {
+          total_read += n;
+        } else if (n < 0 && errno == EINTR) {
+          continue;
+        } else {
+          break;
+        }
+      }
+      close(fd);
+      if (total_read == 6) {
+        random_node[0] |= 0x01;
+        MEMCPY(mac_addr_, random_node, 6);
+        mac_addr_found = true;
+        LOG_INFO("using random UUID node ID with multicast bit set", K(last_errno));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("read /dev/urandom failed for UUID node fallback", K(ret), K(errno), K(last_errno));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && mac_addr_found) {
+    is_inited_ = true;
   }
 #endif
   return ret;
