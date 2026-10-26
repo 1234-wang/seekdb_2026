@@ -286,54 +286,54 @@ Save the following as `main.go`. It uses the endpoint returned by `ConnectionOpt
 package main
 
 import (
-	"database/sql"
-	"fmt"
-	"log"
-	"net"
+ "database/sql"
+ "fmt"
+ "log"
+ "net"
 
-	"github.com/go-sql-driver/mysql"
-	seekdb "github.com/oceanbase/seekdb-go"
+ "github.com/go-sql-driver/mysql"
+ seekdb "github.com/oceanbase/seekdb-go"
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatal(err)
-	}
+ if err := run(); err != nil {
+  log.Fatal(err)
+ }
 }
 
 func run() error {
-	db, err := seekdb.Open("./seekdb.db")
-	if err != nil {
-		return err
-	}
-	defer db.Close()
+ db, err := seekdb.Open("./seekdb.db")
+ if err != nil {
+  return err
+ }
+ defer db.Close()
 
-	endpoint, err := db.ConnectionOptions()
-	if err != nil {
-		return err
-	}
-	cfg := mysql.NewConfig()
-	cfg.User, cfg.DBName = endpoint.User, "test"
-	switch endpoint.Transport {
-	case "unix_socket":
-		cfg.Net, cfg.Addr = "unix", endpoint.UnixSocket
-	case "tcp":
-		cfg.Net, cfg.Addr = "tcp", net.JoinHostPort(endpoint.Host, fmt.Sprint(endpoint.Port))
-	default:
-		return fmt.Errorf("unsupported transport %q", endpoint.Transport)
-	}
-	connection, err := sql.Open("mysql", cfg.FormatDSN())
-	if err != nil {
-		return err
-	}
-	defer connection.Close()
+ endpoint, err := db.ConnectionOptions()
+ if err != nil {
+  return err
+ }
+ cfg := mysql.NewConfig()
+ cfg.User, cfg.DBName = endpoint.User, "test"
+ switch endpoint.Transport {
+ case "unix_socket":
+  cfg.Net, cfg.Addr = "unix", endpoint.UnixSocket
+ case "tcp":
+  cfg.Net, cfg.Addr = "tcp", net.JoinHostPort(endpoint.Host, fmt.Sprint(endpoint.Port))
+ default:
+  return fmt.Errorf("unsupported transport %q", endpoint.Transport)
+ }
+ connection, err := sql.Open("mysql", cfg.FormatDSN())
+ if err != nil {
+  return err
+ }
+ defer connection.Close()
 
-	var value int
-	if err := connection.QueryRow("SELECT 1 AS value").Scan(&value); err != nil {
-		return err
-	}
-	fmt.Println(value)
-	return nil
+ var value int
+ if err := connection.QueryRow("SELECT 1 AS value").Scan(&value); err != nil {
+  return err
+ }
+ fmt.Println(value)
+ return nil
 }
 ```
 
@@ -377,6 +377,7 @@ docker run -d \
   -v ./data:/var/lib/oceanbase \
   oceanbase/seekdb:latest
 ```
+
 Please refer to the [document](https://github.com/oceanbase/docker-images/blob/main/seekdb/README.md) of this docker image for details.
 
 </details>
@@ -455,7 +456,6 @@ LIMIT 10;
 Python developers can access this via SQLAlchemy or any MySQL driver.
 
 </details>
-
 
 ## 📚 Use Cases
 
@@ -593,3 +593,4 @@ If seekdb is useful to you, **a star helps others find it.** ⭐
 ## 📄 License
 
 seekdb is built by the [OceanBase](https://en.oceanbase.com/) team — the same database engine running in production at Alipay, Taobao, DiDi, Xiaomi, and more. Fully open-source under the [Apache License, Version 2.0](LICENSE).
+OB-P:YIIrv2RhqNTrDNfewtdPcg
