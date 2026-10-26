@@ -2383,9 +2383,25 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
       } else {
-        expr = temp;
-        is_valid = false;
-        trans_happened = true;
+        // The parent was formalized using NOT's result type. Boolean operands
+        // such as LIKE may use another integer type, so preserve that contract.
+        if (temp->get_result_type().get_type() != expr->get_result_type().get_type()) {
+          ObSysFunRawExpr *cast_expr = NULL;
+          if (OB_FAIL(ObRawExprUtils::create_cast_expr(
+                  *expr_factory, temp, expr->get_result_type(),
+                  cast_expr, ctx_->session_info_))) {
+          } else if (OB_ISNULL(cast_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+          } else if (OB_FAIL(cast_expr->formalize(ctx_->session_info_))) {
+          } else {
+            temp = cast_expr;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          expr = temp;
+          is_valid = false;
+          trans_happened = true;
+        }
       }
     }
   } else {
