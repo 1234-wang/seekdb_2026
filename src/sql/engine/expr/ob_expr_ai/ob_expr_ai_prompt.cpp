@@ -114,8 +114,10 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         }
       } else if (ob_is_json(arg->datum_meta_.type_)) {
         ObIJsonBase *json_base = nullptr;
-        if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, tmp_allocator, i, json_base))) {
-        } else if (OB_ISNULL(json_base)) {
+        bool is_null = false;
+        if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, tmp_allocator,
+                                                   static_cast<uint16_t>(i), json_base, is_null))) {
+        } else if (is_null || OB_ISNULL(json_base)) {
           ret = OB_ERR_UNEXPECTED;
         } else if (OB_FAIL(args_array->append(static_cast<ObJsonNode *>(json_base)))) {
         }
