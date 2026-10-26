@@ -1,0 +1,9 @@
+SELECT CHAR_LENGTH(UUID()) AS len
+len
+36
+SELECT UUID() REGEXP '^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}' AS is_uuidv1
+is_uuidv1
+1
+SELECT @a <> @b AS distinct_ok
+distinct_ok
+1
