@@ -1,5 +1,7 @@
 # FTS optimization measurements, 2026 competition
 
+This is the frozen first-round comparison against the original competition upstream. The subsequent query optimization and its separate measurements are documented in [the second-round report](fts-performance-2026-round2.md); the results from different rounds are not combined.
+
 This change reduces repeated tokenizer setup and word aggregation work, and bounds collision chains in TaaT retrieval. It preserves token classification, token frequencies, stopword collation, relevance calculation and index format.
 
 IK classification decodes each character once and passes the cached character information to its processors. Dictionary range wrappers use the parser allocator and a small inline array rather than three independent arenas per document. Parser cleanup clears owned pointers so partial initialization can be cleaned up repeatedly.
