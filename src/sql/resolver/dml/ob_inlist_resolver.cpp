@@ -20,6 +20,7 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/engine/expr/ob_expr_version.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
@@ -275,10 +276,12 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObStmt *stmt,
                                                   ObIAllocator &alloc,
                                                   bool &is_question_mark,
-                                                  bool &is_enable)
+                                                  bool &is_enable,
+                                                  const ParseNode *&effective_in_list)
 {
   int ret = OB_SUCCESS;
   is_enable = false;
+  effective_in_list = &in_list;
   int64_t threshold = INT64_MAX;
   bool is_prepare_stmt = false;
   // 1. check basic requests
@@ -350,6 +353,69 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
         }
       }
       is_question_mark = rewrite_info.is_question_mark_;
+      if (OB_SUCC(ret) && is_enable && 1 == column_cnt && !is_question_mark) {
+        if (OB_FAIL(compact_duplicate_integer_literals(in_list,
+                                                       threshold,
+                                                       alloc,
+                                                       effective_in_list))) {
+        } else if (effective_in_list != &in_list) {
+          is_enable = false;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObInListResolver::compact_duplicate_integer_literals(const ParseNode &in_list,
+                                                         const int64_t rewrite_threshold,
+                                                         ObIAllocator &alloc,
+                                                         const ParseNode *&effective_in_list)
+{
+  // Compact only identical signed-integer literals. Extending this to strings,
+  // decimals, NULLs, or parameters requires preserving their coercion,
+  // collation, warning, and plan-cache semantics.
+  int ret = OB_SUCCESS;
+  bool supported = rewrite_threshold > 1;
+  bool has_duplicate = false;
+  hash::ObHashSet<int64_t, hash::NoPthreadDefendMode> seen_values;
+  ObSEArray<ParseNode *, 16> unique_nodes;
+  effective_in_list = &in_list;
+  const int64_t bucket_count = MIN(in_list.num_child_, rewrite_threshold);
+  if (supported && OB_FAIL(seen_values.create(bucket_count))) {
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && supported && i < in_list.num_child_; ++i) {
+    ParseNode *node = in_list.children_[i];
+    int hash_ret = OB_SUCCESS;
+    if (OB_ISNULL(node)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (T_INT != node->type_) {
+      supported = false;
+    } else if (OB_HASH_EXIST == (hash_ret = seen_values.exist_refactored(node->value_))) {
+      has_duplicate = true;
+    } else if (OB_HASH_NOT_EXIST != hash_ret) {
+      ret = hash_ret;
+    } else if (OB_FAIL(seen_values.set_refactored(node->value_))) {
+    } else if (OB_FAIL(unique_nodes.push_back(node))) {
+    } else if (unique_nodes.count() >= rewrite_threshold) {
+      supported = false;
+    }
+  }
+  if (OB_SUCC(ret) && supported && has_duplicate) {
+    ParseNode *compact_list = NULL;
+    ParseNode **compact_children = NULL;
+    if (OB_ISNULL(compact_list = static_cast<ParseNode *>(alloc.alloc(sizeof(ParseNode))))
+        || OB_ISNULL(compact_children = static_cast<ParseNode **>(
+            alloc.alloc(sizeof(ParseNode *) * unique_nodes.count())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      MEMCPY(compact_list, &in_list, sizeof(ParseNode));
+      MEMCPY(compact_children,
+             unique_nodes.get_data(),
+             sizeof(ParseNode *) * unique_nodes.count());
+      compact_list->children_ = compact_children;
+      compact_list->num_child_ = unique_nodes.count();
+      effective_in_list = compact_list;
     }
   }
   return ret;

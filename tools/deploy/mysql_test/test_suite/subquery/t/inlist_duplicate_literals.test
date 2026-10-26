@@ -1,0 +1,30 @@
+# owner: competition-issue-1512
+# tags: optimizer, inlist
+
+--disable_warnings
+drop table if exists inlist_duplicate_literals;
+--enable_warnings
+
+create table inlist_duplicate_literals(id int primary key, c int, s varchar(8));
+insert into inlist_duplicate_literals values
+  (1, 1, 'a'),
+  (2, 2, 'b'),
+  (3, 3, 'c'),
+  (4, null, null);
+
+# Five integer literals cross the rewrite threshold, but only two are distinct.
+# The direct IN predicate must be retained and compacted to its first occurrences.
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+  from inlist_duplicate_literals where c in (1, 1, 2, 2, 1) order by id;
+select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+  from inlist_duplicate_literals where c in (1, 1, 2, 2, 1) order by id;
+
+# Four distinct integers still reach the threshold and use the values-table path.
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+  from inlist_duplicate_literals where c in (1, 2, 3, 4, 1) order by id;
+
+# Non-integer literals retain the existing rewrite to preserve collation semantics.
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ id
+  from inlist_duplicate_literals where s in ('a', 'a', 'b', 'b', 'a') order by id;
+
+drop table inlist_duplicate_literals;
