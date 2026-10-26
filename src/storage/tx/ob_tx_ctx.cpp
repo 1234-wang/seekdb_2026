@@ -482,7 +482,6 @@ int ObTxCtx::kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list)
   int tmp_ret = OB_SUCCESS;
   int cb_param = OB_TRANS_UNKNOWN;
 
-  common::ObTimeGuard timeguard("part_kill", 10 * 1000);
   CtxLockGuard guard(lock_);
 
   if (IS_NOT_INIT) {
@@ -3669,7 +3668,6 @@ int ObTxCtx::replay_rollback_to(const ObTxRollbackToLog &log,
                                        const bool pre_barrier)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard timeguard("replay_rollback_to", 10 * 1000);
   // int64_t start = ObTimeUtility::fast_current_time();
   CtxLockGuard guard(lock_);
   bool need_replay = true;
