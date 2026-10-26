@@ -281,10 +281,10 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
           ObMemLobTxInfo tx_info(tx_read_snapshot_.version().get_val_for_tx(),
                                  tx_read_snapshot_.tx_id().get_id(),
                                  tx_read_snapshot_.tx_seq().cast_to_int());
-          LobAccessInfo access_info(tablet_id_, def_obj.get_collation_type());
+          ObMemLobLocationInfo location_info(tablet_id_, def_obj.get_collation_type());
           if (OB_FAIL(locator.set_table_info(table_id_, col_id))) {
-          } else if (extern_flags.has_access_info_ && OB_FAIL(locator.set_access_info(access_info))) {
-            STORAGE_LOG(WARN, "Lob: set access info failed", K(ret), K(access_info));
+          } else if (extern_flags.has_location_info_ && OB_FAIL(locator.set_location_info(location_info))) {
+            STORAGE_LOG(WARN, "Lob: set location info failed", K(ret), K(location_info));
           }
           if (OB_SUCC(ret) && extern_flags.has_read_snapshot_) {
             int64_t pos = 0;
@@ -424,14 +424,14 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             target_tablet_id = tablet_handle.get_obj()->get_data_tablet_id();
           }
         }
-        LobAccessInfo access_info(target_tablet_id.id(), cs_type);
+        ObMemLobLocationInfo location_info(target_tablet_id.id(), cs_type);
         if (OB_FAIL(ret)) {
         } else if (has_extern && OB_FAIL(locator.set_table_info(table_id_, column_id))) { // should be column idx
           STORAGE_LOG(WARN, "Lob: set table info failed", K(ret), K(table_id_), K(column_id));
-        } else if (extern_flags.has_access_info_ && OB_FAIL(locator.set_access_info(access_info))) {
-          STORAGE_LOG(WARN, "Lob: set access info failed", K(ret), K(access_info));
+        } else if (extern_flags.has_location_info_ && OB_FAIL(locator.set_location_info(location_info))) {
+          STORAGE_LOG(WARN, "Lob: set location info failed", K(ret), K(location_info));
         } else if (extern_flags.has_retry_info_ && OB_FAIL(locator.set_retry_info(retry_info))) {
-          STORAGE_LOG(WARN, "Lob: set access info failed", K(ret), K(retry_info));
+          STORAGE_LOG(WARN, "Lob: set location info failed", K(ret), K(retry_info));
         }
 
         if (OB_SUCC(ret) && extern_flags.has_read_snapshot_) {
