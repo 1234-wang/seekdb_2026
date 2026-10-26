@@ -1,0 +1,29 @@
+CREATE TABLE ddl_identifier_plain (
+id INT PRIMARY KEY,
+enum_col ENUM('one', 'two'),
+set_col SET('a', 'b')
+);
+INSERT INTO ddl_identifier_plain VALUES (1, 'one', 'a'), (2, 'two', 'a,b');
+CREATE UNIQUE INDEX idx_enum ON ddl_identifier_plain (enum_col);
+CREATE UNIQUE INDEX idx_set ON ddl_identifier_plain (set_col);
+SELECT id, CAST(enum_col AS UNSIGNED) AS enum_code, CAST(set_col AS UNSIGNED) AS set_bits
+FROM ddl_identifier_plain FORCE INDEX (idx_enum) ORDER BY id;
+id	enum_code	set_bits
+1	1	1
+2	2	3
+DROP TABLE ddl_identifier_plain;
+CREATE TABLE ddl_identifier_tick (
+`key``id` INT PRIMARY KEY,
+`enum``col` ENUM('one', 'two'),
+`set``col` SET('a', 'b')
+);
+INSERT INTO ddl_identifier_tick VALUES (1, 'one', 'a'), (2, 'two', 'a,b');
+CREATE UNIQUE INDEX idx_enum ON ddl_identifier_tick (`enum``col`);
+CREATE UNIQUE INDEX idx_set ON ddl_identifier_tick (`set``col`);
+SELECT `key``id` AS id, CAST(`enum``col` AS UNSIGNED) AS enum_code,
+CAST(`set``col` AS UNSIGNED) AS set_bits
+FROM ddl_identifier_tick FORCE INDEX (idx_enum) ORDER BY `key``id`;
+id	enum_code	set_bits
+1	1	1
+2	2	3
+DROP TABLE ddl_identifier_tick;
