@@ -983,7 +983,7 @@ int ObTransformerImpl::verify_all_expr_types(ObDMLStmt *stmt, const ObSQLSession
       ObSelectStmt *subquery = NULL;
       if (OB_ISNULL(subquery = table_item->ref_query_)) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(SMART_CALL(verify_all_expr_types(subquery, session))) {
+      } else if (OB_FAIL(SMART_CALL(verify_all_expr_types(subquery, session)))) {
       }
     }
   }
