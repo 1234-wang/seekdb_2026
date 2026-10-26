@@ -1,0 +1,36 @@
+# Regression for issue #1470: positive inner product DESC is the public
+# spelling of the existing negative inner product ASC ANN search.
+--disable_warnings
+drop table if exists t_ip_desc_ann;
+--enable_warnings
+create table t_ip_desc_ann (
+  id int primary key,
+  v vector(3) not null,
+  vector index idx_v(v) with (
+    distance=inner_product, type=hnsw, lib=vsag, m=8,
+    ef_construction=32, sync_mode=immediate)
+) organization heap;
+insert into t_ip_desc_ann values
+  (1, '[1,0,0]'),
+  (2, '[2,0,0]'),
+  (3, '[-1,0,0]'),
+  (4, '[0,1,0]');
+
+# The positive-IP spelling must use the vector index, not an exact TOP-N scan.
+--let $sql = explain format=json select id from t_ip_desc_ann order by inner_product(v, '[1,0,0]') desc approximate limit 3
+--let $scan_operator = query_get_value("$sql", Query Plan, 3)
+--echo $scan_operator
+
+# Rewriting the order key must not negate a projected positive score. Ordering
+# through its select-list alias covers the shared-expression resolver path.
+select id, inner_product(v, '[1,0,0]') as score
+from t_ip_desc_ann
+order by score desc approximate limit 3;
+
+# An IP ANN index cannot produce the minimum inner products. Reject this form
+# instead of silently ignoring APPROXIMATE and executing an exact full scan.
+--error 1235
+select id from t_ip_desc_ann
+order by inner_product(v, '[1,0,0]') asc approximate limit 3;
+
+drop table t_ip_desc_ann;
