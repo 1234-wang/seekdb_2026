@@ -106,4 +106,23 @@ select tokenize('中华人民共和国人民大会堂 一百二十三个 3.14 ab
 select tokenize('中华人民共和国人民大会堂 一百二十三个 3.14 abc-def', 'ik');
 select tokenize('The quick brown fox jumps over the lazy dog', 'beng', '[{"output": "all"}]');
 
+# ---------------------------------------------------------------------------------------------
+# words equal under the collation but not in bytes, and words whose collation order differs from
+# their byte order: the index build sorts them on encoded sort keys
+create table t_coll(id int primary key, c varchar(200));
+insert into t_coll values (1, 'Résumé resume RESUME'), (2, 'resume'), (3, 'éclair eclair'),
+  (4, 'Ångström angstrom'), (5, 'a_b a-b A_B ab'), (6, 'zeta Zeta ZETA'), (7, '中文 中文字符'),
+  (8, 'straße strasse'), (9, 'ｆｕｌｌｗｉｄｔｈ fullwidth'), (10, 'naïve naive'), (11, 'Ü u ü');
+alter table t_coll add fulltext index ft_coll(c) with parser beng;
+alter table t_coll add fulltext index ft_coll_ik(c) with parser ik;
+select id from t_coll where match(c) against('resume') order by id;
+select id from t_coll where match(c) against('résumé') order by id;
+select id from t_coll where match(c) against('eclair') order by id;
+select id from t_coll where match(c) against('angstrom') order by id;
+select id from t_coll where match(c) against('a_b ab') order by id;
+select id from t_coll where match(c) against('zeta naive strasse fullwidth') order by id;
+select id from t_coll where match(c) against('ü') order by id;
+select count(*) from t_coll where match(c) against('中文');
+select tokenize(c, 'beng') from t_coll order by id;
+
 drop database fts_perf;

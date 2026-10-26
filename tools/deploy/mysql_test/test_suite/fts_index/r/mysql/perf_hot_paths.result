@@ -317,4 +317,80 @@ select tokenize('The quick brown fox jumps over the lazy dog', 'beng', '[{"outpu
 | {"tokens": [{"lazy": 1}, {"over": 1}, {"quick": 1}, {"dog": 1}, {"brown": 1}, {"fox": 1}, {"jumps": 1}], "doc_len": 7} |
 +------------------------------------------------------------------------------------------------------------------------+
 
+create table t_coll(id int primary key, c varchar(200));
+insert into t_coll values (1, 'Résumé resume RESUME'), (2, 'resume'), (3, 'éclair eclair'),
+  (4, 'Ångström angstrom'), (5, 'a_b a-b A_B ab'), (6, 'zeta Zeta ZETA'), (7, '中文 中文字符'),
+  (8, 'straße strasse'), (9, 'ｆｕｌｌｗｉｄｔｈ fullwidth'), (10, 'naïve naive'), (11, 'Ü u ü');
+alter table t_coll add fulltext index ft_coll(c) with parser beng;
+alter table t_coll add fulltext index ft_coll_ik(c) with parser ik;
+Warnings:
+Warning	1831	Duplicate index 'ft_coll_ik' defined on the table 'fts_perf.t_coll'
+select id from t_coll where match(c) against('resume') order by id;
++----+
+| id |
++----+
+|  1 |
+|  2 |
++----+
+select id from t_coll where match(c) against('résumé') order by id;
++----+
+| id |
++----+
+|  1 |
+|  2 |
++----+
+select id from t_coll where match(c) against('eclair') order by id;
++----+
+| id |
++----+
+|  3 |
++----+
+select id from t_coll where match(c) against('angstrom') order by id;
++----+
+| id |
++----+
+|  4 |
++----+
+select id from t_coll where match(c) against('a_b ab') order by id;
++----+
+| id |
++----+
++----+
+select id from t_coll where match(c) against('zeta naive strasse fullwidth') order by id;
++----+
+| id |
++----+
+|  6 |
+|  8 |
+|  9 |
+| 10 |
++----+
+select id from t_coll where match(c) against('ü') order by id;
++----+
+| id |
++----+
++----+
+select count(*) from t_coll where match(c) against('中文');
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+select tokenize(c, 'beng') from t_coll order by id;
++----------------------------------------------+
+| tokenize(c, 'beng')                          |
++----------------------------------------------+
+| ["resume"]                                   |
+| ["resume"]                                   |
+| ["eclair"]                                   |
+| ["angstrom"]                                 |
+| []                                           |
+| ["zeta"]                                     |
+| ["中文", "中文字符"]                         |
+| ["straße", "strasse"]                        |
+| ["fullwidth", "ｆｕｌｌｗｉｄｔｈ"]          |
+| ["naive"]                                    |
+| []                                           |
++----------------------------------------------+
+
 drop database fts_perf;
