@@ -401,7 +401,8 @@ _ORDERED_LINK_FILES = [
     "//rust:sql_nio_archive",
     "//rust:config_archive",
 ] + select({
-    "//bazel:sanity_enabled": ["//deps/external:jemalloc_archive"],
+    "@platforms//os:linux": ["//deps/external:jemalloc_archive"],
+    "@platforms//os:macos": ["//deps/external:jemalloc_archive"],
     "//conditions:default": [],
 }) + select({
     "@platforms//os:windows": [],
