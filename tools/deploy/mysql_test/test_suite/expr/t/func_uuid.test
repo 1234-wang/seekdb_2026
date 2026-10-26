@@ -1,0 +1,24 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: Zkeeper6899
+#owner group: sql1
+
+--disable_abort_on_error
+--disable_warnings
+
+# UUID(): deterministic shape checks.
+# Regression for issue #1480: UUID node init must succeed (MAC path or
+# RFC 9562 random-node fallback) and UUID() must keep the UUIDv1 layout.
+SELECT CHAR_LENGTH(UUID()) AS len;
+SELECT UUID() REGEXP '^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}' AS is_uuidv1;
+
+--disable_query_log
+SET @a = UUID();
+SET @b = UUID();
+--enable_query_log
+
+# uniqueness across statements
+SELECT @a <> @b AS distinct_ok;
+
+--enable_warnings
