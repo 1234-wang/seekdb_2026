@@ -163,7 +163,10 @@ EOF
   single_conf=${base_template}
   single_conf=${single_conf//"{{%% SERVERS %%}}"/$SERVERS}
 
-  [ ! -f ./single.yaml ] && echo "$single_conf" > ./single.yaml && echo "generate yaml config file: $(readlink -f ./single.yaml)"
+  if [ ! -f ./single.yaml ]; then
+    echo "$single_conf" > ./single.yaml && echo "generate yaml config file: $(readlink -f ./single.yaml)"
+  fi
+  return 0
 }
 
 function show_deploy_name {
@@ -180,8 +183,12 @@ function get_deploy_name {
   then
     [[ "$YAML_CONF" != "" ]] && yaml_name=${YAML_CONF##*/} && deploy_name=${yaml_name%.yaml} && show_deploy_name && return
     mkdir -p $OBD_CLUSTER_PATH
-    cluster_dirs=$(ls -1 $OBD_CLUSTER_PATH)
-    cluster_num=$(echo "$cluster_dirs" | wc -l )
+    cluster_dirs=$(ls -1 $OBD_CLUSTER_PATH 2>/dev/null)
+    if [[ -z "$cluster_dirs" ]]; then
+      cluster_num=0
+    else
+      cluster_num=$(echo "$cluster_dirs" | wc -l)
+    fi
     if (( ${cluster_num} == 1 )) && [[ -f $DEFAULT_DEPLOY_NAME_FILE ]]
     then
       deploy_name=$(cat "$DEFAULT_DEPLOY_NAME_FILE") && show_deploy_name && return
@@ -340,9 +347,12 @@ function restart_cluster {
   obd cluster restart "$deploy_name"
 }
 
-function upgreade_cluster {
+function upgrade_cluster {
   get_deploy_name
   obd cluster upgrade "$deploy_name"
+}
+function upgreade_cluster {
+  upgrade_cluster "$@"
 }
 
 function destroy_cluster {
@@ -606,7 +616,7 @@ function main() {
     upgrade)
     [[ "$EXEC_CP" == "1" ]] && copy_sh
     mirror_create || exit 1
-    upgreade_cluster
+    upgrade_cluster
     ;;
     mysqltest)
     [[ "$EXEC_CP" == "1" ]] && copy_sh
