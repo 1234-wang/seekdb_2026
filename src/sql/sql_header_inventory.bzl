@@ -31,6 +31,7 @@ SQL_PUBLIC_HEADER_ROOTS = [
     "engine/expr/ob_expr_pl_integer_checker.h",
     "engine/expr/ob_expr_sql_udt_utils.h",
     "engine/expr/ob_expr_uuid.h",
+    "engine/expr/uuid_node_fallback.h",
     "engine/expr/ob_expr_vector.h",
     "engine/expr/ob_expr_xml_func_helper.h",
     "engine/expr/ob_lob_result_materializer.h",
