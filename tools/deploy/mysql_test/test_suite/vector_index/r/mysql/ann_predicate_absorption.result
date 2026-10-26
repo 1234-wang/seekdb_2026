@@ -1,0 +1,105 @@
+drop table if exists t_ann_absorption;
+create table t_ann_absorption (
+id int primary key,
+embedding vector(3) not null,
+category int,
+parity varchar(8),
+key idx_category(category)
+) organization heap;
+insert into t_ann_absorption values
+(1, '[1,0,0]', 1, 'even'),
+(2, '[2,0,0]', 1, null),
+(3, '[3,0,0]', 2, 'even'),
+(4, '[4,0,0]', null, 'even'),
+(5, '[5,0,0]', 1, 'odd'),
+(6, '[6,0,0]', 2, null),
+(7, '[7,0,0]', null, null),
+(8, '[8,0,0]', 1, 'even');
+create vector index idx_vec on t_ann_absorption(embedding)
+with (distance=l2, type=hnsw, lib=vsag, sync_mode=immediate);
+select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+id
+1
+2
+5
+8
+select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+id
+1
+2
+5
+8
+explain basic select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+Query Plan
+============================================================
+|ID|OPERATOR                               |NAME           |
+------------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(idx_category)|
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.category = 1]), rowset=16
+      access([t.__pk_increment], [t.category], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true],
+      range_key([t.category], [t.__pk_increment]), range(1,MIN ; 1,MAX)
+select /*+ no_rewrite index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+id
+1
+2
+5
+8
+explain basic select /*+ no_rewrite index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4;
+Query Plan
+============================================================
+|ID|OPERATOR                               |NAME           |
+------------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(idx_category)|
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.category = 1], [t.category = 1 OR t.parity = 'even']), rowset=16
+      access([t.__pk_increment], [t.category], [t.parity], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,false],
+      range_key([t.category], [t.__pk_increment]), range(1,MIN ; 1,MAX)
+select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = 1 and (category = 1 or parity = 'even')
+order by l2_distance(embedding, '[0,0,0]') limit 4;
+id
+1
+2
+5
+8
+prepare ann_absorption from
+"select /*+ index(t idx_category) */ id from t_ann_absorption t
+where category = ? and (category = ? or parity = ?)
+order by l2_distance(embedding, '[0,0,0]') approximate limit 4";
+set @outer_category = 1, @inner_category = 1, @parity = 'even';
+execute ann_absorption using @outer_category, @inner_category, @parity;
+id
+1
+2
+5
+8
+set @outer_category = 2;
+execute ann_absorption using @outer_category, @inner_category, @parity;
+id
+3
+set @outer_category = 1, @inner_category = 2;
+execute ann_absorption using @outer_category, @inner_category, @parity;
+id
+1
+8
+deallocate prepare ann_absorption;
+drop table t_ann_absorption;
