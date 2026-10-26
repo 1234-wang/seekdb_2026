@@ -16,6 +16,8 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 
+#include "lib/hash_func/murmur_hash.h"
+#include "lib/utility/ob_sort.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/engine/expr/ob_expr_version.h"
@@ -263,6 +265,175 @@ int ObInListResolver::get_inlist_rewrite_info(const ParseNode &in_list,
   return ret;
 }
 
+// Compare the value of two constant literal nodes of an IN list.
+//
+// Nodes of different types or different negation flags are never treated as
+// equal, two literals only have the same value when they are written the same.
+static int compare_in_list_literals(const ParseNode &left, const ParseNode &right)
+{
+  int cmp = 0;
+  const int64_t left_len = NULL == left.str_value_ ? 0 : left.str_len_;
+  const int64_t right_len = NULL == right.str_value_ ? 0 : right.str_len_;
+  if (left.type_ != right.type_) {
+    cmp = static_cast<int>(left.type_) < static_cast<int>(right.type_) ? -1 : 1;
+  } else if (left.is_neg_ != right.is_neg_) {
+    cmp = left.is_neg_ < right.is_neg_ ? -1 : 1;
+  } else if (left_len > 0 || right_len > 0) {
+    const int64_t cmp_len = left_len < right_len ? left_len : right_len;
+    const int mem_cmp = cmp_len > 0 ? MEMCMP(left.str_value_, right.str_value_, cmp_len) : 0;
+    if (0 != mem_cmp) {
+      cmp = mem_cmp < 0 ? -1 : 1;
+    } else if (left_len != right_len) {
+      cmp = left_len < right_len ? -1 : 1;
+    }
+  } else if (left.value_ != right.value_) {
+    cmp = left.value_ < right.value_ ? -1 : 1;
+  }
+  return cmp;
+}
+
+// Hash of a constant literal node, only used to group the elements of an IN
+// list, elements of a group are compared again before they are treated as equal.
+static uint64_t hash_in_list_literal(const ParseNode &node)
+{
+  bool is_neg = node.is_neg_;
+  uint64_t hash_val = 0;
+  if (NULL != node.str_value_ && node.str_len_ > 0) {
+    hash_val = murmurhash64A(node.str_value_, static_cast<int32_t>(node.str_len_),
+                             static_cast<uint64_t>(node.type_));
+  } else {
+    hash_val = murmurhash64A(&node.value_, sizeof(node.value_),
+                             static_cast<uint64_t>(node.type_));
+  }
+  return murmurhash64A(&is_neg, sizeof(is_neg), hash_val);
+}
+
+struct InListConstElement
+{
+  uint64_t hash_;
+  int64_t idx_;
+};
+
+static bool in_list_const_element_less_than(const InListConstElement &left,
+                                            const InListConstElement &right)
+{
+  return left.hash_ != right.hash_ ? left.hash_ < right.hash_ : left.idx_ < right.idx_;
+}
+
+// Hash of an IN list element whose value is a parameter, false is returned when
+// the element can not be hashed and the analysis has to be given up.
+static bool get_in_list_param_hash(const ParamStore &param_store,
+                                   const ParseNode &element,
+                                   uint64_t &hash_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(param_store.at(element.value_).hash(hash_val))) {
+    LOG_WARN("failed to hash in list parameter", K(ret), K(element.value_));
+  }
+  return OB_SUCCESS == ret;
+}
+
+// Check whether two IN list elements have the same value, `is_param` tells
+// whether the elements are parameter markers whose values come from `param_store`.
+static bool is_same_in_list_const_element(const ParseNode &left,
+                                          const ParseNode &right,
+                                          const ParamStore *param_store,
+                                          const bool is_param)
+{
+  int ret = OB_SUCCESS;
+  bool is_same = false;
+  if (is_param) {
+    int cmp = 0;
+    if (OB_ISNULL(param_store)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(param_store->at(left.value_).compare(param_store->at(right.value_), cmp))) {
+    } else {
+      is_same = 0 == cmp;
+    }
+  } else {
+    is_same = 0 == compare_in_list_literals(left, right);
+  }
+  return is_same;
+}
+
+int ObInListResolver::get_in_list_distinct_cnt(ObIAllocator &alloc,
+                                               const ParseNode &in_list,
+                                               const ParamStore *param_store,
+                                               const bool is_prepare_stmt,
+                                               int64_t &distinct_cnt)
+{
+  int ret = OB_SUCCESS;
+  const int64_t element_cnt = in_list.num_child_;
+  bool is_param = false;
+  bool can_analyze = element_cnt > 1 && NULL != in_list.children_;
+  // the number of elements is used when the list can not be analyzed, the
+  // caller then keeps the behavior it had before
+  distinct_cnt = element_cnt;
+  if (can_analyze) {
+    const ParseNode *first = in_list.children_[0];
+    if (OB_ISNULL(first)) {
+      can_analyze = false;
+    } else if (T_QUESTIONMARK == first->type_) {
+      is_param = true;
+      // parameter values of a prepare statement are not known yet
+      can_analyze = NULL != param_store && !is_prepare_stmt;
+    } else if (!IS_DATATYPE_OP(first->type_)) {
+      can_analyze = false;
+    }
+  }
+  for (int64_t i = 0; can_analyze && i < element_cnt; ++i) {
+    const ParseNode *element = in_list.children_[i];
+    if (OB_ISNULL(element)) {
+      can_analyze = false;
+    } else if (is_param) {
+      if (T_QUESTIONMARK != element->type_ ||
+          element->value_ < 0 ||
+          element->value_ >= param_store->count()) {
+        can_analyze = false;
+      }
+    } else if (!IS_DATATYPE_OP(element->type_)) {
+      can_analyze = false;
+    }
+  }
+  if (can_analyze) {
+    InListConstElement *elements =
+        static_cast<InListConstElement *>(alloc.alloc(sizeof(InListConstElement) * element_cnt));
+    if (OB_ISNULL(elements)) {
+      // counting the distinct values is only an optimization, give up quietly
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "failed to allocate memory for in list analysis",
+                   K(element_cnt));
+    } else {
+      for (int64_t i = 0; can_analyze && i < element_cnt; ++i) {
+        const ParseNode *element = in_list.children_[i];
+        elements[i].idx_ = i;
+        elements[i].hash_ = 0;
+        if (is_param) {
+          can_analyze = get_in_list_param_hash(*param_store, *element, elements[i].hash_);
+        } else {
+          elements[i].hash_ = hash_in_list_literal(*element);
+        }
+      }
+      int64_t duplicate_cnt = 0;
+      lib::ob_sort(elements, elements + element_cnt, in_list_const_element_less_than);
+      for (int64_t i = 1; can_analyze && i < element_cnt; ++i) {
+        // equal values are adjacent after sorting, a hash collision only splits
+        // a group and keeps more elements, it never merges different values
+        if (elements[i].hash_ == elements[i - 1].hash_ &&
+            is_same_in_list_const_element(*in_list.children_[elements[i - 1].idx_],
+                                          *in_list.children_[elements[i].idx_],
+                                          param_store,
+                                          is_param)) {
+          ++duplicate_cnt;
+        }
+      }
+      if (can_analyze) {
+        distinct_cnt = element_cnt - duplicate_cnt;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObItemType op_type,
                                                   const ObRawExpr &left_expr,
@@ -308,7 +479,15 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
     if (OB_SUCC(ret)) {
       if (in_list.num_child_ < threshold) {
       } else {
-        is_enable = true;
+        int64_t distinct_cnt = in_list.num_child_;
+        if (OB_FAIL(get_in_list_distinct_cnt(alloc, in_list, param_store,
+                                             is_prepare_stmt, distinct_cnt))) {
+        } else if (distinct_cnt < threshold) {
+          // duplicated constants do not need the values table rewrite, keeping
+          // the plain IN form lets the predicate be pushed down as a range
+        } else {
+          is_enable = true;
+        }
       }
     }
   }

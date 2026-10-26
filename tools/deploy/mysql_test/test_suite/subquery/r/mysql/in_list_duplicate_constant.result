@@ -1,0 +1,67 @@
+drop table if exists t_in_list_dup;
+create table t_in_list_dup(a int primary key, b int);
+insert into t_in_list_dup values (1,10),(2,20),(3,30),(4,40),(5,50);
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a in (1,2,3,1,2,3,1);
+Query Plan
+==================================================
+|ID|OPERATOR |NAME         |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE GET|t_in_list_dup|3       |14          |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t_in_list_dup.a], [t_in_list_dup.b]), filter(nil), rowset=16
+      access([t_in_list_dup.a], [t_in_list_dup.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t_in_list_dup.a]), range[1 ; 1], [2 ; 2], [3 ; 3], 
+      range_cond([t_in_list_dup.a IN (1, 2, 3, 1, 2, 3, 1)])
+select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a in (1,2,3,1,2,3,1) order by a;
+a	b
+1	10
+2	20
+3	30
+select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a not in (1,2,3,1,2,3,1) order by a;
+a	b
+4	40
+5	50
+explain select /*+ opt_param('inlist_rewrite_threshold', 4) */ * from t_in_list_dup where a in (1,2,3,4,5,6);
+Query Plan
+====================================================================
+|ID|OPERATOR                   |NAME         |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |MERGE JOIN                 |             |5       |5           |
+|1 |├─TABLE FULL SCAN          |t_in_list_dup|5       |3           |
+|2 |└─SORT                     |             |6       |2           |
+|3 |  └─SUBPLAN SCAN           |VIEW2        |6       |2           |
+|4 |    └─HASH DISTINCT        |             |6       |2           |
+|5 |      └─VALUES TABLE ACCESS|VALUES_TABLE1|6       |1           |
+====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t_in_list_dup.a], [t_in_list_dup.b]), filter(nil), rowset=16
+      equal_conds([t_in_list_dup.a = VIEW2.column_0]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([t_in_list_dup.a], [t_in_list_dup.b]), filter(nil), rowset=16
+      access([t_in_list_dup.a], [t_in_list_dup.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t_in_list_dup.a]), range(MIN ; MAX)always true
+  2 - output([VIEW2.column_0]), filter(nil), rowset=16
+      sort_keys([VIEW2.column_0, ASC])
+  3 - output([VIEW2.column_0]), filter(nil), rowset=16
+      access([VIEW2.column_0])
+  4 - output([VALUES_TABLE1.column_0]), filter(nil), rowset=16
+      distinct([VALUES_TABLE1.column_0])
+  5 - output([VALUES_TABLE1.column_0]), filter(nil)
+      access([VALUES_TABLE1.column_0])
+prepare stmt_dup from 'select a from t_in_list_dup where a in (?, ?, ?) order by a';
+set @a = 1, @b = 1, @c = 2;
+execute stmt_dup using @a, @b, @c;
+a
+1
+2
+set @a = 3, @b = 4, @c = 3;
+execute stmt_dup using @a, @b, @c;
+a
+3
+4
+drop table t_in_list_dup;
