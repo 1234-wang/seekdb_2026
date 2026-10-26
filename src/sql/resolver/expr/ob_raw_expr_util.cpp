@@ -2670,6 +2670,49 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
   return ret;
 }
 
+namespace
+{
+// The signed integer types and the unsigned integer types are both arranged from the
+// narrowest to the widest in ObObjType, so the offset inside its own group can be used
+// to compare the width of two integer types.
+// Return -1 if the type is not an integer type.
+int get_int_type_width(ObObjType type)
+{
+  int width = -1;
+  if (type >= ObTinyIntType && type <= ObIntType) {
+    width = static_cast<int>(type - ObTinyIntType);
+  } else if (type >= ObUTinyIntType && type <= ObUInt64Type) {
+    width = static_cast<int>(type - ObUTinyIntType);
+  }
+  return width;
+}
+
+// Check whether casting a value of src_type to dst_type keeps the value unchanged.
+// A lossless conversion may be stacked on top of an existing implicit cast: the outer
+// cast then only converts the value the inner cast has produced, so the expression
+// keeps the semantics it already had.
+bool is_lossless_int_type_cast(const ObRawExprResType &src_type, const ObRawExprResType &dst_type)
+{
+  bool bret = false;
+  const ObObjType src_type_obj = src_type.get_type();
+  const ObObjType dst_type_obj = dst_type.get_type();
+  const int src_width = get_int_type_width(src_type_obj);
+  const int dst_width = get_int_type_width(dst_type_obj);
+  if (src_width >= 0 && dst_width >= 0) {
+    const bool src_unsigned = (src_type_obj >= ObUTinyIntType);
+    const bool dst_unsigned = (dst_type_obj >= ObUTinyIntType);
+    if (src_unsigned == dst_unsigned) {
+      bret = dst_width >= src_width;
+    } else {
+      // A signed type and an unsigned type of the same width can not represent each
+      // other, so only accept the case that the destination is strictly wider.
+      bret = dst_width > src_width;
+    }
+  }
+  return bret;
+}
+} // namespace
+
 int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                                             const ObSQLSessionInfo *session,
                                             ObRawExpr &expr,
@@ -2692,7 +2735,8 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
         && !ignore_dup_cast_error
         && !((src_type.is_collection_sql_type()
                   && (dst_type.is_character_type() || dst_type.is_null()))
-            || (src_type.is_character_type() && dst_type.is_character_type())))
+            || (src_type.is_character_type() && dst_type.is_character_type()))
+        && !is_lossless_int_type_cast(src_type, dst_type))
       {
       ret = OB_ERR_UNEXPECTED;
 #ifdef DEBUG

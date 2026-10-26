@@ -1,0 +1,21 @@
+# the reported failure: an even number of negations
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE "x")));
+1
+# control case: one negation
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(1 LIKE "x"));
+1
+# control case: a literal instead of a scalar subquery
+SELECT 1 FROM dual WHERE IFNULL(FALSE, !(!(1 LIKE "x")));
+1
+# three and four negations
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(!(1 LIKE "x"))));
+1
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(!(!(1 LIKE "x")))));
+1
+# coalesce is not affected
+SELECT 1 FROM dual WHERE COALESCE((SELECT FALSE), !(!(1 LIKE "x")));
+1
+# the reported statement returns no rows
+SELECT COUNT(*) AS row_count FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE "x")));
+row_count
+0
