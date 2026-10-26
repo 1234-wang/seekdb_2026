@@ -2262,17 +2262,20 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
   bool push_not_happend = false;
   bool remove_duplicate_happend = false;
   bool pull_similar_happend = false;
+  bool remove_add_zero_happened = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (conditions.count() == 0) {
     //do nothing
+  } else if (OB_FAIL(remove_integer_add_zero(conditions, remove_add_zero_happened))) {
   } else if (OB_FAIL(push_not(conditions, push_not_happend))) {
   } else if (OB_FAIL(remove_duplicate_exprs(stmt->get_query_ctx(),
                                             conditions,
                                             remove_duplicate_happend))) {
   } else if (OB_FAIL(pull_similar_expr(stmt, conditions, pull_similar_happend))) {
   } else {
-    trans_happened =  push_not_happend | remove_duplicate_happend | pull_similar_happend;
+    trans_happened = remove_add_zero_happened | push_not_happend
+                     | remove_duplicate_happend | pull_similar_happend;
     if (trans_happened) {
       for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
         if (OB_ISNULL(conditions.at(i))) {
@@ -2283,6 +2286,63 @@ int ObTransformSimplifyExpr::do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr
       OPT_TRACE("   push_not_happend:", push_not_happend);
       OPT_TRACE("   remove_duplicate_happend:", remove_duplicate_happend);
       OPT_TRACE("   pull_similar_happend:", pull_similar_happend);
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::remove_integer_add_zero(ObIArray<ObRawExpr*> &conditions,
+                                                     bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
+    if (OB_ISNULL(conditions.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      bool cur_happened = false;
+      if (OB_FAIL(recursive_remove_integer_add_zero(conditions.at(i), cur_happened))) {
+      } else {
+        trans_happened |= cur_happened;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::recursive_remove_integer_add_zero(ObRawExpr *&expr,
+                                                               bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      bool cur_happened = false;
+      if (OB_ISNULL(expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(recursive_remove_integer_add_zero(expr->get_param_expr(i), cur_happened))) {
+      } else {
+        trans_happened |= cur_happened;
+      }
+    }
+    if (OB_SUCC(ret) && T_OP_ADD == expr->get_expr_type() && 2 == expr->get_param_count()) {
+      ObRawExpr *left = expr->get_param_expr(0);
+      ObRawExpr *right = expr->get_param_expr(1);
+      if (OB_ISNULL(left) || OB_ISNULL(right)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (!left->get_result_type().is_integer_type()
+                 || !right->get_result_type().is_integer_type()
+                 || !expr->get_result_type().is_integer_type()
+                 || left->get_result_type().get_type() != expr->get_result_type().get_type()
+                 || !right->is_const_raw_expr()
+                 || !static_cast<ObConstRawExpr*>(right)->get_value().is_zero()) {
+        // Keep type-changing, non-integer, and non-literal additions intact.
+      } else {
+        expr = left;
+        trans_happened = true;
+      }
     }
   }
   return ret;
