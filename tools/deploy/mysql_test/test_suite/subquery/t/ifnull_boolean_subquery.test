@@ -43,7 +43,7 @@ WHERE IFNULL((SELECT FALSE WHERE FALSE), !(!(!(value LIKE 'x')))) ORDER BY id;
 
 --echo # Logical operands and a replacement that is itself a value expression.
 SELECT id FROM t_ifnull_boolean_subquery
-WHERE IFNULL((SELECT FALSE WHERE FALSE), (!(!(value LIKE 'x')) AND TRUE)) ORDER BY id;
+WHERE IFNULL((SELECT FALSE WHERE FALSE), (!(!(value LIKE 'x')) AND id > 0)) ORDER BY id;
 SELECT id FROM t_ifnull_boolean_subquery
 WHERE !(!(IFNULL((SELECT FALSE), !(!(value LIKE 'x'))))) ORDER BY id;
 
