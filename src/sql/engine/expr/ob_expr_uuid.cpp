@@ -35,6 +35,9 @@
 #include <linux/if_packet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -74,6 +77,38 @@ int ObBigEndian::put_uint32(unsigned char *b, uint32_t v)
   }
   return ret;
 }
+
+
+#if !defined(__EMSCRIPTEN__) && !defined(_WIN32) && !defined(__APPLE__) && !defined(__ANDROID__)
+// Generate a random UUID node ID following RFC 4122 section 4.5: random bytes with
+// the multicast bit set, so that a generated node is never mistaken for a MAC address.
+static int gen_random_uuid_node(unsigned char *node)
+{
+  int ret = OB_SUCCESS;
+  const int64_t node_len = 6;  // a UUID node ID is 6 bytes long
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, node is null", K(ret));
+  } else {
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("open /dev/urandom failed", K(ret), K(errno));
+    } else {
+      ssize_t nread = read(fd, node, node_len);
+      if (node_len != nread) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("read /dev/urandom failed", K(ret), K(errno), K(nread));
+      } else {
+        node[0] |= 0x01;  // set the multicast bit, see RFC 4122 section 4.5
+      }
+      close(fd);
+    }
+  }
+  return ret;
+}
+#endif
+
 
 ObUUIDNode::ObUUIDNode()
 {
@@ -203,6 +238,7 @@ int ObUUIDNode::init()
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
+  bool mac_addr_found = false;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
     ret = OB_ERR_UNEXPECTED;
@@ -211,11 +247,10 @@ int ObUUIDNode::init()
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF, network interfaces are not enumerable", K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
       for (; it != end && OB_SUCC(ret); ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
@@ -236,14 +271,19 @@ int ObUUIDNode::init()
           }
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
-      }
     }
     close(sock);
+  }
+  if (OB_SUCC(ret) && !mac_addr_found) {
+    // RFC 4122 section 4.5: when no hardware address is available (for example in a
+    // sandbox where SIOCGIFHWADDR is not permitted), use random bytes with the
+    // multicast bit set as the node ID instead of failing the server startup.
+    if (OB_FAIL(gen_random_uuid_node(mac_addr_))) {
+      LOG_WARN("failed to generate a random UUID node ID", K(ret));
+    } else {
+      is_inited_ = true;
+      LOG_WARN("no usable MAC address found, falling back to a random UUID node ID", K(errno));
+    }
   }
 #endif
   return ret;
