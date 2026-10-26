@@ -1,0 +1,59 @@
+#owner: OceanBase database competition
+# Regression for issue #1489: ANN queries must run expression simplification,
+# and large OR expressions must deduplicate without quadratic comparisons.
+--disable_warnings
+DROP TABLE IF EXISTS t_competition_ann_duplicate_or;
+--enable_warnings
+CREATE TABLE t_competition_ann_duplicate_or (
+  id INT PRIMARY KEY,
+  category INT NOT NULL,
+  age INT NOT NULL,
+  v VECTOR(3) NOT NULL,
+  KEY idx_category(category),
+  KEY idx_age(age),
+  VECTOR INDEX idx_v(v) WITH (
+    distance=l2, type=hnsw, lib=vsag, m=8,
+    ef_construction=32, sync_mode=immediate)
+) ORGANIZATION HEAP;
+INSERT INTO t_competition_ann_duplicate_or VALUES
+  (1, 1, 10, '[1,0,0]'),
+  (2, 1, 20, '[0.9,0.1,0]'),
+  (3, 2, 30, '[0,1,0]'),
+  (4, 3, 40, '[0,0,1]'),
+  (5, 2, 50, '[0.5,0.5,0]'),
+  (6, 4, 60, '[0.2,0.2,0.6]');
+
+--let $predicate = category = 1
+--let $loop = 0
+while ($loop < 128)
+{
+  --let $predicate = $predicate OR age > 1000
+  --inc $loop
+}
+
+# All duplicate branches collapse to one while the data-dependent predicate
+# remains present. The resulting ANN filter must match the compact form.
+--disable_query_log
+--eval EXPLAIN SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
+--enable_query_log
+
+# Cross both the old 100-item guard and the proposed 256-item ANN ceiling.
+while ($loop < 1024)
+{
+  --let $predicate = $predicate OR age > 1000
+  --inc $loop
+}
+--disable_query_log
+--eval EXPLAIN SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 2
+--enable_query_log
+
+# Reuse one parameterized shape with a changed final value. The extra branch
+# must survive, even after an earlier execution deduplicated equal values.
+--disable_query_log
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate OR age > 1000 ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 6
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate OR age > 49 ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 6
+--eval SELECT id FROM t_competition_ann_duplicate_or WHERE $predicate OR age > 1000 ORDER BY l2_distance(v, '[1,0,0]') APPROXIMATE LIMIT 6
+--enable_query_log
+DROP TABLE t_competition_ann_duplicate_or;
