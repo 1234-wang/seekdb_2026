@@ -20,52 +20,67 @@
 #include "ob_ai_func.h"
 #include "lib/utility/utility.h"
 #include "common/json_type/ob_json_common.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase 
+namespace oceanbase
 {
-namespace sql 
+namespace sql
 {
 
 ObExprAIPrompt::ObExprAIPrompt(common::ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, 
-                    T_FUN_SYS_AI_PROMPT, 
-                    N_AI_PROMPT, 
+    : ObFuncExprOperator(alloc,
+                    T_FUN_SYS_AI_PROMPT,
+                    N_AI_PROMPT,
                     MORE_THAN_ZERO,
-                    VALID_FOR_GENERATED_COL, 
-                    NOT_ROW_DIMENSION) 
+                    VALID_FOR_GENERATED_COL,
+                    NOT_ROW_DIMENSION)
 {
 }
 
-ObExprAIPrompt::~ObExprAIPrompt() 
+ObExprAIPrompt::~ObExprAIPrompt()
 {
+}
+
+// The template is a plain string, a binary string or a LOB value.
+static bool is_ai_prompt_template_type(ObObjType type)
+{
+  return ob_is_string_tc(type) || ob_is_text_tc(type);
+}
+
+// A parameter is a plain string, a binary string, a LOB value or a JSON value.
+static bool is_ai_prompt_arg_type(ObObjType type)
+{
+  return ob_is_string_tc(type) || ob_is_text_tc(type) || ob_is_json(type);
 }
 
 int ObExprAIPrompt::calc_result_typeN(ObExprResType &type,
                                     ObExprResType *types_stack,
                                     int64_t param_num,
-                                    common::ObExprTypeCtx &type_ctx) const 
+                                    common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   bool is_null_res = false;
   ObExprResType template_type = types_stack[0];
-  if (!ob_is_string_tc(template_type.get_type())) {
+  if (!is_ai_prompt_template_type(template_type.get_type())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
-  } else {
+  } else if (ob_is_string_tc(template_type.get_type())) {
     types_stack[0].set_calc_type(ObVarcharType);
     types_stack[0].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
   }
 
   for (int64_t i = 1; i < param_num && OB_SUCC(ret); i++) {
-    if (ob_is_string_tc(types_stack[i].get_type())) {
+    ObObjType arg_type = types_stack[i].get_type();
+    if (ob_is_string_tc(arg_type)) {
       types_stack[i].set_calc_type(ObVarcharType);
       types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-    } else if (ob_is_json(types_stack[i].get_type())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type is not supported");
+    } else if (ob_is_text_tc(arg_type)) {
+      // Keep the LOB type, the real content is read when the expression runs.
+    } else if (ob_is_json(arg_type)) {
+      // JSON arguments keep their structure, so the JSON type is kept as is.
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
     }
@@ -78,7 +93,27 @@ int ObExprAIPrompt::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) 
+// Read the real content of a parameter, LOB values are stored out of line.
+static int read_ai_prompt_string(ObEvalCtx &ctx,
+                                 ObIAllocator &allocator,
+                                 ObExpr *arg,
+                                 const ObDatum &datum,
+                                 ObString &str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(arg)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (ob_is_text_tc(arg->datum_meta_.type_)) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(ctx.exec_ctx_, allocator, datum,
+                arg->datum_meta_, arg->obj_meta_.has_lob_header(), str))) {
+    }
+  } else {
+    str = datum.get_string();
+  }
+  return ret;
+}
+
+int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
   ObDatum *template_datum = NULL;
@@ -87,15 +122,14 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   ObJsonArray *args_array = NULL;
   ObJsonObject *prompt_object = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  
+
   MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator());
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(N_AI_PROMPT));
 
   if (OB_FAIL(tmp_allocator.eval_arg(arg0, ctx, template_datum))) {
   } else if (template_datum->is_null()) {
     ret = OB_INVALID_ARGUMENT;
-  } else {
-    template_str = template_datum->get_string();
+  } else if (OB_FAIL(read_ai_prompt_string(ctx, tmp_allocator, arg0, *template_datum, template_str))) {
   }
 
   if (OB_FAIL(ret)) {
@@ -106,16 +140,30 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       ObExpr *arg = expr.args_[i];
       ObString arg_str;
       ObJsonString *arg_json_str = NULL;
-      if (OB_FAIL(tmp_allocator.eval_arg(arg, ctx, datum))) {
+      if (ob_is_json(arg->datum_meta_.type_)) {
+        // A JSON argument keeps its own structure inside the prompt object.
+        ObIJsonBase *j_base = nullptr;
+        bool is_null = false;
+        if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, tmp_allocator,
+                                                  static_cast<uint16_t>(i), j_base, is_null))) {
+        } else if (is_null || OB_ISNULL(j_base)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        } else if (OB_FAIL(args_array->append(static_cast<ObJsonNode *>(j_base)))) {
+        }
+      } else if (OB_FAIL(tmp_allocator.eval_arg(arg, ctx, datum))) {
+      } else if (datum->is_null()) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
       } else if (ob_is_string_tc(arg->datum_meta_.type_)) {
         arg_str = datum->get_string();
         if (OB_FAIL(ObAIFuncJsonUtils::get_json_string(tmp_allocator, arg_str, arg_json_str))) {
         } else if (OB_FAIL(args_array->append(arg_json_str))) {
         }
-      } else if (ob_is_json(arg->datum_meta_.type_)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type is not supported");
-      } else if (datum->is_null()) {
+      } else if (ob_is_text_tc(arg->datum_meta_.type_)) {
+        if (OB_FAIL(read_ai_prompt_string(ctx, tmp_allocator, arg, *datum, arg_str))) {
+        } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_string(tmp_allocator, arg_str, arg_json_str))) {
+        } else if (OB_FAIL(args_array->append(arg_json_str))) {
+        }
+      } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
       }
     }
@@ -134,9 +182,9 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
 
 
 
-int ObExprAIPrompt::cg_expr(ObExprCGCtx &expr_cg_ctx, 
+int ObExprAIPrompt::cg_expr(ObExprCGCtx &expr_cg_ctx,
                         const ObRawExpr &raw_expr,
-                        ObExpr &rt_expr) const 
+                        ObExpr &rt_expr) const
 {
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
