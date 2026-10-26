@@ -35,6 +35,8 @@
 #include <linux/if_packet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#else
+#include <openssl/rand.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -206,12 +208,13 @@ int ObUUIDNode::init()
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("cannot create socket for UUID MAC address lookup", K(ret), K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cannot enumerate interfaces for UUID MAC address lookup, SIOCGIFCONF", K(ret), K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
@@ -244,6 +247,23 @@ int ObUUIDNode::init()
       }
     }
     close(sock);
+  }
+  if (!is_inited_) {
+    // RFC 9562 section 6.10: a random 47-bit node ID with the multicast bit
+    // set can replace a physical MAC address. Keep it for this node's lifetime.
+    unsigned char random_node[sizeof(mac_addr_)];
+    const int rand_ret = RAND_bytes(random_node, static_cast<int>(sizeof(random_node)));
+    if (1 != rand_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("cannot initialize UUID node: no MAC address and secure random bytes unavailable; "
+                "check interface access or the OpenSSL entropy source", K(ret), K(rand_ret));
+    } else {
+      random_node[0] |= 0x01;
+      MEMCPY(mac_addr_, random_node, sizeof(mac_addr_));
+      is_inited_ = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("using random UUID node ID because no MAC address is available");
+    }
   }
 #endif
   return ret;
