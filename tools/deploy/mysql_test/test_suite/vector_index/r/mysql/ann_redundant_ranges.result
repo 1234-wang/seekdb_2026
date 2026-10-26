@@ -1,0 +1,313 @@
+drop table if exists t_ann_ranges;
+create table t_ann_ranges (
+id int primary key,
+embedding vector(3) not null,
+age int,
+other_age int,
+key idx_age(age)
+) organization heap;
+insert into t_ann_ranges values
+(1, '[1,0,0]', -10, 1),
+(2, '[2,0,0]', 1, 20),
+(3, '[3,0,0]', 5, 3),
+(4, '[4,0,0]', 9, 40),
+(5, '[5,0,0]', 10, 5),
+(6, '[6,0,0]', 20, 60),
+(7, '[7,0,0]', null, 7),
+(8, '[8,0,0]', null, null),
+(9, '[9,0,0]', 30, 9);
+create vector index idx_vec on t_ann_ranges(embedding)
+with (distance=l2, type=hnsw, lib=vsag, sync_mode=immediate);
+# The filter is reduced, while the vector index and tight range remain.
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and (age < 20 and (age <= 25 and age < 30))
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+Query Plan
+=======================================================
+|ID|OPERATOR                               |NAME      |
+-------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(idx_age)|
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.age < 10]), rowset=16
+      access([t.__pk_increment], [t.age], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([t.age], [t.__pk_increment]), range(NULL,MAX ; 10,MIN)
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and (age < 20 and (age <= 25 and age < 30))
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+select id from t_ann_ranges where age < 10
+order by l2_distance(embedding, '[0,0,0]') limit 9;
+id
+1
+2
+3
+4
+# A tighter predicate may appear last; equal endpoints retain strictness.
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age <= 20 and age <= 10 and age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+Query Plan
+=======================================================
+|ID|OPERATOR                               |NAME      |
+-------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(idx_age)|
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.age < 10]), rowset=16
+      access([t.__pk_increment], [t.age], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([t.age], [t.__pk_increment]), range(NULL,MAX ; 10,MIN)
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age <= 20 and age <= 10 and age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 20 and age <= 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+5
+# Normalize reversed operands and simplify lower bounds independently.
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where 20 > age and 10 > age and age >= 1 and age >= 5 and age > 5
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+Query Plan
+=======================================================
+|ID|OPERATOR                               |NAME      |
+-------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(idx_age)|
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([10 > t.age], [t.age > 5]), rowset=16
+      access([t.__pk_increment], [t.age], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true], 
+      range_key([t.age], [t.__pk_increment]), range(5,MAX ; 10,MIN)
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where 20 > age and 10 > age and age >= 1 and age >= 5 and age > 5
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+4
+# Different columns, OR branches, and contradictory bounds remain valid.
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and other_age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+3
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 or age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+5
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age > 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where (age < 10 and age < 20) or age is null
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+7
+8
+# NO_REWRITE retains both bounds.
+explain basic select /*+ no_rewrite index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+Query Plan
+=======================================================
+|ID|OPERATOR                               |NAME      |
+-------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(idx_age)|
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.age < 10], [t.age < 20]), rowset=16
+      access([t.__pk_increment], [t.age], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true], 
+      range_key([t.age], [t.__pk_increment]), range(NULL,MAX ; 10,MIN)
+# The session-level transformation switch also retains both bounds.
+set @old_transformation = @@ob_enable_transformation;
+set ob_enable_transformation = 0;
+explain basic select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+Query Plan
+=======================================================
+|ID|OPERATOR                               |NAME      |
+-------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)|t(idx_age)|
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.age < 10], [t.age < 20]), rowset=16
+      access([t.__pk_increment], [t.age], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true], 
+      range_key([t.age], [t.__pk_increment]), range(NULL,MAX ; 10,MIN)
+set ob_enable_transformation = @old_transformation;
+# Cached parameterized plans must revalidate the bound implication.
+prepare range_stmt from 'select /*+ index(t idx_age) */ id from t_ann_ranges t where age < ? and age < ? order by l2_distance(embedding, ''[0,0,0]'') approximate limit 9';
+set @a = 10, @b = 20;
+execute range_stmt using @a, @b;
+id
+1
+2
+3
+4
+set @a = 20, @b = 5;
+execute range_stmt using @a, @b;
+id
+1
+2
+set @a = 10, @b = null;
+execute range_stmt using @a, @b;
+id
+set @a = null, @b = 20;
+execute range_stmt using @a, @b;
+id
+set @a = 20, @b = 10;
+execute range_stmt using @a, @b;
+id
+1
+2
+3
+4
+set @a = '20', @b = '5';
+execute range_stmt using @a, @b;
+id
+1
+2
+set @a = 18446744073709551615, @b = 10;
+execute range_stmt using @a, @b;
+id
+1
+2
+3
+4
+deallocate prepare range_stmt;
+prepare strict_stmt from 'select /*+ index(t idx_age) */ id from t_ann_ranges t where age <= ? and age < ? order by l2_distance(embedding, ''[0,0,0]'') approximate limit 9';
+set @a = 10, @b = 10;
+execute strict_stmt using @a, @b;
+id
+1
+2
+3
+4
+set @a = 10, @b = 20;
+execute strict_stmt using @a, @b;
+id
+1
+2
+3
+4
+5
+set @a = 20, @b = 10;
+execute strict_stmt using @a, @b;
+id
+1
+2
+3
+4
+deallocate prepare strict_stmt;
+# Reuse an automatically parameterized SQL shape with reversed limits.
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 20 and age < 5
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+# Casts, unsigned endpoints, and non-integer endpoints are left alone.
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where cast(age as unsigned) < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+2
+3
+4
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 18446744073709551615 and age < 10
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10.5 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+5
+# The same bounds also work without a scalar-index pre-filter.
+explain basic select /*+ index(t idx_vec) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+Query Plan
+==========================================================================
+|ID|OPERATOR                                          |NAME              |
+--------------------------------------------------------------------------
+|0 |VECTOR INDEX ADAPTIVE SCAN (POST-ITERATIVE-FILTER)|t(idx_age,idx_vec)|
+==========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t.id]), filter([t.age < 10]), rowset=16
+      access([t.__pk_increment], [t.age], [t.id]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([t.age], [t.__pk_increment]), range(NULL,MAX ; 10,MIN)
+select /*+ index(t idx_vec) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 9;
+id
+1
+2
+3
+4
+# Simplification must not move an outer filter below the ANN Top-K.
+select id from (
+select /*+ index(t idx_age) */ id, age from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 3
+) v where age >= 5 order by id;
+id
+3
+select /*+ index(t idx_age) */ id from t_ann_ranges t
+where age < 10 and age < 20
+order by l2_distance(embedding, '[0,0,0]') approximate limit 2 offset 2;
+id
+3
+4
+drop table t_ann_ranges;

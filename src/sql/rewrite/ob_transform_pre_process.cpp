@@ -32,6 +32,136 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+namespace
+{
+struct VectorRangeBound
+{
+  VectorRangeBound() : column_(NULL), value_(NULL), is_upper_(false), is_strict_(false) {}
+  ObRawExpr *column_;
+  ObRawExpr *value_;
+  bool is_upper_;
+  bool is_strict_;
+};
+
+int extract_vector_range_bound(ObRawExpr *expr, VectorRangeBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ObItemType type = expr->get_expr_type();
+    if ((T_OP_LT == type || T_OP_LE == type || T_OP_GT == type || T_OP_GE == type)
+        && 2 == expr->get_param_count()) {
+      ObRawExpr *left = expr->get_param_expr(0);
+      ObRawExpr *right = expr->get_param_expr(1);
+      if (OB_ISNULL(left) || OB_ISNULL(right)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        if (right->is_column_ref_expr()) {
+          std::swap(left, right);
+          type = get_opposite_compare_type(type);
+        }
+        // Do not infer bounds across casts, unsigned comparisons, or expressions
+        // whose evaluation could produce diagnostics or depend on a row.
+        if (left->is_column_ref_expr() && ob_is_int_tc(left->get_data_type())
+            && right->is_const_raw_expr() && right->is_static_const_expr()
+            && ob_is_int_tc(right->get_data_type())) {
+          bound.column_ = left;
+          bound.value_ = right;
+          bound.is_upper_ = T_OP_LT == type || T_OP_LE == type;
+          bound.is_strict_ = T_OP_LT == type || T_OP_GT == type;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int vector_range_implies(ObTransformerCtx &ctx,
+                         const VectorRangeBound &stronger,
+                         const VectorRangeBound &weaker,
+                         bool &implies)
+{
+  int ret = OB_SUCCESS;
+  implies = false;
+  if (NULL != stronger.column_ && NULL != weaker.column_
+      && stronger.is_upper_ == weaker.is_upper_
+      && stronger.column_->same_as(*weaker.column_)) {
+    // At equal endpoints a strict bound implies an inclusive bound, but an
+    // inclusive bound does not imply a strict bound.
+    const bool allow_equal = stronger.is_strict_ || !weaker.is_strict_;
+    const ObItemType type = stronger.is_upper_
+        ? (allow_equal ? T_OP_LE : T_OP_LT)
+        : (allow_equal ? T_OP_GE : T_OP_GT);
+    ObRawExpr *comparison = NULL;
+    if (OB_FAIL(ObTransformUtils::compare_const_expr_result(&ctx, *stronger.value_,
+                                                           type, *weaker.value_, implies))) {
+    } else if (!implies) {
+      // Keep both predicates, including predicates with NULL parameters.
+    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx.expr_factory_,
+                                                            ctx.session_info_, type,
+                                                            comparison, stronger.value_,
+                                                            weaker.value_))) {
+    } else if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(&ctx, comparison, true))) {
+    }
+  }
+  return ret;
+}
+
+int remove_redundant_vector_ranges(ObTransformerCtx &ctx, ObDMLStmt &stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObIArray<ObRawExpr *> &conditions = stmt.get_condition_exprs();
+  const ObQueryHint *query_hint = stmt.get_stmt_hint().query_hint_;
+  bool transformation_enabled = true;
+  if (!stmt.has_vec_approx() || conditions.count() < 2
+      || NULL != stmt.get_stmt_hint().get_no_rewrite_hint()
+      || (NULL != query_hint && query_hint->has_outline_data())
+      || (NULL != stmt.get_query_ctx()
+          && stmt.get_query_ctx()->get_global_hint().disable_query_transform())) {
+    // Keep other queries and explicitly disabled rewrites unchanged.
+  } else if (OB_ISNULL(ctx.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(ctx.session_info_->is_transformation_enabled(transformation_enabled))) {
+  } else if (!transformation_enabled) {
+    // Honor the session-level transformation switch as well as hints.
+  } else {
+    // ANN queries disable the general rewrite rules. Remove only implied
+    // conjunctive integer bounds here, without moving predicates across Top-K
+    // or changing the vector ordering or limit. Both adaptive scan paths can
+    // then use the reduced conditions.
+    for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
+      VectorRangeBound current;
+      if (OB_FAIL(extract_vector_range_bound(conditions.at(i), current))) {
+      }
+      for (int64_t j = i + 1; OB_SUCC(ret) && NULL != current.column_ && j < conditions.count();) {
+        VectorRangeBound other;
+        bool current_implies_other = false;
+        bool other_implies_current = false;
+        if (OB_FAIL(extract_vector_range_bound(conditions.at(j), other))) {
+        } else if (OB_FAIL(vector_range_implies(ctx, current, other, current_implies_other))) {
+        } else if (!current_implies_other
+                   && OB_FAIL(vector_range_implies(ctx, other, current, other_implies_current))) {
+        } else if (!current_implies_other && !other_implies_current) {
+          ++j;
+        } else {
+          if (other_implies_current) {
+            conditions.at(i) = conditions.at(j);
+            current = other;
+          }
+          if (OB_FAIL(conditions.remove(j))) {
+          } else {
+            trans_happened = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+}
+
 int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                               ObDMLStmt *&stmt,
                                               bool &trans_happened)
@@ -56,6 +186,13 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         OPT_TRACE("flatten condition:", is_happened);
       }
     }  
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(remove_redundant_vector_ranges(*ctx_, *stmt, is_happened))) {
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("remove redundant vector ranges:", is_happened);
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_gen_straight_join_leading(stmt, is_happened))) {
       } else {
