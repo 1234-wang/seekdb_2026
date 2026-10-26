@@ -229,20 +229,53 @@ int ObOpenAIUtils::ObOpenAIEmbed::parse_output(common::ObIAllocator &allocator,
     if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(allocator, result_array))) {
     } else if (OB_ISNULL(data_node = http_response->get_value("data"))) {
       ret = OB_INVALID_DATA;
+    } else if (data_node->json_type() != ObJsonNodeType::J_ARRAY) {
+      ret = OB_INVALID_DATA;
     } else {
       ObJsonArray *data_array = static_cast<ObJsonArray *>(data_node);
-      ObJsonNode *embedding_node = nullptr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < data_array->element_count(); i++) {
-        if (OB_ISNULL(embedding_node = data_array->get_value(i))) {
-          ret = OB_INVALID_DATA;
-        } else if (embedding_node->json_type() != ObJsonNodeType::J_OBJECT) {
-          ret = OB_INVALID_DATA;
-        } else {
-          ObJsonObject *embedding_obj = static_cast<ObJsonObject *>(embedding_node);
-          ObJsonNode *embedding = embedding_obj->get_value("embedding");
-          if (OB_ISNULL(embedding)) {
+      const int64_t data_count = data_array->element_count();
+      // The endpoint is not required to keep the request order: every data element carries the
+      // index of the input it embeds. Rebuild the result in request order so that callers can map
+      // rows back to their own inputs even when the service answers out of order.
+      ObJsonNode **ordered = nullptr;
+      if (data_count <= 0) {
+        ret = OB_INVALID_DATA;
+      } else if (OB_ISNULL(ordered = static_cast<ObJsonNode **>(
+                     allocator.alloc(sizeof(ObJsonNode *) * data_count)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        MEMSET(ordered, 0, sizeof(ObJsonNode *) * data_count);
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_count; i++) {
+          ObJsonNode *embedding_node = data_array->get_value(i);
+          if (OB_ISNULL(embedding_node) || embedding_node->json_type() != ObJsonNodeType::J_OBJECT) {
             ret = OB_INVALID_DATA;
-          } else if (OB_FAIL(result_array->append(embedding))) {
+          } else {
+            ObJsonObject *embedding_obj = static_cast<ObJsonObject *>(embedding_node);
+            ObJsonNode *embedding = embedding_obj->get_value("embedding");
+            ObJsonNode *index_node = embedding_obj->get_value("index");
+            int64_t position = i;
+            if (OB_ISNULL(embedding)) {
+              ret = OB_INVALID_DATA;
+            } else if (OB_NOT_NULL(index_node)) {
+              if (index_node->json_type() != ObJsonNodeType::J_INT) {
+                ret = OB_INVALID_DATA;
+              } else {
+                position = static_cast<ObJsonInt *>(index_node)->get_int();
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (position < 0 || position >= data_count || OB_NOT_NULL(ordered[position])) {
+                ret = OB_INVALID_DATA;
+              } else {
+                ordered[position] = embedding;
+              }
+            }
+          }
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_count; i++) {
+          if (OB_ISNULL(ordered[i])) {
+            ret = OB_INVALID_DATA;
+          } else if (OB_FAIL(result_array->append(ordered[i]))) {
           }
         }
       }
