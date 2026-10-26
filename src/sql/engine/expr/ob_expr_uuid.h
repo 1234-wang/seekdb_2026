@@ -40,6 +40,14 @@ struct ObUUIDNode
   int init();
   unsigned char mac_addr_[6];
   bool is_inited_;
+  // Generate a synthetic node id for hosts where no hardware address can be
+  // discovered (restricted containers, net namespaces, permission denials).
+  // The multicast bit is set per RFC 9562 section 6.10 so the result can never
+  // be mistaken for a real MAC address.
+  static int generate_random_node(unsigned char *node);
+  // Reject hardware addresses that cannot identify a NIC: the all-zero and the
+  // broadcast addresses are what unconfigured virtual interfaces report.
+  static bool is_usable_mac_addr(const unsigned char *mac);
 };
 
 class ObUUIDTime
