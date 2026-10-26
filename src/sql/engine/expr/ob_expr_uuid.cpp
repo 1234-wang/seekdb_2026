@@ -27,14 +27,14 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -238,8 +238,23 @@ int ObUUIDNode::init()
       }//end for
       if (OB_FAIL(ret)) {
       } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
+        // RFC 4122 section 4.5: restricted environments may deny interface
+        // enumeration or expose no usable MAC. Fall back to a random node ID
+        // with the multicast bit set so UUID generation can still start.
+        int fd = open("/dev/urandom", O_RDONLY);
+        if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
+          mac_addr_[0] |= 0x01;
+          mac_addr_found = true;
+          LOG_INFO("using random UUID node ID (no MAC address available)");
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to read /dev/urandom for UUID node", K(errno));
+        }
+        if (fd >= 0) {
+          close(fd);
+        }
+      }
+      if (OB_SUCC(ret) && mac_addr_found) {
         is_inited_ = true;
       }
     }
