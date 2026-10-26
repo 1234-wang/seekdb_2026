@@ -1,0 +1,28 @@
+--echo # Issue #1477: removing double negation must preserve the result type.
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE 'x')));
+
+--echo # Controls: one negation and a literal first argument.
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(1 LIKE 'x'));
+SELECT 1 FROM dual WHERE IFNULL(FALSE, !(!(1 LIKE 'x')));
+
+--echo # Non-NULL scalar subqueries keep IFNULL short-circuit semantics.
+SELECT IFNULL((SELECT TRUE), !(!(1 LIKE 'x'))) AS value;
+SELECT IFNULL((SELECT FALSE), !(!(1 LIKE '1'))) AS value;
+
+--echo # NULL scalar subqueries evaluate the double-negated fallback.
+SELECT IFNULL((SELECT NULL), !(!(1 LIKE '1'))) AS value;
+SELECT IFNULL((SELECT NULL), !(!(1 LIKE 'x'))) AS value;
+SELECT IFNULL((SELECT NULL), !(!(NULL LIKE 'x'))) AS value;
+
+--echo # More than two negations and a double-negated first argument.
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(!(!(1 LIKE 'x')))));
+SELECT IFNULL(!(!(1 LIKE '1')), (SELECT FALSE)) AS value;
+SELECT IFNULL(!(!(NULL LIKE 'x')), (SELECT TRUE)) AS value;
+
+--echo # Row-dependent predicates must preserve types in both IFNULL arguments.
+SELECT IFNULL((SELECT FALSE), !(!(c LIKE '1'))) AS value
+FROM (SELECT '1' AS c UNION ALL SELECT 'x' UNION ALL SELECT NULL) AS t
+ORDER BY value;
+SELECT IFNULL(!(!(c LIKE '1')), (SELECT TRUE)) AS value
+FROM (SELECT '1' AS c UNION ALL SELECT 'x' UNION ALL SELECT NULL) AS t
+ORDER BY value;
