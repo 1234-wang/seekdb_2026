@@ -27,6 +27,8 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
@@ -81,6 +83,42 @@ ObUUIDNode::ObUUIDNode()
   (void)init();
 }
 
+
+/*
+ * RFC 4122 section 4.5: when no usable hardware MAC address is available
+ * (for example a restricted container or sandbox that hides network
+ * interfaces), derive the UUID node id from random bytes and mark it as a
+ * non-MAC node by setting the multicast bit. This mirrors the existing
+ * Android fallback below and keeps node ids unique without pretending to be
+ * a real IEEE 802 address.
+ */
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+static int set_random_uuid_node_id(unsigned char *mac_addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mac_addr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null mac_addr", K(ret));
+  } else {
+    int fd = ::open("/dev/urandom", O_RDONLY);
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to open /dev/urandom for uuid node fallback", K(ret), K(errno));
+    } else {
+      ssize_t n = ::read(fd, mac_addr, 6);
+      if (6 != n) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to read random bytes for uuid node fallback", K(ret), K(n), K(errno));
+      } else {
+        mac_addr[0] |= 0x01;  // set multicast bit: never a real MAC address
+        LOG_INFO("no usable mac address, using random uuid node id");
+      }
+      ::close(fd);
+    }
+  }
+  return ret;
+}
+#endif
 
 /*
  * get and set mac address
@@ -203,20 +241,19 @@ int ObUUIDNode::init()
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
+  bool mac_addr_found = false;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("socket failed, will fall back to random uuid node id", K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl SIOCGIFCONF failed, will fall back to random uuid node id", K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
+      for (; it != end && !mac_addr_found; ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
         } else {
@@ -236,14 +273,18 @@ int ObUUIDNode::init()
           }
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
-      }
     }
     close(sock);
+  }
+  // A physical MAC address is preferred, but a restricted environment may not
+  // expose one at all. Fall back to a random node id instead of aborting
+  // server startup, so that uuid() keeps working there.
+  if (OB_FAIL(ret)) {
+  } else if (!mac_addr_found) {
+    ret = set_random_uuid_node_id(mac_addr_);
+  }
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
   }
 #endif
   return ret;
