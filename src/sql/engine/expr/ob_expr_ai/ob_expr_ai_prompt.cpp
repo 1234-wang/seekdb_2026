@@ -47,7 +47,7 @@ ObExprAIPrompt::~ObExprAIPrompt()
 int ObExprAIPrompt::calc_result_typeN(ObExprResType &type,
                                     ObExprResType *types_stack,
                                     int64_t param_num,
-                                    common::ObExprTypeCtx &type_ctx) const 
+                                    common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   bool is_null_res = false;
@@ -64,8 +64,8 @@ int ObExprAIPrompt::calc_result_typeN(ObExprResType &type,
       types_stack[i].set_calc_type(ObVarcharType);
       types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else if (ob_is_json(types_stack[i].get_type())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type is not supported");
+      // JSON types are now supported - they will be converted to JSON strings
+      types_stack[i].set_calc_type(ObJsonType);
     } else {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
     }
@@ -113,8 +113,17 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         } else if (OB_FAIL(args_array->append(arg_json_str))) {
         }
       } else if (ob_is_json(arg->datum_meta_.type_)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "json type is not supported");
+        // JSON types are now supported - append directly to args array
+        ObIJsonBase *j_base = NULL;
+        bool is_null = false;
+        if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, tmp_allocator, i, j_base, is_null))) {
+        } else if (is_null) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        } else if (OB_NOT_NULL(j_base)) {
+          ObJsonNode *json_node = static_cast<ObJsonNode *>(j_base);
+          if (OB_FAIL(args_array->append(json_node))) {
+          }
+        }
       } else if (datum->is_null()) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
       }
