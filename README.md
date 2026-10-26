@@ -595,5 +595,4 @@ If seekdb is useful to you, **a star helps others find it.** ⭐
 seekdb is built by the [OceanBase](https://en.oceanbase.com/) team — the same database engine running in production at Alipay, Taobao, DiDi, Xiaomi, and more. Fully open-source under the [Apache License, Version 2.0](LICENSE).
 
 ---
-
-2026 OceanBase 数据库大赛参赛队伍验证行：`OB-P:HqFPkSTe-ii06fRBb-7nOA`
+OB-P:HqFPkSTe-ii06fRBb-7nOA
