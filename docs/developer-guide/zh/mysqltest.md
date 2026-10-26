@@ -29,18 +29,18 @@ mysqltest 是seekdb数据库中的一种准入测试，简单来说，它以编�
   [admin@obtest deploy]$ ./obd.sh mysqltest -n test --all
   ```
 
-* 指定 case 测试，例如指定 `mysql_test/test_suite/alter/t/alter_log_archive_option.test`。请参考以下命令。
+* 指定 case 测试，例如指定 `mysql_test/test_suite/datatype/t/bool.test`。请参考以下命令。
 
   ```shell
   [admin@obtest ~]$ cd seekdb/tools/deploy
-  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --test-dir ./mysql_test/test_suite/alter/t --result-dir ./mysql_test/test_suite/alter/r --test-set alter_log_archive_option
+  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --test-dir ./mysql_test/test_suite/datatype/t --result-dir ./mysql_test/test_suite/datatype/r --test-set bool
   ```
 
 * 指定一个 suite 测试，例如在 `mysql_test/test_suite` 目录下指定一个 suite 进行测试，请参考以下命令。
 
   ```shell
   [admin@obtest ~]$ cd seekdb/tools/deploy
-  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --suite acs
+  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --suite datatype
   ```
 
 ## 附录

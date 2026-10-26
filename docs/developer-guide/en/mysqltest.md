@@ -30,18 +30,18 @@ You can choose to test in full or specify a `case` or `suite` for testing. For t
   [admin@obtest deploy]$ ./obd.sh mysqltest -n test --all
   ```
 
-* Specify case for testing, for example, specify `mysql_test/test_suite/alter/t/alter_log_archive_option.test`. Please refer to the following command.
+* Specify case for testing, for example, specify `mysql_test/test_suite/datatype/t/bool.test`. Please refer to the following command.
   
   ```shell
   [admin@obtest ~]$ cd seekdb/tools/deploy
-  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --test-dir ./mysql_test/test_suite/alter/t --result-dir ./mysql_test/test_suite/alter/r --test-set alter_log_archive_option
+  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --test-dir ./mysql_test/test_suite/datatype/t --result-dir ./mysql_test/test_suite/datatype/r --test-set bool
   ```
 
 * To specify a suite test, for example, to execute a test on a specified suite in the `mysql_test/test_suite` directory, please refer to the following command.
   
   ```shell
   [admin@obtest ~]$ cd seekdb/tools/deploy
-  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --suite acs
+  [admin@obtest deploy]$ ./obd.sh mysqltest -n test --suite datatype
   ```
 
 ## Appendix
