@@ -1,0 +1,38 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
+package(default_testonly = True)
+
+cc_test(
+    name = "test_uuid_node",
+    size = "small",
+    linkstatic = True,
+    srcs = ["test_uuid_node.cpp"],
+    linkopts = [
+        "-Wl,--wrap=socket",
+        "-Wl,--wrap=ioctl",
+        "-Wl,--wrap=RAND_bytes",
+    ],
+    deps = [
+        "//bazel/third_party:gtest",
+        "//src/sql:uuid_node",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+cc_test(
+    name = "test_uuid_node_android",
+    size = "small",
+    linkstatic = True,
+    srcs = ["test_uuid_node.cpp"],
+    local_defines = ["UUID_NODE_TEST_ANDROID"],
+    linkopts = [
+        "-Wl,--wrap=getifaddrs",
+        "-Wl,--wrap=freeifaddrs",
+        "-Wl,--wrap=RAND_bytes",
+    ],
+    deps = [
+        "//bazel/third_party:gtest",
+        "//src/sql:uuid_node_android_test",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+)

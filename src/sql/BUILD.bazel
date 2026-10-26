@@ -189,7 +189,9 @@ cc_library(
     hdrs = glob(
         ["**/*.h", "**/*.ipp", "**/*.def"],
         allow_empty = True,
-        exclude = SQL_PUBLIC_HEADER_ROOTS + SQL_INTERFACE_CLOSURE_HEADERS + SQL_COMPOSITION_HEADERS,
+        exclude = SQL_PUBLIC_HEADER_ROOTS + SQL_INTERFACE_CLOSURE_HEADERS + SQL_COMPOSITION_HEADERS + [
+            "engine/expr/uuid_node.h",
+        ],
     ),
     deps = [
         ":sql_retrieval_composition_headers",
@@ -221,6 +223,7 @@ _SQL_RUNTIME_WITHOUT_PASS_UNITY_GROUPS = singleton_unity_groups(
 
 _SQL_RUNTIME_IMPLEMENTATION_DEPS = [
     "//rust:config_headers",
+    ":uuid_node",
     ":_textual_sql_map_inputs",
     ":sql_runtime_interface",
     ":sql_runtime_internal_headers",
@@ -420,4 +423,30 @@ cc_library(
     ],
     tags = ["manual"],
     visibility = ["//src/observer:__pkg__"],
+)
+
+# Keep OS UUID node discovery independently testable from the SQL runtime.
+cc_library(
+    name = "uuid_node",
+    srcs = ["engine/expr/uuid_node.cpp"],
+    hdrs = ["engine/expr/uuid_node.h"],
+    strip_include_prefix = "/src",
+    deps = ["//bazel/third_party:libcrypto"],
+    visibility = [
+        "//src/sql:__pkg__",
+        "//unittest/sql/engine/expr:__pkg__",
+    ],
+)
+
+# Exercise Android's getifaddrs discovery path on Linux without a device.
+cc_library(
+    name = "uuid_node_android_test",
+    testonly = True,
+    srcs = ["engine/expr/uuid_node.cpp"],
+    hdrs = ["engine/expr/uuid_node.h"],
+    strip_include_prefix = "/src",
+    local_defines = ["__ANDROID__"],
+    deps = ["//bazel/third_party:libcrypto"],
+    target_compatible_with = ["@platforms//os:linux"],
+    visibility = ["//unittest/sql/engine/expr:__pkg__"],
 )
