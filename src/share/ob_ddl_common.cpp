@@ -32,7 +32,6 @@
 #include "common/object/ob_object.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/storage/ob_tablet_local_checksum_table_storage.h"
-#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -550,11 +549,24 @@ int ObDDLUtil::generate_column_name_str(
 {
   int ret = OB_SUCCESS;
   const char *split_char = "`";
-  ObArenaAllocator allocator("ObDDLTmp");
+  ObSqlString escaped_name_buf;
   ObString escaped_column_name = column_name_info.column_name_;
-  if ((with_origin_name || with_alias_name)
-      && OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
-          allocator, column_name_info.column_name_, escaped_column_name))) {
+  if (with_origin_name || with_alias_name) {
+    const ObString &name = column_name_info.column_name_;
+    if (OB_ISNULL(name.ptr()) || name.length() <= 0) {
+      escaped_column_name.assign(NULL, 0);
+    } else if (NULL != name.find('`')) {
+      // MySQL identifiers escape a backtick by doubling it. Keep this in the
+      // Share formatter instead of depending on the upper SQL module.
+      for (int64_t i = 0; OB_SUCC(ret) && i < name.length(); ++i) {
+        if (OB_FAIL(escaped_name_buf.append(name.ptr() + i, 1))) {
+        } else if ('`' == name[i] && OB_FAIL(escaped_name_buf.append("`"))) {
+        }
+      }
+      if (OB_SUCC(ret)) {
+        escaped_column_name = escaped_name_buf.string();
+      }
+    }
   }
   // append comma
   if (OB_SUCC(ret) && with_comma) {
