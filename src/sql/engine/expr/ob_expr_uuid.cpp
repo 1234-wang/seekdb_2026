@@ -238,7 +238,19 @@ int ObUUIDNode::init()
       }//end for
       if (OB_FAIL(ret)) {
       } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
+        // RFC 4122 section 4.5: when no physical MAC address is available,
+        // fall back to random bytes with the multicast bit set as the node ID.
+        int fd = open("/dev/urandom", O_RDONLY);
+        if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
+          mac_addr_[0] |= 0x01;  // set multicast bit
+          is_inited_ = true;
+          LOG_INFO("using random UUID node ID (no MAC address available)");
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+        }
+        if (fd >= 0) {
+          close(fd);
+        }
       } else {
         is_inited_ = true;
       }
