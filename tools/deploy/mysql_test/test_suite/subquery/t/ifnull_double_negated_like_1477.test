@@ -1,0 +1,20 @@
+# issue #1477
+# A boolean scalar subquery as the first argument of IFNULL combined with a
+# double-negated LIKE used to fail during type deduction with
+# "ERROR 4016 (HY000): Internal error".
+#
+# The predicate is false in every case below, so the statements must return an
+# empty result set instead of an error.
+
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE 'x')));
+
+# control cases: single negation and a non-LIKE boolean operand
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(1 LIKE 'x'));
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 = 1)));
+
+# the folded expression is also valid outside a predicate context
+SELECT IFNULL((SELECT FALSE), !(!(1 LIKE 'x')));
+
+# double negation still behaves as a logical identity
+SELECT 1 FROM dual WHERE NOT NOT (1 = 1);
+SELECT 1 FROM dual WHERE NOT NOT (1 = 2);

@@ -2378,10 +2378,34 @@ int ObTransformSimplifyExpr::do_push_not(ObRawExpr *&expr,
       // size of not is even
       // not(not c1 > 1)) -> c1>1
       ObRawExpr *temp = NULL;
+      const ObRawExprResType not_res_type = expr->get_result_type();
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(cur, temp, *expr_factory))) {
       } else if (OB_ISNULL(temp)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(temp->formalize(ctx_->session_info_))) {
+      } else if (temp == cur &&
+                 temp->get_expr_type() != T_FUN_SYS_CAST &&
+                 temp->get_result_type().get_type() != not_res_type.get_type()) {
+        // `cur` already is a boolean expression and try_create_bool_expr
+        // returned it unchanged. Replacing the whole NOT chain with it would
+        // also change the result type of the original NOT expression, so
+        // upper layers re-deduce a different type for this operand and add a
+        // second implicit cast on the same expression, which is rejected by
+        // ObRawExprUtils::try_add_cast_expr_above (issue #1477).
+        // Keep the NOT result type by wrapping the folded expression once.
+        ObRawExpr *cast_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory,
+                                                            ctx_->session_info_,
+                                                            *temp,
+                                                            not_res_type,
+                                                            cast_expr))) {
+        } else if (OB_ISNULL(cast_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          expr = cast_expr;
+          is_valid = false;
+          trans_happened = true;
+        }
       } else {
         expr = temp;
         is_valid = false;
