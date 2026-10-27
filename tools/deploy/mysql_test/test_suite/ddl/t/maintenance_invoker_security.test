@@ -81,6 +81,13 @@ SELECT /*+ INDEX(t_vector v_idx) */ id FROM maintenance_authz_db.t_vector
 ORDER BY l2_distance(embedding, '[1,0,0]') APPROXIMATE LIMIT 1;
 disconnect maintenance_owner;
 disconnect maintenance_caller;
+# DROP DATABASE may retain routines in the recycle bin; remove definer references first.
+DROP PROCEDURE maintenance_authz_db.stats_definer;
+DROP PROCEDURE maintenance_authz_db.stats_invoker;
+DROP PROCEDURE maintenance_authz_db.vector_definer;
+DROP PROCEDURE maintenance_authz_db.vector_invoker;
+SELECT COUNT(*) AS routines_remaining FROM information_schema.ROUTINES
+WHERE ROUTINE_SCHEMA = 'maintenance_authz_db';
 DROP DATABASE maintenance_authz_db;
 DROP USER 'maintenance_authz_owner'@'%';
 DROP USER 'maintenance_authz_caller'@'%';
