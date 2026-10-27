@@ -27,14 +27,14 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -199,34 +199,34 @@ int ObUUIDNode::init()
     }
   }
 #else
-  // Linux: Use ioctl to get MAC address
+  // Linux: use ioctl to get MAC address, fall back to a random node ID
+  // when no usable interface is visible (e.g. sandbox/permission restrictions).
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
+  bool mac_addr_found = false;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("socket failed, will use random UUID node id", K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl SIOCGIFCONF failed, will use random UUID node id", K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
-        if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
+      for (; it != end && !mac_addr_found; ++it) {
+        if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name)) {
           continue;
         } else {
+          MEMSET(&ifr, 0, sizeof(ifr));
           strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
           if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
             if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
               if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
                 MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
                 mac_addr_found = true;
-                break;
               } else {
                 LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
               }
@@ -236,14 +236,42 @@ int ObUUIDNode::init()
           }
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
-      }
     }
     close(sock);
+  }
+  if (OB_SUCC(ret) && !mac_addr_found) {
+    // RFC 4122 section 4.5: when a MAC address is unavailable, use six
+    // random bytes from the OS CSPRNG with the multicast bit set.
+    int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to open /dev/urandom for UUID node id", K(errno));
+    } else {
+      int64_t total_read = 0;
+      while (total_read < 6) {
+        ssize_t read_len = read(fd, mac_addr_ + total_read, 6 - total_read);
+        if (read_len < 0 && EINTR == errno) {
+          continue;
+        } else if (read_len <= 0) {
+          break;
+        } else {
+          total_read += read_len;
+        }
+      }
+      int saved_errno = errno;
+      close(fd);
+      if (total_read != 6) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to read random bytes for UUID node id", K(total_read), K(saved_errno));
+      } else {
+        mac_addr_[0] |= 0x01;  // set multicast bit
+        mac_addr_found = true;
+        LOG_INFO("using random UUID node ID (no usable MAC on Linux)");
+      }
+    }
+  }
+  if (OB_SUCC(ret) && mac_addr_found) {
+    is_inited_ = true;
   }
 #endif
   return ret;
