@@ -1,0 +1,88 @@
+# KILL authorization includes SUPER from enabled roles, but never disabled roles.
+--disable_query_log
+--disable_result_log
+--disable_warnings
+DROP USER IF EXISTS 'kill_authz_owner'@'%';
+DROP USER IF EXISTS 'kill_authz_plain'@'%';
+DROP USER IF EXISTS 'kill_authz_direct'@'%';
+DROP USER IF EXISTS 'kill_authz_role'@'%';
+DROP ROLE IF EXISTS kill_authz_admin;
+--enable_warnings
+CREATE USER 'kill_authz_owner'@'%';
+CREATE USER 'kill_authz_plain'@'%';
+CREATE USER 'kill_authz_direct'@'%';
+CREATE USER 'kill_authz_role'@'%';
+CREATE ROLE kill_authz_admin;
+GRANT SUPER ON *.* TO 'kill_authz_direct'@'%';
+GRANT SUPER ON *.* TO kill_authz_admin;
+GRANT kill_authz_admin TO 'kill_authz_role'@'%';
+
+connect (kill_victim,$OBMYSQL_MS0,kill_authz_owner,,information_schema,$OBMYSQL_PORT);
+let $kill_target = query_get_value(SELECT CONNECTION_ID() AS id, id, 1);
+connect (kill_plain,$OBMYSQL_MS0,kill_authz_plain,,information_schema,$OBMYSQL_PORT);
+--error 1095
+eval KILL QUERY $kill_target;
+--error 1095
+eval KILL CONNECTION $kill_target;
+--enable_result_log
+--echo ordinary user cannot kill another user's query or connection
+--disable_result_log
+
+connect (kill_direct,$OBMYSQL_MS0,kill_authz_direct,,information_schema,$OBMYSQL_PORT);
+eval KILL QUERY $kill_target;
+eval KILL CONNECTION $kill_target;
+disconnect kill_victim;
+--enable_result_log
+--echo directly granted SUPER permits cross-user KILL
+--disable_result_log
+
+connect (kill_victim,$OBMYSQL_MS0,kill_authz_owner,,information_schema,$OBMYSQL_PORT);
+let $kill_target = query_get_value(SELECT CONNECTION_ID() AS id, id, 1);
+connect (kill_role,$OBMYSQL_MS0,kill_authz_role,,information_schema,$OBMYSQL_PORT);
+SET ROLE NONE;
+--error 1095
+eval KILL QUERY $kill_target;
+--error 1095
+eval KILL CONNECTION $kill_target;
+SET ROLE ALL;
+eval KILL QUERY $kill_target;
+--enable_result_log
+--echo enabled role SUPER permits cross-user KILL QUERY
+--disable_result_log
+SET ROLE NONE;
+--error 1095
+eval KILL QUERY $kill_target;
+--error 1095
+eval KILL CONNECTION $kill_target;
+--enable_result_log
+--echo SET ROLE NONE removes cross-user KILL permission
+--disable_result_log
+SET ROLE ALL;
+eval KILL CONNECTION $kill_target;
+disconnect kill_victim;
+--enable_result_log
+--echo enabled role SUPER permits cross-user KILL CONNECTION
+--disable_result_log
+
+connect (kill_victim,$OBMYSQL_MS0,kill_authz_owner,,information_schema,$OBMYSQL_PORT);
+let $kill_target = query_get_value(SELECT CONNECTION_ID() AS id, id, 1);
+connect (kill_owner,$OBMYSQL_MS0,kill_authz_owner,,information_schema,$OBMYSQL_PORT);
+eval KILL QUERY $kill_target;
+eval KILL CONNECTION $kill_target;
+disconnect kill_victim;
+--enable_result_log
+--echo ordinary user may kill own query and connection
+--disable_result_log
+
+connection default;
+disconnect kill_plain;
+disconnect kill_direct;
+disconnect kill_role;
+disconnect kill_owner;
+DROP USER 'kill_authz_owner'@'%';
+DROP USER 'kill_authz_plain'@'%';
+DROP USER 'kill_authz_direct'@'%';
+DROP USER 'kill_authz_role'@'%';
+DROP ROLE kill_authz_admin;
+--enable_query_log
+--enable_result_log

@@ -115,6 +115,9 @@ class Client:
         requested = required | (caps & CLIENT_PLUGIN_AUTH)
         password = os.environ.get("SEEKDB_TEST_PASSWORD", "").encode()
         if password:
+            # mysql_native_password requires this SHA-1 challenge response:
+            # SHA1(password) XOR SHA1(nonce || SHA1(SHA1(password))).
+            # This test client does not persist passwords or intermediate hashes.
             first = hashlib.sha1(password).digest()
             second = hashlib.sha1(first).digest()
             digest = hashlib.sha1(salt[:20] + second).digest()

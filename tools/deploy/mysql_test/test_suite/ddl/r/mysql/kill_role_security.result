@@ -1,0 +1,6 @@
+ordinary user cannot kill another user's query or connection
+directly granted SUPER permits cross-user KILL
+enabled role SUPER permits cross-user KILL QUERY
+SET ROLE NONE removes cross-user KILL permission
+enabled role SUPER permits cross-user KILL CONNECTION
+ordinary user may kill own query and connection
