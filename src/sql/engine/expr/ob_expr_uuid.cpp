@@ -27,18 +27,19 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/random/ob_random.h"
 #include "lib/time/ob_time_utility.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -83,169 +84,215 @@ ObUUIDNode::ObUUIDNode()
 
 
 /*
+ * Generate a random 48-bit node id.
+ *
+ * RFC 4122 section 4.5 allows a random node id when no hardware address is
+ * available. The multicast bit is set so that such a value can never collide
+ * with an IEEE 802 address.
+ */
+int ObUUIDNode::init_random_node(unsigned char *node_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_filled = false;
+  if (OB_ISNULL(node_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(node_id));
+  } else {
+#ifndef _WIN32
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) {
+      LOG_WARN("failed to open /dev/urandom", K(errno));
+    } else {
+      int64_t total = 0;
+      while (OB_SUCC(ret) && total < 6) {
+        const ssize_t n = read(fd, node_id + total, 6 - total);
+        if (n < 0) {
+          if (EINTR == errno) {
+            continue;
+          }
+          LOG_WARN("failed to read /dev/urandom", K(errno));
+          break;
+        } else if (0 == n) {
+          break;
+        } else {
+          total += n;
+        }
+      }
+      close(fd);
+      is_filled = (6 == total);
+    }
+#endif
+    if (OB_SUCC(ret) && !is_filled) {
+      common::ObRandom random;
+      random.seed(static_cast<uint64_t>(ObTimeUtility::current_time()));
+      for (int64_t i = 0; i < 6; ++i) {
+        node_id[i] = static_cast<unsigned char>(random.get() & 0xFF);
+      }
+      is_filled = true;
+    }
+    if (OB_SUCC(ret) && is_filled) {
+      node_id[0] |= 0x01;
+    }
+  }
+  return ret;
+}
+
+/*
  * get and set mac address
  *
  */
 int ObUUIDNode::init()
 {
   int ret = OB_SUCCESS;
+  bool mac_addr_found = false;
+  const char *failure_reason = NULL;
   is_inited_ = false;
 #ifdef __EMSCRIPTEN__
   // Browsers expose no hardware MAC. Use a random UUID node and mark it as
   // non-MAC with the multicast bit, as on the Android fallback below.
   // Emscripten getentropy uses the host cryptographic random source.
   if (getentropy(mac_addr_, sizeof(mac_addr_)) != 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to generate UUID node", K(ret), K(errno));
+    failure_reason = "getentropy failed";
+    LOG_WARN("failed to generate UUID node", K(errno));
   } else {
     mac_addr_[0] |= 0x01;
-    is_inited_ = true;
+    mac_addr_found = true;
   }
 #elif defined(_WIN32)
   ULONG buf_len = 15000;
   PIP_ADAPTER_ADDRESSES addresses = NULL;
-  bool mac_addr_found = false;
   addresses = (IP_ADAPTER_ADDRESSES *)malloc(buf_len);
   if (OB_ISNULL(addresses)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (GetAdaptersAddresses(AF_UNSPEC, 0, NULL, addresses, &buf_len) == NO_ERROR) {
-    for (PIP_ADAPTER_ADDRESSES addr = addresses; addr && !mac_addr_found; addr = addr->Next) {
-      if (addr->PhysicalAddressLength == 6 && addr->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
-        MEMCPY(mac_addr_, addr->PhysicalAddress, 6);
-        mac_addr_found = true;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    if (GetAdaptersAddresses(AF_UNSPEC, 0, NULL, addresses, &buf_len) != NO_ERROR) {
+      failure_reason = "GetAdaptersAddresses failed";
+    } else {
+      for (PIP_ADAPTER_ADDRESSES addr = addresses; NULL != addr; addr = addr->Next) {
+        if (addr->PhysicalAddressLength == 6 && addr->IfType != IF_TYPE_SOFTWARE_LOOPBACK) {
+          MEMCPY(mac_addr_, addr->PhysicalAddress, 6);
+          mac_addr_found = true;
+          break;
+        }
+      }
+      if (!mac_addr_found) {
+        failure_reason = "no non-loopback adapter with a hardware address";
       }
     }
-    if (!mac_addr_found) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      is_inited_ = true;
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
+    free(addresses);
+    addresses = NULL;
   }
-  if (addresses) { free(addresses); }
 #elif defined(__APPLE__)
   // macOS: Use getifaddrs to get network interface information
-  struct ifaddrs *ifaddrs_list = nullptr;
-  struct ifaddrs *ifa = nullptr;
-  bool mac_addr_found = false;
-  
-  if (getifaddrs(&ifaddrs_list) != 0) {
-    ret = OB_ERR_UNEXPECTED;
+  struct ifaddrs *ifaddrs_list = NULL;
+  if (0 != getifaddrs(&ifaddrs_list)) {
+    failure_reason = "getifaddrs failed";
   } else {
-    for (ifa = ifaddrs_list; ifa != nullptr && OB_SUCC(ret) && !mac_addr_found; ifa = ifa->ifa_next) {
-      if (ifa->ifa_addr == nullptr) {
+    for (struct ifaddrs *ifa = ifaddrs_list; NULL != ifa; ifa = ifa->ifa_next) {
+      if (NULL == ifa->ifa_addr || AF_LINK != ifa->ifa_addr->sa_family) {
         continue;
       }
-      // Check if it's a link-level address (MAC address)
-      if (ifa->ifa_addr->sa_family == AF_LINK) {
-        // Skip loopback interface
-        if ((ifa->ifa_flags & IFF_LOOPBACK) == 0) {
-          struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
-          if (sdl->sdl_alen == 6) {  // MAC address is 6 bytes
-            MEMCPY(mac_addr_, LLADDR(sdl), 6);
-            mac_addr_found = true;
-          }
-        }
+      // Skip loopback interface
+      if (0 != (ifa->ifa_flags & IFF_LOOPBACK)) {
+        continue;
+      }
+      struct sockaddr_dl *sdl = reinterpret_cast<struct sockaddr_dl *>(ifa->ifa_addr);
+      if (6 == sdl->sdl_alen) {  // MAC address is 6 bytes
+        MEMCPY(mac_addr_, LLADDR(sdl), 6);
+        mac_addr_found = true;
+        break;
       }
     }
     freeifaddrs(ifaddrs_list);
-    
-    if (OB_FAIL(ret)) {
-      // Error already logged
-    } else if (!mac_addr_found) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      is_inited_ = true;
+    if (!mac_addr_found) {
+      failure_reason = "no non-loopback interface with a hardware address";
     }
   }
 #elif defined(__ANDROID__)
   // Android: Use getifaddrs with AF_PACKET + sockaddr_ll
   {
     struct ifaddrs *ifaddr = NULL;
-    bool mac_addr_found = false;
-    if (getifaddrs(&ifaddr) == -1) {
-      ret = OB_ERR_UNEXPECTED;
+    if (0 != getifaddrs(&ifaddr)) {
+      failure_reason = "getifaddrs failed";
     } else {
-      for (struct ifaddrs *ifa = ifaddr; ifa != NULL && !mac_addr_found; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == NULL) continue;
-        if (ifa->ifa_addr->sa_family != AF_PACKET) continue;
-        if (ifa->ifa_flags & IFF_LOOPBACK) continue;
-        struct sockaddr_ll *sll = (struct sockaddr_ll *)ifa->ifa_addr;
-        if (sll->sll_halen == 6) {
+      for (struct ifaddrs *ifa = ifaddr; NULL != ifa; ifa = ifa->ifa_next) {
+        if (NULL == ifa->ifa_addr || AF_PACKET != ifa->ifa_addr->sa_family) {
+          continue;
+        }
+        if (0 != (ifa->ifa_flags & IFF_LOOPBACK)) {
+          continue;
+        }
+        struct sockaddr_ll *sll = reinterpret_cast<struct sockaddr_ll *>(ifa->ifa_addr);
+        if (6 == sll->sll_halen) {
           MEMCPY(mac_addr_, sll->sll_addr, 6);
           mac_addr_found = true;
+          break;
         }
       }
       freeifaddrs(ifaddr);
-    }
-    if (OB_SUCC(ret) && !mac_addr_found) {
-      // RFC 4122 section 4.5: when MAC address is unavailable (Android sandbox),
-      // use random bytes with the multicast bit set as the node ID.
-      int fd = open("/dev/urandom", O_RDONLY);
-      if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
-        mac_addr_[0] |= 0x01;  // set multicast bit
-        mac_addr_found = true;
-        LOG_INFO("using random UUID node ID (no MAC available on Android)");
-      } else {
-        ret = OB_ERR_UNEXPECTED;
+      if (!mac_addr_found) {
+        failure_reason = "no non-loopback interface with a hardware address";
       }
-      if (fd >= 0) {
-        close(fd);
-      }
-    }
-    if (OB_SUCC(ret) && mac_addr_found) {
-      is_inited_ = true;
     }
   }
 #else
-  // Linux: Use ioctl to get MAC address
+  // Linux: Use ioctl to get the hardware address of the first non-loopback
+  // interface. A restricted environment may deny the interface list or expose
+  // loopback only, and that must not prevent the server from starting.
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-  if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+  MEMSET(&ifr, 0, sizeof(ifr));
+  if (sock < 0) {
+    failure_reason = "socket failed";
+    LOG_WARN("failed to create socket for the MAC address lookup", K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      failure_reason = "SIOCGIFCONF failed";
+      LOG_WARN("failed to enumerate network interfaces", K(errno));
     } else {
-      ifreq *it = ifc.ifc_req;
-      ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
-        if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
-          continue;
+      const struct ifreq *it = ifc.ifc_req;
+      const struct ifreq *const end = it + (ifc.ifc_len / sizeof(struct ifreq));
+      for (; it != end && !mac_addr_found; ++it) {
+        MEMSET(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
+        if (0 != ioctl(sock, SIOCGIFFLAGS, &ifr)) {
+          LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
+        } else if (0 != (ifr.ifr_flags & IFF_LOOPBACK)) {
+          // skip loopback interface
+        } else if (0 != ioctl(sock, SIOCGIFHWADDR, &ifr)) {
+          LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
         } else {
-          strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
-          if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
-            if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
-              if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
-                MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
-                mac_addr_found = true;
-                break;
-              } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
-              }
-            }
-          } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
-          }
+          MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
+          mac_addr_found = true;
         }
-      }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
+      }
+      if (!mac_addr_found) {
+        failure_reason = "no non-loopback interface with a hardware address";
       }
     }
     close(sock);
   }
 #endif
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to initialize the uuid node id", K(ret));
+  } else if (mac_addr_found) {
+    is_inited_ = true;
+  } else {
+    // Falling back to a random node id keeps the server usable in environments
+    // that do not expose a usable hardware address.
+    LOG_WARN("no MAC address is available, falling back to a random uuid node id",
+             "reason", failure_reason);
+    if (OB_FAIL(init_random_node(mac_addr_))) {
+      LOG_WARN("failed to generate a random uuid node id", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
   return ret;
 }
 

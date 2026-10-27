@@ -38,6 +38,10 @@ struct ObUUIDNode
 {
   ObUUIDNode();
   int init();
+  // Fill node_id with a random 48-bit value whose multicast bit is set, as
+  // described by RFC 4122 section 4.5. It is used when no hardware address can
+  // be read, so that the server can still start.
+  static int init_random_node(unsigned char *node_id);
   unsigned char mac_addr_[6];
   bool is_inited_;
 };
