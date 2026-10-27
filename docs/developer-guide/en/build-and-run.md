@@ -46,7 +46,7 @@ Specify your REAPI service address and concurrency:
 ./build.py build --remote_executor=grpc://HOST:PORT --jobs=100 seekdb
 ```
 
-The default strategies in `.bazelrc` prefer remote execution for C++ compilation and use local execution when no remote executor is configured. Set `--remote_executor` without adding `--config=remote`. Cargo, generators, and linking run locally. The default local strategy order is `worker,sandboxed,local`, preserving the preference for sandboxing. Explicit execution strategies on the command line override these defaults. If the service requires an SSH tunnel, establish the tunnel separately.
+The default strategies in `.bazelrc` prefer remote execution for C++ compilation and use local execution when no remote executor is configured. Set `--remote_executor` without adding `--config=remote`. Cargo, generators, and linking run locally. The default local strategy order is `worker,sandboxed,local` on Linux and macOS, and `worker,local` on Windows, where Bazel does not support sandboxing. Explicit execution strategies on the command line override these defaults. If the service requires an SSH tunnel, establish the tunnel separately.
 
 With `--config=remote` or a nonempty `--remote_executor` on the command line, `--jobs` only controls total concurrency. Bazel still detects the local CPU budget automatically unless you set it separately with `--local_resources=cpu=N`.
 

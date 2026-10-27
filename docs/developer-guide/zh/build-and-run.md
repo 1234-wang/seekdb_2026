@@ -48,7 +48,7 @@ Bazel 默认按本机可用 CPU 数量设置并发。显式指定本地编译并
 ./build.py build --remote_executor=grpc://HOST:PORT --jobs=100 seekdb
 ```
 
-`.bazelrc` 默认让 C++ 编译优先使用远程执行；未配置远程执行器时，使用本地执行策略。指定 `--remote_executor` 即可，无需再加 `--config=remote`。Cargo、生成器和链接仍在本机运行。默认本地策略顺序为 `worker,sandboxed,local`，保留沙箱优先级。命令行显式指定的执行策略可覆盖默认值。如果服务需要 SSH 隧道，先单独建立隧道。
+`.bazelrc` 默认让 C++ 编译优先使用远程执行；未配置远程执行器时，使用本地执行策略。指定 `--remote_executor` 即可，无需再加 `--config=remote`。Cargo、生成器和链接仍在本机运行。Linux 和 macOS 的默认本地策略顺序为 `worker,sandboxed,local`；Windows 使用 `worker,local`，因为 Bazel 在 Windows 上不支持沙箱。命令行显式指定的执行策略可覆盖默认值。如果服务需要 SSH 隧道，先单独建立隧道。
 
 命令行指定 `--config=remote` 或非空 `--remote_executor` 时，`--jobs` 只控制总并发，本地 CPU 额度仍由 Bazel 自动识别或通过 `--local_resources=cpu=N` 单独设置。
 
