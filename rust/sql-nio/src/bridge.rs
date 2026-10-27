@@ -16,6 +16,10 @@
 //! connection handles retain their explicit generation/close lifetimes.
 
 use crate::conn::{nio_bind_sql_session, nio_release_sql_session, nio_set_shutdown, nio_shutdown};
+#[cfg(feature = "memory-transport")]
+use crate::memory_transport::{
+    memory_close, memory_connect, memory_read, memory_write, MemoryClient,
+};
 use crate::pump::{nio_get_login_view, nio_get_tls_session_info};
 use crate::reactor::{
     nio_get_bound_tcp_port, nio_start, nio_stop, nio_update_tcp_keepalive_params, nio_wait_destroy,
@@ -390,6 +394,27 @@ pub mod ffi {
     extern "Rust" {
         type NioReactor;
         type NioConnectionHandle;
+
+        #[cfg(feature = "memory-transport")]
+        type MemoryClient;
+        /// Capacity bounds each direction to 1 byte..16 MiB. Null rejects admission.
+        #[cfg(feature = "memory-transport")]
+        unsafe fn memory_connect(reactor: *const NioReactor, capacity: usize) -> *mut MemoryClient;
+        /// Copies bytes; returns a count, -2 for would-block, or -1 for an error.
+        #[cfg(feature = "memory-transport")]
+        unsafe fn memory_write(
+            client: *const MemoryClient,
+            buffer: *const c_char,
+            length: i64,
+        ) -> i64;
+        /// Copies bytes; returns a count, 0 for EOF, -2 for would-block, or -1 for an error.
+        #[cfg(feature = "memory-transport")]
+        unsafe fn memory_read(client: *const MemoryClient, buffer: *mut c_char, length: i64)
+            -> i64;
+        /// Release once without concurrent calls. A client can outlive its reactor.
+        #[cfg(feature = "memory-transport")]
+        unsafe fn memory_close(client: *mut MemoryClient);
+
         #[cxx_name = "get_login_view"]
         unsafe fn nio_get_login_view(
             sess: *mut ObSqlSockSession,

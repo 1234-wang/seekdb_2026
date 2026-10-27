@@ -17,9 +17,6 @@
 #ifndef OCEANBASE_OBMYSQL_OB_SQL_NIO_SERVER_H_
 #define OCEANBASE_OBMYSQL_OB_SQL_NIO_SERVER_H_
 #include "rust/sql_nio.h"
-#ifdef __EMSCRIPTEN__
-#include "rust/sql-nio/include/nio_memory.h"
-#endif
 #include "lib/lock/ob_mutex.h"
 #include "rpc/obmysql/ob_sql_sock_handler.h"
 
@@ -62,7 +59,7 @@ public:
         ? external_tcp_port_ : static_cast<int64_t>(oceanbase::nio::get_bound_tcp_port(reactor_));
   }
   // The caller owns the returned client and must close it exactly once.
-  nio_memory_client *connect_memory(size_t capacity);
+  nio::MemoryClient *connect_memory(size_t capacity);
 #endif
   void update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt);
 

@@ -188,12 +188,12 @@ void ObSqlNioServer::wait()
 }
 
 #ifdef __EMSCRIPTEN__
-nio_memory_client *ObSqlNioServer::connect_memory(size_t capacity)
+nio::MemoryClient *ObSqlNioServer::connect_memory(size_t capacity)
 {
-  // nio_memory_connect requires the reactor to stay live throughout admission.
+  // nio::memory_connect requires the reactor to stay live throughout admission.
   // destroy detaches it under this same mutex before joining Rust workers.
   lib::ObMutexGuard guard(reactor_lock_);
-  return reactor_ == nullptr ? nullptr : nio_memory_connect(reactor_, capacity);
+  return reactor_ == nullptr ? nullptr : nio::memory_connect(reactor_, capacity);
 }
 #endif
 

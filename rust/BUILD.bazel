@@ -55,7 +55,11 @@ cxx_bridge(name = "logger", src = "logger/src/bridge.rs")
 cxx_bridge(
     name = "sql_nio",
     src = "sql-nio/src/bridge.rs",
-    hdrs = ["sql-nio/include/callbacks.h", "sql-nio/include/nio_memory.h"],
+    hdrs = ["sql-nio/include/callbacks.h"],
+    cfgs = select({
+        "@platforms//os:emscripten": ['feature="memory-transport"'],
+        "//conditions:default": [],
+    }),
 )
 
 filegroup(

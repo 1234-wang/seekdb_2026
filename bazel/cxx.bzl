@@ -4,6 +4,8 @@ load("//bazel:defs.bzl", "cc_library")
 
 def _cxx_generate_impl(ctx):
     arguments = ["--header"] if not ctx.file.src else [ctx.file.src.path]
+    for cfg in ctx.attr.cfgs:
+        arguments += ["--cfg", cfg]
     arguments += ["-o", ctx.outputs.header.path]
     outputs = [ctx.outputs.header]
     if ctx.outputs.source:
@@ -23,17 +25,19 @@ cxx_generate = rule(
     implementation = _cxx_generate_impl,
     attrs = {
         "src": attr.label(allow_single_file = True),
+        "cfgs": attr.string_list(),
         "header": attr.output(mandatory = True),
         "source": attr.output(),
         "_tool": attr.label(default = "//rust:cxxbridge", executable = True, cfg = "exec"),
     },
 )
 
-def cxx_bridge(name, src, hdrs = [], deps = []):
+def cxx_bridge(name, src, hdrs = [], deps = [], cfgs = []):
     """Expose <name>.h and compile its bridge independently of the Rust library."""
     cxx_generate(
         name = "_" + name + "_generate",
         src = src,
+        cfgs = cfgs,
         header = name + ".h",
         source = name + ".cc",
     )
