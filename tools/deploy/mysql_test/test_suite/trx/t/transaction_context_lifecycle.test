@@ -1,0 +1,35 @@
+--disable_warnings
+DROP TABLE IF EXISTS tx_context_lifecycle;
+--enable_warnings
+CREATE TABLE tx_context_lifecycle (id INT PRIMARY KEY, value INT);
+
+BEGIN;
+INSERT INTO tx_context_lifecycle VALUES (1, 10);
+COMMIT;
+SELECT * FROM tx_context_lifecycle ORDER BY id;
+
+BEGIN;
+UPDATE tx_context_lifecycle SET value = 20 WHERE id = 1;
+INSERT INTO tx_context_lifecycle VALUES (2, 20);
+ROLLBACK;
+SELECT * FROM tx_context_lifecycle ORDER BY id;
+
+BEGIN;
+UPDATE tx_context_lifecycle SET value = 30 WHERE id = 1;
+SAVEPOINT s1;
+UPDATE tx_context_lifecycle SET value = 40 WHERE id = 1;
+INSERT INTO tx_context_lifecycle VALUES (2, 40);
+ROLLBACK TO SAVEPOINT s1;
+SELECT * FROM tx_context_lifecycle ORDER BY id;
+COMMIT;
+SELECT * FROM tx_context_lifecycle ORDER BY id;
+
+# Reuse the session's transaction descriptor after commit and rollback.
+BEGIN;
+INSERT INTO tx_context_lifecycle VALUES (2, 50);
+COMMIT;
+BEGIN;
+DELETE FROM tx_context_lifecycle WHERE id = 1;
+ROLLBACK;
+SELECT * FROM tx_context_lifecycle ORDER BY id;
+DROP TABLE tx_context_lifecycle;

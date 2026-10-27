@@ -241,16 +241,15 @@ int ObLSTxCtxMgr::process_callback_(ObTxCommitCallback *&cb_list) const
   return ret;
 }
 
-void ObLSTxCtxMgr::print_all_tx_ctx(const int64_t max_print, const bool verbose)
+void ObLSTxCtxMgr::print_all_tx_ctx(const int64_t max_print)
 {
-  print_all_tx_ctx_(max_print, verbose);
+  print_all_tx_ctx_(max_print);
 }
 
-void ObLSTxCtxMgr::print_all_tx_ctx_(const int64_t max_print, const bool verbose)
+void ObLSTxCtxMgr::print_all_tx_ctx_(const int64_t max_print)
 {
   UNUSED(max_print);
-  UNUSED(verbose);
-  PrintFunctor print_fn(max_print, verbose);
+  PrintFunctor print_fn(max_print);
   // ignore ret
   ls_tx_ctx_map_.for_each(print_fn);
 }
@@ -1241,13 +1240,12 @@ int ObTxCtxMgr::stop()
 int ObTxCtxMgr::print_tx_ctx_()
 {
   int ret = OB_SUCCESS;
-  const bool verbose = true;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObTxCtxMgr is not inited", K(*this));
   } else if (OB_NOT_NULL(tx_ctx_mgr_)) {
-    tx_ctx_mgr_->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT, verbose);
+    tx_ctx_mgr_->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT);
   }
   return ret;
 }
@@ -1570,8 +1568,7 @@ int ObTxCtxMgr::remove_context_manager(const bool graceful)
         if (need_retry && MAX_RETRY_NUM == retry) {
           if (OB_FAIL(tx_ctx_mgr_->kill_all_tx(arg.graceful_, is_all_trans_cleaned_up))) {
           } else if (!is_all_trans_cleaned_up) {
-            const bool verbose = true;
-            tx_ctx_mgr_->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT, verbose);
+            tx_ctx_mgr_->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT);
           } else {
             need_retry = false;
           }

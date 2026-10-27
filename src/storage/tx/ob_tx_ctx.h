@@ -424,7 +424,7 @@ private:
   int on_local_abort_tx_();
 
   // int local_tx_abort_();
-  int abort_(int reason);
+  int abort_();
 
   int update_max_commit_version_();
 
@@ -563,7 +563,7 @@ private:
                              const share::SCN replay_scn = share::SCN::invalid_scn());
   int submit_rollback_to_log_(const ObTxSEQ from_scn,
                               const ObTxSEQ to_scn);
-  int submit_redo_log_for_freeze_(bool &try_submit, const uint32_t freeze_clock);
+  int submit_redo_log_for_freeze_(const uint32_t freeze_clock);
   void print_first_mvcc_callback_();
 
   void set_target_state(ObTxState state) { target_state_ = state; }
@@ -588,7 +588,6 @@ private:
 private:
   //0x0078746374726170 means reset partctx
   static const int64_t PART_CTX_MAGIC_NUM = 0x0078746374726170;
-  static const int64_t REPLAY_PRINT_TRACE_THRESHOLD = 10 * 1000; // 10 ms
   static const int64_t REDO_SYNC_TASK_RETRY_INTERVAL_US = 10 * 1000; // 10ms
   static const int64_t END_STMT_SLEEP_US = 10 * 1000; // 10ms
   static const int64_t MAX_END_STMT_RETRY_TIMES = 100;
