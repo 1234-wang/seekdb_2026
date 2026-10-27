@@ -1,0 +1,21 @@
+# DDL must escape backticks without depending on SQL-layer helpers.
+connect (conn_user,$OBMYSQL_MS0,root,,test,$OBMYSQL_PORT);
+connection conn_user;
+--disable_query_log
+--disable_warnings
+drop table if exists ddl_identifier_escape;
+--enable_warnings
+--enable_query_log
+create table ddl_identifier_escape (
+  id int primary key,
+  `a``b` int,
+  `kind``name` enum('first', 'second'),
+  `select` varchar(20)
+);
+insert into ddl_identifier_escape values (1, 10, 'first', 'one'), (2, 20, 'second', 'two');
+create unique index idx_escaped on ddl_identifier_escape (`a``b`);
+create index idx_enum on ddl_identifier_escape (`kind``name`);
+select id, `a``b`, `kind``name`, `select` from ddl_identifier_escape order by id;
+alter table ddl_identifier_escape modify column `a``b` varchar(20);
+select id, `a``b`, `kind``name`, `select` from ddl_identifier_escape order by id;
+drop table ddl_identifier_escape;
