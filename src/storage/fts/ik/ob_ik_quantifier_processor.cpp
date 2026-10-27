@@ -94,26 +94,30 @@ int ObIKQuantifierProcessor::process_CN_count(TokenizeContext &ctx,
     if (ObFTCharUtil::CharType::CHINESE == type) {
       // handle existing
       if (!count_hits_.empty()) {
-        for (ObDATrieHit &hit : count_hits_) {
-          if (OB_FAIL(ret)) {
-            break;
-          } else if (OB_FAIL(quan_dict_.match({char_len, ch}, hit))) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < count_hits_.count(); ) {
+          ObDATrieHit &hit = count_hits_[i];
+          if (OB_FAIL(quan_dict_.match({char_len, ch}, hit))) {
+            ++i;
           } else if (hit.is_match()) {
-            if (OB_FAIL(ctx.add_token(ctx.fulltext(),
-                                      hit.start_pos_,
-                                      hit.end_pos_ - hit.start_pos_,
-                                      hit.char_cnt_,
-                                      ObIKTokenType::IK_COUNT_TOKEN))) {
-            } else {
-              // add ok
-            }
+            ctx.add_token(ctx.fulltext(),
+                          hit.start_pos_,
+                          hit.end_pos_ - hit.start_pos_,
+                          hit.char_cnt_,
+                          ObIKTokenType::IK_COUNT_TOKEN);
+            ++i;
           } else if (hit.is_prefix()) {
             // wait another match
+            ++i;
           } else if (hit.is_unmatch()) {
-            count_hits_.erase(hit);
+            // swap with last element and pop, don't increment i
+            if (i < count_hits_.count() - 1) {
+              count_hits_[i] = count_hits_[count_hits_.count() - 1];
+            }
+            count_hits_.pop_back();
           } else {
             ret = OB_UNEXPECT_INTERNAL_ERROR;
             LOG_WARN("Reached an imposible state.");
+            ++i;
           }
         }
       } else {
@@ -140,19 +144,19 @@ int ObIKQuantifierProcessor::process_CN_count(TokenizeContext &ctx,
           if (OB_FAIL(count_hits_.push_back(hit))) {
           }
         } else if (hit.is_unmatch()) {
-          count_hits_.clear();
+          count_hits_.reuse();
         } else {
           ret = OB_UNEXPECT_INTERNAL_ERROR;
         }
       }
     } else {
-      count_hits_.clear();
+      count_hits_.reuse();
     }
 
     if (OB_FAIL(ret)) {
       // already logged
     } else if (ctx.is_last()) {
-      count_hits_.clear();
+      count_hits_.reuse();
     } else {
     }
   } else {

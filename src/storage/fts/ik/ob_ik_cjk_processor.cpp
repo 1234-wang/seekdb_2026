@@ -38,26 +38,32 @@ int ObIKCJKProcessor::do_process(TokenizeContext &ctx,
 
   if (ObFTCharUtil::CharType::USELESS != type) {
     // handle previous hits_ first and then check from this char
-    for (ObList<ObDATrieHit, ObIAllocator>::iterator iter = hits_.begin();
-         OB_SUCC(ret) && iter != hits_.end();
-         iter++) {
-      ObDATrieHit &hit = *iter;
+    for (int64_t i = 0; OB_SUCC(ret) && i < hits_.count(); ) {
+      ObDATrieHit &hit = hits_[i];
       if (OB_FAIL(dict_main_.match_with_hit({char_len, ch}, hit, hit))) {
+        ++i;
       } else if (hit.is_match()) {
-        if (OB_FAIL(ctx.add_token(ctx.fulltext(),
-                                  hit.start_pos_,
-                                  hit.end_pos_ - hit.start_pos_,
-                                  hit.char_cnt_,
-                                  ObIKTokenType::IK_CHINESE_TOKEN))) {
-        } else if (hit.is_prefix()) {
+        ctx.add_token(ctx.fulltext(),
+                      hit.start_pos_,
+                      hit.end_pos_ - hit.start_pos_,
+                      hit.char_cnt_,
+                      ObIKTokenType::IK_CHINESE_TOKEN);
+        if (hit.is_prefix()) {
           // match will record the start_cursor
         }
+        ++i;
       } else if (hit.is_prefix()) {
         // nothing
+        ++i;
       } else if (hit.is_unmatch()) {
-        hits_.erase(hit);
+        // swap with last element and pop, don't increment i
+        if (i < hits_.count() - 1) {
+          hits_[i] = hits_[hits_.count() - 1];
+        }
+        hits_.pop_back();
       } else {
         ret = OB_UNEXPECT_INTERNAL_ERROR;
+        ++i;
       }
     }
     if (OB_SUCC(ret)) {
@@ -67,29 +73,32 @@ int ObIKCJKProcessor::do_process(TokenizeContext &ctx,
       if (OB_FAIL(dict_main_.match({char_len, ch}, hit))) {
       } else if (hit.is_match()) {
         // output token
-        hits_.push_back(hit);
-        ctx.add_token(ctx.fulltext(),
-                      ctx.get_cursor(),
-                      char_len,
-                      1,
-                      ObIKTokenType::IK_CHINESE_TOKEN);
+        if (OB_FAIL(hits_.push_back(hit))) {
+        } else {
+          ctx.add_token(ctx.fulltext(),
+                        ctx.get_cursor(),
+                        char_len,
+                        1,
+                        ObIKTokenType::IK_CHINESE_TOKEN);
+        }
       } else if (hit.is_prefix()) {
-        hits_.push_back(hit);
+        if (OB_FAIL(hits_.push_back(hit))) {
+        }
       } else {
         // ignore mismatch
       }
     }
   } else {
     // stop previous match
-    hits_.clear();
+    hits_.reuse();
   }
 
   if (OB_SUCC(ret)) {
     if (ctx.is_last()) {
-      hits_.clear();
+      hits_.reuse();
     }
   } else {
-    hits_.clear();
+    hits_.reuse();
   }
 
   return ret;

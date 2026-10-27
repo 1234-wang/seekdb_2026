@@ -17,6 +17,7 @@
 #include "storage/fts/dict/ob_ft_range_dict.h"
 #include "share/rc/ob_server_runtime.h"
 
+#include <algorithm>
 #include "storage/fts/dict/ob_ik_dic.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
@@ -381,22 +382,27 @@ int ObFTRangeDict::match_with_hit(const ObString &single_word,
 int ObFTRangeDict::find_first_char_range(const ObString &single_word, ObIFTDict *&dict) const
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !found && i < range_dicts_.count(); ++i) {
+  // Binary search: find the last range whose start_ <= single_word
+  auto it = std::upper_bound(
+      range_dicts_.begin(),
+      range_dicts_.end(),
+      single_word,
+      [](const ObString &word, const ObFTRange &range) {
+        return ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                 range.start_.get_word(),
+                                 word) > 0;
+      });
+
+  if (it != range_dicts_.begin()) {
+    --it;
     if (ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                          range_dicts_[i].start_.get_word(),
-                          single_word)
-            <= 0
-        && ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                             range_dicts_[i].end_.get_word(),
-                             single_word)
-               >= 0) {
-      dict = range_dicts_[i].dict_;
-      found = true;
+                          it->end_.get_word(),
+                          single_word) >= 0) {
+      dict = it->dict_;
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
     }
-  }
-  if (!found) {
-    // not found, dis match
+  } else {
     ret = OB_ENTRY_NOT_EXIST;
   }
   return ret;
