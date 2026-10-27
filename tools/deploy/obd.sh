@@ -283,18 +283,22 @@ function deploy_cluster {
   fi
   yaml_config_args="--config $config_yaml"
   obd cluster deploy "$deploy_name" --force --clean $yaml_config_args || exit 1
-  if ! obd cluster start "$deploy_name" -f;
+  local start_ret=0
+  obd cluster start "$deploy_name" -f || start_ret=$?
+  if [[ "$start_ret" != "0" ]]
   then
     while [[ "$NO_CONFIRM" != "1" && "$(grep 'config_status: NEED_REDEPLOY' $OBD_CLUSTER_PATH/$deploy_name/.data)" != "" ]]
     do
-      read -r -p "Start $deploy_name failed, do you want to edit config and continue?[Y/n]" input
+      read -r -p "Start $deploy_name failed, do you want to edit config and continue?[Y/n]" input || exit "$start_ret"
       case $input in
         [Yy]|"")
         obd cluster edit-config "$deploy_name"
         if obd cluster start "$deploy_name" -f;
         then
+          start_ret=0
           break
         else
+          start_ret=$?
           continue
         fi
         ;;
@@ -302,6 +306,10 @@ function deploy_cluster {
         exit 1
       esac
     done
+    if [[ "$start_ret" != "0" ]]
+    then
+      exit "$start_ret"
+    fi
   fi
   if [[ $EXEC_INIT_SQL != "1" ]]
   then
