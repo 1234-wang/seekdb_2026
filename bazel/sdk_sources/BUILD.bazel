@@ -1,5 +1,5 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//bazel:defs.bzl", "cc_archives")
+load(":archives.bzl", "sdk_archives")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -32,7 +32,7 @@ alias(
     }),
 )
 
-cc_archives(
+sdk_archives(
     name = "source_sdk",
     target_compatible_with = select({
         "@platforms//os:ios": [],

@@ -54,10 +54,10 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}
           restore-keys: cargo-${{ runner.os }}-
 
-      - name: Prepare generated interfaces and C++ bridges
+      - name: Prepare generated Rust configuration
         run: |
           ./build.py init
-          ./build.py build //rust:generated_headers //rust:bridges
+          ./build.py build //rust:config/generated_config.rs
           echo "CONFIG_RS=$PWD/build/bin/rust/config/generated_config.rs" >> "$GITHUB_ENV"
 
       - name: clippy (deny warnings)
@@ -66,14 +66,7 @@ jobs:
 
       - name: Rust workspace tests
         working-directory: rust
-        run: |
-          execution_root=$(../build.py info execution_root)
-          bridge_archives=$(../build.py cquery //rust:bridges --output=files)
-          for archive in $bridge_archives; do
-            RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=$execution_root/$archive"
-          done
-          export RUSTFLAGS
-          cargo test --locked --workspace
+        run: cargo test --locked --workspace
 
       # Compile Windows code on Linux; this does not run Windows tests.
       - name: check windows target

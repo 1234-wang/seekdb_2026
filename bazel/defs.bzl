@@ -5,7 +5,6 @@ to evolve without spreading their layout or standard policy across packages.
 """
 
 load("@rules_cc//cc:cc_import.bzl", _cc_import = "cc_import")
-load("//bazel:cc_archives.bzl", _cc_archives = "cc_archives")
 load("//bazel:platforms.bzl", _openmp_copts = "openmp_copts")
 load(
     "//bazel:compile_config.bzl",
@@ -38,7 +37,6 @@ X86_SIMD_COPTS = _X86_SIMD_COPTS
 openmp_copts = _openmp_copts
 
 cc_import = _cc_import
-cc_archives = _cc_archives
 cc_library = _cc_library
 final_link = _final_link
 unity_cc_library = _unity_cc_library
