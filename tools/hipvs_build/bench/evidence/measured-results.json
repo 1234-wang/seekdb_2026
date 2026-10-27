@@ -1,0 +1,184 @@
+{
+  "scope": "Derived public measurement summary plus exact synthetic result ID files. Original session and SQL reports remain separately sealed. Measured integrated source is not this unbuilt AMD-only tree.",
+  "measured_source_revision": "5ee7271c6f750894a3e1ff15c9d6b2afa5f44ff9",
+  "binary_sha256": "40e2dd628db3ea68d1a9176587617586043404c33df5535e669f242123aba2d9",
+  "helper_sha256": "cebf83aad448811961be9bb5e3d44fe8e53d1382194cf739f6f586dd5e2e26a9",
+  "original_acceptance_sha256": "9a31526e7cc4bf0bb4969fa21b5f42a03820ff138f5f45b920e4fbbb7401f8e5",
+  "source_core_patch_sha256": "ce1ef8237cdedb455e7146596212fdda9da721a9d927856721558031a1e44aae",
+  "modes": {
+    "cpu": {
+      "status": "PASSED_FUNCTIONAL_REOPEN_PENDING",
+      "build_rounds": [
+        {
+          "round": 0,
+          "index": "idx_amd_0",
+          "status": "PASSED",
+          "create_succeeded": true,
+          "ddl_through_first_query_seconds": 8.388145212084055,
+          "recall": 0.9958333333333333,
+          "backend_log_evidence": {
+            "gpu_native_import_trace": false,
+            "explicit_cpu_fallback_trace": false,
+            "device": 1795,
+            "inode": 1703949,
+            "start_offset": 8830307,
+            "end_offset": 40664359,
+            "new_span_bytes": 31834052,
+            "new_span_sha256": "fcce86294b69e4df81ada9d7198b8866c0009a9349da66db6524c9803cced72e",
+            "excerpt_file": "round-0-server-trace.log",
+            "excerpt_bytes": 9408,
+            "excerpts_are_not_full_log": true
+          },
+          "gpu_native_import_trace": false,
+          "explicit_cpu_fallback_trace": false
+        },
+        {
+          "round": 1,
+          "index": "idx_amd_1",
+          "status": "PASSED",
+          "create_succeeded": true,
+          "ddl_through_first_query_seconds": 8.47150007635355,
+          "recall": 0.9958333333333333,
+          "backend_log_evidence": {
+            "gpu_native_import_trace": false,
+            "explicit_cpu_fallback_trace": false,
+            "device": 1795,
+            "inode": 1703949,
+            "start_offset": 42677962,
+            "end_offset": 50695999,
+            "new_span_bytes": 8018037,
+            "new_span_sha256": "4f545433957078fe1365ea250a27cecbbb2a6fa3e864908623c3a84f14f1a4db",
+            "excerpt_file": "round-1-server-trace.log",
+            "excerpt_bytes": 11776,
+            "excerpts_are_not_full_log": true
+          },
+          "gpu_native_import_trace": false,
+          "explicit_cpu_fallback_trace": false
+        },
+        {
+          "round": 2,
+          "index": "idx_amd_2",
+          "status": "PASSED",
+          "create_succeeded": true,
+          "ddl_through_first_query_seconds": 8.451989920809865,
+          "recall": 0.9958333333333333,
+          "backend_log_evidence": {
+            "gpu_native_import_trace": false,
+            "explicit_cpu_fallback_trace": false,
+            "device": 1795,
+            "inode": 1703949,
+            "start_offset": 52722604,
+            "end_offset": 60741031,
+            "new_span_bytes": 8018427,
+            "new_span_sha256": "8ec724ab3d84dc4716ae1147600f25bed71a57d360777e43bdf8f86b155ef6d6",
+            "excerpt_file": "round-2-server-trace.log",
+            "excerpt_bytes": 9408,
+            "excerpts_are_not_full_log": true
+          },
+          "gpu_native_import_trace": false,
+          "explicit_cpu_fallback_trace": false
+        }
+      ],
+      "checks_passed": 97,
+      "reopen_status": "PASSED_READ_ONLY_REOPEN_COMPONENT",
+      "reopen_checks_passed": 31,
+      "original_sql_report_sha256": "048c5b873748be3ea43c49991a7cc8975e70c4e68910f055b08db12b244c83d5",
+      "original_session_sha256": "ee12ace45caa6f44ecb13575083d662514b728e4e4909b09e04afc9bc3ef1d33",
+      "original_reopen_sql_report_sha256": "03a65e421532621b5e4dea5d98f37d4181420d8b8517d302f1a5abca1b6788e6",
+      "original_reopen_session_sha256": "19ac6dcb26841dafc0a212dafdb8c6f349bfa660cdb4237ef9918c96442251c2",
+      "input_sha256": {
+        "base.f32": "cc5ea4ca8bd02cdbf807f721df666ea797fdc16582d9ced4ba523f9e8c2e93e3",
+        "queries.f32": "525d711d576289a68bf6648b522ac5f551e2ed633fa703998c7417f736629dc6",
+        "ids.i64": "38e9a50ab1ed4f6339740f0c62ce81883911722ea190cf1b5e506c75202cdddc",
+        "exact-ground-truth.json": "fc90f6a3662f23f7ea8b3164910b9e42dfc87cffd1b0c35fa9ad4b1df0bf5773"
+      }
+    },
+    "gpu": {
+      "status": "PASSED_FUNCTIONAL_REOPEN_PENDING",
+      "build_rounds": [
+        {
+          "round": 0,
+          "index": "idx_amd_0",
+          "status": "PASSED",
+          "create_succeeded": true,
+          "ddl_through_first_query_seconds": 3.062071142718196,
+          "recall": 1.0,
+          "backend_log_evidence": {
+            "gpu_native_import_trace": true,
+            "explicit_cpu_fallback_trace": false,
+            "device": 1795,
+            "inode": 2621453,
+            "start_offset": 8830599,
+            "end_offset": 38101270,
+            "new_span_bytes": 29270671,
+            "new_span_sha256": "18f9937f3d8663267a08dd6f65d0f64f5608953cefd9c9ac5b0a84c003db19d7",
+            "excerpt_file": "round-0-server-trace.log",
+            "excerpt_bytes": 16512,
+            "excerpts_are_not_full_log": true
+          },
+          "gpu_native_import_trace": true,
+          "explicit_cpu_fallback_trace": false
+        },
+        {
+          "round": 1,
+          "index": "idx_amd_1",
+          "status": "PASSED",
+          "create_succeeded": true,
+          "ddl_through_first_query_seconds": 3.035283913835883,
+          "recall": 1.0,
+          "backend_log_evidence": {
+            "gpu_native_import_trace": true,
+            "explicit_cpu_fallback_trace": false,
+            "device": 1795,
+            "inode": 2621453,
+            "start_offset": 40410429,
+            "end_offset": 44839935,
+            "new_span_bytes": 4429506,
+            "new_span_sha256": "fac35763fe11255be637c8d517ec3716b5b1c0024712656e4bb38cddf13894dc",
+            "excerpt_file": "round-1-server-trace.log",
+            "excerpt_bytes": 16512,
+            "excerpts_are_not_full_log": true
+          },
+          "gpu_native_import_trace": true,
+          "explicit_cpu_fallback_trace": false
+        },
+        {
+          "round": 2,
+          "index": "idx_amd_2",
+          "status": "PASSED",
+          "create_succeeded": true,
+          "ddl_through_first_query_seconds": 3.0422396287322044,
+          "recall": 1.0,
+          "backend_log_evidence": {
+            "gpu_native_import_trace": true,
+            "explicit_cpu_fallback_trace": false,
+            "device": 1795,
+            "inode": 2621453,
+            "start_offset": 46900353,
+            "end_offset": 52293686,
+            "new_span_bytes": 5393333,
+            "new_span_sha256": "caa7b9cba1cc23c2468d021e1545150dfb106bf7e16009598aaebbc96207644e",
+            "excerpt_file": "round-2-server-trace.log",
+            "excerpt_bytes": 16512,
+            "excerpts_are_not_full_log": true
+          },
+          "gpu_native_import_trace": true,
+          "explicit_cpu_fallback_trace": false
+        }
+      ],
+      "checks_passed": 97,
+      "reopen_status": "PASSED_READ_ONLY_REOPEN_COMPONENT",
+      "reopen_checks_passed": 31,
+      "original_sql_report_sha256": "c0f3520f355bc0897e06a2e159d44ab030b9c3c2448519700ec455b554020485",
+      "original_session_sha256": "82ec3e314bb2336c65a4723d1212d7d3899cab648ce3cc5810a64384ef5f1776",
+      "original_reopen_sql_report_sha256": "1f2d982b8f39191b1ca4bf8ad74bf5f907661a84514f78f6ffee3d8bb880264d",
+      "original_reopen_session_sha256": "a35f77721c99a1b67c7b2d56e419933bbff83e151dd053bd85ca78a744788472",
+      "input_sha256": {
+        "base.f32": "cc5ea4ca8bd02cdbf807f721df666ea797fdc16582d9ced4ba523f9e8c2e93e3",
+        "queries.f32": "525d711d576289a68bf6648b522ac5f551e2ed633fa703998c7417f736629dc6",
+        "ids.i64": "38e9a50ab1ed4f6339740f0c62ce81883911722ea190cf1b5e506c75202cdddc",
+        "exact-ground-truth.json": "fc90f6a3662f23f7ea8b3164910b9e42dfc87cffd1b0c35fa9ad4b1df0bf5773"
+      }
+    }
+  }
+}
