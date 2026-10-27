@@ -884,7 +884,9 @@ int ObDASTRTaatIter::check_and_prepare()
   } else if (limit_param_.limit_ > 0 && output_row_cnt_ >= limit_param_.limit_) {
     ret = OB_ITER_END;
   } else if (!doc_cnt_calculated_) {
-    if (OB_FAIL(do_total_doc_cnt())) {
+    if (!ir_ctdef_->need_calc_relevance()) {
+      doc_cnt_calculated_ = true;
+    } else if (OB_FAIL(do_total_doc_cnt())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
       } else {
         doc_cnt_calculated_ = true;
@@ -899,7 +901,7 @@ int ObDASTRTaatIter::check_and_prepare()
 int ObDASTRTaatIter::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-  bool need_fill_doc_cnt = !doc_cnt_calculated_;
+  bool need_fill_doc_cnt = ir_ctdef_->need_calc_relevance() && !doc_cnt_calculated_;
   if (OB_FAIL(check_and_prepare())) {
     if (OB_ITER_END != ret) {
     }
@@ -924,7 +926,7 @@ int ObDASTRTaatIter::inner_get_next_row()
 int ObDASTRTaatIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
-  bool need_fill_doc_cnt = !doc_cnt_calculated_;
+  bool need_fill_doc_cnt = ir_ctdef_->need_calc_relevance() && !doc_cnt_calculated_;
   if (OB_FAIL(check_and_prepare())) {
     if (OB_ITER_END != ret) {
     }
@@ -996,7 +998,7 @@ int ObDASTRTaatIter::fill_output_exprs(int64_t &count, int64_t safe_capacity)
   int ret = OB_SUCCESS;
   const bool need_relevance = ir_ctdef_->need_proj_relevance_score();
   ObDatum *filter_res = nullptr;
-  ObExpr *match_filter = need_relevance ? ir_ctdef_->match_filter_ : nullptr;
+  ObExpr *match_filter = ir_ctdef_->need_calc_relevance() ? ir_ctdef_->match_filter_ : nullptr;
   ObDASTRTaatHashMap *map = hash_maps_[cur_map_idx_];
   ObEvalCtx *eval_ctx = ir_rtdef_->eval_ctx_;
   ObExpr *relevance_proj_col = ir_ctdef_->relevance_proj_col_;
@@ -1070,10 +1072,14 @@ int ObDASTRTaatIter::fill_total_doc_cnt()
 int ObDASTRTaatIter::init_stores_by_partition()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(total_doc_cnt_ <= 0 || is_hashmap_inited_)) {
+  if (OB_UNLIKELY((ir_ctdef_->need_calc_relevance() && total_doc_cnt_ <= 0) || is_hashmap_inited_)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    int64_t partition_cnt = force_return_docid_ ? 1 : OB_MIN((total_doc_cnt_- 1) / OB_HASHMAP_DEFAULT_SIZE + 1, OB_MAX_HASHMAP_COUNT);
+    // No-score scans omit document-count aggregation. Use the existing bounded
+    // partition count rather than collecting corpus statistics just for sizing.
+    int64_t partition_cnt = force_return_docid_ ? 1 : !ir_ctdef_->need_calc_relevance()
+        ? OB_MAX_HASHMAP_COUNT
+        : OB_MIN((total_doc_cnt_- 1) / OB_HASHMAP_DEFAULT_SIZE + 1, OB_MAX_HASHMAP_COUNT);
     hash_map_size_ = partition_cnt;
     void *buf = nullptr;
     if (nullptr == hash_maps_ && OB_SUCC(ret)) {
@@ -1155,7 +1161,7 @@ int ObDASTRTaatIter::fill_chunk_store_by_tr_iter()
   } else {
     ObSEArray<ObExpr *, 2> exprs;
     if (OB_FAIL(exprs.push_back(ir_ctdef_->inv_scan_domain_id_col_))) {
-    } else if (ir_ctdef_->need_proj_relevance_score()) {
+    } else if (ir_ctdef_->need_calc_relevance()) {
       if (OB_FAIL(exprs.push_back(ir_ctdef_->relevance_expr_))) {
       }
     }
@@ -1320,7 +1326,7 @@ int ObDASTRTaatIter::load_next_hashmap()
 int ObDASTRTaatIter::inner_load_next_hashmap()
 {
   int ret = OB_SUCCESS;
-  const bool need_relevance = ir_ctdef_->need_proj_relevance_score();
+  const bool need_relevance = ir_ctdef_->need_calc_relevance();
   if (OB_UNLIKELY(hash_maps_[cur_map_idx_]->size() != 0)) {
     ret = OB_ERR_UNEXPECTED;
   }
@@ -1369,6 +1375,9 @@ int ObDASTRTaatIter::inner_load_next_hashmap()
         }
       } else {
         if (OB_FAIL(map->set_refactored(doc_id, 1, 0/*overwrite*/))) {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          }
         }
       }
     }
