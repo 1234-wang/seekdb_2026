@@ -67,7 +67,7 @@ Use the configured base directory to locate logs. For a systemd installation, in
 
 ```bash
 journalctl -u seekdb --since today
-tail -F /var/lib/oceanbase/log/seekdb.log
+tail -F /var/lib/seekdb/log/seekdb.log
 ```
 
 If `base-dir` was changed in `/etc/seekdb/seekdb.cnf`, use the corresponding log directory. Search a request by its trace ID:
