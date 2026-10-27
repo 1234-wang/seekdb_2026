@@ -35,6 +35,10 @@
 #include <linux/if_packet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -244,6 +248,33 @@ int ObUUIDNode::init()
       }
     }
     close(sock);
+  }
+  if (OB_FAIL(ret)) {
+    // RFC 4122 section 4.5: a random node with the multicast bit set is
+    // suitable when the process cannot discover a hardware address.
+    const int fd = open("/dev/urandom", O_RDONLY);
+    size_t offset = 0;
+    if (fd >= 0) {
+      while (offset < sizeof(mac_addr_)) {
+        const ssize_t n = read(fd, mac_addr_ + offset, sizeof(mac_addr_) - offset);
+        if (n > 0) {
+          offset += static_cast<size_t>(n);
+        } else if (n < 0 && errno == EINTR) {
+          continue;
+        } else {
+          break;
+        }
+      }
+      close(fd);
+    }
+    if (offset == sizeof(mac_addr_)) {
+      mac_addr_[0] |= 0x01;
+      is_inited_ = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("using random UUID node because no MAC address is available");
+    } else {
+      LOG_WARN("unable to generate a random UUID node", K(errno), K(offset));
+    }
   }
 #endif
   return ret;
