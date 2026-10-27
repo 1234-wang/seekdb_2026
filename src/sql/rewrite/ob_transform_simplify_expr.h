@@ -179,7 +179,12 @@ private:
   int get_opposite_op(ObItemType type, ObItemType& opposit_type);
   int remove_duplicate_exprs(ObQueryCtx* query_ctx, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
   int recursive_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObRawExpr* &expr, bool &trans_happened);
-  int do_remove_duplicate_exprs(ObQueryCtx &query_ctx, ObIArray<ObRawExpr*> &exprs);
+  int do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
+                                ObIArray<ObRawExpr*> &exprs,
+                                const ObItemType parent_op_type);
+  int is_bound_implied_by(ObRawExpr *cand_expr,
+                          ObRawExpr *other_expr,
+                          bool &cand_implies_other);
   int pull_similar_expr(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
   int recursive_pull_similar(ObDMLStmt *stmt, ObRawExpr* &expr, bool &trans_happened);
   int do_pull_similar(ObDMLStmt *stmt,
