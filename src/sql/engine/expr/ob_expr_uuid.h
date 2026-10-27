@@ -38,6 +38,11 @@ struct ObUUIDNode
 {
   ObUUIDNode();
   int init();
+  // Fallback used when no physical MAC address can be obtained, e.g. in a
+  // restricted sandbox where network interface enumeration is not allowed.
+  // Generates a random node with the RFC 4122 section 4.5 multicast bit set,
+  // so it can never collide with a real IEEE 802 MAC address.
+  int init_random_node();
   unsigned char mac_addr_[6];
   bool is_inited_;
 };
