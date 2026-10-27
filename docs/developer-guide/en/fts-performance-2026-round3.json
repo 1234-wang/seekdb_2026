@@ -1,0 +1,305 @@
+{
+  "status": "local candidate; not published; full SQL and official benchmark validation pending",
+  "baseline_commit": "d719f55ec7b7507d3e726a0e665422f41566d30d",
+  "product_patch_sha256": "5cb5fc6c8285e3940d9e9051de9b4fa2852e838381b5eb503d6d85fcd15f6f2c",
+  "native_microbenchmark": {
+    "kind": "diagnostic native microbenchmark, not SQL or official FTS benchmark",
+    "test_sha256": "22239539e3bf477f9ed0a179f06e95f6482da15aed5f70a4c55bf07083931113",
+    "baseline_commit": "d719f55ec7b7507d3e726a0e665422f41566d30d",
+    "candidate_source_patch_sha256": "5cb5fc6c8285e3940d9e9051de9b4fa2852e838381b5eb503d6d85fcd15f6f2c",
+    "cpu_affinity": [
+      4,
+      5,
+      6,
+      7
+    ],
+    "sequence": [
+      "old",
+      "candidate",
+      "candidate",
+      "old",
+      "old",
+      "candidate"
+    ],
+    "binaries": {
+      "old": {
+        "path": "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/test_fts_word_map",
+        "sha256": "0ac39a15477d6dfc31b0611b2c04858de3339c00aacf7b1b09157da24db8e591"
+      },
+      "candidate": {
+        "path": "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/test_fts_word_map",
+        "sha256": "cda517fd5fdfdf67fa521fa22c10be0bfe07fc6a23ee9910e156c79a3760cb44"
+      }
+    },
+    "workloads": {
+      "stopword_reads": {
+        "operations_per_process": 4000000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 1.0680645229876973,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=100"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/stopword_reads-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 0.8177160459454171,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=100"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/stopword_reads-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 0.5166790019720793,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=100"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/stopword_reads-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 1.0681650139740668,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=100"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/stopword_reads-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 0.9179508929955773,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=100"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/stopword_reads-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 0.6170522919856012,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=100"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/stopword_reads-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 1.0180601433191139,
+          "candidate": 0.6504824466343658
+        },
+        "median_sec": {
+          "old": 1.0680645229876973,
+          "candidate": 0.6170522919856012
+        },
+        "mean_time_reduction": 0.36105695630747203,
+        "median_time_reduction": 0.4222705850583628
+      },
+      "beng_documents": {
+        "operations_per_process": 200000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 1.1185011220513843,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/beng_documents-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 0.7670885020052083,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/beng_documents-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 0.7673249069484882,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/beng_documents-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 0.9676557440543547,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/beng_documents-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 1.0680042509920895,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/beng_documents-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 0.7172071199747734,
+            "exit_code": 0,
+            "command": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round3-native-micro-20261026T151228942881Z/beng_documents-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 1.0513870390326094,
+          "candidate": 0.75054017630949
+        },
+        "median_sec": {
+          "old": 1.0680042509920895,
+          "candidate": 0.7670885020052083
+        },
+        "mean_time_reduction": 0.2861428299515004,
+        "median_time_reduction": 0.281755197797532
+      }
+    },
+    "limitations": [
+      "Process and thread creation and assertions are included.",
+      "No SQL, networking, index construction or query execution is measured.",
+      "CPU affinity is identical but CPUs are not exclusive and frequency is not fixed.",
+      "Three observations per binary are diagnostic; they do not predict the competition score.",
+      "Every timed trial is retained. The earlier build-overlap pilot is excluded in advance from this post-build comparison and preserved separately."
+    ]
+  },
+  "correctness": {
+    "baseline_tests_passed": 5,
+    "candidate_tests_passed": 5,
+    "identical_test_source_sha256": "22239539e3bf477f9ed0a179f06e95f6482da15aed5f70a4c55bf07083931113",
+    "baseline_binary_sha256": "0ac39a15477d6dfc31b0611b2c04858de3339c00aacf7b1b09157da24db8e591",
+    "candidate_binary_sha256": "cda517fd5fdfdf67fa521fa22c10be0bfe07fc6a23ee9910e156c79a3760cb44",
+    "xml_results": [
+      "run-logs/seekdb-fts-unit-round2-reference-fixed-20261026T150535037845Z/gtest.xml",
+      "run-logs/seekdb-fts-unit-round3-candidate-20261026T151140682683Z/gtest.xml"
+    ]
+  },
+  "release_build": {
+    "command": [
+      "./build.sh",
+      "release",
+      "--make",
+      "-j24"
+    ],
+    "repo": "/home/ganzw/oceanbase/seekdb",
+    "source_commit": "d719f55ec7b7507d3e726a0e665422f41566d30d",
+    "dirty_paths_at_start": [
+      " M src/data_plane/api/data_plane/fts/ob_fts_struct.h",
+      " M src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp",
+      " M src/sql/das/iter/ob_das_text_retrieval_merge_iter.cpp",
+      " M src/sql/optimizer/ob_join_order.cpp",
+      " M src/storage/fts/ob_fts_stop_word.h",
+      "?? unittest/storage/"
+    ],
+    "exit_code": 0,
+    "log": "/home/ganzw/oceanbase/run-logs/seekdb-build-20261026T150752014017Z.log"
+  },
+  "official_benchmark_assets_sha256": {
+    "fts_large_bench.sh": "596ea5d1c0038e666b78aa94bef22d2dfb87ffc9e84dbc7e2a1da1f746424462",
+    "fts_large_bench_baseline.json": "f4e97eddb2e49c982b967fc8047f7cf37177eebe53d648f6746d85aacda91f0c",
+    "fts_large_bench_gen.py": "b0c816dd8211ac0471f60b72a37a3fb5c62580357a5b6d7ac95f5a8c2e3f143d",
+    "fts_large_bench_score.py": "bea52eb1c68d05693bb3ac5b910ab0e2fa0e70e01582f40466898ee1e2e3ef55",
+    "fts_large_bench_setup.sql": "311826751df7f51ac45156fb4284aeca9bd9197370aceb88f4fb92832b458108"
+  },
+  "sql_and_benchmark_limitation": {
+    "date": "2026-10-27",
+    "attempt": "official default benchmark on a fresh private instance",
+    "baseline_commit": "d719f55ec7b7507d3e726a0e665422f41566d30d",
+    "command": [
+      "python",
+      "scripts/run_seekdb_fts.py",
+      "--label",
+      "round3-before",
+      "--binary",
+      ".tooling/seekdb-fts-round2-d719f55e",
+      "--binary-commit",
+      "d719f55ec7b7507d3e726a0e665422f41566d30d",
+      "--cpu-list",
+      "4,5,6,7",
+      "--repeats",
+      "3"
+    ],
+    "status": "blocked_before_server_start",
+    "error": "PermissionError: [Errno 1] Operation not permitted in socket.socket() at scripts/run_seekdb_fts.py:48",
+    "sql_tests_run": false,
+    "benchmarks_run": 0,
+    "official_assets_modified": false
+  },
+  "official_score": null
+}

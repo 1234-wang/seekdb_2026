@@ -41,6 +41,12 @@ public:
   {
   }
 
+  ObDATrieHit()
+      : dict_(nullptr), char_cnt_(0), start_pos_(0), end_pos_(0), base_idx_(0),
+        current_check_(0), is_match_(false), is_prefix_(false)
+  {
+  }
+
   bool is_match() const { return is_match_; }
 
   bool is_prefix() const { return is_prefix_; }
