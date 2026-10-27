@@ -26,6 +26,8 @@ using namespace oceanbase::sql;
 
 namespace
 {
+const int64_t MAX_REMOVE_DUPLICATE_EXPRS_COUNT = 1024;
+
 int has_scalar_in_predicate(ObRawExpr *expr, bool &has_in)
 {
   int ret = OB_SUCCESS;
@@ -2600,6 +2602,7 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
   /* basic case
   * A and A -> A
   * A or A -> A
+  * c1 > 1 and c1 > 10 -> c1 > 1
   */
   int ret = OB_SUCCESS;
   const int64_t param_count = conditions.count();
@@ -2611,10 +2614,10 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
     //select * from t1 where c1 > 1 and c1 > 1
     //like above stmt, and expr in level 0 is process here
     ObSEArray<ObRawExpr *, 4> param_conds;
-    if (param_count <= 1 || param_count > 100) {
+    if (param_count <= 1 || param_count > MAX_REMOVE_DUPLICATE_EXPRS_COUNT) {
       /* use too much resource and need add lots of constraints */
     } else if (OB_FAIL(param_conds.assign(conditions))) {
-    } else if (OB_FAIL(do_remove_duplicate_exprs(*query_ctx, param_conds))) {
+    } else if (OB_FAIL(do_remove_duplicate_exprs(*query_ctx, param_conds, T_OP_AND))) {
     } else if (param_conds.count() == conditions.count()) {
       //do nothing
     } else {
@@ -2655,10 +2658,10 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
     } else if (expr->get_expr_type() == T_OP_OR || expr->get_expr_type() == T_OP_AND) {
       ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
       ObSEArray<ObRawExpr *, 4> param_conds;
-      if (op_expr->get_param_count() > 100) {
+      if (op_expr->get_param_count() > MAX_REMOVE_DUPLICATE_EXPRS_COUNT) {
         /* use too much resource and need add lots of constraints */
       } else if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
-      } else if (OB_FAIL(do_remove_duplicate_exprs(query_ctx, param_conds))) {
+      } else if (OB_FAIL(do_remove_duplicate_exprs(query_ctx, param_conds, expr->get_expr_type()))) {
       } else if (param_conds.count() == op_expr->get_param_count()) {
         //do nothing
       } else if (param_conds.count() == 1) {
@@ -2681,7 +2684,8 @@ int ObTransformSimplifyExpr::recursive_remove_duplicate_exprs(ObQueryCtx &query_
 }
 
 int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
-                                                       ObIArray<ObRawExpr*> &exprs)
+                                                       ObIArray<ObRawExpr*> &exprs,
+                                                       const ObItemType parent_op_type)
 {
   int ret = OB_SUCCESS;
   const int64_t param_count = exprs.count();
@@ -2707,6 +2711,102 @@ int ObTransformSimplifyExpr::do_remove_duplicate_exprs(ObQueryCtx &query_ctx,
           break;
         } else if (!cmp_ctx.equal_pairs_.empty()) {
           cmp_ctx.equal_pairs_.reset();
+        } else {
+          bool cand_implies_other = false;
+          if (OB_FAIL(is_bound_implied_by(exprs.at(i), exprs.at(j), cand_implies_other))) {
+            // the pair is not a dominating bound pair, keep both exprs
+            ret = OB_SUCCESS;
+          } else if (T_OP_AND == parent_op_type) {
+            // keep the tighter bound, drop the bound implied by it
+            if (cand_implies_other) {
+              if (OB_FAIL(exprs.remove(j))) {
+              }
+            } else if (OB_FAIL(exprs.remove(i))) {
+            }
+            break;
+          } else if (T_OP_OR == parent_op_type) {
+            // keep the looser bound, drop the bound that implies it
+            if (cand_implies_other) {
+              if (OB_FAIL(exprs.remove(i))) {
+              }
+            } else if (OB_FAIL(exprs.remove(j))) {
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::is_bound_implied_by(ObRawExpr *cand_expr,
+                                                 ObRawExpr *other_expr,
+                                                 bool &cand_implies_other)
+{
+  int ret = OB_NOT_SUPPORTED;
+  cand_implies_other = false;
+  const ObItemType cand_op_type = cand_expr->get_expr_type();
+  const ObItemType other_op_type = other_expr->get_expr_type();
+  const bool cand_is_lower = (T_OP_LT == cand_op_type || T_OP_LE == cand_op_type);
+  const bool other_is_lower = (T_OP_LT == other_op_type || T_OP_LE == other_op_type);
+  const bool cand_is_upper = (T_OP_GT == cand_op_type || T_OP_GE == cand_op_type);
+  const bool other_is_upper = (T_OP_GT == other_op_type || T_OP_GE == other_op_type);
+  if ((!cand_is_lower && !cand_is_upper)
+      || (!other_is_lower && !other_is_upper)
+      || cand_is_lower != other_is_lower
+      || 2 != cand_expr->get_param_count()
+      || 2 != other_expr->get_param_count()) {
+    // only same-direction bound comparisons on the same operand are considered
+  } else {
+    ObRawExpr *cand_left = cand_expr->get_param_expr(0);
+    ObRawExpr *cand_bound = cand_expr->get_param_expr(1);
+    ObRawExpr *other_left = other_expr->get_param_expr(0);
+    ObRawExpr *other_bound = other_expr->get_param_expr(1);
+    if (OB_ISNULL(cand_left) || OB_ISNULL(cand_bound)
+        || OB_ISNULL(other_left) || OB_ISNULL(other_bound)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (!cand_bound->is_const_raw_expr()
+               || !other_bound->is_const_raw_expr()) {
+      // only literal bounds can be compared during rewrite
+    } else {
+      const ObObj &cand_value = static_cast<const ObConstRawExpr *>(cand_bound)->get_value();
+      const ObObj &other_value = static_cast<const ObConstRawExpr *>(other_bound)->get_value();
+      if (cand_value.is_null() || other_value.is_null()) {
+        // NULL bounds are rewritten by the null-condition pass
+      } else if (cand_value.get_type() != other_value.get_type()) {
+        // only identical bound types are compared to avoid mixed
+        // signed/unsigned integer or numeric conversion pitfalls
+      } else {
+        ObQuestionmarkEqualCtx equal_ctx(false);
+        if (!cand_left->same_as(*other_left, &equal_ctx) || !equal_ctx.equal_pairs_.empty()) {
+          // different operands, or operands that contain question marks
+        } else {
+          bool cand_lt_other = false;
+          bool cand_eq_other = false;
+          if (OB_FAIL(ObTransformUtils::compare_const_expr_result(
+              ctx_, *cand_bound, T_OP_LT, *other_bound, cand_lt_other))) {
+            // non-numeric bounds cannot be ordered here, keep both exprs
+            ret = OB_NOT_SUPPORTED;
+          } else if (OB_FAIL(ObTransformUtils::compare_const_expr_result(
+              ctx_, *cand_bound, T_OP_EQ, *other_bound, cand_eq_other))) {
+            ret = OB_NOT_SUPPORTED;
+          } else {
+            const bool cand_is_strict = (T_OP_LT == cand_op_type || T_OP_GT == cand_op_type);
+            const bool other_is_strict = (T_OP_LT == other_op_type || T_OP_GT == other_op_type);
+            bool cand_is_tighter = false;
+            if (cand_is_lower) {
+              // a smaller lower bound is tighter: c1 < 10 implies c1 < 20
+              cand_is_tighter = cand_lt_other
+                                || (cand_eq_other && cand_is_strict && !other_is_strict);
+            } else {
+              // a larger upper bound is tighter: c1 > 20 implies c1 > 10
+              cand_is_tighter = (!cand_lt_other && !cand_eq_other)
+                                || (cand_eq_other && cand_is_strict && !other_is_strict);
+            }
+            cand_implies_other = cand_is_tighter;
+            ret = OB_SUCCESS;
+          }
         }
       }
     }
