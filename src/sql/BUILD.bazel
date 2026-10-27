@@ -421,3 +421,11 @@ cc_library(
     tags = ["manual"],
     visibility = ["//src/observer:__pkg__"],
 )
+
+cc_library(
+    name = "ai_function_test_headers",
+    testonly = True,
+    deps = _SQL_RUNTIME_IMPLEMENTATION_DEPS,
+    tags = ["manual"],
+    visibility = ["//unittest/sql/engine/expr:__pkg__"],
+)
