@@ -15,7 +15,7 @@ C++ STL provides many convenient containers, such as vector, map, unordered_map,
 # String
 The string class provided by seekdb is ObString. Code reference ob_string.h.
 
-Before introducing ObString's interface, let's first look at ObSring's memory management method, which will make it easier to understand ObString's interface design.
+Before introducing ObString's interface, let's first look at ObString's memory management method, which will make it easier to understand ObString's interface design.
 
 There are two biggest differences from STL string:
 1. ObString does not manage memory, memory is transferred from the outside, and the life cycle of the memory buffer is also controlled externally;
@@ -71,7 +71,7 @@ obstr_size_t size() const;
 const char *ptr() const;
 
 /**
- * Case insensitively comparison
+ * Case-insensitive comparison
  *
  * @NOTE: Although ObString does not specify that it ends with '\0',
  * strncasecmp is used in the implementation here, so please pay attention
