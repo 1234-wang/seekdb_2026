@@ -2298,7 +2298,7 @@ int ObServer::init_global_kvcache()
       cache_memory_limit, bucket_num))) {
   } else if (OB_FAIL(ObKVGlobalCache::get_instance().init(bucket_num,
                                                    max_cache_size,
-                                                   lib::ACHUNK_SIZE,
+                                                   ObKVCacheStore::DEFAULT_BLOCK_SIZE,
                                                    0,
                                                    runtime_options))) {
   }

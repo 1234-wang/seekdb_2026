@@ -67,6 +67,8 @@ class ObKVCacheStore final : public ObIKVCacheStore,
 {
 public:
   static constexpr int64_t MAX_CACHE_SIZE = MAX_KVCACHE_MEMORY_SIZE;
+  // Preserve the existing cache block capacity (2 MiB - 16 KiB).
+  static constexpr int64_t DEFAULT_BLOCK_SIZE = 2080768;
   ObKVCacheStore();
   virtual ~ObKVCacheStore();
   int init(const int64_t max_cache_size,
@@ -147,7 +149,7 @@ private:
 
 public:
   static const int64_t MAX_MB_HANDLE_NUM = 
-        MAX_CACHE_SIZE / lib::ACHUNK_SIZE
+        MAX_CACHE_SIZE / DEFAULT_BLOCK_SIZE
         + 2 * (ObKVCacheStore::WASH_THREAD_RETIRE_LIMIT
                + ObKVCacheStore::RETIRE_LIMIT * OB_MAX_THREAD_NUM);
 
