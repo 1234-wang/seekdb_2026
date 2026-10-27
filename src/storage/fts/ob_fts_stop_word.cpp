@@ -26,6 +26,21 @@ namespace oceanbase
 {
 namespace storage
 {
+namespace
+{
+// casedown is an identity for a string that has no upper case ascii letter and
+// no multi byte character, so the copy and the case conversion can be skipped.
+inline bool is_ascii_casedown_noop(const char *str, const int64_t len)
+{
+  for (int64_t i = 0; i < len; ++i) {
+    const unsigned char c = static_cast<unsigned char>(str[i]);
+    if (c >= 0x80 || (c >= 'A' && c <= 'Z')) {
+      return false;
+    }
+  }
+  return true;
+}
+} // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // class ObStopWordChecker
@@ -164,15 +179,20 @@ int ObAddWord::casedown_word(const ObFTWord &src, ObFTWord &dst)
   if (OB_UNLIKELY(src.empty())) {
     ret = OB_INVALID_ARGUMENT;
   } else if (flag_.casedown()) {
-    ObString dst_str;
-    if (OB_FAIL(ObCharset::tolower(
-                    word_meta_.get_collation_type(),
-                    src.get_word().get_string(),
-                    dst_str,
-                    allocator_))) {
+    const ObString src_str = src.get_word().get_string();
+    if (is_ascii_casedown_noop(src_str.ptr(), src_str.length())) {
+      dst = src;
     } else {
-      ObFTWord tmp(dst_str.length(), dst_str.ptr(), word_meta_);
-      dst = tmp;
+      ObString dst_str;
+      if (OB_FAIL(ObCharset::tolower(
+                      word_meta_.get_collation_type(),
+                      src_str,
+                      dst_str,
+                      allocator_))) {
+      } else {
+        ObFTWord tmp(dst_str.length(), dst_str.ptr(), word_meta_);
+        dst = tmp;
+      }
     }
   } else {
     dst = src;
