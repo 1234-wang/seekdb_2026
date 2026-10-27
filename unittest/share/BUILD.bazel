@@ -1,0 +1,13 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
+package(default_testonly = True)
+
+cc_test(
+    name = "test_rs_timeout_policy",
+    srcs = ["test_rs_timeout_policy.cpp"],
+    linkstatic = True,
+    deps = [
+        "//src/share:rs_timeout_policy",
+        "//bazel/third_party:gtest",
+    ],
+)
