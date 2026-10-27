@@ -33,6 +33,9 @@
 #include <linux/if_packet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -186,51 +189,106 @@ int ObUUIDNode::init()
     }
   }
 #else
-  // Linux: Use ioctl to get MAC address
+  // Linux: prefer a real MAC address. Restricted sandboxes can hide every
+  // interface, so a failed or empty discovery falls back to a random node id.
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
+  bool mac_addr_found = false;
+  int discovery_errno = 0;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
+    discovery_errno = errno;
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("socket failed while discovering MAC address", K(ret), K(discovery_errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
+      discovery_errno = errno;
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF", K(ret), K(discovery_errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
+      for (; it != end && !mac_addr_found; ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
         } else {
           strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
+          ifr.ifr_name[IFNAMSIZ - 1] = '\0';
           if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
             if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
               if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
-                MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
-                mac_addr_found = true;
-                break;
+                bool all_zero = true;
+                for (int i = 0; i < 6; ++i) {
+                  if (ifr.ifr_hwaddr.sa_data[i] != 0) {
+                    all_zero = false;
+                    break;
+                  }
+                }
+                if (!all_zero) {
+                  MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
+                  mac_addr_found = true;
+                }
               } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
+                discovery_errno = errno;
+                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(discovery_errno), K(it->ifr_name));
               }
             }
           } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
+            discovery_errno = errno;
+            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(discovery_errno), K(it->ifr_name));
           }
         }
-      }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
+      }
+      if (mac_addr_found) {
+        ret = OB_SUCCESS;
         is_inited_ = true;
+      } else if (OB_SUCC(ret)) {
+        ret = OB_ERR_UNEXPECTED;
       }
     }
     close(sock);
+  }
+  if (!mac_addr_found) {
+    const int saved_ret = ret;
+    unsigned char node[6];
+    int got = 0;
+    int fd = open("/dev/urandom", O_RDONLY);
+    ret = OB_SUCCESS;
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("open /dev/urandom failed for UUID node fallback", K(ret), K(errno), K(saved_ret));
+    } else {
+      while (got < 6) {
+        const int n = static_cast<int>(read(fd, node + got, static_cast<size_t>(6 - got)));
+        if (n < 0) {
+          if (EINTR == errno) {
+            continue;
+          }
+          discovery_errno = errno;
+          break;
+        }
+        if (0 == n) {
+          break;
+        }
+        got += n;
+      }
+      close(fd);
+      if (6 != got) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to read a UUID node id from /dev/urandom", K(ret), K(got), K(discovery_errno));
+      } else {
+        // RFC 9562 section 6.10: a generated node id sets the multicast bit.
+        node[0] = static_cast<unsigned char>(node[0] | 0x01);
+        MEMCPY(mac_addr_, node, 6);
+        mac_addr_found = true;
+        is_inited_ = true;
+        LOG_WARN("UUID node fell back to a random id because no MAC address was available",
+                 K(saved_ret), K(discovery_errno));
+      }
+    }
   }
 #endif
   return ret;
