@@ -1715,8 +1715,6 @@ int ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(ObIAllocator &al
   } else {
     uint64_t args_count = args_array->element_count();
     ObArray<ObString> arg_values;
-    int64_t max_result_len = template_str.length();
-    char *result_buf = NULL;
     for (uint64_t i = 0; OB_SUCC(ret) && i < args_count; i++) {
       ObJsonNode *arg_node = args_array->get_value(i);
       ObString arg_value;
@@ -1726,25 +1724,24 @@ int ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(ObIAllocator &al
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(arg_values.push_back(arg_value))) {
-        } else {
-          max_result_len += arg_value.length();
         }
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(result_buf = static_cast<char *>(allocator.alloc(max_result_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      int64_t result_pos = 0;
+      // The length of the result is not known in advance: one argument may be
+      // referenced by more than one placeholder, so the buffer grows on demand
+      // instead of being sized by the number of arguments.
+      ObStringBuffer result_buf(&allocator);
       const char *template_ptr = template_str.ptr();
       int64_t template_len = template_str.length();
-      
+
       for (int64_t i = 0; i < template_len && OB_SUCC(ret); i++) {
         if (template_ptr[i] == '{') {
           int64_t start_pos = i;
           int64_t end_pos = start_pos;
           bool found_end = false;
-          
+
           for (int64_t j = start_pos + 1; j < template_len && !found_end; j++) {
             if (template_ptr[j] == '}') {
               end_pos = j;
@@ -1753,53 +1750,54 @@ int ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(ObIAllocator &al
               break;
             }
           }
-          
+
           if (found_end && end_pos > start_pos + 1) {
             ObString index_str;
             index_str.assign_ptr(template_ptr + start_pos + 1, static_cast<int32_t>(end_pos - start_pos - 1));
-            
+
             int64_t index = 0;
             bool valid_index = true;
             for (int64_t k = 0; k < index_str.length() && valid_index; k++) {
               if (index_str.ptr()[k] >= '0' && index_str.ptr()[k] <= '9') {
-                index = index * 10 + (index_str.ptr()[k] - '0');
+                if (index < static_cast<int64_t>(args_count)) {
+                  index = index * 10 + (index_str.ptr()[k] - '0');
+                } else {
+                  // The index is out of range already: stop accumulating so
+                  // that a huge placeholder index cannot overflow.
+                  valid_index = false;
+                }
               } else {
                 valid_index = false;
               }
             }
-            
+
             if (valid_index && index >= 0 && static_cast<uint64_t>(index) < args_count) {
               ObString arg_value = arg_values.at(index);
-              if (result_pos + arg_value.length() <= max_result_len) {
-                MEMCPY(result_buf + result_pos, arg_value.ptr(), arg_value.length());
-                result_pos += arg_value.length();
-              } else {
-                ret = OB_BUF_NOT_ENOUGH;
+              if (OB_FAIL(result_buf.append(arg_value))) {
+                LOG_WARN("fail to append the argument value", K(ret));
               }
-              
+
               i = end_pos;
             } else {
               ret = OB_INVALID_ARGUMENT;
               LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_prompt: invalid placeholder index");
             }
           } else {
-            if (result_pos < max_result_len) {
-              result_buf[result_pos++] = template_ptr[i];
-            } else {
-              ret = OB_BUF_NOT_ENOUGH;
+            if (OB_FAIL(result_buf.append(template_ptr + i, 1))) {
+              LOG_WARN("fail to append the template character", K(ret));
             }
           }
         } else {
-          if (result_pos < max_result_len) {
-            result_buf[result_pos++] = template_ptr[i];
-          } else {
-            ret = OB_BUF_NOT_ENOUGH;
+          if (OB_FAIL(result_buf.append(template_ptr + i, 1))) {
+            LOG_WARN("fail to append the template character", K(ret));
           }
         }
       }
-      
+
       if (OB_SUCC(ret)) {
-        replaced_prompt_str.assign_ptr(result_buf, static_cast<int32_t>(result_pos));
+        if (OB_FAIL(result_buf.get_result_string(replaced_prompt_str))) {
+          LOG_WARN("fail to get the replaced prompt string", K(ret));
+        }
       }
     }
   }
