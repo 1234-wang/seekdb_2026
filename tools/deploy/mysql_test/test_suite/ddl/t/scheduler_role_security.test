@@ -1,6 +1,4 @@
-# Job ownership and SUPER held only through an enabled role.
---disable_query_log
---disable_result_log
+# Scheduler ownership and enabled-role SUPER; verify every successful or rejected state change.
 --disable_warnings
 DROP USER IF EXISTS 'scheduler_authz_owner'@'%';
 DROP USER IF EXISTS 'scheduler_authz_caller'@'%';
@@ -20,36 +18,49 @@ VALUES ('SCHEDULER_AUTHZ_TEST_JOB', 990000001, 'test',
         'scheduler_authz_owner@%', 'scheduler_authz_owner@%',
         '2099-01-01 00:00:00', 'null', 0, 'STORED_PROCEDURE',
         'DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC', false, false);
+SELECT job_name, enabled FROM oceanbase.__all_scheduler_job
+WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
 connect (scheduler_owner,$OBMYSQL_MS0,scheduler_authz_owner,,information_schema,$OBMYSQL_PORT);
+SELECT CURRENT_USER() AS actor;
 CALL DBMS_SCHEDULER.ENABLE('SCHEDULER_AUTHZ_TEST_JOB');
+connection default;
+SELECT job_name, enabled FROM oceanbase.__all_scheduler_job
+WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
+connection scheduler_owner;
 CALL DBMS_SCHEDULER.DISABLE('SCHEDULER_AUTHZ_TEST_JOB');
---enable_result_log
---echo scheduler owner may change own job
---disable_result_log
+connection default;
+SELECT job_name, enabled FROM oceanbase.__all_scheduler_job
+WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
 connect (scheduler_caller,$OBMYSQL_MS0,scheduler_authz_caller,,information_schema,$OBMYSQL_PORT);
+SELECT CURRENT_USER() AS actor;
 SET ROLE NONE;
 --error 1227
 CALL DBMS_SCHEDULER.ENABLE('SCHEDULER_AUTHZ_TEST_JOB');
---enable_result_log
---echo scheduler non-owner denied
---disable_result_log
+connection default;
+SELECT job_name, enabled FROM oceanbase.__all_scheduler_job
+WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
+connection scheduler_caller;
 SET ROLE ALL;
 CALL DBMS_SCHEDULER.ENABLE('SCHEDULER_AUTHZ_TEST_JOB');
---enable_result_log
---echo scheduler role-only SUPER succeeds
---disable_result_log
+connection default;
+SELECT job_name, enabled FROM oceanbase.__all_scheduler_job
+WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
+connection scheduler_caller;
 SET ROLE NONE;
 --error 1227
 CALL DBMS_SCHEDULER.DISABLE('SCHEDULER_AUTHZ_TEST_JOB');
---enable_result_log
---echo scheduler disabled role denied
---disable_result_log
 connection default;
+SELECT job_name, enabled FROM oceanbase.__all_scheduler_job
+WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
+connection scheduler_caller;
+SET ROLE ALL;
+CALL DBMS_SCHEDULER.DISABLE('SCHEDULER_AUTHZ_TEST_JOB');
+connection default;
+SELECT job_name, enabled FROM oceanbase.__all_scheduler_job
+WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
 disconnect scheduler_owner;
 disconnect scheduler_caller;
 DELETE FROM oceanbase.__all_scheduler_job WHERE job_name = 'SCHEDULER_AUTHZ_TEST_JOB';
 DROP USER 'scheduler_authz_owner'@'%';
 DROP USER 'scheduler_authz_caller'@'%';
 DROP ROLE scheduler_authz_admin;
---enable_query_log
---enable_result_log
