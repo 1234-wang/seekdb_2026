@@ -27,14 +27,14 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -81,6 +81,44 @@ ObUUIDNode::ObUUIDNode()
   (void)init();
 }
 
+
+#if !defined(__EMSCRIPTEN__) && !defined(_WIN32) && !defined(__APPLE__)
+/*
+ * RFC 4122 section 4.5: a node id built from random bytes may stand in for an
+ * IEEE 802 address that cannot be obtained, as long as the multicast bit is
+ * set, so that the value can never be mistaken for a real hardware address.
+ */
+static int generate_random_uuid_node(unsigned char *node, const int64_t len)
+{
+  int ret = OB_SUCCESS;
+  int fd = -1;
+  if (OB_ISNULL(node) || len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid random node id buffer", K(ret), KP(node), K(len));
+  } else if ((fd = open("/dev/urandom", O_RDONLY)) < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to open /dev/urandom", K(ret), K(errno));
+  } else {
+    int64_t filled = 0;
+    while (OB_SUCC(ret) && filled < len) {
+      const ssize_t read_len = read(fd, node + filled, len - filled);
+      if (read_len > 0) {
+        filled += read_len;
+      } else if (read_len < 0 && EINTR == errno) {
+        // interrupted before reading anything, read the rest again
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to read /dev/urandom", K(ret), K(errno), K(filled), K(len));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      node[0] |= 0x01;  // multicast bit, never set in an IEEE 802 address
+    }
+    close(fd);
+  }
+  return ret;
+}
+#endif
 
 /*
  * get and set mac address
@@ -180,18 +218,12 @@ int ObUUIDNode::init()
       freeifaddrs(ifaddr);
     }
     if (OB_SUCC(ret) && !mac_addr_found) {
-      // RFC 4122 section 4.5: when MAC address is unavailable (Android sandbox),
-      // use random bytes with the multicast bit set as the node ID.
-      int fd = open("/dev/urandom", O_RDONLY);
-      if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
-        mac_addr_[0] |= 0x01;  // set multicast bit
+      // no interface exposes a MAC address inside an Android sandbox
+      if (OB_FAIL(generate_random_uuid_node(mac_addr_, sizeof(mac_addr_)))) {
+        LOG_WARN("failed to generate a random UUID node id", K(ret));
+      } else {
         mac_addr_found = true;
         LOG_INFO("using random UUID node ID (no MAC available on Android)");
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-      }
-      if (fd >= 0) {
-        close(fd);
       }
     }
     if (OB_SUCC(ret) && mac_addr_found) {
@@ -203,20 +235,19 @@ int ObUUIDNode::init()
   struct ifreq ifr;
   struct ifconf ifc;
   char buf[1024];
+  bool mac_addr_found = false;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("failed to open a socket to enumerate interfaces", K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF", K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
+      for (; it != end && !mac_addr_found; ++it) {
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
         } else {
@@ -226,7 +257,6 @@ int ObUUIDNode::init()
               if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
                 MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
                 mac_addr_found = true;
-                break;
               } else {
                 LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
               }
@@ -236,14 +266,26 @@ int ObUUIDNode::init()
           }
         }
       }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
+      if (!mac_addr_found) {
+        LOG_WARN("no non-loopback interface reports a MAC address",
+                 "interface_count",
+                 static_cast<int64_t>(ifc.ifc_len / sizeof(ifreq)));
       }
     }
     close(sock);
+  }
+  if (mac_addr_found) {
+    is_inited_ = true;
+  } else if (OB_FAIL(generate_random_uuid_node(mac_addr_, sizeof(mac_addr_)))) {
+    // A container or sandbox can keep an ordinary user from enumerating
+    // interfaces, and a host may expose no non-loopback interface at all. The
+    // server still has to start there, so a random node id replaces the MAC
+    // address instead of failing the whole initialization.
+    LOG_ERROR("failed to init uuid node, no MAC address and no random node id",
+              K(ret));
+  } else {
+    is_inited_ = true;
+    LOG_INFO("no MAC address is available, using a random UUID node id");
   }
 #endif
   return ret;
