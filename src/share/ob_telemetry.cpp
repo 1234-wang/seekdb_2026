@@ -1260,7 +1260,9 @@ int send_telemetry_by_libcurl(const char *url, const ObString &json_str)
       ret = OB_CURL_ERROR;
     } else {
       curl_easy_setopt(curl, CURLOPT_URL, url);
-      curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+      // Skip CA trust verification to avoid depending on distro-specific CA bundle paths.
+      // Hostname verification remains enabled, but this does not authenticate the peer.
+      curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
       curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
       curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "https");
       curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
