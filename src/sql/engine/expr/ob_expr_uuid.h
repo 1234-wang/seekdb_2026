@@ -40,6 +40,34 @@ struct ObUUIDNode
   int init();
   unsigned char mac_addr_[6];
   bool is_inited_;
+  /**
+   * @brief Look up the MAC address of a non-loopback network interface.
+   * @param mac_addr [out] the 6 bytes MAC address
+   * @return OB_SUCCESS if a physical MAC address was found, otherwise an error
+   */
+  static int find_mac_address(unsigned char *mac_addr);
+  /**
+   * @brief Get the MAC address of a non-loopback interface with getifaddrs().
+   *        Unlike ioctl(SIOCGIFCONF), getifaddrs() does not need CAP_NET_ADMIN,
+   *        so it also works in the sandboxes where the ioctl path is denied.
+   * @param mac_addr [out] the 6 bytes MAC address
+   * @return OB_SUCCESS if a physical MAC address was found, otherwise an error
+   */
+  static int get_mac_by_getifaddrs(unsigned char *mac_addr);
+  /**
+   * @brief Generate a random node id for the UUID, see RFC 4122 section 4.5.
+   *        The multicast bit is set to mark the node id as a random one.
+   * @param mac_addr [out] the 6 bytes node id
+   * @return OB_SUCCESS if the node id was generated, otherwise an error
+   */
+  static int gen_random_node_id(unsigned char *mac_addr);
+  /**
+   * @brief The interface lookup used by init(). It is a function pointer so that
+   *        the unit test can simulate an environment where no physical MAC
+   *        address can be obtained.
+   */
+  typedef int (*MacFinder)(unsigned char *mac_addr);
+  static MacFinder mac_finder_;
 };
 
 class ObUUIDTime
