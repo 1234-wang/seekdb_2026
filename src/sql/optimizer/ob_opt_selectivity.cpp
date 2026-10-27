@@ -3979,14 +3979,61 @@ int ObOptSelectivity::calculate_expr_nns(const OptTableMetas &table_metas,
                                          double &nns)
 {
   int ret = OB_SUCCESS;
+  nns = 1.0;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (expr->is_column_ref_expr()) {
     if (OB_FAIL(get_column_ndv_and_nns(table_metas, ctx, *expr, NULL, &nns))) {
     }
+  } else if (expr->is_static_scalar_const_expr()) {
+    ObObj value;
+    bool got_result = false;
+    if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(
+                    ctx.get_opt_ctx().get_exec_ctx(), expr, value, got_result, ctx.get_allocator()))) {
+    } else if (got_result) {
+      nns = value.is_null() ? 0.0 : 1.0;
+    }
+  } else if (T_FUN_SYS_CAST == expr->get_expr_type() &&
+             expr->get_param_count() >= 1 &&
+             NULL != expr->get_param_expr(0) &&
+             ob_is_numeric_type(expr->get_data_type()) &&
+             ob_is_numeric_type(expr->get_param_expr(0)->get_data_type())) {
+    if (OB_FAIL(SMART_CALL(calculate_expr_nns(table_metas, ctx, expr->get_param_expr(0), nns)))) {
+    }
+  } else if ((T_FUN_SYS_DATE == expr->get_expr_type() || is_dense_time_expr_type(expr->get_expr_type())) &&
+             expr->get_param_count() == 1) {
+    if (OB_FAIL(SMART_CALL(calculate_expr_nns(table_metas, ctx, expr->get_param_expr(0), nns)))) {
+    }
+  } else if (T_FUN_SYS_EXTRACT == expr->get_expr_type() && expr->get_param_count() == 2) {
+    if (OB_FAIL(SMART_CALL(calculate_expr_nns(table_metas, ctx, expr->get_param_expr(1), nns)))) {
+    }
+  } else if ((T_OP_ADD == expr->get_expr_type() || T_OP_MINUS == expr->get_expr_type() ||
+              T_OP_MUL == expr->get_expr_type() || T_OP_DIV == expr->get_expr_type()) &&
+             expr->get_param_count() == 2) {
+    const ObRawExpr *left = expr->get_param_expr(0);
+    const ObRawExpr *right = expr->get_param_expr(1);
+    if (OB_ISNULL(left) || OB_ISNULL(right)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (left->is_static_scalar_const_expr() != right->is_static_scalar_const_expr()) {
+      const bool left_const = left->is_static_scalar_const_expr();
+      const ObRawExpr *constant = left_const ? left : right;
+      const ObRawExpr *variable = left_const ? right : left;
+      ObObj value;
+      bool got_result = false;
+      if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(
+                      ctx.get_opt_ctx().get_exec_ctx(), constant, value, got_result, ctx.get_allocator()))) {
+      } else if (!got_result) {
+        // Keep the fallback when the constant is unavailable.
+      } else if (value.is_null()) {
+        nns = 0.0;
+      } else if (!value.is_numeric_type() || !ob_is_numeric_type(variable->get_data_type()) ||
+                 (T_OP_DIV == expr->get_expr_type() && (left_const || value.is_zero()))) {
+        // Only propagate through the arithmetic supported by range estimation.
+      } else if (OB_FAIL(SMART_CALL(calculate_expr_nns(table_metas, ctx, variable, nns)))) {
+      }
+    }
   } else {
     // todo: wuyuming.wym null propagate expr
-    nns = 1.0;
   }
   return ret;
 }
