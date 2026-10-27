@@ -38,6 +38,13 @@ struct ObUUIDNode
 {
   ObUUIDNode();
   int init();
+  // Best-effort MAC discovery fallback: generate a random node ID with the
+  // multicast bit set, as allowed by RFC 9562 (formerly RFC 4122) section 6.10,
+  // when no usable MAC address can be obtained. `reason` describes why the
+  // fallback is needed and is written to the log. Returns success only when the
+  // node was fully initialized from the CSPRNG; a genuine entropy failure
+  // remains an error and never produces a partially initialized node.
+  int init_random_node(const char *reason);
   unsigned char mac_addr_[6];
   bool is_inited_;
 };
