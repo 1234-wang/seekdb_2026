@@ -28,8 +28,10 @@ def cargo_action(ctx, command, sources, outputs, work_dir, env = {}, extra_input
         "--cargo", toolchain.cargo.path, "--rustc", toolchain.rustc.path,
         # Cargo's cc crate expects ar syntax; Apple's C++ archive action uses libtool.
         "--sources", source_manifest.path, "--target", platform.rust_target, "--cc", compiler, "--ar", "/usr/bin/ar" if platform.apple else cc.ar_executable,
-        "--",
     ]
+    if platform.os in ["linux", "android"]:
+        arguments += ["--ld", cc.ld_executable, "--nm", cc.nm_executable]
+    arguments += ["--"]
     environment = {"PYTHONHOME": toolchain.python_home}
     environment.update(env)
     # Cargo's C/C++ compiler and linker need the selected toolchain's environment.
