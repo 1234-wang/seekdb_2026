@@ -33,11 +33,14 @@
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
+#endif
+#if defined(__linux__)
 #include <fcntl.h>
 #include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
+#include "sql/engine/expr/uuid_node_fallback.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/time/ob_time_utility.h"
 using namespace oceanbase::common;
@@ -206,12 +209,13 @@ int ObUUIDNode::init()
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("UUID node interface socket unavailable; trying random node", K(ret), K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("UUID node interface enumeration failed", K(ret), K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
@@ -220,6 +224,7 @@ int ObUUIDNode::init()
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
         } else {
+          MEMSET(&ifr, 0, sizeof(ifr));
           strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
           if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
             if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
@@ -244,6 +249,33 @@ int ObUUIDNode::init()
       }
     }
     close(sock);
+  }
+  // Network enumeration may be denied in a container, or expose only loopback.
+  // UUID generation must not require relaxing that sandbox's network policy.
+  if (!is_inited_) {
+    if (make_random_uuid_node(mac_addr_, [](unsigned char *out, size_t len) {
+          // System-variable static initialization calls this before main installs
+          // OpenSSL's allocator hooks. Do not initialize OpenSSL's RNG here.
+          int fd;
+          do {
+            fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+          } while (fd < 0 && errno == EINTR);
+          bool complete = false;
+          if (fd >= 0) {
+            complete = read_uuid_entropy(out, len, [fd](unsigned char *buffer, size_t count) {
+              return read(fd, buffer, count);
+            });
+            close(fd);
+          }
+          return complete ? 1 : 0;
+        })) {
+      is_inited_ = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("UUID node initialized from random entropy (MAC unavailable)");
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("UUID initialization failed: neither MAC nor random entropy available", K(ret));
+    }
   }
 #endif
   return ret;
