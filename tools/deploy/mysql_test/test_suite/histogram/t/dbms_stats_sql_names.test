@@ -1,0 +1,29 @@
+# Regression: names in statistics DDL, CASE expressions and IN lists stay data.
+connection default;
+--disable_query_log
+--disable_warnings
+DROP DATABASE IF EXISTS stats_sql_names;
+--enable_warnings
+CREATE DATABASE stats_sql_names;
+CREATE TABLE stats_sql_names.src (`c'one` INT)
+  PARTITION BY RANGE (`c'one`) (PARTITION `p'one` VALUES LESS THAN (10), PARTITION pmax VALUES LESS THAN MAXVALUE);
+INSERT INTO stats_sql_names.src VALUES (1), (2), (20);
+CALL DBMS_STATS.GATHER_TABLE_STATS('stats_sql_names', 'src', granularity=>'ALL');
+CALL DBMS_STATS.CREATE_STAT_TABLE('stats_sql_names', 'stat`quote''x');
+CALL DBMS_STATS.EXPORT_TABLE_STATS('stats_sql_names', 'src', NULL, 'stat`quote''x', statown=>'stats_sql_names');
+--enable_query_log
+SELECT COUNT(*) > 0 AS exported_table_stats FROM stats_sql_names.`stat``quote'x` WHERE type = 'T';
+SELECT COUNT(*) > 0 AS exported_partition_name FROM stats_sql_names.`stat``quote'x` WHERE c2 = 'p''one';
+SELECT COUNT(*) > 0 AS exported_column_name FROM stats_sql_names.`stat``quote'x` WHERE c4 = 'c''one';
+--disable_query_log
+CALL DBMS_STATS.IMPORT_TABLE_STATS('stats_sql_names', 'src', NULL, 'stat`quote''x', statown=>'stats_sql_names');
+CALL DBMS_STATS.EXPORT_TABLE_STATS('stats_sql_names', 'src', 'p''one', 'stat`quote''x', statown=>'stats_sql_names');
+CALL DBMS_STATS.IMPORT_TABLE_STATS('stats_sql_names', 'src', 'p''one', 'stat`quote''x', statown=>'stats_sql_names');
+CALL DBMS_STATS.EXPORT_COLUMN_STATS('stats_sql_names', 'src', 'c''one', 'p''one', 'stat`quote''x', statown=>'stats_sql_names');
+CALL DBMS_STATS.IMPORT_COLUMN_STATS('stats_sql_names', 'src', 'c''one', 'p''one', 'stat`quote''x', statown=>'stats_sql_names');
+CALL DBMS_STATS.DROP_STAT_TABLE('stats_sql_names', 'stat`quote''x');
+--enable_query_log
+SELECT COUNT(*) AS remaining_stat_tables FROM information_schema.tables WHERE table_schema = 'stats_sql_names' AND table_name = 'stat`quote''x';
+--disable_query_log
+DROP DATABASE stats_sql_names;
+--enable_query_log

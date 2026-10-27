@@ -6,7 +6,7 @@ repo=https://mirrors.oceanbase.com/oceanbase/development-kit/al/8/aarch64/
 [target-community]
 os=8
 arch=aarch64
-repo=http://mirrors.oceanbase.com/oceanbase/community/stable/al/8/aarch64/
+repo=https://mirrors.oceanbase.com/oceanbase/community/stable/al/8/aarch64/
 
 [deps]
 devdeps-gtest-1.8.0-242026020914.al8.aarch64.rpm

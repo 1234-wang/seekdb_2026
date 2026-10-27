@@ -1,0 +1,6 @@
+SELECT ST_DISTANCE(ST_GEOMFROMTEXT('POINT(0 0)'), ST_GEOMFROMTEXT('POINT(3 4)')) AS distance;
+distance
+5
+SELECT 1 AS server_alive;
+server_alive
+1

@@ -1,0 +1,4 @@
+owner statistics and vector maintenance succeed
+direct unauthorized maintenance denied
+definer wrappers retain owner privileges
+invoker wrappers retain caller restrictions

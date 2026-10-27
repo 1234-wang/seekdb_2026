@@ -1,0 +1,4 @@
+scheduler owner may change own job
+scheduler non-owner denied
+scheduler role-only SUPER succeeds
+scheduler disabled role denied

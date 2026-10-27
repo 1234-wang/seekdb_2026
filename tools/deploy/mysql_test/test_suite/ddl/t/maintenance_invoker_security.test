@@ -1,0 +1,74 @@
+# Invoker-rights maintenance APIs called through stored routines.
+--disable_query_log
+--disable_result_log
+--disable_warnings
+DROP DATABASE IF EXISTS maintenance_authz_db;
+DROP USER IF EXISTS 'maintenance_authz_owner'@'%';
+DROP USER IF EXISTS 'maintenance_authz_caller'@'%';
+--enable_warnings
+CREATE DATABASE maintenance_authz_db;
+CREATE USER 'maintenance_authz_owner'@'%';
+CREATE USER 'maintenance_authz_caller'@'%';
+CREATE TABLE maintenance_authz_db.t_stats(id INT);
+CREATE TABLE maintenance_authz_db.t_vector(id INT PRIMARY KEY, embedding VECTOR(3),
+  VECTOR INDEX v_idx(embedding) WITH (distance=l2, type=hnsw));
+GRANT SELECT, INSERT ON maintenance_authz_db.t_stats TO 'maintenance_authz_owner'@'%';
+GRANT INDEX ON maintenance_authz_db.t_vector TO 'maintenance_authz_owner'@'%';
+GRANT CREATE ROUTINE, ALTER ROUTINE, EXECUTE ON maintenance_authz_db.* TO 'maintenance_authz_owner'@'%';
+delimiter |;
+CREATE DEFINER='maintenance_authz_owner'@'%' PROCEDURE maintenance_authz_db.stats_definer()
+SQL SECURITY DEFINER
+BEGIN
+  CALL DBMS_STATS.SET_TABLE_PREFS('maintenance_authz_db', 't_stats', 'STALE_PERCENT', '10');
+END|
+CREATE DEFINER='maintenance_authz_owner'@'%' PROCEDURE maintenance_authz_db.stats_invoker()
+SQL SECURITY INVOKER
+BEGIN
+  CALL DBMS_STATS.SET_TABLE_PREFS('maintenance_authz_db', 't_stats', 'STALE_PERCENT', '10');
+END|
+CREATE DEFINER='maintenance_authz_owner'@'%' PROCEDURE maintenance_authz_db.vector_definer()
+SQL SECURITY DEFINER
+BEGIN
+  CALL DBMS_VECTOR.REFRESH_INDEX('maintenance_authz_db.v_idx', 'maintenance_authz_db.t_vector', 'embedding', 100000, 'FAST');
+END|
+CREATE DEFINER='maintenance_authz_owner'@'%' PROCEDURE maintenance_authz_db.vector_invoker()
+SQL SECURITY INVOKER
+BEGIN
+  CALL DBMS_VECTOR.REFRESH_INDEX('maintenance_authz_db.v_idx', 'maintenance_authz_db.t_vector', 'embedding', 100000, 'FAST');
+END|
+delimiter ;|
+GRANT EXECUTE ON maintenance_authz_db.* TO 'maintenance_authz_caller'@'%';
+connect (maintenance_owner,$OBMYSQL_MS0,maintenance_authz_owner,,maintenance_authz_db,$OBMYSQL_PORT);
+CALL DBMS_STATS.SET_TABLE_PREFS('maintenance_authz_db', 't_stats', 'STALE_PERCENT', '10');
+CALL DBMS_VECTOR.REFRESH_INDEX('maintenance_authz_db.v_idx', 'maintenance_authz_db.t_vector', 'embedding', 100000, 'FAST');
+--enable_result_log
+--echo owner statistics and vector maintenance succeed
+--disable_result_log
+connect (maintenance_caller,$OBMYSQL_MS0,maintenance_authz_caller,,maintenance_authz_db,$OBMYSQL_PORT);
+--error 1142
+CALL DBMS_STATS.SET_TABLE_PREFS('maintenance_authz_db', 't_stats', 'STALE_PERCENT', '10');
+--error 1142
+CALL DBMS_VECTOR.REFRESH_INDEX('maintenance_authz_db.v_idx', 'maintenance_authz_db.t_vector', 'embedding', 100000, 'FAST');
+--enable_result_log
+--echo direct unauthorized maintenance denied
+--disable_result_log
+CALL maintenance_authz_db.stats_definer();
+CALL maintenance_authz_db.vector_definer();
+--enable_result_log
+--echo definer wrappers retain owner privileges
+--disable_result_log
+--error 1142
+CALL maintenance_authz_db.stats_invoker();
+--error 1142
+CALL maintenance_authz_db.vector_invoker();
+--enable_result_log
+--echo invoker wrappers retain caller restrictions
+--disable_result_log
+connection default;
+disconnect maintenance_owner;
+disconnect maintenance_caller;
+DROP DATABASE maintenance_authz_db;
+DROP USER 'maintenance_authz_owner'@'%';
+DROP USER 'maintenance_authz_caller'@'%';
+--enable_query_log
+--enable_result_log

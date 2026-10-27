@@ -1,0 +1,12 @@
+SELECT COUNT(*) > 0 AS exported_table_stats FROM stats_sql_names.`stat``quote'x` WHERE type = 'T';
+exported_table_stats
+1
+SELECT COUNT(*) > 0 AS exported_partition_name FROM stats_sql_names.`stat``quote'x` WHERE c2 = 'p''one';
+exported_partition_name
+1
+SELECT COUNT(*) > 0 AS exported_column_name FROM stats_sql_names.`stat``quote'x` WHERE c4 = 'c''one';
+exported_column_name
+1
+SELECT COUNT(*) AS remaining_stat_tables FROM information_schema.tables WHERE table_schema = 'stats_sql_names' AND table_name = 'stat`quote''x';
+remaining_stat_tables
+0

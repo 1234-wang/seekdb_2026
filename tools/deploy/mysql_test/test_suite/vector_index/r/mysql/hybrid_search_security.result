@@ -1,0 +1,12 @@
+SELECT JSON_LENGTH(DBMS_HYBRID_SEARCH.SEARCH('hybrid_search_security.docs', @request)) AS matched_rows;
+matched_rows
+1
+SELECT JSON_UNQUOTE(JSON_EXTRACT(DBMS_HYBRID_SEARCH.SEARCH('hybrid_search_security.docs', @request), '$[0].body')) = @needle AS literal_roundtrip;
+literal_roundtrip
+1
+SELECT JSON_UNQUOTE(JSON_EXTRACT(DBMS_HYBRID_SEARCH.SEARCH('hybrid_search_security.docs', @request), '$[0].body')) = @needle AS no_backslash_roundtrip;
+no_backslash_roundtrip
+1
+SELECT JSON_LENGTH(DBMS_HYBRID_SEARCH.SEARCH('hybrid_search_security.docs', '{}')) AS authorized_rows;
+authorized_rows
+2

@@ -6,7 +6,7 @@ repo=https://mirrors.oceanbase.com/oceanbase/development-kit/al/8/x86_64/
 [target-community]
 os=8
 arch=x86_64
-repo=http://mirrors.oceanbase.com/oceanbase/community/stable/al/8/x86_64/
+repo=https://mirrors.oceanbase.com/oceanbase/community/stable/al/8/x86_64/
 
 [deps]
 devdeps-gtest-1.8.0-242026020914.al8.x86_64.rpm

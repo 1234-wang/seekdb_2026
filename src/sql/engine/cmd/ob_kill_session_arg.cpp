@@ -120,9 +120,11 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
 
 int ObKillSessionArg::check_auth_for_kill(uint64_t kill_tid, uint64_t kill_uid) const {
   int ret = OB_SUCCESS;
-  if (!(true)) {
+  UNUSED(kill_tid);
+  if (OB_INVALID_ID == user_id_ || OB_INVALID_ID == kill_uid
+      || (user_id_ != kill_uid && !has_user_super_privilege_)) {
     ret = OB_ERR_KILL_DENIED;
- }
+  }
   return ret;
 }
 

@@ -1,0 +1,6 @@
+SELECT COUNT(*) AS inserted_endpoint FROM oceanbase.DBA_OB_AI_MODEL_ENDPOINTS WHERE ENDPOINT_NAME = @endpoint;
+inserted_endpoint
+1
+SELECT COUNT(*) AS updated_endpoint FROM oceanbase.DBA_OB_AI_MODEL_ENDPOINTS WHERE ENDPOINT_NAME = @endpoint AND REQUEST_MODEL_NAME = 'updated-model';
+updated_endpoint
+1
