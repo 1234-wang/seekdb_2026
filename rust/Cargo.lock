@@ -1137,7 +1137,7 @@ dependencies = [
 name = "sql-nio"
 version = "0.1.0"
 dependencies = [
- "cbindgen",
+ "cxx",
  "flate2",
  "libc",
  "mio",

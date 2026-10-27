@@ -56,9 +56,6 @@ jobs:
           export RUSTFLAGS="-C link-arg=$GITHUB_WORKSPACE/build/bin/rust/liblocal_bridge.a -C link-arg=$GITHUB_WORKSPACE/build/bin/rust/libconfig_bridge.a -C link-arg=$GITHUB_WORKSPACE/build/bin/rust/liblogger_bridge.a"
           cargo test --locked --workspace
 
-      - name: NIO C interface is up to date
-        run: git diff --exit-code -- rust/sql-nio/include/nio.h
-
       # Compile Windows code on Linux; this does not run Windows tests.
       - name: check windows target
         working-directory: rust

@@ -52,6 +52,11 @@ cxx_bridge(
     deps = [":local_headers"],
 )
 cxx_bridge(name = "logger", src = "logger/src/bridge.rs")
+cxx_bridge(
+    name = "sql_nio",
+    src = "sql-nio/src/bridge.rs",
+    hdrs = ["sql-nio/include/callbacks.h", "sql-nio/include/nio_memory.h"],
+)
 
 filegroup(
     name = "generated_headers",
@@ -61,6 +66,7 @@ filegroup(
         "config.h",
         "config/config_checkers.h",
         "logger.h",
+        "sql_nio.h",
     ],
     visibility = ["//visibility:public"],
 )
@@ -82,7 +88,7 @@ cargo_library(
 
 cc_library(
     name = "bridges",
-    deps = [":local_bridge", ":config_bridge", ":logger_bridge"],
+    deps = [":local_bridge", ":config_bridge", ":logger_bridge", ":sql_nio_bridge"],
     visibility = ["//visibility:public"],
 )
 
@@ -94,13 +100,6 @@ cc_library(
         "@platforms//os:windows": ["ntdll.lib", "userenv.lib", "ws2_32.lib", "bcrypt.lib", "advapi32.lib", "synchronization.lib"],
         "//conditions:default": [],
     }),
-)
-
-cc_library(
-    name = "sql_nio_headers",
-    hdrs = glob(["sql-nio/include/**/*.h"]),
-    includes = ["sql-nio/include"],
-    visibility = ["//visibility:public"],
 )
 
 cc_library(

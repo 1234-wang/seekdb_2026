@@ -16,18 +16,23 @@
 
 #pragma once
 
-#include "nio.h"
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
+namespace oceanbase { namespace nio { struct NioReactor; } }
+using NioReactor = oceanbase::nio::NioReactor;
 extern "C" {
+#else
+typedef struct NioReactor NioReactor;
 #endif
 
 /* Available only in sql-nio's memory-transport build (without default features).
- * Start with nio_start(..., tls = NULL, tls_size = 0, disable_tcp = 1).
+ * Start with oceanbase::nio::start(..., tls = NULL, tls_size = 0, disable_tcp = 1).
  * The address is validated for ABI consistency but no endpoint is opened.
  * The existing reactor, MySQL parser, and request/response lifecycle are used.
  * on_connect receives fd = -1 and is_unix = 1 (trusted in-process transport).
- * TLS configuration is rejected with NIO_START_ETLS.
+ * TLS configuration is rejected with StartStatus::Etls.
  */
 typedef struct MemoryClient nio_memory_client;
 
@@ -45,7 +50,7 @@ nio_memory_client *nio_memory_connect(const NioReactor *reactor, size_t capacity
  * may be NULL. Neither function retains the caller's buffer.
  * Calls can run concurrently while client remains live; ordering concurrent
  * writes, reads, and MySQL packet sequences is the caller's responsibility.
- * A client can outlive nio_wait_destroy and drain already delivered output.
+ * A client can outlive oceanbase::nio::wait_destroy and drain already delivered output.
  */
 int64_t nio_memory_write(const nio_memory_client *client, const char *buffer, int64_t length);
 int64_t nio_memory_read(const nio_memory_client *client, char *buffer, int64_t length);
