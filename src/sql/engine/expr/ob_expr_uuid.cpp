@@ -86,6 +86,55 @@ ObUUIDNode::ObUUIDNode()
  * get and set mac address
  *
  */
+/*
+ * Fallback UUID node generation.
+ *
+ * When a physical MAC address cannot be obtained (permission error, no usable
+ * interface, loopback-only results, ...), take six bytes from an OS-backed
+ * CSPRNG and set the multicast bit, as required by RFC 9562 section 6.10 for
+ * a synthetic node. A genuine entropy failure stays a real init error.
+ */
+static int generate_random_uuid_node(unsigned char *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (0 == getentropy(node, 6)) {
+    node[0] |= 0x01;  // multicast bit: mark the node as synthetic
+  } else {
+    // getentropy unavailable or failed: fall back to /dev/urandom,
+    // handling interrupted and partial reads.
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to open /dev/urandom for UUID node", K(ret), K(errno));
+    } else {
+      size_t filled = 0;
+      while (filled < 6) {
+        ssize_t n = read(fd, node + filled, 6 - filled);
+        if (n > 0) {
+          filled += static_cast<size_t>(n);
+        } else if (n < 0 && EINTR == errno) {
+          continue;
+        } else {
+          break;
+        }
+      }
+      close(fd);
+      if (filled != 6) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to read random bytes for UUID node", K(ret), K(filled));
+      } else {
+        node[0] |= 0x01;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("using random UUID node ID (no usable MAC address available)");
+  }
+  return ret;
+}
+
 int ObUUIDNode::init()
 {
   int ret = OB_SUCCESS;
@@ -205,13 +254,23 @@ int ObUUIDNode::init()
   char buf[1024];
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("socket failed, fallback to a random UUID node", K(errno));
+    if (OB_FAIL(generate_random_uuid_node(mac_addr_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to generate random UUID node", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF, fallback to a random UUID node", K(errno));
+      if (OB_FAIL(generate_random_uuid_node(mac_addr_))) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        is_inited_ = true;
+      }
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
@@ -238,7 +297,11 @@ int ObUUIDNode::init()
       }//end for
       if (OB_FAIL(ret)) {
       } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
+        if (OB_FAIL(generate_random_uuid_node(mac_addr_))) {
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          is_inited_ = true;
+        }
       } else {
         is_inited_ = true;
       }
