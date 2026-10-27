@@ -1,5 +1,3 @@
-<img width="684" height="214" alt="image" src="https://github.com/user-attachments/assets/03555f03-5401-4552-92f3-2e81c1043463" /><div align="center">
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*pKqtRILxGioAAAAAQLAAAAgAejCYAQ/original" width="420">
   <source media="(prefers-color-scheme: light)" srcset="https://mdn.alipayobjects.com/huamei_ytl0i7/afts/img/A*6BO4Q6D78GQAAAAAQFAAAAgAejCYAQ/original" width="420">
