@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <algorithm>
+#include <array>
+
 #include "object/ob_object.h"
 #define USING_LOG_PREFIX STORAGE_FTS
 
@@ -71,17 +74,74 @@ void ObStopWordChecker::destroy()
   }
 }
 
+namespace
+{
+// Zero means this needs the general collation-aware path. Only ASCII letters
+// are encoded: accents, padding, controls and other charsets retain conversion
+// and UTF8MB4_GENERAL_CI comparison semantics.
+uint64_t ascii_stopword_key(const ObString &word)
+{
+  uint64_t key = 0;
+  if (word.empty() || word.length() > 7) {
+    return 0;
+  }
+  for (int64_t i = 0; i < word.length(); ++i) {
+    const unsigned char byte = static_cast<unsigned char>(word.ptr()[i]);
+    const unsigned char lower = byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte;
+    if (lower < 'a' || lower > 'z') {
+      return 0;
+    }
+    key = (key << 8) | lower;
+  }
+  return key;
+}
+
+bool check_ascii_stopword(const ObString &word, bool &is_stopword)
+{
+  const uint64_t key = ascii_stopword_key(word);
+  if (key == 0) {
+    return false;
+  }
+  // Derive from the same built-in list as the collation-aware hash set, so
+  // adding a stopword cannot make the two paths disagree.
+  struct AsciiStopwords
+  {
+    std::array<uint64_t, sizeof(ob_stop_word_list) / sizeof(ob_stop_word_list[0])> keys_;
+    bool valid_;
+  };
+  static const auto words = [] {
+    AsciiStopwords result{};
+    result.valid_ = true;
+    for (size_t i = 0; i < result.keys_.size(); ++i) {
+      result.keys_[i] = ascii_stopword_key(ObString::make_string(ob_stop_word_list[i]));
+      result.valid_ = result.valid_ && result.keys_[i] != 0;
+    }
+    std::sort(result.keys_.begin(), result.keys_.end());
+    return result;
+  }();
+  if (!words.valid_) {
+    return false;
+  }
+  is_stopword = std::binary_search(words.keys_.begin(), words.keys_.end(), key);
+  return true;
+}
+} // namespace
+
 int ObStopWordChecker::check_stopword(const ObFTWord &word, bool &is_stopword)
 {
   int ret = OB_SUCCESS;
   
   
-  common::ObArenaAllocator allocator(lib::ObMemAttr("ChkStopWord"));
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(word.empty())) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (ObCharset::is_valid_collation(word.get_collation_type())
+      && ObCharset::charset_type_by_coll(word.get_collation_type()) == CHARSET_UTF8MB4
+      && check_ascii_stopword(word.get_word().get_string(), is_stopword)) {
+    // No conversion, allocator or collation hash is needed for ASCII letters.
   } else {
+    common::ObArenaAllocator allocator(lib::ObMemAttr("ChkStopWord"));
     common::ObString cmp_str;
     // do nothing set out with in if type is the same.
     if (OB_FAIL(common::ObCharset::charset_convert(
@@ -198,20 +258,18 @@ int ObAddWord::check_stopword(const ObFTWord &ft_word, bool &is_stopword)
 int ObAddWord::groupby_word(const ObFTWord &word, const int64_t word_freq)
 {
   int ret = OB_SUCCESS;
-  int64_t word_count = 0;
   if (OB_UNLIKELY(word.empty() || word_freq <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (!flag_.groupby_word()) {
-    if (OB_FAIL(word_map_.set_refactored(word, 1/*word count*/))) {
-    }
-  } else if (OB_FAIL(word_map_.get_refactored(word, word_count)) && OB_HASH_NOT_EXIST != ret) {
+    ret = word_map_.set_refactored(word, 1/*word count*/);
   } else {
-    if (OB_HASH_NOT_EXIST == ret) {
-      word_count = 1;
+    // The map belongs to this document's synchronous parse. Repeated words can
+    // update the existing value without a second hash lookup.
+    int64_t *word_count = word_map_.get(word);
+    if (word_count != nullptr) {
+      *word_count += word_freq;
     } else {
-      word_count += word_freq;
-    }
-    if (OB_FAIL(word_map_.set_refactored(word, word_count, 1/*overwrite*/))) {
+      ret = word_map_.set_refactored(word, 1/*first occurrence*/);
     }
   }
   return ret;

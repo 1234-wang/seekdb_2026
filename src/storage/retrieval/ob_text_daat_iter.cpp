@@ -30,7 +30,8 @@ int ObTextDaaTIter::init(const ObTextDaaTParam &param)
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(ObSRDaaTIterImpl::init(*param.base_param_, *param.dim_iters_,
                                             *param.allocator_, *param.relevance_collector_))) {
-  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
+  } else if (nullptr != param.base_param_->relevance_expr_
+      && OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
   } else {
     mode_flag_ = param.mode_flag_;
     function_lookup_mode_ = param.function_lookup_mode_;
@@ -70,8 +71,83 @@ int ObTextDaaTIter::pre_process()
   int ret = OB_SUCCESS;
   if (dim_iters_->count() == 0) {
     ret = OB_ITER_END;
-  } else if (iter_param_->need_project_relevance()) {
+  } else if (nullptr != iter_param_->relevance_expr_) {
     if (OB_FAIL(bm25_param_estimator_.do_estimation(*iter_param_->eval_ctx_))) {
+    }
+  }
+  return ret;
+}
+
+int ObTextDaaTIter::do_one_merge_round(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  // For a small natural-language membership union, the ordered document IDs
+  // can be merged directly. Retain the collector for minimum_should_match,
+  // and the common cache/projection path for LIMIT and lookup ownership.
+  // Scores, boolean expressions, function lookups and larger unions retain
+  // the general heap implementation.
+  if (nullptr != iter_param_->relevance_expr_ || iter_param_->need_filter()
+      || iter_param_->need_pushdown_topk() || function_lookup_mode_
+      || mode_flag_ != sql::ObMatchAgainstMode::NATURAL_LANGUAGE_MODE
+      || dim_iters_->count() > 8) {
+    ret = ObSRDaaTIterImpl::do_one_merge_round(count);
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
+      const int64_t idx = next_round_iter_idxes_[i];
+      ObISRDaaTDimIter *dim = dim_iters_->at(idx);
+      if (OB_ISNULL(dim)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(dim->get_next_row())) {
+        if (OB_ITER_END == ret) {
+          iter_domain_ids_[idx] = nullptr;
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(dim->get_curr_id(iter_domain_ids_[idx]))) {
+      } else if (OB_ISNULL(iter_domain_ids_[idx]) || iter_domain_ids_[idx]->is_null()) {
+        ret = OB_ERR_UNEXPECTED;
+      }
+    }
+    next_round_cnt_ = 0;
+    const ObDatum *first = nullptr;
+    ObSRMergeItem first_item;
+    const bool integer_ids = iter_param_->id_proj_expr_->datum_meta_.type_ == common::ObUInt64Type;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dim_iters_->count(); ++i) {
+      const ObDatum *id = iter_domain_ids_[i];
+      if (nullptr != id) {
+        int64_t cmp = 1;
+        if (nullptr == first) {
+        } else if (integer_ids) {
+          cmp = first->get_uint() > id->get_uint() ? 1
+              : (first->get_uint() < id->get_uint() ? -1 : 0);
+        } else {
+          ObSRMergeItem item;
+          item.iter_idx_ = i;
+          if (OB_FAIL(merge_cmp_.cmp(first_item, item, cmp))) {
+          }
+        }
+        if (OB_SUCC(ret) && cmp >= 0) {
+          if (cmp > 0) {
+            first = id;
+            first_item.iter_idx_ = i;
+            next_round_cnt_ = 0;
+          }
+          next_round_iter_idxes_[next_round_cnt_++] = i;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && nullptr == first) {
+      ret = OB_ITER_END;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
+      if (OB_FAIL(relevance_collector_->collect_one_dim(next_round_iter_idxes_[i], 1.0))) {
+      }
+    }
+    if (OB_SUCC(ret)) {
+      double relevance = 0.0;
+      bool valid = false;
+      if (OB_FAIL(relevance_collector_->get_result(relevance, valid))) {
+      } else if (valid && OB_FAIL(cache_result(count, *first, relevance))) {
+      }
     }
   }
   return ret;
