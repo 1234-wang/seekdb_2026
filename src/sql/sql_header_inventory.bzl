@@ -345,7 +345,6 @@ SQL_INTERFACE_CLOSURE_HEADERS = [
     "optimizer/stat/ob_stats_estimator.h",
     "parser/ob_char_type.h",
     "parser/ob_fast_parser.h",
-    "parser/ob_item_type.h",
     "parser/ob_parser_utils.h",
     "plan_cache/ob_adaptive_auto_dop.h",
     "plan_cache/ob_dist_plans.h",
