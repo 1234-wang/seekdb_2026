@@ -38,7 +38,7 @@ int ObExprICUVersion::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type
   UNUSED(type_ctx);
   type.set_varchar();
   type.set_length(static_cast<common::ObLength>(
-                    strlen(ObExprRegexContext::icu_version_string())));
+                    strlen(ObExprRegexContext::regex_version_string())));
   type.set_default_collation_type();
   type.set_collation_level(CS_LEVEL_SYSCONST);
   return OB_SUCCESS;
@@ -51,7 +51,7 @@ int ObExprICUVersion::eval_version(const ObExpr &expr,
   UNUSED(expr);
   UNUSED(ctx);
   int ret = OB_SUCCESS;
-  expr_datum.set_string(common::ObString(ObExprRegexContext::icu_version_string()));
+  expr_datum.set_string(common::ObString(ObExprRegexContext::regex_version_string()));
   return ret;
 }
 
