@@ -1034,7 +1034,7 @@ int ObFtsIndexBuilderUtil::generate_doc_id_column(
 
 // Upper bound for the degree of parallelism given to a fulltext index build that
 // was left at the default. The server size halves that bound.
-static const int64_t FTS_BUILD_MAX_DEFAULT_PARALLELISM = 8;
+static const int64_t FTS_BUILD_MAX_DEFAULT_PARALLELISM = 16;
 
 int ObFtsIndexBuilderUtil::decide_parallelism(
     const share::schema::ObIndexType index_type,
