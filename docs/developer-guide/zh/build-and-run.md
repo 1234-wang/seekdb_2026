@@ -26,6 +26,8 @@ cd seekdb
 
 Windows 使用 `python build.py`，命令参数相同。C++ 测试目标参见[编写与运行单元测试](unittest.md)。修改 Rust 依赖时，一并提交更新后的 `rust/Cargo.lock`。
 
+Rust 的 CXX 接口由 Bazel 自动生成，头文件路径为 `rust/<Bazel target name>.h`，例如 `#include "rust/local.h"`。C++ 编译只等待所需头文件，不等待 Rust 静态库。只想查看接口时执行 `./build.py build //rust:generated_headers`，文件位于 `build/bin/rust/`；该目标不编译 Rust 业务库。配置 YAML 由 Python 生成配置源码和 `config_checkers.h`，生成文件无需入库。
+
 ## 设置编译并发
 
 Bazel 默认按本机可用 CPU 数量设置并发。显式指定本地编译并发时，`build.py` 同时设置任务数量上限和本地 CPU 调度额度：

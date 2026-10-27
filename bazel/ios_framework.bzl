@@ -36,11 +36,7 @@ def ios_framework():
         group_deps = [":observer_embedded_runtime"],
         sdk_deps = ["//bazel/sdk_sources:source_sdk", "//bazel/third_party:base_libraries"],
         ordered_link_files = [
-            "//rust:sql_nio_archive",
-            "//rust:config_archive",
-            "//rust:local_archive",
-            "//rust:logger_archive",
-            "//rust:in_process_archive",
+            "//rust:archive",
             "//deps/external:jemalloc_archive",
         ],
         extra_inputs = ["ios/exports.txt"],

@@ -16,7 +16,7 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include "config_bridge.h"
+#include "rust/config.h"
 #include "nio.h"
 
 #include "obmp_stmt_execute.h"
