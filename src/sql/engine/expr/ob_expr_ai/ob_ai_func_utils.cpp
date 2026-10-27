@@ -1596,7 +1596,8 @@ int ObAIFuncModel::call_rerank(ObString &query, ObJsonArray *contents, ObJsonArr
 
   if (ret == OB_INVALID_DATA) {
     ObString response_str;
-    if (OB_SUCCESS == ObAIFuncJsonUtils::print_json_to_str(*allocator_, response, response_str)) {
+    if (OB_NOT_NULL(response) &&
+        OB_SUCCESS == ObAIFuncJsonUtils::print_json_to_str(*allocator_, response, response_str)) {
       char http_message_str[1024];
       snprintf(http_message_str, sizeof(http_message_str), "unexpected http message: %s", response_str.ptr());
       ObString ob_http_message_str(http_message_str);
