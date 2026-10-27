@@ -32,7 +32,7 @@ def ios_framework():
     )
     final_link(
         name = "_ios_framework_link",
-        direct_object_deps = [":_ios_entry"],
+        direct_object_deps = [":_ios_entry", ":in_process_api"],
         group_deps = [":observer_embedded_runtime"],
         sdk_deps = ["//bazel/sdk_sources:source_sdk", "//bazel/third_party:base_libraries"],
         ordered_link_files = [
@@ -75,7 +75,7 @@ def ios_framework():
             ":_ios_build_config",
             ":_ios_framework_link_inputs",
             ":_ios_framework_link_manifest",
-            "//rust:in-process/include/seekdb.h",
+            "in_process/seekdb.h",
             "ios/exports.txt",
             "//:LICENSE",
             "//rust:Cargo.lock",
@@ -95,7 +95,7 @@ def ios_framework():
         ],
         cmd = 'python3 "$(location //package/ios:package_framework.py)"' +
               ' --binary "$(location :_ios_framework_link)" --config "$(location :_ios_build_config)"' +
-              ' --header "$(location //rust:in-process/include/seekdb.h)" --exports "$(location ios/exports.txt)"' +
+              ' --header "$(location in_process/seekdb.h)" --exports "$(location ios/exports.txt)"' +
               ' --link-inputs "$(location :_ios_framework_link_manifest)"' +
               ' --rust-lock "$(location //rust:Cargo.lock)"' +
               ' --cargo-sources "$(location @cargo_native_sources//:vendor.tar)"' +

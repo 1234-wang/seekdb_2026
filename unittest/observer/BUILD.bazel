@@ -1,0 +1,23 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//bazel:defs.bzl", "cc_library")
+
+package(default_testonly = True)
+
+cc_library(
+    name = "in_process_api_cases",
+    srcs = ["test_in_process_api.cpp"],
+    deps = [
+        "//bazel/third_party:gtest",
+        "//src/observer:in_process_api",
+        "//rust:in_process",
+    ],
+    alwayslink = True,
+)
+
+cc_test(
+    name = "test_in_process_api",
+    size = "small",
+    linkstatic = True,
+    deps = [":in_process_api_cases"],
+    target_compatible_with = ["@platforms//os:linux"],
+)
