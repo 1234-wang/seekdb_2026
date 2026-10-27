@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--base-dir", required=True)
     parser.add_argument("--port", type=int, default=2882)
     parser.add_argument("--mysql-client", default="mysql")
-    parser.add_argument("--fault", choices=["deny", "empty", "entropy-denied", "entropy-eof", "entropy-partial"], default="deny")
+    parser.add_argument("--fault", choices=["normal", "deny", "empty", "entropy-denied", "entropy-eof", "entropy-partial"], default="deny")
     parser.add_argument("--expect-failure", action="store_true")
     parser.add_argument("--timeout", type=int, default=90)
     args = parser.parse_args()
@@ -86,8 +86,9 @@ def main():
                     assert len(values) == 1000 and len(set(values)) == 1000
                     parsed = [uuid.UUID(value) for value in values]
                     assert all(value.version == 1 and value.variant == uuid.RFC_4122 for value in parsed)
-                    assert all(((value.node >> 40) & 1) == 1 for value in parsed)
-                    print("PASS SQL ready; 1000 unique RFC4122 UUIDs with multicast node: " + args.fault, flush=True)
+                    if args.fault != "normal":
+                        assert all(((value.node >> 40) & 1) == 1 for value in parsed)
+                    print("PASS SQL ready; 1000 unique RFC4122 UUIDs: " + args.fault, flush=True)
             finally:
                 if server.poll() is None:
                     server.terminate()

@@ -27,7 +27,7 @@ int ioctl(int fd, unsigned long request, ...)
   va_start(args, request);
   void *argument = va_arg(args, void *);
   va_end(args);
-  if (request == SIOCGIFCONF) {
+  if (request == SIOCGIFCONF && strcmp(fault_mode(), "normal") != 0) {
     static const char marker[] = "UUID_TEST: forced interface discovery\n";
     (void)write(STDERR_FILENO, marker, sizeof(marker) - 1);
     enumeration_seen = 1;
