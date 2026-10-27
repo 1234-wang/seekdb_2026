@@ -88,7 +88,7 @@ class ObTransCtx: public share::ObLightHashLink<ObTransCtx>
 public:
   ObTransCtx()
       : trans_expired_time_(0), ctx_create_time_(0),
-      trans_service_(NULL), tlog_(NULL),
+      trans_service_(NULL), 
       ls_tx_ctx_mgr_(NULL),
       session_id_(UINT32_MAX),
       stc_(0), part_trans_action_(ObPartTransAction::UNKNOWN),
@@ -220,8 +220,6 @@ protected:
   int64_t ctx_create_time_;
   ObTransService *trans_service_;
   mutable CtxLock lock_;
-  ObTransTraceLog trace_log_;
-  ObTransTraceLog *tlog_;
   ObLSTxCtxMgr *ls_tx_ctx_mgr_;
   uint32_t session_id_;
   // set stc only by set_stc_xxx, and
