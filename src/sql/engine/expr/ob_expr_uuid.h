@@ -38,6 +38,12 @@ struct ObUUIDNode
 {
   ObUUIDNode();
   int init();
+#ifndef _WIN32
+  // RFC 4122 section 4.5: build a random node id and set the multicast bit to
+  // mark it as "not a real hardware address", used when the MAC address of the
+  // host cannot be read (restricted containers, network namespaces, sandboxes).
+  static int get_random_node_id(unsigned char *mac_addr);
+#endif
   unsigned char mac_addr_[6];
   bool is_inited_;
 };

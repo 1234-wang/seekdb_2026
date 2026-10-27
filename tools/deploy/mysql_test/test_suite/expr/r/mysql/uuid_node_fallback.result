@@ -1,0 +1,21 @@
+select length(uuid()) as uuid_length;
+uuid_length
+36
+select uuid() regexp '^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' as is_rfc4122_v1;
+is_rfc4122_v1
+1
+select length(substring_index(uuid(), '-', -1)) as node_id_length;
+node_id_length
+12
+select substring(replace(uuid(), '-', ''), 13, 1) as uuid_version;
+uuid_version
+1
+select substring(replace(uuid(), '-', ''), 17, 1) in ('8', '9', 'a', 'b') as rfc4122_variant;
+rfc4122_variant
+1
+select count(*) as total, count(distinct u) as distinct_uuids from (select uuid() as u from table(generator(100))) t;
+total	distinct_uuids
+100	100
+select uuid() is not null as uuid_is_not_null;
+uuid_is_not_null
+1
