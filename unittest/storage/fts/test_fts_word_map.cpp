@@ -13,6 +13,8 @@
 #include "storage/fts/ob_beng_ft_parser.h"
 #include "storage/fts/ob_fts_parser_helper.h"
 #include "storage/fts/ob_fts_stop_word.h"
+#include "storage/retrieval/ob_sparse_daat_iter.h"
+#include "sql/das/ob_das_domain_utils.h"
 
 namespace oceanbase
 {
@@ -163,6 +165,178 @@ TEST(FtsBeng, parser_lifecycle_errors)
   EXPECT_EQ(ObString("first"), ObString(length, word));
   parser.reset();
   EXPECT_EQ(OB_NOT_INIT, parser.get_next_token(word, length, characters, frequency));
+}
+
+TEST(FtsStopWords, dictionary_equivalence_for_ascii_unicode_and_padding)
+{
+  ObStopWordChecker checker;
+  ASSERT_EQ(OB_SUCCESS, checker.init());
+  hash::ObHashSet<ObFTWord> reference;
+  ASSERT_EQ(OB_SUCCESS, reference.create(37, "FtsStopRef", "FtsStopRef"));
+  ObObjMeta dictionary_meta;
+  dictionary_meta.set_varchar();
+  dictionary_meta.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  for (const auto &word : ob_stop_word_list) {
+    ASSERT_EQ(OB_SUCCESS, reference.set_refactored(ObFTWord(STRLEN(word), word, dictionary_meta)));
+  }
+  std::vector<std::string> inputs = {"thé", "THÉ", "ｔｈｅ", "the\t", "the\n", "the  ", "thex",
+      "数据库", "😀", "tһе", "tһе ", std::string("the\0", 4), std::string("\0the", 4),
+      "the\xCC\x81", "THE\xC2\xA0", "the\xE3\x80\x80", "", " ", "   "};
+  for (const auto &word : ob_stop_word_list) {
+    std::string base(word);
+    for (unsigned mask = 0; mask < (1U << base.size()); ++mask) {
+      std::string mixed = base;
+      for (size_t i = 0; i < mixed.size(); ++i) {
+        if (mask & (1U << i)) { mixed[i] -= 'a' - 'A'; }
+      }
+      inputs.push_back(mixed);
+      inputs.push_back(mixed + "  ");
+    }
+  }
+  for (char a = 'a'; a <= 'z'; ++a) {
+    for (char b = 'a'; b <= 'z'; ++b) {
+      for (char c = 'a'; c <= 'z'; ++c) {
+        inputs.push_back(std::string{a, b, c});
+      }
+    }
+  }
+  for (int value = 0; value < 256; ++value) {
+    inputs.push_back("th" + std::string(1, static_cast<char>(value)));
+    inputs.push_back(std::string(1, static_cast<char>(value)) + "the");
+  }
+  for (ObCollationType collation : {CS_TYPE_UTF8MB4_BIN, CS_TYPE_UTF8MB4_GENERAL_CI,
+                                     CS_TYPE_UTF8MB4_UNICODE_CI, CS_TYPE_BINARY}) {
+    ObObjMeta meta;
+    meta.set_varchar();
+    meta.set_collation_type(collation);
+    for (const auto &input : inputs) {
+      ObArenaAllocator conversion(ObMemAttr("FtsStopRef"));
+      ObString converted;
+      bool actual = false;
+      int expected_ret = input.empty() ? OB_INVALID_ARGUMENT : ObCharset::charset_convert(
+          conversion, ObString(input.size(), input.data()), collation,
+          CS_TYPE_UTF8MB4_GENERAL_CI, converted);
+      bool expected = false;
+      if (OB_SUCCESS == expected_ret) {
+        int found = reference.exist_refactored(ObFTWord(converted.length(), converted.ptr(), dictionary_meta));
+        ASSERT_TRUE(found == OB_HASH_EXIST || found == OB_HASH_NOT_EXIST);
+        expected = found == OB_HASH_EXIST;
+      }
+      ASSERT_EQ(expected_ret, checker.check_stopword(ObFTWord(input.size(), input.data(), meta), actual));
+      if (OB_SUCCESS == expected_ret) {
+        ASSERT_EQ(expected, actual) << "input size=" << input.size() << " collation=" << collation;
+      }
+    }
+  }
+}
+
+TEST(FtsMerge, id_comparison_matches_datum_functions)
+{
+  const auto sign = [](int64_t value) { return (value > 0) - (value < 0); };
+  for (ObObjType type : {ObUInt64Type, ObVarcharType}) {
+    for (ObCollationType collation : {CS_TYPE_BINARY, CS_TYPE_UTF8MB4_BIN,
+                                      CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_UNICODE_CI}) {
+      ObArenaAllocator allocator(ObMemAttr("FtsMergeTest"));
+      std::vector<std::string> strings = {"", " ", "a", "a ", "a  ", "A", "é", "e", "😀",
+                                         std::string("a\0", 2), std::string("a\0b", 3)};
+      uint32_t state = 123456789;
+      for (int n = 0; n < 100; ++n) {
+        std::string value;
+        for (int i = 0; i < n % 33; ++i) {
+          state = state * 1664525U + 1013904223U;
+          value.push_back(static_cast<char>(state >> 24));
+        }
+        strings.push_back(value);
+      }
+      std::vector<ObDatum> datums(strings.size() + 1);
+      std::vector<uint64_t> integers(strings.size());
+      datums[0].set_null();
+      for (size_t i = 0; i < strings.size(); ++i) {
+        if (ObUInt64Type == type) {
+          datums[i + 1].ptr_ = reinterpret_cast<const char *>(&integers[i]);
+          datums[i + 1].set_uint(i == 0 ? UINT64_MAX : i * UINT64_C(0x100000001));
+        } else {
+          datums[i + 1].set_string(strings[i].data(), strings[i].size());
+        }
+      }
+      ObFixedArray<const ObDatum *, ObIAllocator> ids;
+      ids.set_allocator(&allocator);
+      ASSERT_EQ(OB_SUCCESS, ids.init(datums.size()));
+      ASSERT_EQ(OB_SUCCESS, ids.prepare_allocate(datums.size()));
+      for (size_t i = 0; i < datums.size(); ++i) { ids[i] = &datums[i]; }
+      ObSRMergeCmp comparison;
+      sql::ObDatumMeta meta;
+      meta.type_ = type;
+      meta.cs_type_ = collation;
+      ASSERT_EQ(OB_SUCCESS, comparison.init(meta, &ids));
+      auto reference = ObDatumFuncs::get_basic_func(type, collation)->null_first_cmp_;
+      for (size_t left = 0; left < datums.size(); ++left) {
+        for (size_t right = 0; right < datums.size(); ++right) {
+          ObSRMergeItem l;
+          ObSRMergeItem r;
+          l.iter_idx_ = left;
+          r.iter_idx_ = right;
+          int expected = 0;
+          int64_t actual = 0;
+          ASSERT_EQ(OB_SUCCESS, reference(datums[left], datums[right], expected, nullptr));
+          ASSERT_EQ(OB_SUCCESS, comparison.cmp(l, r, actual));
+          ASSERT_EQ(sign(expected), sign(actual));
+        }
+      }
+    }
+  }
+}
+
+TEST(FtsIndexRows, both_layouts_match_segmented_words)
+{
+  ASSERT_EQ(OB_SUCCESS, ObFTParseData::init_global());
+  {
+    std::vector<std::string> texts = {"", "the with the", "DATABASE database café CAFE 数据库",
+        "Résumé resume RESUME word_a word_b word_c", "BEGIN\nnext\tEND"};
+    std::string many;
+    for (int i = 0; i < 320; ++i) { many += " word" + std::to_string(i); }
+    texts.push_back(many);
+    for (ObCollationType collation : {CS_TYPE_UTF8MB4_BIN, CS_TYPE_UTF8MB4_GENERAL_CI,
+                                       CS_TYPE_UTF8MB4_UNICODE_CI}) {
+      for (bool inverted : {false, true}) {
+        for (const auto &text : texts) {
+          ObArenaAllocator allocator(ObMemAttr("FtsRowsTest"));
+          ObFTParseHelper helper;
+          ObObjMeta meta;
+          meta.set_varchar();
+          meta.set_collation_type(collation);
+          ASSERT_EQ(OB_SUCCESS, helper.init(&allocator, ObString("beng.1"), ObString()));
+          ObDatum doc_id;
+          const std::string id("document\0id", 11);
+          doc_id.set_string(id.data(), id.size());
+          ObFTWordMap reference;
+          const int64_t buckets = MIN(MAX(text.size() / 10, 2), 997);
+          ASSERT_EQ(OB_SUCCESS, reference.create(buckets, ObMemAttr("FtsRowsTest")));
+          int64_t document_length = 0;
+          if (!text.empty()) {
+            ASSERT_EQ(OB_SUCCESS, helper.segment(meta, text.data(), text.size(), document_length, reference));
+          }
+          sql::ObDomainIndexRow rows;
+          int ret = sql::ObDASDomainUtils::generate_fulltext_word_rows(allocator, &helper, meta,
+              doc_id, ObString(text.size(), text.data()), inverted, rows);
+          ASSERT_EQ(reference.empty() ? OB_ITER_END : OB_SUCCESS, ret);
+          ASSERT_EQ(reference.size(), rows.count());
+          int index = 0;
+          for (auto it = reference.begin(); it != reference.end(); ++it, ++index) {
+            auto *row = rows.at(index);
+            ASSERT_TRUE(row->is_valid());
+            ASSERT_EQ(4, row->get_column_count());
+            EXPECT_EQ(it->first.get_word().get_string(), row->storage_datums_[inverted ? 0 : 1].get_string());
+            EXPECT_EQ(ObString(id.size(), id.data()), row->storage_datums_[inverted ? 1 : 0].get_string());
+            EXPECT_EQ(it->second, row->storage_datums_[2].get_uint64());
+            EXPECT_EQ(document_length, row->storage_datums_[3].get_uint64());
+            row->~ObDatumRow();
+          }
+        }
+      }
+    }
+  }
+  ObFTParseData::deinit_global();
 }
 
 struct AddFrequency

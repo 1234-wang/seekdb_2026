@@ -1,6 +1,6 @@
 # FTS fourth optimization: BENG parser ownership
 
-This local candidate builds on the third-round product `314f2807ade71bbf6fc693f63d2466e1853c3de9`. The immediate parent `75be6f0bb786b983c900a493a1c073b104f06dc5` changes only documentation of the second-round official result. The user reported raw score **41.794/100** for second delivery `d719f55e`; no third- or fourth-round official score is available. Native reductions from different rounds are not added together or used to forecast the competition score.
+This local candidate builds on the third-round product `314f2807ade71bbf6fc693f63d2466e1853c3de9`. The immediate parent `75be6f0bb786b983c900a493a1c073b104f06dc5` changes only documentation of the second-round official result. The user reported raw score **41.794/100** for second delivery `d719f55e`; the user subsequently reported latest raw score **43.384/100**, equivalent to **21.692/50** under the task weight (computed, not a supplied platform display), in the fourth-round submission context. No task ID/SHA or per-metric timings were supplied, so the exact platform revision was not independently verified. Native reductions from different rounds are not added together or used to forecast the competition score.
 
 ## Repeated work and implementation
 

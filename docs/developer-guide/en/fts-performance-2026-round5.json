@@ -1,0 +1,1164 @@
+{
+  "status": "local next candidate; complete SQL and official benchmark not run",
+  "baseline_commit": "6f2ee5fcd3d54479201585ae3687fc8099af319c",
+  "baseline_score_user_reported": {
+    "source": "user_reported_evaluation_result",
+    "user_message": "现在最新得分FTS raw score 43.384/100 ，继续优化，我希望下次可以满分",
+    "recorded_at": "2026-10-27T06:03:00.090370+00:00",
+    "raw_score": 43.384,
+    "raw_max_score": 100,
+    "weighted_score_computed": 21.692,
+    "weighted_score_displayed": null,
+    "weighted_max_score": 50,
+    "mean_improvement_implied_by_published_formula": 0.21692,
+    "task_id": null,
+    "per_metric_timings_available": false,
+    "per_metric_timings_confirmed_unavailable_by_user": true,
+    "submission_commit_context": "6f2ee5fcd3d54479201585ae3687fc8099af319c",
+    "submission_sha_independently_confirmed_from_task": false,
+    "previous_raw_score": 41.794,
+    "raw_score_point_increase": 1.59,
+    "full_score_target_raw": 100,
+    "remaining_mean_improvement_percentage_points": 28.308,
+    "next_candidate_official_score": null,
+    "note": "Version attribution follows conversation context after the user undertook the round-four push; no task SHA, task ID, or per-metric times were supplied."
+  },
+  "candidate_official_score": null,
+  "product_patch_sha256": "cd04173d14d44cbd1ca8fa917ee90ff789a0a272ea0e1be87ece2a254edb44d6",
+  "release_build": {
+    "command": [
+      "./build.sh",
+      "release",
+      "--make",
+      "-j24"
+    ],
+    "repo": "/home/ganzw/oceanbase/seekdb",
+    "source_commit": "6f2ee5fcd3d54479201585ae3687fc8099af319c",
+    "dirty_paths_at_start": [
+      " M src/data_plane/api/data_plane/fts/ob_fts_struct.h",
+      " M src/observer/composition/retrieval/ob_das_legacy_tr_merge_iter.cpp",
+      " M src/sql/das/iter/ob_das_text_retrieval_merge_iter.cpp",
+      " M src/sql/das/ob_das_domain_utils.cpp",
+      " M src/sql/engine/expr/ob_expr_tokenize.cpp",
+      " M src/sql/optimizer/ob_join_order.cpp",
+      " M src/storage/fts/ob_fts_stop_word.cpp",
+      " M src/storage/fts/ob_fts_stop_word.h",
+      " M src/storage/fts/ob_fts_struct.cpp",
+      " M src/storage/retrieval/ob_sparse_daat_iter.cpp",
+      " M src/storage/retrieval/ob_sparse_daat_iter.h",
+      " M unittest/storage/fts/run_word_map_test.py",
+      " M unittest/storage/fts/test_fts_word_map.cpp",
+      "?? unittest/storage/fts/test_fts_word_map_allocator.cpp"
+    ],
+    "exit_code": 0,
+    "log": "/home/ganzw/oceanbase/run-logs/seekdb-build-20261027T061158730668Z.log"
+  },
+  "correctness": {
+    "baseline_common_tests_passed": 11,
+    "candidate_tests_passed": 15,
+    "primary_test_source_sha256": "9c20a4598fb4ad6347fd4338d227888c640338bc505b3eaa653e453bde411879",
+    "candidate_additional_test_sources": {
+      "unittest/storage/fts/test_fts_word_map_allocator.cpp": "3a25073aab70ac8d1f57808011099c0d395c8a57899aca1ff5055ad3bf92be88"
+    },
+    "baseline_xml": "run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/gtest.xml",
+    "candidate_xml": "run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/gtest.xml",
+    "new_allocator_failure_points": 25,
+    "exact_index_row_document_layout_combinations": 36,
+    "id_comparison_pairs": 100352,
+    "dictionary_coverage": "All 26^3 lower-case triples, every case combination of each built-in word, ASCII byte boundaries, Unicode, controls and trailing padding under four supported collations."
+  },
+  "native_measurements": {
+    "kind": "native component workloads; not official FTS SQL benchmarks",
+    "baseline_commit": "6f2ee5fcd3d54479201585ae3687fc8099af319c",
+    "candidate_product_patch_sha256": "cd04173d14d44cbd1ca8fa917ee90ff789a0a272ea0e1be87ece2a254edb44d6",
+    "primary_test_sha256": "9c20a4598fb4ad6347fd4338d227888c640338bc505b3eaa653e453bde411879",
+    "additional_candidate_tests": {
+      "unittest/storage/fts/test_fts_word_map_allocator.cpp": "3a25073aab70ac8d1f57808011099c0d395c8a57899aca1ff5055ad3bf92be88"
+    },
+    "sequence": [
+      "old",
+      "candidate",
+      "candidate",
+      "old",
+      "old",
+      "candidate"
+    ],
+    "cpu_affinity": [
+      4,
+      5,
+      6,
+      7
+    ],
+    "binaries": {
+      "old": {
+        "path": "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+        "sha256": "c75226c472d1c73a362a13d063997e946e7205de34c978003bd49c31d567280d"
+      },
+      "candidate": {
+        "path": "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+        "sha256": "e8ddf4944e29587ce7edc4c461f70dc34eecf66d038785045048458637749391"
+      }
+    },
+    "workloads": {
+      "index_word_rows": {
+        "gtest_repetitions_per_process": 1500,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 3.1217935230233707,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/index_word_rows-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.0720466970233247,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/index_word_rows-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.520825934014283,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/index_word_rows-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 2.971680368995294,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/index_word_rows-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 2.5708435410051607,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/index_word_rows-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.021368657005951,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/index_word_rows-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 2.8881058110079416,
+          "candidate": 2.871413762681186
+        },
+        "median_sec": {
+          "old": 2.971680368995294,
+          "candidate": 3.021368657005951
+        },
+        "mean_time_reduction": 0.005779583373688779,
+        "median_time_reduction": -0.016720603106940457
+      },
+      "stopword_reads": {
+        "gtest_repetitions_per_process": 1000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 6.577507983020041,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/stopword_reads-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.4211300070164725,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/stopword_reads-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.9205081739928573,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/stopword_reads-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 6.329509291041177,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/stopword_reads-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 6.279061881999951,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/stopword_reads-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.2211877190275118,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/stopword_reads-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 6.3953597186870565,
+          "candidate": 3.1876086333456137
+        },
+        "median_sec": {
+          "old": 6.329509291041177,
+          "candidate": 3.2211877190275118
+        },
+        "mean_time_reduction": 0.5015747708402526,
+        "median_time_reduction": 0.49108413134225126
+      },
+      "id_comparisons": {
+        "gtest_repetitions_per_process": 1500,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 6.479455597989727,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/id_comparisons-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 5.426629075023811,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/id_comparisons-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 5.527346611022949,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/id_comparisons-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 5.47735520103015,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/id_comparisons-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 5.577654902008362,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/id_comparisons-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 4.976041852030903,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/id_comparisons-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 5.844821900342747,
+          "candidate": 5.310005846025888
+        },
+        "median_sec": {
+          "old": 5.577654902008362,
+          "candidate": 5.426629075023811
+        },
+        "mean_time_reduction": 0.09150254078494613,
+        "median_time_reduction": 0.027076939975287928
+      },
+      "beng_documents": {
+        "gtest_repetitions_per_process": 10000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 3.773266355972737,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/beng_documents-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.219204519991763,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/beng_documents-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.219760889012832,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/beng_documents-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.2218591879936866,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/beng_documents-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.72246629599249,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/beng_documents-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.119692770007532,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/beng_documents-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 3.5725306133196377,
+          "candidate": 2.1862193930040426
+        },
+        "median_sec": {
+          "old": 3.72246629599249,
+          "candidate": 2.219204519991763
+        },
+        "mean_time_reduction": 0.3880474012306415,
+        "median_time_reduction": 0.4038348923720544
+      },
+      "legacy_allocator_map": {
+        "gtest_repetitions_per_process": 1000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 4.073452737997286,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/legacy_allocator_map-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.422786373994313,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/legacy_allocator_map-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.422419617010746,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/legacy_allocator_map-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 4.074104821949732,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/legacy_allocator_map-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.6724112479714677,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/legacy_allocator_map-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.4728195819770917,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-dispatch-final-20261027T061548491957Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-final-native-20261027T061655183740Z/legacy_allocator_map-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 3.939989602639495,
+          "candidate": 3.439341857660717
+        },
+        "median_sec": {
+          "old": 4.073452737997286,
+          "candidate": 3.422786373994313
+        },
+        "mean_time_reduction": 0.12706829090193084,
+        "median_time_reduction": 0.15973337751866812
+      }
+    },
+    "limitations": [
+      "Whole-process times include assertions, process startup, and fixture setup.",
+      "Index-row and comparison workloads include their independent oracles.",
+      "The ID comparison workload includes the former out-of-line call boundary; it is not full MATCH execution.",
+      "CPUs are not exclusive and frequency is not fixed.",
+      "All repetitions are retained. No timing adjustment, subtraction, or outlier removal is applied.",
+      "The legacy allocator workload exercises the changed fallback wrappers and hash/equality dispatch, not an unchanged control.",
+      "These results are not the nine official metrics or a score prediction."
+    ],
+    "intermediate_measurements": "run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/comparison.json"
+  },
+  "intermediate_measurements": {
+    "kind": "native component workloads; not official FTS SQL benchmarks",
+    "baseline_commit": "6f2ee5fcd3d54479201585ae3687fc8099af319c",
+    "candidate_product_patch_sha256": "4a300ee6d7e185e0dbbe2a224bf073d81c836d2d733b36fe9ca1d209420f8024",
+    "primary_test_sha256": "9c20a4598fb4ad6347fd4338d227888c640338bc505b3eaa653e453bde411879",
+    "additional_candidate_tests": {
+      "unittest/storage/fts/test_fts_word_map_allocator.cpp": "434e5e0a155a3d8f81a4d486d910ac0c33f4cc1368f908910faeaeccc52ebff0"
+    },
+    "sequence": [
+      "old",
+      "candidate",
+      "candidate",
+      "old",
+      "old",
+      "candidate"
+    ],
+    "cpu_affinity": [
+      4,
+      5,
+      6,
+      7
+    ],
+    "binaries": {
+      "old": {
+        "path": "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+        "sha256": "c75226c472d1c73a362a13d063997e946e7205de34c978003bd49c31d567280d"
+      },
+      "candidate": {
+        "path": "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+        "sha256": "56f0db471a599cd22492fa1d840ddc8ab9647f16d5ae32513b14b07662664216"
+      }
+    },
+    "workloads": {
+      "index_word_rows": {
+        "gtest_repetitions_per_process": 1500,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 3.0718913270393386,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/index_word_rows-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.6210063060279936,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/index_word_rows-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.569855578010902,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/index_word_rows-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.0720035979757085,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/index_word_rows-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 2.5204149520141073,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/index_word_rows-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.570860849984456,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsIndexRows.both_layouts_match_segmented_words",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/index_word_rows-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 2.8881032923430516,
+          "candidate": 2.5872409113411172
+        },
+        "median_sec": {
+          "old": 3.0718913270393386,
+          "candidate": 2.570860849984456
+        },
+        "mean_time_reduction": 0.10417299886731257,
+        "median_time_reduction": 0.16310162818740448
+      },
+      "stopword_reads": {
+        "gtest_repetitions_per_process": 1000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 6.328352401964366,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/stopword_reads-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.272120240959339,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/stopword_reads-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.4728092559962533,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/stopword_reads-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 6.4294904340058565,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/stopword_reads-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 5.7783963839756325,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/stopword_reads-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.2718705070437863,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsStopWords.concurrent_reads_of_published_dictionary",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/stopword_reads-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 6.178746406648618,
+          "candidate": 3.3389333346664594
+        },
+        "median_sec": {
+          "old": 6.328352401964366,
+          "candidate": 3.272120240959339
+        },
+        "mean_time_reduction": 0.45960990872297136,
+        "median_time_reduction": 0.48294278935167245
+      },
+      "id_comparisons": {
+        "gtest_repetitions_per_process": 1500,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 6.329591061978135,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/id_comparisons-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 5.427917524997611,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/id_comparisons-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 5.277093340991996,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/id_comparisons-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 5.47717659000773,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/id_comparisons-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 5.07566107599996,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/id_comparisons-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 4.825928302016109,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsMerge.id_comparison_matches_datum_functions",
+              "--gtest_repeat=1500"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/id_comparisons-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 5.627476242661942,
+          "candidate": 5.176979722668572
+        },
+        "median_sec": {
+          "old": 5.47717659000773,
+          "candidate": 5.277093340991996
+        },
+        "mean_time_reduction": 0.08005302920306478,
+        "median_time_reduction": 0.03653036299409351
+      },
+      "beng_documents": {
+        "gtest_repetitions_per_process": 10000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 3.2217536100069992,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/beng_documents-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.169194423011504,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/beng_documents-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.57001984101953,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/beng_documents-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.7232434790348634,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/beng_documents-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.5727724180324003,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/beng_documents-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 2.6209011339815333,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.beng_segment_reuses_map_across_documents",
+              "--gtest_repeat=10000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/beng_documents-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 3.5059231690247543,
+          "candidate": 2.4533717993375226
+        },
+        "median_sec": {
+          "old": 3.5727724180324003,
+          "candidate": 2.57001984101953
+        },
+        "mean_time_reduction": 0.3002208887481185,
+        "median_time_reduction": 0.28066511372283465
+      },
+      "legacy_allocator_map": {
+        "gtest_repetitions_per_process": 1000,
+        "trials": [
+          {
+            "label": "old",
+            "elapsed_sec": 3.673569251957815,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/collision_control-1-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 4.073937710025348,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/collision_control-2-candidate.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 3.622484092018567,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/collision_control-3-candidate.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.9238629190367647,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/collision_control-4-old.log"
+          },
+          {
+            "label": "old",
+            "elapsed_sec": 3.6225910070352256,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-reference-backed-20261027T055422913733Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/collision_control-5-old.log"
+          },
+          {
+            "label": "candidate",
+            "elapsed_sec": 4.024300249002408,
+            "exit_code": 0,
+            "argv": [
+              "taskset",
+              "-c",
+              "4,5,6,7",
+              "/home/ganzw/oceanbase/run-logs/seekdb-fts-unit-round5-candidate-20261027T060258908852Z/test_fts_word_map",
+              "--gtest_filter=FtsWordMap.collisions_replacement_and_reuse",
+              "--gtest_repeat=1000"
+            ],
+            "log": "/home/ganzw/oceanbase/run-logs/seekdb-fts-round5-native-micro-20261027T060521455936Z/collision_control-6-candidate.log"
+          }
+        ],
+        "mean_sec": {
+          "old": 3.740007726009935,
+          "candidate": 3.9069073503487743
+        },
+        "median_sec": {
+          "old": 3.673569251957815,
+          "candidate": 4.024300249002408
+        },
+        "mean_time_reduction": -0.04462547581870857,
+        "median_time_reduction": -0.09547417592785878
+      }
+    },
+    "limitations": [
+      "Elapsed time includes assertions, process startup, and fixture setup.",
+      "The comparison and index-row tests also run their independent datum/segmentation oracles.",
+      "The merge comparison test includes the former out-of-line call boundary; it is not a full posting-merge benchmark.",
+      "No exclusive CPU reservation or fixed CPU frequency is applied.",
+      "Every trial is retained; no control subtraction or outlier removal is used.",
+      "These measurements do not supply the nine official timings or predict a competition score.",
+      "The legacy-allocator map workload changed indirectly through the new allocator adapters; its regression is retained and it is not treated as an unchanged control."
+    ],
+    "implementation_stage": "intermediate, before per-map hash/equality dispatch caching; superseded only by a different tested product patch, not by dropping observations"
+  },
+  "official_benchmark_assets_sha256": {
+    "fts_large_bench.sh": "596ea5d1c0038e666b78aa94bef22d2dfb87ffc9e84dbc7e2a1da1f746424462",
+    "fts_large_bench_baseline.json": "f4e97eddb2e49c982b967fc8047f7cf37177eebe53d648f6746d85aacda91f0c",
+    "fts_large_bench_gen.py": "b0c816dd8211ac0471f60b72a37a3fb5c62580357a5b6d7ac95f5a8c2e3f143d",
+    "fts_large_bench_score.py": "bea52eb1c68d05693bb3ac5b910ab0e2fa0e70e01582f40466898ee1e2e3ef55",
+    "fts_large_bench_setup.sql": "311826751df7f51ac45156fb4284aeca9bd9197370aceb88f4fb92832b458108"
+  },
+  "runtime_limitation": {
+    "local_socket_creation_observed_at_task_start": "PermissionError: [Errno 1] Operation not permitted",
+    "dedicated_server_started": false,
+    "official_sql_cases_run": 0,
+    "official_benchmarks_run": 0
+  },
+  "publication": "Manual user push is the established workflow; no push attempted for this candidate."
+}

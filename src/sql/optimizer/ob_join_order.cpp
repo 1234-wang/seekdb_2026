@@ -16717,7 +16717,7 @@ int ObJoinOrder::get_query_tokens(ObMatchFunRawExpr *match_expr,
     if (search_text_string.length() == 0) {
       // do nothing
     } else if (OB_FAIL(tokenize_helper.init(allocator_, parser_name, parser_properties))) {
-    } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr("FTWordMap")))) {
+    } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, *allocator_))) {
     } else if (OB_FAIL(tokenize_helper.segment(
                            key_meta,
                            search_text_string.ptr(),

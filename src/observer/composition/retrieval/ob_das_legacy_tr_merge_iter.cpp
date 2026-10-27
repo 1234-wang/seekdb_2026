@@ -1119,7 +1119,7 @@ int ObDASLegacyTRMergeIter::build_query_tokens(const ObDASIRScanCtDef *ir_ctdef,
     storage::ObFTWordMap token_map;
     const int64_t ft_word_bkt_cnt = MAX(search_text_string.length() / 10, 2);
     if (OB_FAIL(tokenize_helper.init(&alloc, parser_name, parser_properties))) {
-    } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, common::ObMemAttr("FTWordMap")))) {
+    } else if (OB_FAIL(token_map.create(ft_word_bkt_cnt, alloc))) {
     } else if (OB_FAIL(tokenize_helper.segment(
                            meta,
                            search_text_string.ptr(),

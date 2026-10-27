@@ -25,6 +25,16 @@ namespace oceanbase
 namespace storage
 {
 
+void FTWordMapEqual::resolve(const ObObjMeta &left, const ObObjMeta &right) const
+{
+  left_meta_ = left;
+  right_meta_ = right;
+  function_ = get_datum_cmp_func(left, right);
+  if (function_ == nullptr) {
+    ob_abort();
+  }
+}
+
 int ObFTWord::hash(uint64_t &hash_val) const
 {
   int ret = OB_SUCCESS;

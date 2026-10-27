@@ -44,7 +44,32 @@ struct ObSRMergeCmp
   virtual ~ObSRMergeCmp() {}
 
   int init(sql::ObDatumMeta id_meta, const ObFixedArray<const ObDatum *, ObIAllocator> *iter_ids);
-  int cmp(const ObSRMergeItem &l, const ObSRMergeItem &r, int64_t &cmp_ret);
+  int cmp(const ObSRMergeItem &l, const ObSRMergeItem &r, int64_t &cmp_ret)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+    } else {
+      const ObDatum &lhs = get_id_datum(l.iter_idx_);
+      const ObDatum &rhs = get_id_datum(r.iter_idx_);
+      if (id_kind_ != IdKind::GENERIC && (lhs.is_null() || rhs.is_null())) {
+        cmp_ret = static_cast<int>(rhs.is_null()) - static_cast<int>(lhs.is_null());
+      } else if (id_kind_ == IdKind::UINT64) {
+        cmp_ret = (lhs.get_uint() > rhs.get_uint()) - (lhs.get_uint() < rhs.get_uint());
+      } else if (id_kind_ == IdKind::BINARY_STRING) {
+        const int64_t common_length = MIN(lhs.len_, rhs.len_);
+        int compared = common_length > 0 ? MEMCMP(lhs.ptr_, rhs.ptr_, common_length) : 0;
+        cmp_ret = compared != 0 ? compared : (lhs.len_ > rhs.len_) - (lhs.len_ < rhs.len_);
+      } else {
+        int compared = 0;
+        if (OB_FAIL(cmp_func_(lhs, rhs, compared, nullptr))) {
+        } else {
+          cmp_ret = compared;
+        }
+      }
+    }
+    return ret;
+  }
 private:
   inline const ObDatum &get_id_datum(const int64_t iter_idx)
   {
@@ -53,7 +78,9 @@ private:
     return *datum;
   }
 private:
+  enum class IdKind : uint8_t { GENERIC, UINT64, BINARY_STRING };
   common::ObDatumCmpFuncType cmp_func_;
+  IdKind id_kind_;
   // TODO: if memory lifetime of docid datum is guaranteed by dim_iters, we can use pointer to datum directly
   //       and avoid deep copy into merge heap here
   const ObFixedArray<const ObDatum *, ObIAllocator> *iter_ids_;

@@ -82,6 +82,8 @@ public:
 
 private:
   static const int64_t DEFAULT_STOPWORD_BUCKET_NUM = 37L;
+  static constexpr int64_t STOPWORD_COUNT = sizeof(ob_stop_word_list) / sizeof(ob_stop_word_list[0]);
+  static bool make_ascii_key(const common::ObString &word, uint64_t &key);
   // Populated before publication by ObFTParseData::init_global(), then read
   // concurrently without mutation until all parser users have stopped.
   typedef common::hash::ObHashSet<storage::ObFTWord,
@@ -89,6 +91,8 @@ private:
 
   StopWordSet stopword_set_;
   ObObjMeta stopword_type_;
+  uint64_t ascii_keys_[STOPWORD_COUNT] = {};
+  bool ascii_keys_valid_ = false;
 
   bool inited_ = false;
 

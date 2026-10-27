@@ -38,6 +38,7 @@ public:
   ~ObFTWord() = default;
 
   OB_INLINE const ObDatum &get_word() const { return word_; }
+  OB_INLINE const ObObjMeta &get_meta() const { return meta_; }
   OB_INLINE ObCollationType get_collation_type() const { return meta_.get_collation_type(); }
   OB_INLINE bool empty() const { return word_.get_string().empty(); }
   int hash(uint64_t &hash_val) const;
@@ -51,20 +52,149 @@ private:
   ObObjMeta meta_;
 };
 
+// A word map is confined to one worker. Cache operation dispatch there rather
+// than adding cached fields to every token or changing collation semantics.
+class FTWordMapHash final
+{
+public:
+  int operator()(const ObFTWord &word, uint64_t &hash) const
+  {
+    if (function_ == nullptr || meta_ != word.get_meta()) {
+      meta_ = word.get_meta();
+      auto *functions = common::ObDatumFuncs::get_basic_func(meta_.get_type(), meta_.get_collation_type());
+      function_ = functions != nullptr ? functions->default_hash_ : nullptr;
+    }
+    return function_ != nullptr ? function_(word.get_word(), 0, hash, nullptr) : OB_ERR_UNEXPECTED;
+  }
+private:
+  mutable common::ObObjMeta meta_;
+  mutable common::ObDatumHashFuncType function_ = nullptr;
+};
+
+class FTWordMapEqual final
+{
+public:
+  bool operator()(const ObFTWord &left, const ObFTWord &right) const
+  {
+    if (function_ == nullptr || left_meta_ != left.get_meta() || right_meta_ != right.get_meta()) {
+      resolve(left.get_meta(), right.get_meta());
+    }
+    int compared = 0;
+    if (OB_SUCCESS != function_(left.get_word(), right.get_word(), compared, nullptr)) {
+      ob_abort();
+    }
+    return compared == 0;
+  }
+private:
+  void resolve(const ObObjMeta &left, const ObObjMeta &right) const;
+  mutable common::ObObjMeta left_meta_;
+  mutable common::ObObjMeta right_meta_;
+  mutable common::ObDatumCmpFuncType function_ = nullptr;
+};
+
 // Each map is local to document/query tokenization. Neither its buckets nor
 // its node allocator are shared between workers, so per-token bucket latches
 // and allocator spinlocks are unnecessary.
 using FTWordMapNode = common::hash::HashMapTypes<ObFTWord, int64_t>::AllocType;
-using FTWordMapNodeAllocator = common::hash::SimpleAllocer<
+using FTWordMapNodeAllocatorBase = common::hash::SimpleAllocer<
     FTWordMapNode,
     common::hash::NodeNumTraits<FTWordMapNode>::NODE_NUM,
     common::hash::NoPthreadDefendMode>;
+class FTWordMapNodeAllocator final : public FTWordMapNodeAllocatorBase
+{
+public:
+  void set_allocator(common::ObIAllocator *allocator) { allocator_ = allocator; }
+  FTWordMapNode *alloc()
+  {
+    FTWordMapNode *node = nullptr;
+    if (allocator_ == nullptr) {
+      node = FTWordMapNodeAllocatorBase::alloc();
+    } else if (void *buffer = allocator_->alloc(sizeof(FTWordMapNode)); buffer != nullptr) {
+      node = new (buffer) FTWordMapNode();
+    }
+    return node;
+  }
+  void free(FTWordMapNode *node)
+  {
+    if (allocator_ == nullptr) {
+      FTWordMapNodeAllocatorBase::free(node);
+    } else if (node != nullptr) {
+      node->~FTWordMapNode();
+      allocator_->free(node);
+    }
+  }
+private:
+  common::ObIAllocator *allocator_ = nullptr;
+};
+
+class FTWordMapBucketAllocator final : public common::ObMalloc
+{
+public:
+  using common::ObMalloc::ObMalloc;
+  void set_allocator(common::ObIAllocator *allocator) { allocator_ = allocator; }
+  void *alloc(int64_t size) override
+  {
+    return allocator_ != nullptr ? allocator_->alloc(size) : common::ObMalloc::alloc(size);
+  }
+  void *alloc(int64_t size, const common::ObMemAttr &attr) override
+  {
+    return allocator_ != nullptr ? allocator_->alloc(size, attr) : common::ObMalloc::alloc(size, attr);
+  }
+  void free(void *pointer) override
+  {
+    if (allocator_ != nullptr) {
+      allocator_->free(pointer);
+    } else {
+      common::ObMalloc::free(pointer);
+    }
+  }
+private:
+  common::ObIAllocator *allocator_ = nullptr;
+};
+
 typedef common::hash::ObHashMap<ObFTWord,
                               int64_t,
                               common::hash::NoPthreadDefendMode,
-                              common::hash::hash_func<ObFTWord>,
-                              common::hash::equal_to<ObFTWord>,
-                              FTWordMapNodeAllocator> ObFTWordMap;
+                              FTWordMapHash,
+                              FTWordMapEqual,
+                              FTWordMapNodeAllocator,
+                              common::hash::NormalPointer,
+                              FTWordMapBucketAllocator> FTWordMapBase;
+
+class ObFTWordMap final : public FTWordMapBase
+{
+public:
+  using FTWordMapBase::create;
+  int create(int64_t bucket_count, common::ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    if (created()) {
+      ret = OB_INIT_TWICE;
+    } else {
+      // The caller outlives this local map. Reuse its allocation pages for
+      // temporary buckets and nodes rather than allocating separate blocks.
+      get_local_allocer().set_allocator(&allocator);
+      get_local_bucket_allocer().set_allocator(&allocator);
+      ret = FTWordMapBase::create(bucket_count, common::ObMemAttr("FTWordMap"));
+      if (OB_FAIL(ret)) {
+        reset_parent_allocator();
+      }
+    }
+    return ret;
+  }
+  int destroy()
+  {
+    int ret = FTWordMapBase::destroy();
+    reset_parent_allocator();
+    return ret;
+  }
+private:
+  void reset_parent_allocator()
+  {
+    get_local_allocer().set_allocator(nullptr);
+    get_local_bucket_allocer().set_allocator(nullptr);
+  }
+};
 
 class ObAddWordFlag final
 {

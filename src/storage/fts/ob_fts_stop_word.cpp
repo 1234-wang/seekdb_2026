@@ -21,6 +21,7 @@
 #include "storage/fts/ob_fts_stop_word.h"
 #include "storage/fts/ob_fts_parser_helper.h"
 #include "storage/fts/ob_fts_parser_property.h"
+#include <algorithm>
 
 namespace oceanbase
 {
@@ -49,14 +50,20 @@ int ObStopWordChecker::init()
     stop_meta.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
 
     stopword_type_.set_meta(stop_meta);
-    const int64_t stopword_count = sizeof(ob_stop_word_list) / sizeof(ob_stop_word_list[0]);
-    for (int64_t i = 0; OB_SUCC(ret) && i < stopword_count; ++i) {
+    ascii_keys_valid_ = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < STOPWORD_COUNT; ++i) {
       ObFTWord stopword(STRLEN(ob_stop_word_list[i]), ob_stop_word_list[i], stopword_type_);
+      if (!make_ascii_key(stopword.get_word().get_string(), ascii_keys_[i])) {
+        // If the built-in dictionary ever acquires non-ASCII entries, retain
+        // collation-aware lookup for every word, including ASCII equivalents.
+        ascii_keys_valid_ = false;
+      }
       if (OB_FAIL(stopword_set_.set_refactored(stopword))) {
       }
     }
 
     if (OB_SUCC(ret)) {
+      std::sort(ascii_keys_, ascii_keys_ + STOPWORD_COUNT);
       inited_ = true;
     }
   }
@@ -65,19 +72,47 @@ int ObStopWordChecker::init()
 
 void ObStopWordChecker::destroy()
 {
+  ascii_keys_valid_ = false;
   if (inited_) {
     stopword_set_.destroy();
     inited_ = false;
   }
 }
 
+bool ObStopWordChecker::make_ascii_key(const ObString &word, uint64_t &key)
+{
+  int64_t length = word.length();
+  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(word.ptr());
+  while (length > 0 && bytes[length - 1] == ' ') { --length; }
+  bool valid = length > 0 && length < FTS_STOP_WORD_MAX_LENGTH;
+  key = 1; // a length prefix keeps differently sized words distinct
+  for (int64_t i = 0; valid && i < length; ++i) {
+    unsigned char byte = bytes[i];
+    if (byte >= 'A' && byte <= 'Z') { byte += 'a' - 'A'; }
+    if (byte < 'a' || byte > 'z') {
+      valid = false;
+    } else {
+      key = (key << 5) | (byte - 'a' + 1);
+    }
+  }
+  return valid;
+}
+
 int ObStopWordChecker::check_stopword(const ObFTWord &word, bool &is_stopword)
 {
   int ret = OB_SUCCESS;
+  uint64_t ascii_key = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(word.empty())) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (ascii_keys_valid_ && ObCharset::is_valid_collation(word.get_collation_type())
+      && make_ascii_key(word.get_word().get_string(), ascii_key)) {
+    // The dictionary's general_ci collation folds ASCII letters and pads
+    // trailing spaces. Non-ASCII, punctuation and control bytes use the exact
+    // original conversion/hash path below.
+    is_stopword = ascii_key >= ascii_keys_[0] && ascii_key <= ascii_keys_[STOPWORD_COUNT - 1]
+        && std::binary_search(ascii_keys_, ascii_keys_ + STOPWORD_COUNT, ascii_key);
   } else {
     common::ObString cmp_str;
     if (ObCharset::charset_type_by_coll(word.get_collation_type())
