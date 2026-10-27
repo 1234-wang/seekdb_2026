@@ -204,7 +204,7 @@ int ObAddWord::groupby_word(const ObFTWord &word, const int64_t word_freq)
     ret = word_map_.set_refactored(word, 1/*word count*/);
   } else {
     // The map belongs to this document's synchronous parse. Repeated words can
-    // update the existing value without a second hash lookup and bucket lock.
+    // update the existing value without a second hash lookup.
     int64_t *word_count = word_map_.get(word);
     if (word_count != nullptr) {
       *word_count += word_freq;

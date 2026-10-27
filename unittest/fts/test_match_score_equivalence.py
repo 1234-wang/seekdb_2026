@@ -52,6 +52,8 @@ INSERT INTO docs VALUES
             f'SELECT id FROM docs WHERE {match} ORDER BY {match} DESC, id LIMIT 4',
             f'SELECT SUM({match}), MAX({match}) FROM docs WHERE {match}',
             f'SELECT category, COUNT(*) FROM docs WHERE {match} GROUP BY category ORDER BY category',
+            f'SELECT id FROM docs WHERE {match} AND ({match}>0.5 OR category=3) ORDER BY id',
+            f"SELECT id FROM docs WHERE {match} AND CAST({match} AS CHAR)='1' ORDER BY id",
             f'SELECT id FROM docs WHERE {match} AND EXISTS(SELECT 1 WHERE docs.category=1) ORDER BY id',
             f'SELECT a.id, b.id FROM docs a JOIN docs b ON a.category=b.category '
             f"WHERE MATCH(a.body) AGAINST('{words}') AND b.id=2 ORDER BY a.id, b.id",
@@ -106,6 +108,7 @@ def check_plans():
         (f'SELECT id FROM docs WHERE {match} ORDER BY id', False),
         (f'SELECT id FROM docs WHERE {match}', True),
         (f'SELECT id, {match}>0 FROM docs WHERE {match} ORDER BY id', True),
+        (f'SELECT id FROM docs WHERE {match} ORDER BY id FOR UPDATE', True),
         (f'SELECT id, {match} FROM docs WHERE {match}', True),
         (f'SELECT id FROM docs WHERE {match} ORDER BY {match} DESC LIMIT 3', True),
         (f'SELECT COUNT(*) FROM docs WHERE {match}>0.1', True),
@@ -162,6 +165,6 @@ if __name__ == '__main__':
     print(f'{args.mode}: {len(actual)} MATCH result groups checked')
     if args.check_plans:
         check_plans()
-        print('8 optimizer scoring decisions checked')
+        print('9 optimizer scoring decisions checked')
         check_count_limit()
         print('9 COUNT/LIMIT cardinality and ordering cases checked')

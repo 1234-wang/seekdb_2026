@@ -12817,7 +12817,7 @@ int ObTransformUtils::check_need_calc_match_score(ObExecContext *exec_ctx,
   ObSEArray<ObRawExpr *, 16> exprs;
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(stmt) || OB_ISNULL(match_expr)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (!stmt->is_select_stmt()
+  } else if (!stmt->is_select_stmt() || stmt->has_for_update()
       || NATURAL_LANGUAGE_MODE != match_expr->get_mode_flag()
       || !match_expr->get_columns_boosts().empty()) {
     // Boolean matching and field boosts need their original score evaluation.
@@ -12863,6 +12863,11 @@ int ObTransformUtils::inner_check_need_calc_match_score(ObExecContext *exec_ctx,
   if (OB_ISNULL(expr) || OB_ISNULL(match_expr)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (expr == match_expr) {
+    need_calc = true;
+    need_check_child = false;
+  } else if (expr->is_match_against_expr()) {
+    // Equivalent MATCH calls can be distinct raw expressions before runtime
+    // expression sharing. Keep scoring rather than missing a numeric use.
     need_calc = true;
     need_check_child = false;
   } else if (expr->get_expr_type() == T_OP_GT || expr->get_expr_type() == T_OP_LT) {

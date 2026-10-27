@@ -540,7 +540,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_fulltext_search_ && !func.contain_geometry_values_
-        && !func.contain_vec_index_approx_ && stmt->is_select_stmt()) {
+        && !func.contain_vec_index_approx_ && !func.contain_for_update_ && stmt->is_select_stmt()) {
       const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(stmt);
       const ObAggFunRawExpr *agg = select_stmt->get_aggr_item_size() == 1
           ? select_stmt->get_aggr_item(0) : nullptr;

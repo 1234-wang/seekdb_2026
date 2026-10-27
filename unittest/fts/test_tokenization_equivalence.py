@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import random
+import re
 import subprocess
 
 
@@ -19,7 +20,7 @@ def snapshot():
     randomizer = random.Random(20261026)
     samples = ['', 'hello hello world world', 'Hello HELLO hello', '世界 世界 数据库 数据库',
                'THE and is the an', 'ＡＢＣ abc 123 ＡＢＣ', 'İstanbul Σίσυφος Straße',
-               '😀 hello 😀 中文', 'a\tb\nc\rd', 'x' * 1000, '重复词 ' * 500]
+               '😀 hello 😀 中文', 'a\tb\nc\rd', 'x' * 1000, '重复词 ' * 500, 'hello\x00world', '\x00abc\x7fxyz', '\n\x00\t\r', 'abc\x1fDEF']
     pieces = ['hello', 'WORLD', 'SeekDB', '全文索引', '数据库', '中文', '東京', '123',
               '3.14159', '😀', 'naïve', 'café', 'Σ', '-', '.', ',', '\n', '\t', 'the']
     for _ in range(120):
@@ -42,8 +43,27 @@ def snapshot():
     rows = result.stdout.splitlines()
     if len(rows) != len(labels):
         raise AssertionError((len(rows), len(labels), rows[:5]))
-    return [[label, canonical(None if row == 'NULL' else json.loads(row))]
-            for label, row in zip(labels, rows)]
+    captured = [[label, canonical(None if row == 'NULL' else json.loads(row))]
+                for label, row in zip(labels, rows)]
+    # A fast ASCII path must retain unsupported-charset and binary behavior,
+    # including after the shared IK dictionaries have already been warmed.
+    for parser in ['ik', 'beng']:
+        for charset in ['utf8mb4', 'utf16', 'utf16le', 'gbk', 'latin1', 'binary']:
+            for value in ['hello HELLO world 123', '数据库 中文 OceanBase']:
+                literal = "CONVERT(UNHEX('" + value.encode().hex() + "') USING utf8mb4)"
+                query = f"SELECT TOKENIZE(CONVERT({literal} USING {charset}),'{parser}');"
+                result = subprocess.run(
+                    [client, '-h127.0.0.1', '-P' + os.environ.get('SEEKDB_TEST_PORT', '10105'),
+                     '-uroot', '-N', '-s', '--raw', '--default-character-set=utf8mb4', '-e', query],
+                    text=True, capture_output=True, timeout=30)
+                if result.returncode:
+                    error = re.search(r'ERROR (\d+)', result.stderr)
+                    assert error is not None, result.stderr
+                    outcome = ['error', error.group(1)]
+                else:
+                    outcome = ['tokens', canonical(json.loads(result.stdout))]
+                captured.append([['charset', parser, charset, value], outcome])
+    return captured
 
 
 if __name__ == '__main__':
