@@ -47,6 +47,8 @@ public:
     SURROGATE_LOW = 6,
   };
 
+  static CharType classify_unicode(ob_wc_t unicode);
+
   static int classify_first_char(ObCollationType coll_type,
                                  const char *input,
                                  const uint8_t char_len,
@@ -441,28 +443,45 @@ inline int ObFTCharUtil::is_ignore_single_cjk(ObCollationType coll_type,
   return ret;
 }
 
+inline ObFTCharUtil::CharType ObFTCharUtil::classify_unicode(ob_wc_t unicode)
+{
+  CharType type = CharType::USELESS;
+  if (unicode < 0x80) {
+    if ((unicode >= 'a' && unicode <= 'z') || (unicode >= 'A' && unicode <= 'Z')) {
+      type = CharType::ENGLISH_LETTER;
+    } else if (unicode >= '0' && unicode <= '9') {
+      type = CharType::ARABIC_LETTER;
+    }
+  } else if (ObUnicodeBlockUtils::is_chinese(unicode)) {
+    // CJK ranges do not overlap the ASCII/full-width alpha and digit ranges.
+    type = CharType::CHINESE;
+  } else if (ObUnicodeBlockUtils::is_alpha(unicode)) {
+    type = CharType::ENGLISH_LETTER;
+  } else if (ObUnicodeBlockUtils::is_arabic(unicode)) {
+    type = CharType::ARABIC_LETTER;
+  } else if (ObUnicodeBlockUtils::is_other_cjk(unicode)) {
+    type = CharType::OTHER_CJK;
+  }
+  return type;
+}
+
 template <ObCharsetType CS_TYPE>
 inline int ObFTCharUtil::do_classify(const char *input, const uint8_t char_len, CharType &type)
 {
   int ret = OB_SUCCESS;
   ob_wc_t unicode = 0;
   type = CharType::USELESS;
-  // Decode once. Previously each unsuccessful category probe decoded the
-  // same character again, up to six times for punctuation and CJK input.
   if (OB_FAIL(decode_unicode<CS_TYPE>(input, char_len, unicode))) {
-  } else if (ObUnicodeBlockUtils::is_alpha(unicode)) {
-    type = CharType::ENGLISH_LETTER;
-  } else if (ObUnicodeBlockUtils::is_arabic(unicode)) {
-    type = CharType::ARABIC_LETTER;
-  } else if (ObUnicodeBlockUtils::is_chinese(unicode)) {
-    type = CharType::CHINESE;
-  } else if (ObUnicodeBlockUtils::is_other_cjk(unicode)) {
-    type = CharType::OTHER_CJK;
-  } else if constexpr (CS_TYPE == CHARSET_UTF16 || CS_TYPE == CHARSET_UTF16LE) {
-    if (ObUnicodeBlockUtils::check_high_surrogate(unicode)) {
-      type = CharType::SURROGATE_HIGH;
-    } else if (ObUnicodeBlockUtils::check_low_surrogate(unicode)) {
-      type = CharType::SURROGATE_LOW;
+  } else {
+    type = classify_unicode(unicode);
+    if constexpr (CS_TYPE == CHARSET_UTF16 || CS_TYPE == CHARSET_UTF16LE) {
+      if (type == CharType::USELESS) {
+        if (ObUnicodeBlockUtils::check_high_surrogate(unicode)) {
+          type = CharType::SURROGATE_HIGH;
+        } else if (ObUnicodeBlockUtils::check_low_surrogate(unicode)) {
+          type = CharType::SURROGATE_LOW;
+        }
+      }
     }
   }
   return ret;

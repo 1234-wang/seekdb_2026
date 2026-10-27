@@ -21,6 +21,8 @@ def snapshot():
     samples = ['', 'hello hello world world', 'Hello HELLO hello', '世界 世界 数据库 数据库',
                'THE and is the an', 'ＡＢＣ abc 123 ＡＢＣ', 'İstanbul Σίσυφος Straße',
                '😀 hello 😀 中文', 'a\tb\nc\rd', 'x' * 1000, '重复词 ' * 500, 'hello\x00world', '\x00abc\x7fxyz', '\n\x00\t\r', 'abc\x1fDEF']
+    samples += ['left' + chr(point) + 'right' for point in
+                [0, 0x7f, 0x80, 0x7ff, 0x800, 0xd7ff, 0xe000, 0xffff, 0x10000, 0x10ffff]]
     # Numeric compounds, mixed-width connectors and stopword collation must
     # retain their baseline behavior on the tokenizer fast paths.
     samples += ['一二两三四五六七八九十零壹贰叁肆伍陆柒捌玖拾百千万亿佰仟萬億兆卅廿',
@@ -47,6 +49,25 @@ def snapshot():
             queries.append("SELECT TOKENIZE(CONVERT(UNHEX('" + text.encode().hex() +
                            "') USING utf8mb4), '" + parser + "', '[{\"output\":\"all\"}]');")
             labels.append([parser, text])
+    # Arbitration must preserve ambiguity resolution and complete token sets
+    # in both modes, including a document spanning multiple segmentation batches.
+    ambiguous = ['南京市长江大桥', '研究生命起源', '中华人民共和国国歌',
+                 '长春市长春节讲话', '乒乓球拍卖完了', '北京大学生物系主任',
+                 '一百二十三个苹果 两千万元 叁佰萬 壹亿兆',
+                 '中华人民共和国 南京市长江大桥 ABC123，世界😀 ' * 150,
+                 '数据库。' * 400, '研究生命起源南京市长江大桥' * 100]
+    fragments = ['研究', '生命', '起源', '南京', '南京市', '长江', '大桥', '北京',
+                 '大学', '一百', '二十三', '个', '人民', '共和国', '中华', 'ABC',
+                 '123', ' ', ',', '。', '😀', '東京', '１２３']
+    for _ in range(100):
+        ambiguous.append(''.join(randomizer.choice(fragments)
+                                 for _ in range(randomizer.randrange(1, 70))))
+    for mode in ['smart', 'max_word']:
+        options = json.dumps([{'output': 'all'}, {'additional_args': [{'ik_mode': mode}]}])
+        for text in ambiguous:
+            queries.append("SELECT TOKENIZE(CONVERT(UNHEX('" + text.encode().hex() +
+                           "') USING utf8mb4), 'ik', '" + options + "');")
+            labels.append(['ik', mode, text])
     client = os.environ.get('MYSQL_CLIENT', str(Path(__file__).resolve().parents[2] /
                             'deps/3rd/u01/obclient/bin/obclient'))
     result = subprocess.run([client, '-h127.0.0.1', '-P' + os.environ.get('SEEKDB_TEST_PORT', '10105'),
@@ -78,6 +99,24 @@ def snapshot():
                 else:
                     outcome = ['tokens', canonical(json.loads(result.stdout))]
                 captured.append([['charset', parser, charset, value], outcome])
+    # Do not silently change the error class for malformed UTF-8. Explicit
+    # introducers preserve the byte sequence where accepted by SQL resolution.
+    malformed = ['80', 'c0af', 'e08080', 'eda080', 'edbfbf', 'f0808080',
+                 'f4908080', 'f5808080', 'ff', 'fe', 'c2', 'e4b8', 'f09f92']
+    for bad in malformed:
+        for value in [bad, '616263' + bad, '616263' + bad + '646566']:
+            query = f"SELECT TOKENIZE(_utf8mb4 X'{value}','ik','[{{\"output\":\"all\"}}]');"
+            result = subprocess.run(
+                [client, '-h127.0.0.1', '-P' + os.environ.get('SEEKDB_TEST_PORT', '10105'),
+                 '-uroot', '-N', '-s', '--raw', '--default-character-set=utf8mb4', '-e', query],
+                text=True, capture_output=True, timeout=30)
+            if result.returncode:
+                error = re.search(r'ERROR (\d+)', result.stderr)
+                assert error is not None, result.stderr
+                outcome = ['error', error.group(1)]
+            else:
+                outcome = ['tokens', canonical(json.loads(result.stdout))]
+            captured.append([['malformed-utf8', value], outcome])
     return captured
 
 

@@ -174,8 +174,15 @@ if __name__ == '__main__':
     parser.add_argument('mode', choices=['record', 'verify'])
     parser.add_argument('path', type=Path)
     parser.add_argument('--check-plans', action='store_true', help='Assert candidate scoring decisions')
+    parser.add_argument('--queries-from', type=Path,
+                        help='Replay a saved query list against existing data without rebuilding fixtures')
     args = parser.parse_args()
-    actual = snapshot()
+    if args.queries_from:
+        saved = json.loads(args.queries_from.read_text())
+        actual = [[query, execute(query if query.rstrip().endswith(';') else query + ';')]
+                  for query, _ in saved]
+    else:
+        actual = snapshot()
     if args.mode == 'record':
         args.path.write_text(json.dumps(actual, ensure_ascii=False, indent=2))
     else:
