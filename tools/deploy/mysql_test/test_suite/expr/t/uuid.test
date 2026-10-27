@@ -1,0 +1,39 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: qingkui-77
+#owner group: sql1
+
+--disable_abort_on_error
+--disable_warnings
+
+# Regression test for issue #1480: UUID node initialization must not fail
+# server startup when no MAC address can be obtained; a random node ID with
+# the multicast bit set (RFC 9562 section 6.10) is used instead. These SQL
+# level checks verify that UUID() keeps producing valid UUIDv1 values whose
+# version, variant and layout semantics are preserved on the fallback path.
+
+# basic format
+select length(uuid());
+select is_uuid(uuid());
+
+# two consecutive calls must not collide (timestamp tick or clock sequence)
+select uuid() != uuid();
+
+# version nibble: byte 7 of the standard (non-swapped) binary form is
+# time_hi_and_version; its low hex char must be '1' (UUIDv1)
+select substring(hex(uuid_to_bin(uuid())), 13, 1) = '1';
+
+# variant: byte 9's high two bits must be 10, i.e. its low hex char in {8,9,a,b}
+select conv(substring(hex(uuid_to_bin(uuid())), 17, 1), 16, 10) between 8 and 11;
+
+# format functions: deterministic roundtrip of a fixed UUID
+select is_uuid('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002');
+select hex(uuid_to_bin('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002', true));
+select bin_to_uuid(uuid_to_bin('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002', true), true);
+
+# invalid input handling stays unchanged
+select is_uuid('not-a-uuid');
+select is_uuid(null);
+
+--enable_warnings

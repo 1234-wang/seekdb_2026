@@ -1,0 +1,30 @@
+select length(uuid());
+length(uuid())
+36
+select is_uuid(uuid());
+is_uuid(uuid())
+1
+select uuid() != uuid();
+uuid() != uuid()
+1
+select substring(hex(uuid_to_bin(uuid())), 13, 1) = '1';
+substring(hex(uuid_to_bin(uuid())), 13, 1) = '1'
+1
+select conv(substring(hex(uuid_to_bin(uuid())), 17, 1), 16, 10) between 8 and 11;
+conv(substring(hex(uuid_to_bin(uuid())), 17, 1), 16, 10) between 8 and 11
+1
+select is_uuid('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002');
+is_uuid('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002')
+1
+select hex(uuid_to_bin('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002', true));
+hex(uuid_to_bin('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002', true))
+11EF6F3AE7A1D0B69B2F0242AC110002
+select bin_to_uuid(uuid_to_bin('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002', true), true);
+bin_to_uuid(uuid_to_bin('e7a1d0b6-6f3a-11ef-9b2f-0242ac110002', true), true)
+e7a1d0b6-6f3a-11ef-9b2f-0242ac110002
+select is_uuid('not-a-uuid');
+is_uuid('not-a-uuid')
+0
+select is_uuid(null);
+is_uuid(null)
+NULL
