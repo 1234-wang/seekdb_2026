@@ -1,0 +1,15 @@
+# Regression for shared DDL identifier escaping (issue #1469).
+# Unique indexes exercise the enum/set cast and shadow-column alias paths.
+--disable_warnings
+drop table if exists ddl_identifier_escape;
+--enable_warnings
+
+set ob_query_timeout = 60000000;
+create table ddl_identifier_escape (id int primary key, `e``num` enum('a','b'), `s``et` set('x','y'));
+insert into ddl_identifier_escape values (1,'a','x'),(2,'b','y');
+create unique index enum_idx on ddl_identifier_escape (`e``num`);
+create unique index set_idx on ddl_identifier_escape (`s``et`);
+select id, `e``num` as enum_value, `s``et` as set_value from ddl_identifier_escape order by id;
+select id from ddl_identifier_escape force index(enum_idx) where `e``num` = 'a';
+select id from ddl_identifier_escape force index(set_idx) where `s``et` = 'y';
+drop table ddl_identifier_escape;

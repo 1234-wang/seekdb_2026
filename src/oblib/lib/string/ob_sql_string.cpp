@@ -23,6 +23,43 @@ namespace oceanbase
 namespace common
 {
 
+int ObSqlString::escape_identifier(ObIAllocator &allocator, const ObString &src, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  const int64_t src_len = src.length();
+  int64_t dst_len = src_len;
+  if (NULL == src.ptr() || src_len <= 0) {
+    dst.assign_ptr(NULL, 0);
+  } else if (NULL == src.find('`')) {
+    dst = src;
+  } else {
+    for (int64_t i = 0; i < src_len; ++i) {
+      if ('`' == src[i]) {
+        ++dst_len;
+      }
+    }
+    char *buf = NULL;
+    if (dst_len > INT32_MAX) {
+      dst.assign_ptr(NULL, 0);
+      ret = OB_SIZE_OVERFLOW;
+    } else if (NULL == (buf = static_cast<char *>(allocator.alloc(dst_len + 1)))) {
+      dst.assign_ptr(NULL, 0);
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      int64_t pos = 0;
+      for (int64_t i = 0; i < src_len; ++i) {
+        buf[pos++] = src[i];
+        if ('`' == src[i]) {
+          buf[pos++] = '`';
+        }
+      }
+      buf[pos] = '\0';
+      dst.assign_ptr(buf, static_cast<ObString::obstr_size_t>(dst_len));
+    }
+  }
+  return ret;
+}
+
 ObSqlString::ObSqlString(const lib::ObLabel &label /* = ObModIds::OB_SQL_STRING */)
     : data_(NULL), data_size_(0), len_(0), allocator_(label)
 {

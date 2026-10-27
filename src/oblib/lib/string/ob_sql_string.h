@@ -37,6 +37,10 @@ class ObSqlString
 {
 
 public:
+  // Escape embedded MySQL identifier delimiters without adding outer quotes.
+  // The result aliases src when no escaping is needed; otherwise allocator owns it.
+  static int escape_identifier(ObIAllocator &allocator, const ObString &src, ObString &dst);
+
   explicit ObSqlString(const lib::ObLabel &label = ObModIds::OB_SQL_STRING);
   virtual ~ObSqlString();
 
