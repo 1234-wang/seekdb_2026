@@ -1,0 +1,16 @@
+# uuid() must stay available when the MAC address of the host cannot be read:
+# restricted containers, network namespaces and sandboxes where socket() or
+# ioctl(SIOCGIFCONF) fail. In that case the node id of the version 1 UUID falls
+# back to random bytes with the multicast bit set, as described in RFC 4122
+# section 4.5, instead of making the uuid() expression unusable.
+#
+# No raw uuid() value is printed, so the expected result is the same whether the
+# node id comes from a real MAC address or from the random fallback.
+
+select length(uuid()) as uuid_length;
+select uuid() regexp '^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' as is_rfc4122_v1;
+select length(substring_index(uuid(), '-', -1)) as node_id_length;
+select substring(replace(uuid(), '-', ''), 13, 1) as uuid_version;
+select substring(replace(uuid(), '-', ''), 17, 1) in ('8', '9', 'a', 'b') as rfc4122_variant;
+select count(*) as total, count(distinct u) as distinct_uuids from (select uuid() as u from table(generator(100))) t;
+select uuid() is not null as uuid_is_not_null;
