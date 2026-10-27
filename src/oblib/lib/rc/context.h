@@ -411,8 +411,7 @@ public:
     ObMemAttr inner_attr = param_.attr_;
     attr_ = inner_attr;
     // init allocator
-    const bool thread_safe = param_.properties_ & ALLOC_THREAD_SAFE;
-    ret = init_malloc_alloc(thread_safe);
+    ret = init_malloc_alloc();
     if (OB_SUCC(ret)) {
       // init arena allocator
       p_arena_alloc_ = new (&arena_alloc_) common::ObArenaAllocator(
@@ -427,11 +426,11 @@ public:
     }
     return ret;
   }
-  int init_malloc_alloc(const bool thread_safe)
+  int init_malloc_alloc()
   {
     p_alloc_ = new (&page_malloc_alloc_) common::ObMalloc(attr_);
     p_freeable_malloc_alloc_ = new (&freeable_malloc_alloc_)
-        common::MemoryContextMalloc(*p_alloc_, attr_, thread_safe);
+        common::MemoryContextMalloc(*p_alloc_, attr_);
     freeable_alloc_ = p_freeable_malloc_alloc_;
     return common::OB_SUCCESS;
   }

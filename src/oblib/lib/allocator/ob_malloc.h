@@ -19,7 +19,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdlib>
-#include <mutex>
 #include <stdint.h>
 #include "lib/ob_abort.h"
 #include "lib/alloc/alloc_func.h"
@@ -318,22 +317,17 @@ private:
 };
 typedef ObMalloc ObTCMalloc;
 
+// Allocations must be explicitly freed before the owning allocator is destroyed.
 class MemoryContextMalloc final : public ObIAllocator
 {
 public:
   MemoryContextMalloc(ObIAllocator &allocator,
-                      const ObMemAttr &attr,
-                      const bool thread_safe)
+                      const ObMemAttr &attr)
     : allocator_(&allocator),
       attr_(attr),
-      head_(nullptr),
-      live_bytes_(0),
-      thread_safe_(thread_safe)
+      live_bytes_(0)
   {}
-  ~MemoryContextMalloc() override
-  {
-    reset();
-  }
+  ~MemoryContextMalloc() override = default;
 
   void *alloc(const int64_t size) override
   {
@@ -348,11 +342,7 @@ public:
       void *raw_ptr = allocator_->alloc(raw_size, attr);
       if (nullptr != raw_ptr) {
         Header *header = new (raw_ptr) Header(this, allocation_size(raw_ptr, raw_size));
-        {
-          OptionalLockGuard guard(*this);
-          link_locked(header);
-          live_bytes_.fetch_add(header->allocation_size_, std::memory_order_relaxed);
-        }
+        live_bytes_.fetch_add(header->allocation_size_, std::memory_order_relaxed);
         ptr = header + 1;
       }
     }
@@ -382,24 +372,6 @@ public:
   int64_t total() const override { return live_bytes_.load(std::memory_order_relaxed); }
   int64_t used() const override { return total(); }
 
-  void reset() override
-  {
-    Header *list = nullptr;
-    {
-      OptionalLockGuard guard(*this);
-      list = head_;
-      head_ = nullptr;
-      live_bytes_.store(0, std::memory_order_relaxed);
-    }
-    while (nullptr != list) {
-      Header *next = list->next_;
-      abort_unless(list->is_valid() && this == list->owner_);
-      list->invalidate();
-      allocator_->free(list);
-      list = next;
-    }
-  }
-
 private:
   struct alignas(std::max_align_t) Header
   {
@@ -408,8 +380,6 @@ private:
     Header(MemoryContextMalloc *owner, const int64_t allocation_size)
       : magic_(MAGIC),
         owner_(owner),
-        prev_(nullptr),
-        next_(nullptr),
         allocation_size_(allocation_size)
     {}
 
@@ -422,39 +392,16 @@ private:
     {
       magic_ = 0;
       owner_ = nullptr;
-      prev_ = nullptr;
-      next_ = nullptr;
       allocation_size_ = 0;
     }
 
     uint64_t magic_;
     MemoryContextMalloc *owner_;
-    Header *prev_;
-    Header *next_;
     int64_t allocation_size_;
   };
 
   static_assert(0 == sizeof(Header) % alignof(std::max_align_t),
                 "MemoryContextMalloc must preserve malloc alignment");
-
-  class OptionalLockGuard
-  {
-  public:
-    explicit OptionalLockGuard(MemoryContextMalloc &owner) : owner_(owner)
-    {
-      if (owner_.thread_safe_) {
-        owner_.mutex_.lock();
-      }
-    }
-    ~OptionalLockGuard()
-    {
-      if (owner_.thread_safe_) {
-        owner_.mutex_.unlock();
-      }
-    }
-  private:
-    MemoryContextMalloc &owner_;
-  };
 
   void *realloc_with_attr(void *ptr, const int64_t size, const ObMemAttr &attr)
   {
@@ -475,26 +422,15 @@ private:
   {
     abort_unless(nullptr != header && header->is_valid() && this == header->owner_);
     const int64_t old_allocation_size = header->allocation_size_;
-    {
-      OptionalLockGuard guard(*this);
-      unlink_locked(header);
-    }
-
     const int64_t raw_size = size + sizeof(Header);
     void *raw_ptr = allocator_->realloc(header, raw_size, attr);
     if (nullptr == raw_ptr) {
-      OptionalLockGuard guard(*this);
-      link_locked(header);
       return nullptr;
     }
 
     Header *new_header = new (raw_ptr) Header(this, allocation_size(raw_ptr, raw_size));
-    {
-      OptionalLockGuard guard(*this);
-      link_locked(new_header);
-      live_bytes_.fetch_add(new_header->allocation_size_ - old_allocation_size,
-                            std::memory_order_relaxed);
-    }
+    live_bytes_.fetch_add(new_header->allocation_size_ - old_allocation_size,
+                         std::memory_order_relaxed);
     return new_header + 1;
   }
 
@@ -502,12 +438,8 @@ private:
   {
     abort_unless(nullptr != header && header->is_valid() && this == header->owner_);
     const int64_t old_allocation_size = header->allocation_size_;
-    {
-      OptionalLockGuard guard(*this);
-      unlink_locked(header);
-      live_bytes_.fetch_sub(old_allocation_size, std::memory_order_relaxed);
-      header->invalidate();
-    }
+    live_bytes_.fetch_sub(old_allocation_size, std::memory_order_relaxed);
+    header->invalidate();
     allocator_->free(header);
   }
 
@@ -522,38 +454,10 @@ private:
     return usable_size > 0 ? usable_size : requested_size;
   }
 
-  void link_locked(Header *header)
-  {
-    abort_unless(nullptr != header && header->is_valid() && this == header->owner_);
-    header->prev_ = nullptr;
-    header->next_ = head_;
-    if (nullptr != head_) {
-      head_->prev_ = header;
-    }
-    head_ = header;
-  }
-
-  void unlink_locked(Header *header)
-  {
-    abort_unless(nullptr != header && header->is_valid() && this == header->owner_);
-    if (nullptr != header->prev_) {
-      header->prev_->next_ = header->next_;
-    } else {
-      abort_unless(head_ == header);
-      head_ = header->next_;
-    }
-    if (nullptr != header->next_) {
-      header->next_->prev_ = header->prev_;
-    }
-  }
-
 private:
   ObIAllocator *allocator_;
   ObMemAttr attr_;
-  Header *head_;
   std::atomic<int64_t> live_bytes_;
-  const bool thread_safe_;
-  std::mutex mutex_;
 };
 
 class ObMemBuf
