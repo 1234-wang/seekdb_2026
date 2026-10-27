@@ -17,6 +17,8 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "config_bridge.h"
+#include <cstdlib>
+#include <limits>
 #include "query/vector/ob_vector_index_adaptor.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "share/rc/ob_server_runtime.h"
@@ -38,6 +40,20 @@ namespace oceanbase
 {
 namespace share
 {
+
+namespace {
+bool hipvs_snapshot_buffer_requested(const ObVectorIndexParam *param, bool sparse)
+{
+#if defined(__linux__)
+  const char *helper = ::getenv("SEEKDB_HIPVS_BUILD_HELPER");
+  return helper != nullptr && helper[0] != '\0' && param != nullptr && !sparse
+      && param->type_ == VIAT_HNSW && param->dist_algorithm_ == VIDA_L2
+      && param->extra_info_actual_size_ == 0;
+#else
+  return false;
+#endif
+}
+} // namespace
 
 ObVectorIndexInfo::ObVectorIndexInfo()
   : rowkey_vid_table_id_(common::OB_INVALID_ID),
@@ -1690,7 +1706,48 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
   } else if (OB_FALSE_IT(dim = param->dim_)) {
   } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
   } else {
-    if (param->type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
+    if (hipvs_snapshot_buffer_requested(param, is_sparse_vector_index_type()) && !snap_data_->has_build_sq_) {
+      // Reuse the existing deferred snapshot buffers; ordinary CPU Add must not run before GPU construction.
+      if (OB_FAIL(init_hnswsq_mem_data())) {
+      } else if (num == 0 || OB_ISNULL(vectors)) {
+      } else if (num < 0 || OB_ISNULL(vids) || dim <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+      } else {
+        TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+        int64_t existing = 0;
+        if (OB_NOT_NULL(snap_data_->index_) && OB_FAIL(obvectorutil::get_index_number(snap_data_->index_, existing))) {
+        } else if (snap_data_->has_build_sq_ || existing > 0) {
+          if (OB_NOT_NULL(snap_data_->vid_array_) && snap_data_->vid_array_->count() != 0) {
+            ret = OB_ERR_UNEXPECTED;
+          } else {
+            // An already-published/restored snapshot keeps its original CPU incremental behavior.
+            snap_data_->has_build_sq_ = true;
+            free_hnswsq_array_data(snap_data_, get_allocator());
+            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr("VIndexVsagADP"));
+            lib::ObLightBacktraceGuard light_backtrace_guard(false);
+            ret = obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, nullptr, num);
+          }
+        } else if (OB_ISNULL(snap_data_->vid_array_) || OB_ISNULL(snap_data_->vec_array_)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          const int64_t old_rows = snap_data_->vid_array_->count();
+          const int64_t limit = std::numeric_limits<int64_t>::max();
+          if (old_rows > limit - num || old_rows + num > limit / dim
+              || snap_data_->vec_array_->count() != old_rows * dim) {
+            ret = OB_SIZE_OVERFLOW;
+          } else if (OB_FAIL(snap_data_->vid_array_->reserve(old_rows + num))) {
+          } else if (OB_FAIL(snap_data_->vec_array_->reserve((old_rows + num) * dim))) {
+          } else {
+            for (int i = 0; OB_SUCC(ret) && i < num; ++i) {
+              if (OB_FAIL(snap_data_->vid_array_->push_back(vids[i]))) {}
+            }
+            for (int64_t i = 0; OB_SUCC(ret) && i < int64_t(num) * dim; ++i) {
+              if (OB_FAIL(snap_data_->vec_array_->push_back(vectors[i]))) {}
+            }
+          }
+        }
+      }
+    } else if (param->type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
         param->type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
         param->type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
       if (OB_FAIL(try_init_mem_data(VIRT_SNAP))) {
@@ -1803,6 +1860,40 @@ int ObPluginVectorIndexAdaptor::build_hnswsq_index(ObVectorIndexParam *param)
   ObVecIdxVidArray *vid_array = snap_data_->vid_array_;
   ObVecIdxVecArray *vec_array = snap_data_->vec_array_;
   ObVecExtraInfoBuffer *extra_info_buf = snap_data_->extra_info_buf_;
+  if (param->type_ == VIAT_HNSW && OB_NOT_NULL(vid_array) && OB_NOT_NULL(vec_array)) {
+    TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+    const int64_t rows = vid_array->count();
+    if (param->dim_ <= 0 || rows > std::numeric_limits<int>::max()
+        || rows > std::numeric_limits<int64_t>::max() / param->dim_
+        || vec_array->count() != rows * param->dim_) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (!snap_data_->mem_ctx_->is_inited()
+        && OB_FAIL(snap_data_->mem_ctx_->init(parent_mem_ctx_, all_vsag_use_mem_))) {
+    }
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr("VIndexVsagADP"));
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
+    if (OB_SUCC(ret) && OB_ISNULL(snap_data_->index_)) {
+      ret = obvectorutil::create_index(snap_data_->index_, param->type_, DATATYPE_FLOAT32,
+          VEC_INDEX_ALGTH[param->dist_algorithm_], param->dim_, param->m_, param->ef_construction_,
+          param->ef_search_, snap_data_->mem_ctx_, 0, param->refine_type_, param->bq_bits_query_, param->bq_use_fht_);
+    }
+    int64_t existing = 0;
+    if (OB_SUCC(ret) && rows > 0) {
+      if (OB_FAIL(obvectorutil::get_index_number(snap_data_->index_, existing))) {
+      } else if (existing != 0) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        ret = obvectorutil::build_index(snap_data_->index_, vec_array->get_data(), vid_array->get_data(),
+            param->dim_, rows, nullptr);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      snap_data_->set_inited();
+      snap_data_->has_build_sq_ = true;
+      free_hnswsq_array_data(snap_data_, get_allocator());
+    }
+    return ret;
+  }
   if (OB_ISNULL(ATOMIC_LOAD(&(snap_data_->index_)))) {
     if (OB_NOT_NULL(ATOMIC_LOAD(&(snap_data_->index_)))) {
       // do nothing
@@ -1890,10 +1981,21 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(uint64_t tablet_id, uint
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
+  ObVectorIndexParam *build_param = static_cast<ObVectorIndexParam *>(algo_data_);
 
   if (OB_ISNULL(get_allocator())) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_NOT_NULL(snap_data_) && OB_NOT_NULL(build_param) && build_param->type_ == VIAT_HNSW
+      && OB_NOT_NULL(snap_data_->vid_array_) && !snap_data_->has_build_sq_
+      && OB_FAIL(build_hnswsq_index(build_param))) {
+    // Publish no prefix if native GPU construction or its explicit CPU fallback failed.
   } else {
+    // Complete deferred construction before a partial adaptor exposes its new prefix.
+    // Merged adaptors share snap_data_ but own separate prefix strings; publishing the
+    // prefix during a long Build could leave one alias with a valid prefix and the
+    // empty shared index installed by renew_single_snap_index, skipping disk reload.
+    // Only DDL/private async builders use this overload, without the mem-data lock.
+    // The opaque prefix setter used by renew/deserialization deliberately stays inert.
     char *key_prefix_str = static_cast<char*>(get_allocator()->alloc(max_length));
     if (OB_ISNULL(key_prefix_str)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3168,6 +3270,11 @@ int ObPluginVectorIndexAdaptor::serialize(ObIAllocator *allocator, ObOStreamBuf:
   int ret = OB_SUCCESS;
   ObVectorIndexSerializer index_seri(*allocator);
   int64_t snap_index_size = 0;
+  ObVectorIndexParam *build_param = static_cast<ObVectorIndexParam *>(algo_data_);
+  if (OB_NOT_NULL(snap_data_) && OB_NOT_NULL(build_param) && build_param->type_ == VIAT_HNSW
+      && OB_NOT_NULL(snap_data_->vid_array_) && !snap_data_->has_build_sq_) {
+    if (OB_FAIL(build_hnswsq_index(build_param))) { return ret; }
+  }
   if (!snap_data_->is_inited()) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(obvectorutil::get_index_number(snap_data_->index_, snap_index_size))) {

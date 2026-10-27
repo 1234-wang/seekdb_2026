@@ -18,6 +18,27 @@
 
 #include "ob_vsag_adaptor.h"
 #include <map>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <stdexcept>
+#include <unordered_set>
+#include <vector>
+#if defined(__linux__)
+#include <cerrno>
+#include <climits>
+#include <csignal>
+#include <fcntl.h>
+#include <poll.h>
+#include <spawn.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <ext/stdio_filebuf.h>
+#endif
 #include "vsag/vsag.h"
 #include "vsag/errors.h"
 #include "vsag/dataset.h"
@@ -108,6 +129,197 @@ private:
   std::function<bool(const char *)> exinfo_fallback_func_{nullptr};
 };
 
+// This block lives only in ob_vsag_adaptor.cpp; no hipVS dependency enters seekdb.
+#if defined(__linux__)
+#if defined(__GLIBC_PREREQ)
+#if __GLIBC_PREREQ(2, 34)
+#define OB_HIPVS_SPAWN_CLOSEFROM_AVAILABLE 1
+#endif
+#endif
+namespace {
+class HipvsSnapshotBuildJob {
+public:
+  HipvsSnapshotBuildJob() = default;
+  ~HipvsSnapshotBuildJob()
+  {
+    stop_and_reap();
+    if (read_fd_ >= 0) { ::close(read_fd_); }
+    if (write_fd_ >= 0) { ::close(write_fd_); }
+    if (graph_fd_ >= 0) { ::close(graph_fd_); }
+    if (!input_.empty()) { ::unlink(input_.c_str()); }
+    if (!output_.empty()) { ::unlink(output_.c_str()); }
+    if (!directory_.empty()) { ::rmdir(directory_.c_str()); }
+  }
+
+  void build(const float *vectors, int64_t rows, int dim, int m, int ef)
+  {
+#if !defined(OB_HIPVS_SPAWN_CLOSEFROM_AVAILABLE)
+    throw std::runtime_error("hipVS requires closefrom spawn support; use CPU fallback");
+#else
+    diagnostics_.reserve(65536);
+    if (rows <= 4LL * m || dim <= 0 || dim > 65536 || m < 2 || m > 512 || ef < m || ef > 1000000
+        || rows > (INT64_C(8) << 30) / sizeof(float) / dim) {
+      throw std::runtime_error("hipVS input outside supported bounded dense-L2 range");
+    }
+    const char *configured = ::getenv("SEEKDB_HIPVS_BUILD_HELPER");
+    char helper[PATH_MAX];
+    struct stat helper_stat;
+    if (configured == nullptr || configured[0] != '/' || ::realpath(configured, helper) == nullptr
+        || ::stat(helper, &helper_stat) != 0 || !S_ISREG(helper_stat.st_mode)
+        || (helper_stat.st_mode & (S_IWGRP | S_IWOTH | S_ISUID | S_ISGID)) != 0
+        || (helper_stat.st_uid != ::geteuid() && helper_stat.st_uid != 0) || ::access(helper, X_OK) != 0) {
+      throw std::runtime_error("hipVS helper must be an absolute trusted regular executable");
+    }
+    const char *temporary = ::getenv("SEEKDB_HIPVS_BUILD_TMPDIR");
+    if (temporary == nullptr || temporary[0] == '\0') { temporary = ::getenv("TMPDIR"); }
+    char base[PATH_MAX];
+    if (temporary == nullptr || temporary[0] != '/' || ::realpath(temporary, base) == nullptr
+        || ::strlen(base) > PATH_MAX - 40) {
+      throw std::runtime_error("hipVS requires an explicit absolute private-build TMPDIR");
+    }
+    std::string pattern = std::string(base) + "/seekdb-hipvs-XXXXXX";
+    std::vector<char> name(pattern.begin(), pattern.end()); name.push_back('\0');
+    char *created = ::mkdtemp(name.data());
+    if (created == nullptr) { throw std::runtime_error("hipVS private directory creation failed"); }
+    directory_ = created;
+    struct stat directory_stat;
+    if (::stat(directory_.c_str(), &directory_stat) != 0 || (directory_stat.st_mode & 0077) != 0
+        || directory_stat.st_uid != ::geteuid()) { throw std::runtime_error("hipVS private directory permissions invalid"); }
+    input_ = directory_ + "/vectors.f32";
+    output_ = directory_ + "/graph.hnsw";
+    int fd = ::open(input_.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) { throw std::runtime_error("hipVS input creation failed"); }
+    const char *bytes = reinterpret_cast<const char *>(vectors);
+    size_t remaining = static_cast<size_t>(rows) * dim * sizeof(float);
+    bool written = true;
+    while (remaining > 0) {
+      const ssize_t size = ::write(fd, bytes, std::min(remaining, size_t(1U << 20)));
+      if (size < 0 && errno == EINTR) { continue; }
+      if (size <= 0) { written = false; break; }
+      bytes += size; remaining -= size;
+    }
+    const int close_result = ::close(fd);
+    if (!written || close_result != 0) { throw std::runtime_error("hipVS input write failed"); }
+    int pipe_fds[2];
+    if (::pipe2(pipe_fds, O_CLOEXEC) != 0) { throw std::runtime_error("hipVS output pipe failed"); }
+    for (int i = 0; i < 2; ++i) {
+      if (pipe_fds[i] < 3) {
+        const int replacement = ::fcntl(pipe_fds[i], F_DUPFD_CLOEXEC, 3);
+        if (replacement < 0) { ::close(pipe_fds[0]); ::close(pipe_fds[1]); throw std::runtime_error("hipVS private pipe descriptor failed"); }
+        ::close(pipe_fds[i]); pipe_fds[i] = replacement;
+      }
+    }
+    read_fd_ = pipe_fds[0];
+    write_fd_ = pipe_fds[1];
+    if (::fcntl(read_fd_, F_SETFL, O_NONBLOCK) != 0) { throw std::runtime_error("hipVS nonblocking log reader failed"); }
+    std::string n = std::to_string(rows), d = std::to_string(dim), degree = std::to_string(m), construction = std::to_string(ef);
+    char *argv[] = {helper, const_cast<char *>("--input"), const_cast<char *>(input_.c_str()),
+      const_cast<char *>("--output"), const_cast<char *>(output_.c_str()), const_cast<char *>("--rows"), const_cast<char *>(n.c_str()),
+      const_cast<char *>("--dim"), const_cast<char *>(d.c_str()), const_cast<char *>("--m"), const_cast<char *>(degree.c_str()),
+      const_cast<char *>("--ef-construction"), const_cast<char *>(construction.c_str()),
+      const_cast<char *>("--host-threads"), const_cast<char *>("1"), nullptr};
+    std::vector<std::string> environment = {"PATH=/usr/bin:/bin", "OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1",
+      "LD_LIBRARY_PATH=/opt/hipvs/lib:/opt/rocm/lib", "TMPDIR=" + directory_};
+    for (const char *key : {"HIP_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES", "CUDA_VISIBLE_DEVICES"}) {
+      const char *value = ::getenv(key);
+      if (value != nullptr && ::strlen(value) < 1024) { environment.push_back(std::string(key) + "=" + value); }
+    }
+    std::vector<char *> envp;
+    for (std::string &value : environment) { envp.push_back(const_cast<char *>(value.c_str())); }
+    envp.push_back(nullptr);
+    posix_spawn_file_actions_t actions;
+    posix_spawnattr_t attributes;
+    bool actions_ready = false, attributes_ready = false;
+    int spawn_error = ::posix_spawn_file_actions_init(&actions);
+    actions_ready = spawn_error == 0;
+    if (spawn_error == 0) { spawn_error = ::posix_spawnattr_init(&attributes); attributes_ready = spawn_error == 0; }
+    if (spawn_error == 0) { spawn_error = ::posix_spawn_file_actions_addopen(&actions, 0, "/dev/null", O_RDONLY, 0); }
+    if (spawn_error == 0) { spawn_error = ::posix_spawn_file_actions_adddup2(&actions, pipe_fds[1], 1); }
+    if (spawn_error == 0) { spawn_error = ::posix_spawn_file_actions_adddup2(&actions, pipe_fds[1], 2); }
+    if (spawn_error == 0) { spawn_error = ::posix_spawn_file_actions_addclosefrom_np(&actions, 3); }
+    sigset_t mask, defaults;
+    ::sigemptyset(&mask); ::sigemptyset(&defaults);
+    ::sigaddset(&defaults, SIGTERM); ::sigaddset(&defaults, SIGINT); ::sigaddset(&defaults, SIGPIPE);
+    ::sigaddset(&defaults, SIGUSR1); ::sigaddset(&defaults, SIGUSR2);
+    if (spawn_error == 0) { spawn_error = ::posix_spawnattr_setsigmask(&attributes, &mask); }
+    if (spawn_error == 0) { spawn_error = ::posix_spawnattr_setsigdefault(&attributes, &defaults); }
+    if (spawn_error == 0) { spawn_error = ::posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF); }
+    if (spawn_error == 0) { spawn_error = ::posix_spawn(&child_, helper, &actions, &attributes, argv, envp.data()); }
+    if (attributes_ready) { ::posix_spawnattr_destroy(&attributes); }
+    if (actions_ready) { ::posix_spawn_file_actions_destroy(&actions); }
+    ::close(write_fd_); write_fd_ = -1;
+    if (spawn_error != 0) { child_ = -1; throw std::runtime_error("hipVS posix_spawn failed"); }
+    long timeout_seconds = 300;
+    if (const char *configured_timeout = ::getenv("SEEKDB_HIPVS_BUILD_TIMEOUT_SECONDS")) {
+      char *end = nullptr; errno = 0;
+      const long value = ::strtol(configured_timeout, &end, 10);
+      if (errno != 0 || end == configured_timeout || *end != '\0' || value < 1 || value > 3600) {
+        stop_and_reap(); throw std::runtime_error("hipVS timeout must be 1..3600 seconds");
+      }
+      timeout_seconds = value;
+    }
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeout_seconds);
+    int status = 0;
+    while (true) {
+      drain();
+      const pid_t result = ::waitpid(child_, &status, WNOHANG);
+      if (result == child_) { child_ = -1; break; }
+      if (result < 0 && errno == EINTR) { continue; }
+      if (result < 0) { if (errno == ECHILD) { child_ = -1; } throw std::runtime_error("hipVS child wait failed"); }
+      if (std::chrono::steady_clock::now() >= deadline) { stop_and_reap(); throw std::runtime_error("hipVS helper timeout"); }
+      pollfd event{read_fd_, POLLIN, 0}; ::poll(&event, 1, 20);
+    }
+    drain();
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) { throw std::runtime_error("hipVS helper failed; " + diagnostics_); }
+    graph_fd_ = ::open(output_.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    struct stat graph_stat;
+    if (graph_fd_ < 0 || ::fstat(graph_fd_, &graph_stat) != 0 || !S_ISREG(graph_stat.st_mode)
+        || graph_stat.st_uid != ::geteuid() || graph_stat.st_nlink != 1 || graph_stat.st_size <= 0) {
+      throw std::runtime_error("hipVS output identity invalid");
+    }
+#endif
+  }
+
+  int take_graph_fd() { const int fd = graph_fd_; graph_fd_ = -1; return fd; }
+  const std::string &diagnostics() const { return diagnostics_; }
+
+private:
+  void drain()
+  {
+    if (read_fd_ < 0) { return; }
+    char buffer[4096]; ssize_t size;
+    while ((size = ::read(read_fd_, buffer, sizeof(buffer))) > 0) {
+      const size_t kept = std::min(static_cast<size_t>(size), size_t(65536) - diagnostics_.size());
+      diagnostics_.append(buffer, kept);
+    }
+  }
+  void stop_and_reap()
+  {
+    if (child_ <= 0) { return; }
+    int status = 0;
+    pid_t result = ::waitpid(child_, &status, WNOHANG);
+    if (result == child_ || (result < 0 && errno == ECHILD)) { child_ = -1; return; }
+    // The unreaped child belongs to this posix_spawn call, so its PID cannot be reused here.
+    ::kill(child_, SIGTERM);
+    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (std::chrono::steady_clock::now() < until) {
+      drain(); result = ::waitpid(child_, &status, WNOHANG);
+      if (result == child_ || (result < 0 && errno == ECHILD)) { child_ = -1; return; }
+      pollfd event{read_fd_, POLLIN, 0}; ::poll(&event, 1, 20);
+    }
+    ::kill(child_, SIGKILL);
+    do { result = ::waitpid(child_, &status, 0); } while (result < 0 && errno == EINTR);
+    child_ = -1;
+  }
+  std::string directory_, input_, output_, diagnostics_;
+  int read_fd_ = -1;
+  int write_fd_ = -1;
+  int graph_fd_ = -1;
+  pid_t child_ = -1;
+};
+} // namespace
+#endif
+
 class HnswIndexHandler {
 public:
   HnswIndexHandler(bool is_create, bool is_build, bool use_static,
@@ -145,6 +357,7 @@ public:
     LOG_INFO("[OBVSAG] after deconstruction, hnsw index", KP(allocator_), K(index_.use_count()), K(lbt()));
   }
   int build_index(const vsag::DatasetPtr &base);
+  int try_hipvs_build(const vsag::DatasetPtr &base);
   int get_index_number();
   int add_index(const vsag::DatasetPtr &incremental);
   int cal_distance_by_id(const float *vector, const int64_t *ids, int64_t count,
@@ -194,6 +407,7 @@ public:
       K_(refine_type), K_(bq_bits_query), K_(bq_use_fht));
 
 private:
+  bool hipvs_build_attempted_ = false;
   bool is_created_;
   bool is_build_;
   bool use_static_;
@@ -215,9 +429,102 @@ private:
   int window_size_;
 };
 
+int HnswIndexHandler::try_hipvs_build(const vsag::DatasetPtr &base)
+{
+#if !defined(__linux__)
+  return OB_NOT_SUPPORTED;
+#else
+  const auto started = std::chrono::steady_clock::now();
+  HipvsSnapshotBuildJob job;
+  job.build(base->GetFloat32Vectors(), base->GetNumElements(), dim_, max_degree_, ef_construction_);
+  char parameters[1024] = {0};
+  int ret = construct_vsag_create_param(static_cast<uint8_t>(index_type_), dtype_, metric_, dim_,
+      max_degree_, ef_construction_, ef_search_, allocator_, 0, refine_type_, bq_bits_query_, bq_use_fht_, parameters);
+  if (OB_FAIL(ret)) { return ret; }
+  auto created = vsag::Factory::CreateIndex("hnsw", std::string(parameters), allocator_);
+  if (!created.has_value()) { return vsag_errcode2ob(created.error().type); }
+  auto candidate = created.value();
+  // Own the O_NOFOLLOW descriptor validated in the private directory; no pathname reopen.
+  __gnu_cxx::stdio_filebuf<char> file_buffer(job.take_graph_fd(), std::ios::in);
+  std::istream stream(&file_buffer);
+  auto imported = candidate->Deserialize(stream);
+  if (!imported.has_value()) { return vsag_errcode2ob(imported.error().type); }
+  const int64_t count = base->GetNumElements();
+  const int64_t *ids = base->GetIds();
+  if (candidate->GetNumElements() != count) { return OB_ERR_UNEXPECTED; }
+  std::unordered_set<int64_t> occupied;
+  std::vector<int64_t> temporary;
+  for (int64_t i = 0; i < count; ++i) {
+    if (!occupied.insert(ids[i]).second) { return OB_INVALID_ARGUMENT; }
+  }
+  for (int64_t i = 0; i < count; ++i) { occupied.insert(i); }
+  int64_t next = count;
+  for (int64_t i = 0; i < count; ++i) {
+    while (occupied.count(next)) { ++next; }
+    temporary.push_back(next); occupied.insert(next++);
+  }
+  for (int64_t i = 0; i < count; ++i) {
+    auto changed = candidate->UpdateId(i, temporary[i]);
+    if (!changed.has_value()) { return vsag_errcode2ob(changed.error().type); }
+    if (!changed.value()) { return OB_ERR_UNEXPECTED; }
+  }
+  for (int64_t i = 0; i < count; ++i) {
+    auto changed = candidate->UpdateId(temporary[i], ids[i]);
+    if (!changed.has_value()) { return vsag_errcode2ob(changed.error().type); }
+    if (!changed.value()) { return OB_ERR_UNEXPECTED; }
+  }
+  // This API returns count distances; its Dataset shape is not KnnSearch's shape contract.
+  auto distances = candidate->CalDistanceById(base->GetFloat32Vectors(), ids, count);
+  if (!distances.has_value()) { return vsag_errcode2ob(distances.error().type); }
+  if (distances.value()->GetNumElements() != count || distances.value()->GetDistances() == nullptr) {
+    return OB_ERR_UNEXPECTED;
+  }
+  for (int64_t i = 0; i < count; ++i) {
+    double expected = 0;
+    for (int d = 0; d < dim_; ++d) {
+      const double delta = double(base->GetFloat32Vectors()[d]) - double(base->GetFloat32Vectors()[i * dim_ + d]);
+      expected += delta * delta;
+    }
+    const double actual = distances.value()->GetDistances()[i];
+    if (!std::isfinite(actual) || std::abs(actual - expected) > 1e-4 * std::max(1.0, std::abs(expected))) {
+      return OB_ERR_UNEXPECTED;
+    }
+  }
+  const auto bounds = candidate->GetMinAndMaxId();
+  if (!bounds.has_value()) { return vsag_errcode2ob(bounds.error().type); }
+  const auto expected_bounds = std::minmax_element(ids, ids + count);
+  if (bounds.value().first != *expected_bounds.first || bounds.value().second != *expected_bounds.second) {
+    return OB_ERR_UNEXPECTED;
+  }
+  index_.swap(candidate);
+  const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+  LOG_INFO("[OBVSAG][hipVS] GPU graph imported with native original IDs; no CPU Build",
+      K(count), K(dim_), K(max_degree_), K(seconds), "helper_output", job.diagnostics().c_str());
+  return OB_SUCCESS;
+#endif
+}
+
 int HnswIndexHandler::build_index(const vsag::DatasetPtr &base)
 {
   int ret = OB_SUCCESS;
+  const char *helper = ::getenv("SEEKDB_HIPVS_BUILD_HELPER");
+  if (!hipvs_build_attempted_ && helper != nullptr && helper[0] != '\0'
+      && index_type_ == HNSW_TYPE && extra_info_size_ == 0 && dtype_ != nullptr && metric_ != nullptr
+      && ::strcmp(dtype_, "float32") == 0 && ::strcmp(metric_, "l2") == 0 && base != nullptr
+      && base->GetNumElements() > 0 && base->GetDim() == dim_ && base->GetIds() != nullptr
+      && base->GetFloat32Vectors() != nullptr && index_->GetNumElements() == 0) {
+    hipvs_build_attempted_ = true;
+    int gpu_ret = OB_ERR_UNEXPECTED;
+    try {
+      gpu_ret = try_hipvs_build(base);
+    } catch (const std::exception &error) {
+      LOG_WARN("[OBVSAG][hipVS] helper/import failed", "error", error.what());
+    } catch (...) {
+      LOG_WARN("[OBVSAG][hipVS] unknown helper/import failure");
+    }
+    if (OB_SUCCESS == gpu_ret) { return OB_SUCCESS; }
+    LOG_WARN("[OBVSAG][hipVS] GPU build not successful; explicit CPU fallback Build once", K(gpu_ret));
+  }
   try {
     tl::expected<std::vector<int64_t>, Error> result = index_->Build(base);
     if (result.has_value()) {

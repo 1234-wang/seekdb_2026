@@ -1,0 +1,26 @@
+{
+  "scope": "Selected ASCII native-import lines, not full source excerpts or complete backend logs",
+  "records": [
+    {
+      "round": 0,
+      "native_import_message": "[OBVSAG][hipVS] GPU graph imported with native original IDs; no CPU Build(count=20000, dim_=128, max_degree_=32, seconds=1.926908365000000067e+00, helper_output=\"{\"phase\":\"read_and_validate_float32\"}",
+      "original_complete_selected_line_sha256": "a0e8e760b9fccba2cdcc47b73ce1eb10ea8ea3ce8cad854045500dcf8efc1e23",
+      "original_source_excerpt_sha256": "886774c7ac7c984a3b16f16868277532f52613669b8a825ce9865143760ce69b",
+      "full_excerpt_included": false
+    },
+    {
+      "round": 1,
+      "native_import_message": "[OBVSAG][hipVS] GPU graph imported with native original IDs; no CPU Build(count=20000, dim_=128, max_degree_=32, seconds=1.912984806999999954e+00, helper_output=\"{\"phase\":\"read_and_validate_float32\"}",
+      "original_complete_selected_line_sha256": "4fa04501c24c4aebb36b055aab7dd64f5e38c14ad31bcbd5fa1e1452257584aa",
+      "original_source_excerpt_sha256": "f9e4d3ef626a32ffc5ea49c52524f20a65d6a38d58885e75701e13064dbf6d57",
+      "full_excerpt_included": false
+    },
+    {
+      "round": 2,
+      "native_import_message": "[OBVSAG][hipVS] GPU graph imported with native original IDs; no CPU Build(count=20000, dim_=128, max_degree_=32, seconds=1.969225384000000023e+00, helper_output=\"{\"phase\":\"read_and_validate_float32\"}",
+      "original_complete_selected_line_sha256": "f9cad744dea1b914a1aee6f8e9d6e3588d8973d6a11e48f8ae6f9175af7e83bb",
+      "original_source_excerpt_sha256": "88e98b462c2e7f1918e7822f580ca31f30b46aeb76beba266eb149f8f468246e",
+      "full_excerpt_included": false
+    }
+  ]
+}
