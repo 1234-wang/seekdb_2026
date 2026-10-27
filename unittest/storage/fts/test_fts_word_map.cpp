@@ -9,6 +9,8 @@
 #include <thread>
 #include <vector>
 #include "lib/charset/ob_charset.h"
+#include "share/text_analysis/ob_text_analyzer.h"
+#include "storage/fts/ob_beng_ft_parser.h"
 #include "storage/fts/ob_fts_parser_helper.h"
 #include "storage/fts/ob_fts_stop_word.h"
 
@@ -21,6 +23,147 @@ using namespace common;
 // Keep the former synchronized implementation as a semantic reference. Bucket
 // counts, iteration order, collations and replacement spelling must agree.
 using LockedWordMap = hash::ObHashMap<ObFTWord, int64_t>;
+
+// The generic analyzer is the BENG pipeline before its ownership optimization.
+// Keep this independent reference on its ordinary, scratch-buffer interface.
+void compare_beng_tokens(const std::string &text, ObCollationType collation)
+{
+  SCOPED_TRACE(testing::Message() << "input size=" << text.size() << " collation=" << collation);
+  ObArenaAllocator output_allocator(ObMemAttr("BengOutputTest"));
+  ObArenaAllocator reference_allocator(ObMemAttr("BengRefTest"));
+  ObFTParserParam param;
+  param.allocator_ = &output_allocator;
+  param.cs_ = ObCharset::get_charset(collation);
+  param.fulltext_ = text.data();
+  param.ft_length_ = text.size();
+  param.parser_version_ = ObFTParser::BUILTIN_VERSION;
+  share::ObTextAnalysisCtx analysis;
+  analysis.cs_ = param.cs_;
+  analysis.filter_stopword_ = false;
+  analysis.need_grouping_ = false;
+  share::ObEnglishTextAnalyzer reference;
+  ObDatum document;
+  document.set_string(text.data(), text.size());
+  share::ObITokenStream *stream = nullptr;
+  ASSERT_EQ(OB_SUCCESS, reference.init(analysis, reference_allocator));
+  ASSERT_EQ(OB_SUCCESS, reference.analyze(document, stream));
+  ObBEngFTParser parser(output_allocator);
+  ASSERT_EQ(OB_SUCCESS, parser.init(&param));
+  std::vector<std::pair<ObString, std::string>> retained;
+  bool ended = false;
+  for (size_t step = 0; step <= text.size(); ++step) {
+    const char *word = nullptr;
+    int64_t length = 0;
+    int64_t characters = 0;
+    int64_t frequency = 0;
+    ObDatum expected;
+    int64_t expected_frequency = 0;
+    int expected_ret = stream->get_next(expected, expected_frequency);
+    // The legacy BENG wrapper rejects an empty result from case conversion
+    // even when the generic stream reports success on malformed UTF-8.
+    if (OB_SUCCESS == expected_ret
+        && (nullptr == expected.ptr_ || 0 == expected.len_ || expected_frequency <= 0)) {
+      expected_ret = OB_INVALID_ARGUMENT;
+    }
+    int actual_ret = parser.get_next_token(word, length, characters, frequency);
+    ASSERT_EQ(expected_ret, actual_ret);
+    if (OB_SUCCESS != expected_ret) {
+      EXPECT_EQ(nullptr, word);
+      EXPECT_EQ(0, length);
+      EXPECT_EQ(0, characters);
+      EXPECT_EQ(0, frequency);
+      ended = true;
+      break;
+    }
+    ASSERT_NE(nullptr, word);
+    EXPECT_EQ(expected.get_string(), ObString(length, word));
+    EXPECT_EQ(expected.len_, characters);
+    EXPECT_EQ(expected_frequency, frequency);
+    retained.emplace_back(ObString(length, word), std::string(expected.ptr_, expected.len_));
+  }
+  ASSERT_TRUE(ended);
+  // Hash-map keys outlive the iterator and must not refer to its scratch arena.
+  parser.reset();
+  reference.reset();
+  reference_allocator.reset();
+  for (const auto &token : retained) {
+    EXPECT_EQ(ObString(token.second.size(), token.second.data()), token.first);
+  }
+  // Reinitialization must not leave a tokenizer open on the old document.
+  const char *second = "NEXT next";
+  param.fulltext_ = second;
+  param.ft_length_ = STRLEN(second);
+  ASSERT_EQ(OB_SUCCESS, parser.init(&param));
+  const char *word = nullptr;
+  int64_t length = 0;
+  int64_t characters = 0;
+  int64_t frequency = 0;
+  ASSERT_EQ(OB_SUCCESS, parser.get_next_token(word, length, characters, frequency));
+  for (const auto &token : retained) {
+    EXPECT_EQ(ObString(token.second.size(), token.second.data()), token.first);
+  }
+}
+
+TEST(FtsBeng, generic_pipeline_equivalence_and_owned_results)
+{
+  std::vector<std::string> documents = {
+      "The Quick BROWN fox jumps over the lazy dog. Full-text search indexing requires efficient tokenization.",
+      "Résumé CAFÉ İ I ß Σ σ ς Кириллица ＡＢＣ 数据库 𠀀 😀 END",
+      "___+++... @example.com co-operate O'Reilly a_b a+b 3.14 １２３",
+      "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz",
+      std::string("first\0SECOND\nthird\tfourth\r\n", 27),
+      " \t\r\n\v\f!@#$%^&*()_-+={}[]:;\"'<>,.?/\\|~`",
+      std::string(65537, 'A') + " ending"};
+  for (int byte = 0; byte < 256; ++byte) {
+    documents.push_back("begin" + std::string(1, static_cast<char>(byte)) + "END");
+  }
+  for (ObCollationType collation : {CS_TYPE_UTF8MB4_BIN, CS_TYPE_UTF8MB4_GENERAL_CI,
+                                     CS_TYPE_UTF8MB4_UNICODE_CI, CS_TYPE_BINARY}) {
+    for (const auto &document : documents) {
+      compare_beng_tokens(document, collation);
+    }
+  }
+}
+
+TEST(FtsBeng, generated_byte_sequences_keep_existing_error_semantics)
+{
+  uint32_t state = 0x4f534654;
+  for (int document = 0; document < 160; ++document) {
+    std::string text;
+    for (int byte = 0; byte < 257; ++byte) {
+      state = state * 1664525U + 1013904223U;
+      text.push_back(static_cast<char>(state >> 24));
+    }
+    compare_beng_tokens(text, CS_TYPE_UTF8MB4_BIN);
+    compare_beng_tokens(text, CS_TYPE_BINARY);
+  }
+}
+
+TEST(FtsBeng, parser_lifecycle_errors)
+{
+  ObArenaAllocator allocator(ObMemAttr("BengOutputTest"));
+  ObBEngFTParser parser(allocator);
+  const char *word = nullptr;
+  int64_t length = 0;
+  int64_t characters = 0;
+  int64_t frequency = 0;
+  EXPECT_EQ(OB_NOT_INIT, parser.get_next_token(word, length, characters, frequency));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, parser.init(nullptr));
+  parser.reset();
+  parser.reset();
+  ObFTParserParam param;
+  param.allocator_ = &allocator;
+  param.cs_ = ObCharset::get_charset(CS_TYPE_UTF8MB4_BIN);
+  param.fulltext_ = "first second";
+  param.ft_length_ = STRLEN(param.fulltext_);
+  param.parser_version_ = ObFTParser::BUILTIN_VERSION;
+  ASSERT_EQ(OB_SUCCESS, parser.init(&param));
+  EXPECT_EQ(OB_INIT_TWICE, parser.init(&param));
+  ASSERT_EQ(OB_SUCCESS, parser.get_next_token(word, length, characters, frequency));
+  EXPECT_EQ(ObString("first"), ObString(length, word));
+  parser.reset();
+  EXPECT_EQ(OB_NOT_INIT, parser.get_next_token(word, length, characters, frequency));
+}
 
 struct AddFrequency
 {

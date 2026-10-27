@@ -130,6 +130,9 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual int get_next(ObDatum &next_token, int64_t &token_freq) override;
+  // Store the normalized bytes in the caller's allocator. Subsequent reads
+  // and stream reset do not invalidate tokens retained by FTS word maps.
+  int get_next_owned(ObDatum &next_token, int64_t &token_freq, ObIAllocator &allocator);
 private:
   ObArenaAllocator norm_allocator_;
 };
