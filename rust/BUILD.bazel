@@ -116,13 +116,6 @@ cc_library(
 )
 
 cc_library(
-    name = "in_process",
-    srcs = [":archive"],
-    deps = [":in_process_bridge", ":_rust_runtime"],
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
     name = "local",
     srcs = [":archive"],
     deps = [":local_bridge", ":_rust_runtime"],

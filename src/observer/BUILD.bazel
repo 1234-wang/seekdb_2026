@@ -504,16 +504,10 @@ alias(
 )
 
 cc_library(
-    name = "in_process_api_headers",
-    hdrs = ["in_process/seekdb.h"],
-    visibility = ["//unittest:__subpackages__"],
-)
-
-cc_library(
     name = "in_process_api",
     srcs = ["in_process/seekdb.cpp"],
-    deps = [":in_process_api_headers", "//rust:in_process_headers"],
-    visibility = ["//unittest:__subpackages__"],
+    hdrs = ["in_process/seekdb.h"],
+    deps = ["//rust:in_process_headers"],
 )
 
 cc_library(
