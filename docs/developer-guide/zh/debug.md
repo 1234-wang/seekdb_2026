@@ -67,7 +67,7 @@ LOG_DEBUG("insert sql generated", K(insert_sql), K(lbt()));
 
 ```bash
 journalctl -u seekdb --since today
-tail -F /var/lib/oceanbase/log/seekdb.log
+tail -F /var/lib/seekdb/log/seekdb.log
 ```
 
 如果在 `/etc/seekdb/seekdb.cnf` 中修改了 `base-dir`，应使用对应的日志目录。可以通过 trace ID 搜索一次请求的全部日志：

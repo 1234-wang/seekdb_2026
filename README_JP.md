@@ -356,13 +356,16 @@ curl -X POST https://d0.seekdb.ai/api/v1/instances
 <summary><b>🐳 Docker（簡易テスト）</b></summary>
 
 ```bash
+docker volume create seekdb-data
 docker run -d \
   --name seekdb \
   -p 2881:2881 \
   -p 2886:2886 \
-  -v ./data:/var/lib/oceanbase \
+  -v seekdb-data:/var/lib/seekdb \
   oceanbase/seekdb:latest
 ```
+SeekDB 1.4 以降はデータを `/var/lib/seekdb` に保存します。`/var/lib/oceanbase` だけをマウントしてもデータは永続化されません。上記の名前付きボリュームは Windows でも動作します（このイメージではホストディレクトリのバインドマウントではなく Docker ボリュームが必要です）。1.3.x 以前のイメージは `/var/lib/oceanbase` を使用します。
+
 この Docker イメージの詳細は[ドキュメント](https://github.com/oceanbase/docker-images/blob/main/seekdb/README.md)を参照してください。
 
 </details>
