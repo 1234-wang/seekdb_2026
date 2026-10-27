@@ -35,6 +35,10 @@
 #include <linux/if_packet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#else
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -206,12 +210,13 @@ int ObUUIDNode::init()
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("socket failed during UUID MAC discovery", K(ret), K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ioctl failed, SIOCGIFCONF", K(ret), K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
@@ -244,6 +249,41 @@ int ObUUIDNode::init()
       }
     }
     close(sock);
+  }
+  if (!is_inited_) {
+    // RFC 4122 section 4.5 permits a random node when no MAC is available.
+    int fd;
+    do {
+      fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("open UUID random source failed", K(ret), K(errno));
+    } else {
+      size_t bytes_read = 0;
+      ret = OB_SUCCESS;
+      while (OB_SUCC(ret) && bytes_read < sizeof(mac_addr_)) {
+        ssize_t size = read(fd, mac_addr_ + bytes_read, sizeof(mac_addr_) - bytes_read);
+        if (size > 0) {
+          bytes_read += size;
+        } else if (size < 0 && errno == EINTR) {
+          continue;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          if (size == 0) {
+            LOG_WARN("unexpected EOF reading UUID random source", K(ret), K(bytes_read));
+          } else {
+            LOG_WARN("read UUID random source failed", K(ret), K(errno), K(bytes_read));
+          }
+        }
+      }
+      close(fd);
+      if (OB_SUCC(ret)) {
+        mac_addr_[0] |= 0x01;
+        is_inited_ = true;
+        LOG_INFO("using random UUID node ID (no MAC available on Linux)");
+      }
+    }
   }
 #endif
   return ret;
