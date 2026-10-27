@@ -35,6 +35,8 @@
 #include <linux/if_packet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#else
+#include <openssl/rand.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -206,12 +208,13 @@ int ObUUIDNode::init()
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("UUID MAC discovery socket failed", K(ret), K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("UUID interface enumeration failed, SIOCGIFCONF", K(ret), K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
@@ -239,11 +242,25 @@ int ObUUIDNode::init()
       if (OB_FAIL(ret)) {
       } else if (!mac_addr_found) {
         ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no usable MAC address for UUID node", K(ret));
       } else {
         is_inited_ = true;
       }
     }
     close(sock);
+  }
+  if (!is_inited_) {
+    // RFC 4122 section 4.5: a random node with the multicast bit set
+    // cannot conflict with a physical MAC. Keep the same node for this run.
+    if (RAND_bytes(mac_addr_, sizeof(mac_addr_)) != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to generate random UUID node", K(ret));
+    } else {
+      mac_addr_[0] |= 0x01;
+      is_inited_ = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("using random UUID node because MAC discovery failed");
+    }
   }
 #endif
   return ret;
