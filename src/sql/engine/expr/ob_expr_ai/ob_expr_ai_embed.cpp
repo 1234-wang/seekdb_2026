@@ -62,6 +62,9 @@ int ObExprAIEmbed::calc_result_typeN(ObExprResType &type,
         types_stack[DIM_IDX].set_calc_type(ObIntType);
         types_stack[DIM_IDX].set_precision(10);
         types_stack[DIM_IDX].set_scale(0);
+      } else if (ob_is_null(types_stack[DIM_IDX].get_type())) {
+        // A literal NULL dimension means "use the provider default dimension".
+        // The type stays NULL and the dimension is skipped at evaluation time.
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_embed, dimension parameter must be an integer, not a decimal or float");
@@ -210,59 +213,113 @@ int ObExprAIEmbed::eval_ai_embed_batch(const ObExpr &expr,
       }
     }
 
-    // One request per (model, dimension) group, at most max_request_rows inputs.
-    int64_t chunk_start = 0;
-    while (OB_SUCC(ret) && chunk_start < pending_rows.count()) {
-      int64_t chunk_end = chunk_start;
-      const ObString &chunk_model = pending_models.at(chunk_start);
-      const int64_t chunk_dim = pending_dims.at(chunk_start);
-      while (chunk_end < pending_rows.count()
-             && chunk_end - chunk_start < max_request_rows
-             && pending_dims.at(chunk_end) == chunk_dim
-             && pending_models.at(chunk_end) == chunk_model) {
-        ++chunk_end;
-      }
+    // Rows are grouped by (model, dimension) so that every request carries a
+    // single model and a single dimension.  The groups are built over all the
+    // pending rows instead of over the adjacent ones only, so alternating
+    // dimensions still collapse into one request per group.  Inside a group
+    // the original row order is kept.
+    ObArray<ObString> group_models;
+    ObArray<int64_t> group_dims;
+    ObArray<int64_t> row_group;        // group index of every pending row
+    ObArray<int64_t> group_start;      // first slot of a group in ordered_rows
+    ObArray<int64_t> group_count;      // number of rows of a group
+    ObArray<int64_t> ordered_rows;     // pending index of every ordered slot
 
+    for (int64_t p = 0; OB_SUCC(ret) && p < pending_rows.count(); ++p) {
+      const ObString &pending_model = pending_models.at(p);
+      const int64_t pending_dim = pending_dims.at(p);
+      int64_t group = -1;
+      for (int64_t g = 0; g < group_models.count(); ++g) {
+        if (group_dims.at(g) == pending_dim && group_models.at(g) == pending_model) {
+          group = g;
+          break;
+        }
+      }
+      if (group < 0) {
+        if (OB_FAIL(group_models.push_back(pending_model))
+            || OB_FAIL(group_dims.push_back(pending_dim))) {
+          break;
+        }
+        group = group_models.count() - 1;
+      }
+      if (OB_FAIL(row_group.push_back(group))) {
+        break;
+      }
+    }
+
+    // Order the pending rows by group, keeping the original row order inside
+    // a group, so that the result of every request can be written back to the
+    // row it belongs to.
+    for (int64_t g = 0; OB_SUCC(ret) && g < group_models.count(); ++g) {
+      int64_t count = 0;
+      if (OB_FAIL(group_start.push_back(ordered_rows.count()))) {
+        break;
+      }
+      for (int64_t p = 0; OB_SUCC(ret) && p < row_group.count(); ++p) {
+        if (row_group.at(p) == g) {
+          if (OB_FAIL(ordered_rows.push_back(p))) {
+            break;
+          }
+          ++count;
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(group_count.push_back(count))) {
+        break;
+      }
+    }
+
+    // One request per group, at most max_request_rows inputs per request.
+    for (int64_t g = 0; OB_SUCC(ret) && g < group_models.count(); ++g) {
+      const int64_t group_total = group_count.at(g);
+      const int64_t group_begin = group_start.at(g);
+      const int64_t group_dim = group_dims.at(g);
       ObAIFuncExprInfo *info = nullptr;
       share::ObAiModelEndpointInfo resolved_endpoint;
       ObJsonObject *config = nullptr;
-      if (chunk_dim > 0) {
+      if (group_dim > 0) {
         ObJsonInt *dim_json = nullptr;
         if (OB_FAIL(ObAIFuncJsonUtils::get_json_object(temp_allocator, config))) {
-        } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_int(temp_allocator, chunk_dim, dim_json))) {
+        } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_int(temp_allocator, group_dim, dim_json))) {
         } else if (OB_FAIL(config->add("dimensions", dim_json))) {
         }
       }
-      ObArray<ObString> chunk_contents;
-      ObArray<ObString> chunk_results;
-      for (int64_t k = chunk_start; OB_SUCC(ret) && k < chunk_end; ++k) {
-        if (OB_FAIL(chunk_contents.push_back(pending_contents.at(k)))) {
+      for (int64_t offset = 0; OB_SUCC(ret) && offset < group_total; offset += max_request_rows) {
+        int64_t chunk_len = group_total - offset;
+        if (chunk_len > max_request_rows) {
+          chunk_len = max_request_rows;
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObAIFuncUtils::get_ai_func_info(temp_allocator, chunk_model, info))) {
-      } else if (OB_FAIL(endpoint_resolver->resolve_by_model_name(
-                     chunk_model, temp_allocator, resolved_endpoint))) {
-      } else {
-        ObAIFuncModel model(temp_allocator, *info, resolved_endpoint);
-        if (OB_FAIL(model.call_dense_embedding_vector_v2(chunk_contents, config, chunk_results))) {
-        } else if (chunk_results.count() != chunk_contents.count()) {
-          ret = OB_ERR_UNEXPECTED;
+        ObArray<ObString> chunk_contents;
+        ObArray<ObString> chunk_results;
+        for (int64_t k = 0; OB_SUCC(ret) && k < chunk_len; ++k) {
+          if (OB_FAIL(chunk_contents.push_back(
+                        pending_contents.at(ordered_rows.at(group_begin + offset + k))))) {
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObAIFuncUtils::get_ai_func_info(
+                       temp_allocator, group_models.at(g), info))) {
+        } else if (OB_FAIL(endpoint_resolver->resolve_by_model_name(
+                       group_models.at(g), temp_allocator, resolved_endpoint))) {
         } else {
-          for (int64_t k = 0; OB_SUCC(ret) && k < chunk_contents.count(); ++k) {
-            const int64_t row = pending_rows.at(chunk_start + k);
-            const ObString &result = chunk_results.at(k);
-            ObTextStringDatumResult output(expr.datum_meta_.type_, &expr, &ctx, &res_datums[row]);
-            if (OB_FAIL(output.init_with_batch_idx(result.length(), row))) {
-            } else if (OB_FAIL(output.append(result))) {
-            } else {
-              output.set_result();
-              eval_flags.set(row);
+          ObAIFuncModel model(temp_allocator, *info, resolved_endpoint);
+          if (OB_FAIL(model.call_dense_embedding_vector_v2(chunk_contents, config, chunk_results))) {
+          } else if (chunk_results.count() != chunk_len) {
+            ret = OB_ERR_UNEXPECTED;
+          } else {
+            for (int64_t k = 0; OB_SUCC(ret) && k < chunk_len; ++k) {
+              const int64_t row = pending_rows.at(ordered_rows.at(group_begin + offset + k));
+              const ObString &result = chunk_results.at(k);
+              ObTextStringDatumResult output(expr.datum_meta_.type_, &expr, &ctx, &res_datums[row]);
+              if (OB_FAIL(output.init_with_batch_idx(result.length(), row))) {
+              } else if (OB_FAIL(output.append(result))) {
+              } else {
+                output.set_result();
+                eval_flags.set(row);
+              }
             }
           }
         }
       }
-      chunk_start = chunk_end;
     }
   }
   return ret;
