@@ -1,0 +1,67 @@
+# Repeated integer values must not by themselves trigger IN-to-subquery rewriting.
+# Query protocol exercises the rewrite decision; explicit bind tests are below.
+--disable_ps_protocol
+--disable_warnings
+DROP TABLE IF EXISTS inlist_duplicate_values;
+--enable_warnings
+CREATE TABLE inlist_duplicate_values (id INT PRIMARY KEY, c BIGINT);
+INSERT INTO inlist_duplicate_values VALUES
+  (1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,NULL),(8,-1),(9,9223372036854775807);
+
+--echo # Duplicate-heavy lists retain a scalar filter.
+EXPLAIN BASIC SELECT /*+ FULL(t) OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values t WHERE c IN (1,2,3,1,2,3);
+
+--echo # Reaching the distinct threshold still permits rewriting.
+EXPLAIN BASIC SELECT /*+ FULL(t) OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values t WHERE c IN (1,2,3,4,5,6);
+
+--echo # An explicit threshold of one continues to force rewriting.
+EXPLAIN BASIC SELECT /*+ FULL(t) OPT_PARAM('inlist_rewrite_threshold' 1) */ id
+  FROM inlist_duplicate_values t WHERE c IN (1,2,3,1,2,3);
+
+--echo # The issue's 3072 values have only three distinct integers.
+--disable_query_log
+let $duplicated_values = `SELECT CONCAT(REPEAT('1,2,3,',1023),'1,2,3')`;
+eval EXPLAIN BASIC SELECT /*+ FULL(t) */ id FROM inlist_duplicate_values t WHERE c IN ($duplicated_values);
+eval SELECT COUNT(*) AS matched FROM inlist_duplicate_values WHERE c IN ($duplicated_values);
+--enable_query_log
+
+--echo # Plan reuse must preserve every independent parameter position.
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ COUNT(*) AS matched
+  FROM inlist_duplicate_values WHERE c IN (1,2,3,1,2,3);
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ COUNT(*) AS matched
+  FROM inlist_duplicate_values WHERE c IN (1,2,3,4,5,6);
+
+--echo # NULL, mixed types, row values and NOT IN preserve their semantics.
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE c IN (1,2,3,NULL,1,2,3,NULL) ORDER BY id;
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ COUNT(*) AS matched
+  FROM inlist_duplicate_values WHERE c NOT IN (1,2,3,NULL,1,2,3,NULL);
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE c NOT IN (1,2,3,1,2,3) ORDER BY id;
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE c IN ('1','2','3','1','2','3') ORDER BY id;
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE c IN (1.0,2.0,3.0,1.0,2.0,3.0) ORDER BY id;
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE (id,c) IN ((1,1),(2,2),(1,1),(2,2)) ORDER BY id;
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE c IN (-1,-1,-1,-1,9223372036854775807,9223372036854775807) ORDER BY id;
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE c IN (18446744073709551615,18446744073709551615,1,1) ORDER BY id;
+
+--echo # Column types are bound after this rewrite decision.
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE CAST(c AS CHAR) IN (1,2,3,1,2,3) ORDER BY id;
+SELECT /*+ OPT_PARAM('inlist_rewrite_threshold' 4) */ id
+  FROM inlist_duplicate_values WHERE c/2 IN (1,2,3,1,2,3) ORDER BY id;
+
+--echo # Prepared statements cannot specialize the plan to one set of binds.
+PREPARE duplicate_inlist FROM 'SELECT /*+ OPT_PARAM(''inlist_rewrite_threshold'' 4) */ COUNT(*) AS matched FROM inlist_duplicate_values WHERE c IN (?,?,?,?,?,?)';
+SET @a=1, @b=2, @c=3, @d=1, @e=2, @f=3;
+EXECUTE duplicate_inlist USING @a,@b,@c,@d,@e,@f;
+SET @d=4, @e=5, @f=6;
+EXECUTE duplicate_inlist USING @a,@b,@c,@d,@e,@f;
+DEALLOCATE PREPARE duplicate_inlist;
+DROP TABLE inlist_duplicate_values;

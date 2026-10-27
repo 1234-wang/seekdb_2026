@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "sql/resolver/dml/ob_inlist_resolver.h"
+#include "lib/hash/ob_hashset.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/engine/expr/ob_expr_version.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
@@ -263,6 +264,54 @@ int ObInListResolver::get_inlist_rewrite_info(const ParseNode &in_list,
   return ret;
 }
 
+int ObInListResolver::check_duplicate_integer_values(const ParseNode &in_list,
+                                                      const ParamStore *param_store,
+                                                      const int64_t threshold,
+                                                      bool &has_few_values)
+{
+  int ret = OB_SUCCESS;
+  bool all_integers = true;
+  hash::ObHashSet<int64_t, hash::NoPthreadDefendMode> distinct_values;
+  has_few_values = false;
+  if (OB_ISNULL(in_list.children_) || OB_UNLIKELY(in_list.num_child_ <= 0 || threshold <= 1)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(distinct_values.create(std::min<int64_t>(threshold, in_list.num_child_),
+                                          ObMemAttr("InListDistinct")))) {
+    LOG_WARN("failed to create in-list value set", K(ret));
+  }
+  // Stop once the distinct count reaches the rewrite threshold. In particular,
+  // large lists of different values do not require a second full traversal.
+  for (int64_t i = 0; OB_SUCC(ret) && all_integers && distinct_values.size() < threshold
+                     && i < in_list.num_child_; ++i) {
+    const ParseNode *node = in_list.children_[i];
+    int64_t value = 0;
+    if (OB_ISNULL(node)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (T_INT == node->type_) {
+      value = node->value_;
+    } else if (T_QUESTIONMARK == node->type_ && NULL != param_store
+               && node->value_ >= 0 && node->value_ < param_store->count()
+               && param_store->at(node->value_).is_int()) {
+      value = param_store->at(node->value_).get_int();
+    } else {
+      // Leave NULLs, mixed types, row values and unevaluated parameters on the
+      // existing path; their comparison semantics need additional type handling.
+      all_integers = false;
+    }
+    if (OB_SUCC(ret) && all_integers) {
+      const int hash_ret = distinct_values.set_refactored(value, 0 /* overwrite */);
+      if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
+        ret = hash_ret;
+        LOG_WARN("failed to record in-list value", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    has_few_values = all_integers && distinct_values.size() < threshold;
+  }
+  return ret;
+}
+
 int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                   const ObItemType op_type,
                                                   const ObRawExpr &left_expr,
@@ -350,6 +399,17 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
         }
       }
       is_question_mark = rewrite_info.is_question_mark_;
+    }
+  }
+  if (OB_SUCC(ret) && is_enable && T_OP_IN == op_type && threshold > 1
+      && !is_prepare_stmt && T_OP_ROW != left_expr.get_expr_type()) {
+    bool has_few_values = false;
+    if (OB_FAIL(check_duplicate_integer_values(in_list, param_store, threshold, has_few_values))) {
+      LOG_WARN("failed to check duplicate in-list values", K(ret));
+    } else if (has_few_values) {
+      // Keep the original list and every parameter position. A cached scalar IN
+      // plan must remain correct when a later execution supplies different values.
+      is_enable = false;
     }
   }
   return ret;
