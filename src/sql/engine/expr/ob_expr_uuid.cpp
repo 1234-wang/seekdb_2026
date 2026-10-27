@@ -27,14 +27,14 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
-#include <fcntl.h>
-#include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
@@ -81,6 +81,31 @@ ObUUIDNode::ObUUIDNode()
   (void)init();
 }
 
+
+#if defined(__ANDROID__) || defined(__linux__)
+/*
+ * Fill a synthetic UUID node ID from the operating system random source.
+ *
+ * RFC 9562 section 6.10 requires a node ID that is not derived from a real
+ * MAC address to have the multicast bit set.
+ */
+static int random_uuid_node_id(unsigned char *node)
+{
+  int ret = OB_SUCCESS;
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd < 0) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    if (read(fd, node, 6) != 6) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      node[0] |= 0x01;  // set multicast bit
+    }
+    close(fd);
+  }
+  return ret;
+}
+#endif
 
 /*
  * get and set mac address
@@ -182,16 +207,11 @@ int ObUUIDNode::init()
     if (OB_SUCC(ret) && !mac_addr_found) {
       // RFC 4122 section 4.5: when MAC address is unavailable (Android sandbox),
       // use random bytes with the multicast bit set as the node ID.
-      int fd = open("/dev/urandom", O_RDONLY);
-      if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
-        mac_addr_[0] |= 0x01;  // set multicast bit
+      if (OB_SUCC(random_uuid_node_id(mac_addr_))) {
         mac_addr_found = true;
         LOG_INFO("using random UUID node ID (no MAC available on Android)");
       } else {
         ret = OB_ERR_UNEXPECTED;
-      }
-      if (fd >= 0) {
-        close(fd);
       }
     }
     if (OB_SUCC(ret) && mac_addr_found) {
@@ -244,6 +264,22 @@ int ObUUIDNode::init()
       }
     }
     close(sock);
+  }
+  if (OB_FAIL(ret) && !is_inited_) {
+    // RFC 9562 section 6.10: when the MAC address is unavailable, for example
+    // in a restricted sandbox that denies interface enumeration, fall back to
+    // random bytes with the multicast bit set as the node ID. The random source
+    // itself stays a hard requirement: a genuine entropy failure is still an
+    // initialisation error.
+    int fallback_ret = random_uuid_node_id(mac_addr_);
+    if (OB_SUCC(fallback_ret)) {
+      is_inited_ = true;
+      ret = OB_SUCCESS;
+      LOG_INFO("using random UUID node ID (no MAC available)");
+    } else {
+      ret = fallback_ret;
+      LOG_WARN("failed to generate random UUID node ID", K(ret), K(errno));
+    }
   }
 #endif
   return ret;
