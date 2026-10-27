@@ -33,6 +33,7 @@ psmall_test=[
 'datatype.replace',
 'datatype.type_varchar_2',
 'ddlrollback',
+'ddl.ddl_identifier_escaping',
 'deadlock_detector.trans_deadlock_basic',
 'delete.delete',
 'delete.delete_from_mysql',

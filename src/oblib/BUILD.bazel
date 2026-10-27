@@ -1262,12 +1262,16 @@ cc_library(
         ":_oblib_rpc_impl",
         ":_oblib_vector_impl",
         ":_zstd_1_3_8_objects",
-        "//bazel/third_party:libaio",
         "//bazel/third_party:libcrypto",
         "//bazel/third_party:libssl",
-        "//bazel/third_party:libunwind",
         "//bazel/third_party:zlib",
     ] + select({
+        "@platforms//os:linux": [
+            "//bazel/third_party:libaio",
+            "//bazel/third_party:libunwind",
+        ],
+        "//conditions:default": [],
+    }) + select({
         "//bazel:sanity_enabled": ["//deps/external:jemalloc_library"],
         "//conditions:default": [],
     }),

@@ -80,6 +80,31 @@ int ObSqlString::append(const ObString &str)
   return append(str.ptr(), str.length());
 }
 
+int ObSqlString::append_escaped_identifier(const ObString &identifier)
+{
+  int ret = OB_SUCCESS;
+  const char *data = identifier.ptr();
+  const int64_t length = identifier.length();
+  int64_t start = 0;
+  if (OB_UNLIKELY(length < 0 || (NULL == data && length > 0))) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < length; ++i) {
+      if ('`' == data[i]) {
+        if (OB_FAIL(append(data + start, i - start + 1))) {
+        } else if (OB_FAIL(append("`", 1))) {
+        } else {
+          start = i + 1;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && start < length) {
+      ret = append(data + start, length - start);
+    }
+  }
+  return ret;
+}
+
 int ObSqlString::append_fmt(const char *fmt, ...)
 {
   int ret = OB_SUCCESS;

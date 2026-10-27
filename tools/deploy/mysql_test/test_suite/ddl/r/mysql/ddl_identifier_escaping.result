@@ -1,0 +1,19 @@
+create table ddl_identifier_escape (
+  id int primary key,
+  `a``b` int,
+  `kind``name` enum('first', 'second'),
+  `select` varchar(20)
+);
+insert into ddl_identifier_escape values (1, 10, 'first', 'one'), (2, 20, 'second', 'two');
+create unique index idx_escaped on ddl_identifier_escape (`a``b`);
+create index idx_enum on ddl_identifier_escape (`kind``name`);
+select id, `a``b`, `kind``name`, `select` from ddl_identifier_escape order by id;
+id	a`b	kind`name	select
+1	10	first	one
+2	20	second	two
+alter table ddl_identifier_escape modify column `a``b` varchar(20);
+select id, `a``b`, `kind``name`, `select` from ddl_identifier_escape order by id;
+id	a`b	kind`name	select
+1	10	first	one
+2	20	second	two
+drop table ddl_identifier_escape;
