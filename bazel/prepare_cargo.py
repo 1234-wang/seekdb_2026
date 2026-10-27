@@ -50,7 +50,7 @@ def vendor(arguments):
     cargo = sysroot / "bin" / ("cargo" + exe)
     vendor = output / "vendor"
     # A registry alias avoids conflicting with existing names for the same mirror.
-    command = [str(cargo), "vendor", "--locked", "--respect-source-config",
+    command = [str(cargo), "vendor", "--quiet", "--locked", "--respect-source-config",
                "--config", 'source.crates-io.replace-with="seekdb"',
                "--config", 'registries.seekdb.index="sparse+https://rsproxy.cn/index/"',
                "--manifest-path", str(root / "rust/Cargo.toml"),
