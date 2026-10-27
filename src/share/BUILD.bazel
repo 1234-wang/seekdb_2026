@@ -1744,6 +1744,16 @@ _SHARE_UNIT_TEST_DEPS = [
     ":worker_runtime",
 ]
 
+cc_library(
+    name = "ddl_identifier_test_headers",
+    testonly = True,
+    deps = [
+        ":ddl_protocol",
+        "//src/oblib:oblib_base",
+    ],
+    visibility = ["//unittest/share:__pkg__"],
+)
+
 # A small, test-only friend seam for the seven implementation headers that
 # Share's white-box tests intentionally exercise.  It is not a production
 # compatibility aggregate.
@@ -1788,6 +1798,7 @@ grouped_unity_cc_library(
     ] + _SHARE_RUNTIME_COMPILE_DEPS + [
         "//src/oblib:common_sql_mode",
         "//src/oblib:oblib_base",
+        "//src/oblib:sql_identifier",
         "//src/oblib:oblib_collections_primitives",
         "//src/oblib:oblib_common",
         "//src/oblib:oblib_compression",

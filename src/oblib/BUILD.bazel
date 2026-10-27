@@ -306,6 +306,15 @@ cc_library(
 )
 
 cc_library(
+    name = "sql_identifier",
+    hdrs = ["lib/string/ob_sql_identifier.h"],
+    deps = [":oblib_base"],
+    features = ["layering_check"],
+    tags = ["manual"],
+    visibility = _OBLIB_INTERFACE_VISIBILITY,
+)
+
+cc_library(
     name = "oblib_collections_primitives",
     hdrs = [
         "lib/hash/fnv_hash.h",
