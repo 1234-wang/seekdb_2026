@@ -1,0 +1,14 @@
+# Regression for shared DDL identifier quoting without a share -> sql dependency.
+CREATE DATABASE ddl_identifier_quoting;
+USE ddl_identifier_quoting;
+CREATE TABLE t (id INT PRIMARY KEY, `c``name` INT);
+INSERT INTO t VALUES (1, 10), (2, 20);
+CREATE INDEX idx ON t (`c``name`);
+SELECT id, `c``name` FROM t FORCE INDEX(idx) ORDER BY id;
+CREATE TABLE enum_set (id INT PRIMARY KEY, `e``num` ENUM('red','blue'), `s``et` SET('x','y'));
+INSERT INTO enum_set VALUES (1, 'red', 'x'), (2, 'blue', 'y');
+CREATE UNIQUE INDEX enum_idx ON enum_set (`e``num`);
+CREATE UNIQUE INDEX set_idx ON enum_set (`s``et`);
+SELECT id, `e``num` FROM enum_set FORCE INDEX(enum_idx) ORDER BY id;
+SELECT id, `s``et` FROM enum_set FORCE INDEX(set_idx) ORDER BY id;
+DROP DATABASE ddl_identifier_quoting;

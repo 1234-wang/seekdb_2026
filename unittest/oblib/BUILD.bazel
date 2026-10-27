@@ -4,6 +4,23 @@ load("//bazel:defs.bzl", "cc_library")
 package(default_testonly = True)
 
 cc_library(
+    name = "ddl_identifier_cases",
+    srcs = ["test_ddl_identifier.cpp"],
+    alwayslink = True,
+    deps = [
+        "//bazel/third_party:gtest",
+        "//src/oblib:oblib_base",
+    ],
+)
+
+cc_test(
+    name = "test_ddl_identifier",
+    linkstatic = True,
+    deps = [":ddl_identifier_cases", "//src/oblib:oblib_test_runtime"],
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+cc_library(
     name = "malloc_backend_cases",
     srcs = ["test_malloc_backend.cpp"],
     alwayslink = True,
