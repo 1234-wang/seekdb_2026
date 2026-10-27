@@ -1535,7 +1535,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
             }
           } else if (T_FUN_SYS_ICU_VERSION == name_expr->get_expr_type()) {
             if (OB_FAIL(ob_write_string(*allocator_,
-                                        common::ObString(ObExprRegexContext::icu_version_string()),
+                                        common::ObString(ObExprRegexContext::regex_version_string()),
                                         select_item.alias_name_))) {
             }
           } else {

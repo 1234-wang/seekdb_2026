@@ -23,9 +23,8 @@ namespace oceanbase
 {
 namespace sql
 {
-// MySQL function 
-// The version of the International Components for Unicode (ICU) library used to support 
-// regular expression operations. This function is primarily intended for use in test cases. 
+// Retained MySQL diagnostic function. Reports the active regular-expression
+// backend, including its name, since seekdb no longer uses ICU.
 class ObExprICUVersion : public ObStringExprOperator
 {
 public:
