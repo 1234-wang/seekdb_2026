@@ -38,6 +38,7 @@
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
+#include "sql/engine/expr/ob_expr_uuid_node_id.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/time/ob_time_utility.h"
 using namespace oceanbase::common;
@@ -199,51 +200,38 @@ int ObUUIDNode::init()
     }
   }
 #else
-  // Linux: Use ioctl to get MAC address
-  struct ifreq ifr;
-  struct ifconf ifc;
-  char buf[1024];
-  int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-  if (sock == -1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
-  } else {
-    ifc.ifc_len = sizeof(buf);
-    ifc.ifc_buf = buf;
-    if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      ifreq *it = ifc.ifc_req;
-      ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
-      bool mac_addr_found = false;
-      for (; it != end && OB_SUCC(ret); ++it) {
-        if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
-          continue;
-        } else {
-          strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
-          if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
-            if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
-              if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
-                MEMCPY(mac_addr_, ifr.ifr_hwaddr.sa_data, 6);
-                mac_addr_found = true;
-                break;
-              } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
-              }
-            }
-          } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
-          }
-        }
-      }//end for
-      if (OB_FAIL(ret)) {
-      } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
-      } else {
-        is_inited_ = true;
+  // Linux: resolve the node identifier through the strategy chain described in
+  // ob_expr_uuid_node_id.h.  A host whose interfaces are invisible to the process
+  // keeps starting up with the RFC 4122 section 4.5 random node identifier, so
+  // that a restricted sandbox no longer aborts server_start 4/14.  The entropy
+  // source that fallback needs is itself a hard requirement: when it is
+  // unusable the node identifier cannot be produced correctly, and that stays an
+  // initialisation error rather than being papered over with a weaker value.
+  {
+    uuid_node_id::Diagnostics diag;
+    const uuid_node_id::Result result = uuid_node_id::resolve(
+        mac_addr_, static_cast<int64_t>(sizeof(mac_addr_)), diag);
+    if (uuid_node_id::RESULT_OK == result) {
+      is_inited_ = true;
+      if (uuid_node_id::SOURCE_RANDOM == diag.source_) {
+        LOG_WARN("no usable MAC address is visible, uuid node id falls back to the "
+                 "RFC 4122 section 4.5 random node id; uuid() output stays unique but is no "
+                 "longer derived from a hardware address.  MAC discovery needs AF_INET "
+                 "SOCK_DGRAM socket creation plus the SIOCGIF* ioctls or netlink RTM_GETLINK, "
+                 "and at least one non-loopback interface with a link-layer address",
+                 K(diag));
       }
+    } else if (uuid_node_id::RESULT_ENTROPY_UNAVAILABLE == result) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("init uuid node failed: no usable MAC address is visible and the entropy "
+                "source required for the RFC 4122 section 4.5 random node id is unusable, "
+                "so no correct node id can be produced; uuid() requires a readable "
+                "/dev/urandom (or an equivalent character device) in this environment",
+                K(ret), K(diag));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("init uuid node failed", K(ret), K(diag));
     }
-    close(sock);
   }
 #endif
   return ret;
