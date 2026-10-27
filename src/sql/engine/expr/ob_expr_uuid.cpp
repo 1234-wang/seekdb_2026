@@ -188,13 +188,13 @@ int ObUUIDNode::init()
   bool mac_addr_found = false;
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
-    LOG_WARN("socket failed, can not get mac address, "
+    LOG_INFO("socket failed, can not get mac address, "
              "fall back to random uuid node", K(errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
-      LOG_WARN("ioctl failed, SIOCGIFCONF, can not enumerate network "
+      LOG_INFO("ioctl failed, SIOCGIFCONF, can not enumerate network "
                "interfaces, fall back to random uuid node", K(errno));
     } else {
       ifreq *it = ifc.ifc_req;
@@ -226,10 +226,11 @@ int ObUUIDNode::init()
     // No physical MAC address is available, e.g. in a restricted sandbox where
     // network interface enumeration is denied. Generate a random node instead
     // of failing the server startup.
+    // OB-P:a4L9E_IDIyEM2Ol_ZvDXqw
     if (OB_FAIL(init_random_node())) {
-      LOG_WARN("unexpected error. can not generate random uuid node", K(ret));
+      LOG_ERROR("unexpected error. can not generate random uuid node", K(ret));
     } else {
-      LOG_WARN("can not get mac address, using random UUID node ID");
+      LOG_INFO("can not get mac address, using random UUID node ID");
       mac_addr_found = true;
     }
   }
@@ -246,7 +247,7 @@ int ObUUIDNode::init_random_node()
   int fd = open("/dev/urandom", O_RDONLY);
   if (fd < 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error. can not open /dev/urandom", K(ret), K(errno));
+    LOG_ERROR("unexpected error. can not open /dev/urandom", K(ret), K(errno));
   } else {
     int64_t pos = 0;
     while (OB_SUCC(ret) && pos < 6) {
@@ -256,10 +257,10 @@ int ObUUIDNode::init_random_node()
           continue;
         }
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error. can not read /dev/urandom", K(ret), K(errno));
+        LOG_ERROR("unexpected error. can not read /dev/urandom", K(ret), K(errno));
       } else if (n == 0) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error. /dev/urandom returned no data", K(ret));
+        LOG_ERROR("unexpected error. /dev/urandom returned no data", K(ret));
       } else {
         pos += n;
       }
