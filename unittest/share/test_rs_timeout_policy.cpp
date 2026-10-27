@@ -14,32 +14,4 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-
-#include "src/share/ob_rs_timeout_policy.h"
-
-using oceanbase::share::get_rs_default_timeout_us;
-
-TEST(RsTimeoutPolicy, short_rpc_timeout)
-{
-#if defined(__APPLE__) || defined(_WIN32)
-  EXPECT_EQ(10000000LL, get_rs_default_timeout_us(2000000));
-  EXPECT_EQ(10000000LL, get_rs_default_timeout_us(1));
-#else
-  EXPECT_EQ(2000000, get_rs_default_timeout_us(2000000));
-  EXPECT_EQ(1, get_rs_default_timeout_us(1));
-#endif
-}
-
-TEST(RsTimeoutPolicy, preserves_larger_configured_timeout)
-{
-  EXPECT_EQ(10000000, get_rs_default_timeout_us(10000000));
-  EXPECT_EQ(30000000, get_rs_default_timeout_us(30000000));
-  EXPECT_EQ(INT64_MAX, get_rs_default_timeout_us(INT64_MAX));
-}
-
-int main(int argc, char **argv)
-{
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
+#include "unittest/share/rs_timeout_policy_cases.h"
