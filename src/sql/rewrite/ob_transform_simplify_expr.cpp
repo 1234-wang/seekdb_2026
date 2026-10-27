@@ -2602,7 +2602,7 @@ int ObTransformSimplifyExpr::remove_duplicate_exprs(ObQueryCtx* query_ctx,
   /* basic case
   * A and A -> A
   * A or A -> A
-  * c1 > 1 and c1 > 10 -> c1 > 1
+  * c1 > 1 and c1 > 10 -> c1 > 10
   */
   int ret = OB_SUCCESS;
   const int64_t param_count = conditions.count();
