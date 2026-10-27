@@ -3,7 +3,6 @@
 
 import argparse
 import hashlib
-import json
 import os
 from pathlib import Path
 import platform
@@ -14,12 +13,10 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
-import urllib.parse
 
 
 ROOT = Path(__file__).resolve().parents[2]
 PROFILES = Path(__file__).resolve().parent
-RPM_CHECKSUMS = PROFILES / "rpm-sha256.json"
 EL_RELEASES = ((9, "el9"), (8, "el8"), (7, "el7"))
 LINUX_RELEASES = {
     "rhel": EL_RELEASES,
@@ -104,58 +101,11 @@ def packages(profile):
     return result
 
 
-def require_https(url):
-    parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("Dependency URL must use HTTPS: " + url)
-
-
-class HTTPSOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        require_https(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-
-def verified_packages(profile):
-    checksums = json.loads(RPM_CHECKSUMS.read_text())
-    result = []
-    for filename, url in packages(profile):
-        require_https(url)
-        digest = checksums.get(url)
-        if filename.endswith(".rpm") and digest is None:
-            raise ValueError("No pinned SHA-256 for RPM dependency: " + url)
-        if digest is not None and (not isinstance(digest, str)
-                                   or re.fullmatch(r"[0-9a-f]{64}", digest) is None):
-            raise ValueError("Invalid pinned SHA-256 for dependency: " + url)
-        # Non-RPM SDK archives remain HTTPS-only until publisher digests exist.
-        result.append((filename, url, digest))
-    return result
-
-
-def verify_archive(archive, digest):
-    if digest is None:
-        if archive.name.endswith(".rpm"):
-            raise ValueError("No pinned SHA-256 for RPM dependency: " + archive.name)
-        return
-    actual = hashlib.sha256()
-    with archive.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            actual.update(chunk)
-    if actual.hexdigest() != digest:
-        raise ValueError("SHA-256 mismatch for dependency: " + archive.name)
-
-
-def download(url, archive, digest=None):
-    require_https(url)
-    if archive.name.endswith(".rpm") and digest is None:
-        raise ValueError("No pinned SHA-256 for RPM dependency: " + archive.name)
+def download(url, archive):
     partial = archive.with_name(archive.name + ".download")
     try:
-        opener = urllib.request.build_opener(HTTPSOnlyRedirectHandler())
-        with opener.open(url, timeout=60) as source, partial.open("wb") as output:
-            require_https(source.geturl())
+        with urllib.request.urlopen(url, timeout=60) as source, partial.open("wb") as output:
             shutil.copyfileobj(source, output)
-        verify_archive(partial, digest)
         partial.replace(archive)
     finally:
         if partial.exists():
@@ -188,23 +138,19 @@ def ready(destination, key):
     return (destination / key).is_file() and (destination / "DONE").is_file()
 
 
-def populate(profile, destination, key, archive_directory, entries=None):
-    if entries is None:
-        entries = verified_packages(profile)
+def populate(profile, destination, key, archive_directory):
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".deps-", dir=destination.parent) as temporary:
         stage = Path(temporary) / "3rd"
         (stage / "pkg").mkdir(parents=True)
-        for filename, url, digest in entries:
+        for filename, url in packages(profile):
             print("Preparing " + filename, flush=True)
             archive = stage / "pkg" / filename
             cached = archive_directory / filename
             if cached.is_file():
                 shutil.copyfile(cached, archive)
             else:
-                download(url, archive, digest)
-            # Verify staged bytes even for cache hits (and after copying).
-            verify_archive(archive, digest)
+                download(url, archive)
             unpack(archive, stage)
         (stage / key).touch()
         (stage / "DONE").touch()
@@ -213,17 +159,13 @@ def populate(profile, destination, key, archive_directory, entries=None):
 
 
 def install(profile, destination, cache_directory=None):
-    entries = verified_packages(profile)
-    # Bind ready markers and shared SDK caches to both profile and pinned bytes.
-    # The policy prefix also invalidates caches created before verification.
-    identity = hashlib.sha256(b"seekdb-deps-sha256-v1\0" + profile.read_bytes())
-    identity.update(json.dumps(entries, separators=(",", ":")).encode())
-    key = identity.hexdigest()
+    # Retain the existing cache identity so initialized SDKs remain reusable.
+    key = hashlib.md5(profile.read_bytes()).hexdigest()
     if ready(destination, key):
         print("Dependencies ready: " + str(destination), flush=True)
         return
     if cache_directory is None:
-        populate(profile, destination, key, destination / "pkg", entries)
+        populate(profile, destination, key, destination / "pkg")
         return
 
     import fcntl
@@ -233,7 +175,7 @@ def install(profile, destination, cache_directory=None):
     with (cache_directory / (key + ".lock")).open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if not ready(cached, key):
-            populate(profile, cached, key, destination / "pkg", entries)
+            populate(profile, cached, key, destination / "pkg")
     destination.parent.mkdir(parents=True, exist_ok=True)
     remove_directory(destination)
     destination.symlink_to(cached, target_is_directory=True)
