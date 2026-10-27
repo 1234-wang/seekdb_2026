@@ -1988,3 +1988,25 @@ FROM table0_hash_pk_parts_1_bigint)));
 drop table s;
 drop table table0_hash_pk_parts_1_bigint;
 drop table ff;
+# issue 1477: preserve the result type when removing an even NOT chain
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE "x")));
+1
+# control: a single NOT does not take the even-chain replacement path
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(1 LIKE "x"));
+1
+# control: a literal first argument does not trigger scalar-subquery re-deduction
+SELECT 1 FROM dual WHERE IFNULL(FALSE, !(!(1 LIKE "x")));
+1
+# double negation preserves boolean values and three-valued logic
+SELECT IFNULL((SELECT NULL), !(!(1 LIKE "x"))) AS false_value,
+IFNULL((SELECT NULL), !(!(1 LIKE "1"))) AS true_value,
+IFNULL((SELECT NULL), !(!(NULL LIKE "x"))) AS null_value;
+false_value	true_value	null_value
+0	1	NULL
+SELECT IFNULL((SELECT NULL), !(!(NULL LIKE "x"))) IS NULL AS null_is_preserved;
+null_is_preserved
+1
+# a longer even NOT chain has the same boolean value
+SELECT IFNULL((SELECT NULL), !(!(!(!(1 LIKE "1"))))) AS four_not_value;
+four_not_value
+1
