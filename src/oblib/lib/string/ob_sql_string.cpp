@@ -80,6 +80,34 @@ int ObSqlString::append(const ObString &str)
   return append(str.ptr(), str.length());
 }
 
+int ObSqlString::append_escaped_identifier(const ObString &identifier)
+{
+  int ret = OB_SUCCESS;
+  if (identifier.length() < 0 || (identifier.length() > 0 && OB_ISNULL(identifier.ptr()))) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (identifier.length() > 0) {
+    // Use a temporary so identifier may refer to this string, and escaping failures
+    // do not append an incomplete identifier to the destination.
+    ObSqlString escaped;
+    int64_t segment_start = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < identifier.length(); ++i) {
+      if ('`' == identifier.ptr()[i]) {
+        if (OB_FAIL(escaped.append(identifier.ptr() + segment_start, i - segment_start))) {
+        } else if (OB_FAIL(escaped.append("``", 2))) {
+        }
+        segment_start = i + 1;
+      }
+    }
+    if (OB_SUCC(ret) && segment_start < identifier.length()) {
+      ret = escaped.append(identifier.ptr() + segment_start, identifier.length() - segment_start);
+    }
+    if (OB_SUCC(ret)) {
+      ret = append(escaped.string());
+    }
+  }
+  return ret;
+}
+
 int ObSqlString::append_fmt(const char *fmt, ...)
 {
   int ret = OB_SUCCESS;
