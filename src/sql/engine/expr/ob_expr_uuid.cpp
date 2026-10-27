@@ -27,6 +27,8 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
@@ -74,6 +76,45 @@ int ObBigEndian::put_uint32(unsigned char *b, uint32_t v)
   }
   return ret;
 }
+
+#if defined(__linux__)
+// Stage the node locally: an entropy failure must not publish partial state.
+static int init_random_uuid_node(unsigned char (&node)[6])
+{
+  int ret = OB_SUCCESS;
+  unsigned char random_node[6];
+  int fd;
+  do {
+    fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+  } while (fd < 0 && errno == EINTR);
+  if (fd < 0) {
+    const int random_errno = errno;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to open UUID node entropy source", K(ret), K(random_errno));
+  } else {
+    size_t offset = 0;
+    while (OB_SUCC(ret) && offset < sizeof(random_node)) {
+      const ssize_t count = read(fd, random_node + offset, sizeof(random_node) - offset);
+      if (count > 0) {
+        offset += count;
+      } else if (count < 0 && errno == EINTR) {
+        // Retry interrupted reads, including after a previous partial read.
+      } else {
+        const int random_errno = count < 0 ? errno : 0;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to read UUID node entropy", K(ret), K(random_errno), K(count));
+      }
+    }
+    close(fd);
+    if (OB_SUCC(ret)) {
+      // RFC 9562 section 6.10: mark a synthetic node with the multicast bit.
+      random_node[0] |= 0x01;
+      MEMCPY(node, random_node, sizeof(random_node));
+    }
+  }
+  return ret;
+}
+#endif
 
 ObUUIDNode::ObUUIDNode()
 {
@@ -165,7 +206,9 @@ int ObUUIDNode::init()
     struct ifaddrs *ifaddr = NULL;
     bool mac_addr_found = false;
     if (getifaddrs(&ifaddr) == -1) {
+      const int discovery_errno = errno;
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("UUID node interface enumeration failed", K(ret), K(discovery_errno));
     } else {
       for (struct ifaddrs *ifa = ifaddr; ifa != NULL && !mac_addr_found; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr == NULL) continue;
@@ -179,19 +222,13 @@ int ObUUIDNode::init()
       }
       freeifaddrs(ifaddr);
     }
-    if (OB_SUCC(ret) && !mac_addr_found) {
-      // RFC 4122 section 4.5: when MAC address is unavailable (Android sandbox),
-      // use random bytes with the multicast bit set as the node ID.
-      int fd = open("/dev/urandom", O_RDONLY);
-      if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
-        mac_addr_[0] |= 0x01;  // set multicast bit
+    if (!mac_addr_found) {
+      if (OB_SUCC(init_random_uuid_node(mac_addr_))) {
+        ret = OB_SUCCESS;
         mac_addr_found = true;
-        LOG_INFO("using random UUID node ID (no MAC available on Android)");
+        LOG_WARN("using random UUID node ID after MAC discovery failed or found no usable MAC");
       } else {
         ret = OB_ERR_UNEXPECTED;
-      }
-      if (fd >= 0) {
-        close(fd);
       }
     }
     if (OB_SUCC(ret) && mac_addr_found) {
@@ -205,13 +242,16 @@ int ObUUIDNode::init()
   char buf[1024];
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
   if (sock == -1) {
+    const int discovery_errno = errno;
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("socket failed", K(ret), K(errno));
+    LOG_WARN("UUID node discovery socket failed", K(ret), K(discovery_errno));
   } else {
     ifc.ifc_len = sizeof(buf);
     ifc.ifc_buf = buf;
     if (ioctl(sock, SIOCGIFCONF, &ifc) < 0) {
+      const int discovery_errno = errno;
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("UUID node interface enumeration failed", K(ret), K(discovery_errno));
     } else {
       ifreq *it = ifc.ifc_req;
       ifreq *end = it + (ifc.ifc_len / sizeof(ifreq));
@@ -220,6 +260,7 @@ int ObUUIDNode::init()
         if (OB_ISNULL(it) || OB_ISNULL(it->ifr_name) || OB_ISNULL(ifr.ifr_name)) {
           continue;
         } else {
+          MEMSET(&ifr, 0, sizeof(ifr));
           strncpy(ifr.ifr_name, it->ifr_name, IFNAMSIZ - 1);
           if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) {
             if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
@@ -228,11 +269,13 @@ int ObUUIDNode::init()
                 mac_addr_found = true;
                 break;
               } else {
-                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(errno), K(it->ifr_name));
+                const int discovery_errno = errno;
+                LOG_WARN("ioctl failed, SIOCGIFHWADDR", K(discovery_errno), K(it->ifr_name));
               }
             }
           } else {
-            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(errno), K(it->ifr_name));
+            const int discovery_errno = errno;
+            LOG_WARN("ioctl failed, SIOCGIFFLAGS", K(discovery_errno), K(it->ifr_name));
           }
         }
       }//end for
@@ -245,6 +288,17 @@ int ObUUIDNode::init()
     }
     close(sock);
   }
+#if defined(__linux__)
+  if (!is_inited_) {
+    if (OB_SUCC(init_random_uuid_node(mac_addr_))) {
+      ret = OB_SUCCESS;
+      is_inited_ = true;
+      LOG_WARN("using random UUID node ID after MAC discovery failed or found no usable MAC");
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
+#endif
 #endif
   return ret;
 }
