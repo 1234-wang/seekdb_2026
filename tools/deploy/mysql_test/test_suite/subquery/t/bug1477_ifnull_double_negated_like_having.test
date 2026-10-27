@@ -14,5 +14,8 @@ SELECT 1 FROM dual HAVING IFNULL((SELECT FALSE), !(!(!(!(1 LIKE 'x')))));
 SELECT 1 FROM dual HAVING IFNULL((SELECT FALSE), !(1 LIKE 'x'));
 SELECT 1 FROM dual HAVING IFNULL((SELECT TRUE), !(1 LIKE 'x'));
 
+# Control case: a literal instead of a scalar subquery
+SELECT 1 FROM dual HAVING IFNULL(FALSE, !(!(1 LIKE 'x')));
+
 # Control case: a NULL scalar subquery
 SELECT 1 FROM dual HAVING IFNULL((SELECT NULL), !(!(1 LIKE 'x')));
