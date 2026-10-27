@@ -1,0 +1,32 @@
+# Keep the original result type when simplifying an even NOT chain.
+--echo # Original reproducer and both control queries
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(1 LIKE "x")));
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(1 LIKE "x"));
+SELECT 1 FROM dual WHERE IFNULL(FALSE, !(!(1 LIKE "x")));
+
+--echo # Four NOT operators and a non-NULL true first argument
+SELECT 1 FROM dual WHERE IFNULL((SELECT FALSE), !(!(!(!(1 LIKE "x")))));
+SELECT 1 FROM dual WHERE IFNULL((SELECT TRUE), !(!(1 LIKE "x")));
+
+--echo # A NULL first argument must use the fallback's SQL truth value
+SELECT 1 FROM dual WHERE IFNULL((SELECT NULL), !(!('abc' LIKE 'a%')));
+SELECT 1 FROM dual WHERE IFNULL((SELECT NULL), !(!('abc' LIKE 'z%')));
+SELECT 1 FROM dual WHERE IFNULL((SELECT NULL), !(!(NULL LIKE '%')));
+
+--echo # Boolean coercion must not return the original nonzero numeric value
+SELECT IFNULL((SELECT NULL), !(!2)) AS positive,
+       IFNULL((SELECT NULL), !(!(-2))) AS negative,
+       IFNULL((SELECT NULL), !(!0)) AS zero,
+       IFNULL((SELECT NULL), !(!NULL)) AS unknown_value;
+
+--echo # LIKE on row values, including NULL, must retain the same filtering semantics
+SELECT id FROM (
+  SELECT 1 AS id, 'abc' AS value UNION ALL
+  SELECT 2, 'xyz' UNION ALL
+  SELECT 3, NULL
+) AS rows_to_check
+WHERE IFNULL((SELECT NULL), !(!(value LIKE 'a%')))
+ORDER BY id;
+
+--echo # Preserve behavior under an explicitly typed scalar subquery
+SELECT 1 FROM dual WHERE IFNULL((SELECT CAST(FALSE AS UNSIGNED)), !(!(1 LIKE "x")));
