@@ -42,6 +42,8 @@ int ObBEngFTParser::get_next_token(
   word_freq = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
+  } else if (ascii_document_) {
+    ret = get_next_ascii_token(word, word_len, char_len, word_freq);
   } else if (OB_ISNULL(token_stream_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(token_stream_->get_next(token, token_freq))) {
@@ -62,6 +64,44 @@ int ObBEngFTParser::get_next_token(
   return ret;
 }
 
+int ObBEngFTParser::get_next_ascii_token(
+    const char *&word, int64_t &word_len, int64_t &char_len, int64_t &word_freq)
+{
+  int ret = OB_SUCCESS;
+  const auto is_alnum = [](const unsigned char byte) {
+    return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z')
+        || (byte >= '0' && byte <= '9');
+  };
+  // In UTF8MB4, every ASCII non-alphanumeric byte is a whitespace,
+  // punctuation or control delimiter in the existing analysis pipeline.
+  while (ascii_cursor_ < doc_.len_ && !is_alnum(doc_.ptr_[ascii_cursor_])) {
+    ++ascii_cursor_;
+  }
+  const uint32_t start = ascii_cursor_;
+  while (ascii_cursor_ < doc_.len_ && is_alnum(doc_.ptr_[ascii_cursor_])) {
+    ++ascii_cursor_;
+  }
+  const uint32_t length = ascii_cursor_ - start;
+  char *buf = nullptr;
+  if (length == 0) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    // Preserve the original parser's owned token lifetime. Only the transient
+    // tokenizer/normalizer objects and their extra copy are omitted.
+    for (uint32_t i = 0; i < length; ++i) {
+      const char byte = doc_.ptr_[start + i];
+      buf[i] = byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte;
+    }
+    word = buf;
+    word_len = length;
+    char_len = length;
+    word_freq = 1;
+  }
+  return ret;
+}
+
 int ObBEngFTParser::init(ObFTParserParam *param)
 {
   int ret = OB_SUCCESS;
@@ -76,7 +116,15 @@ int ObBEngFTParser::init(ObFTParserParam *param)
     analysis_ctx_.cs_ = param->cs_;
     analysis_ctx_.filter_stopword_ = false;
     analysis_ctx_.need_grouping_ = false;
-    if (OB_FAIL(english_analyzer_.init(analysis_ctx_, *param->allocator_))) {
+    ascii_cursor_ = 0;
+    ascii_document_ = ObCharset::charset_type_by_coll(
+        static_cast<ObCollationType>(param->cs_->number)) == CHARSET_UTF8MB4;
+    for (uint32_t i = 0; ascii_document_ && i < doc_.len_; ++i) {
+      ascii_document_ = static_cast<unsigned char>(doc_.ptr_[i]) < 0x80;
+    }
+    if (ascii_document_) {
+      is_inited_ = true;
+    } else if (OB_FAIL(english_analyzer_.init(analysis_ctx_, *param->allocator_))) {
     } else if (OB_FAIL(segment(doc_, token_stream_))) {
     } else if (OB_ISNULL(token_stream_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -110,6 +158,8 @@ void ObBEngFTParser::reset()
   english_analyzer_.reset();
   doc_.reset();
   token_stream_ = nullptr;
+  ascii_cursor_ = 0;
+  ascii_document_ = false;
   is_inited_ = false;
 }
 

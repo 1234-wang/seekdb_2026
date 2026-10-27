@@ -21,6 +21,21 @@ def snapshot():
     samples = ['', 'hello hello world world', 'Hello HELLO hello', '世界 世界 数据库 数据库',
                'THE and is the an', 'ＡＢＣ abc 123 ＡＢＣ', 'İstanbul Σίσυφος Straße',
                '😀 hello 😀 中文', 'a\tb\nc\rd', 'x' * 1000, '重复词 ' * 500, 'hello\x00world', '\x00abc\x7fxyz', '\n\x00\t\r', 'abc\x1fDEF']
+    # Numeric compounds, mixed-width connectors and stopword collation must
+    # retain their baseline behavior on the tokenizer fast paths.
+    samples += ['一二两三四五六七八九十零壹贰叁肆伍陆柒捌玖拾百千万亿佰仟萬億兆卅廿',
+                '一百二十三个 两千万元 零点五 叁佰萬 壹亿兆',
+                '12,345.67 abc-def abc@def ＡＢＣ－１２３ １２，３４５．６７',
+                'a about an are as at be by com de en for from how i in is it la of on or that the this to was what when where who will with und www',
+                'A ABOUT AN ARE AS AT BE BY COM DE EN FOR FROM HOW I IN IS IT LA OF ON OR THAT THE THIS TO WAS WHAT WHEN WHERE WHO WILL WITH UND WWW',
+                'thé thé THE thè thére whére à â Ä İ ı',
+                'abcdefg abcdefgh abcdefghi thex athe the\x00 the\x7f',
+                'a' * 5000 + ' THE ' + '数据库' * 500]
+    for number in '一二两三四五六七八九十零壹贰叁肆伍陆柒捌玖拾百千万亿佰仟萬億兆卅廿':
+        samples.append(f'{number}个 {number}万 {number}元 第{number}次')
+    for byte in range(128):
+        samples.append('Left' + chr(byte) + 'Right THE 123')
+    samples.append(''.join(chr(byte) for byte in range(128)))
     pieces = ['hello', 'WORLD', 'SeekDB', '全文索引', '数据库', '中文', '東京', '123',
               '3.14159', '😀', 'naïve', 'café', 'Σ', '-', '.', ',', '\n', '\t', 'the']
     for _ in range(120):

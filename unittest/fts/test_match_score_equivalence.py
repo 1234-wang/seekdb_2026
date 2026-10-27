@@ -95,6 +95,27 @@ INSERT INTO composite_docs SELECT id,category,body FROM docs;""")
         for words in ['database performance', long_words]:
             query = f"SELECT id,category,body FROM {table} WHERE MATCH(body) AGAINST('{words}') ORDER BY id"
             results.append([query, execute(query + ';')])
+    # Cross several storage batches, exercise unsigned ordering, equal IDs in
+    # multiple posting lists, exhausted lists and the small-union cutoff.
+    execute("""DROP TABLE IF EXISTS union_docs;
+CREATE TABLE union_docs(id BIGINT UNSIGNED PRIMARY KEY, body TEXT,
+ FULLTEXT INDEX ft(body) WITH PARSER beng);""")
+    vocabulary = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india']
+    for start in range(0, 2051, 250):
+        rows = []
+        for i in range(start, min(start + 250, 2051)):
+            body = ' '.join(word for j, word in enumerate(vocabulary) if i % (j + 2) == 0)
+            doc_id = i if i < 1024 else (1 << 63) + i
+            rows.append(f"({doc_id},'{body}')")
+        execute('INSERT INTO union_docs VALUES ' + ','.join(rows) + ';')
+    for words in ['alpha', 'alpha bravo', ' '.join(vocabulary[:8]), ' '.join(vocabulary),
+                  'alpha alpha bravo absentword', 'absentword missingtoken']:
+        match = f"MATCH(body) AGAINST('{words}')"
+        for query in [f'SELECT COUNT(*),SUM(id) FROM union_docs WHERE {match}',
+                      f'SELECT id FROM union_docs WHERE {match} ORDER BY id LIMIT 33 OFFSET 1000',
+                      f'SELECT id,body FROM union_docs WHERE {match} AND id%3=0 ORDER BY id DESC LIMIT 31',
+                      f'SELECT COUNT(*) FROM (SELECT id FROM union_docs WHERE {match} LIMIT 3000 OFFSET 900) t']:
+            results.append([query, execute(query + ';')])
     execute("UPDATE docs SET body='database audit' WHERE id=4; DELETE FROM docs WHERE id=1;")
     query = "SELECT id FROM docs WHERE MATCH(body) AGAINST('database performance') ORDER BY id"
     results.append([query, execute(query + ';')])
