@@ -1383,6 +1383,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   int ret = OB_SUCCESS;
   int64_t *brute_vids = nullptr;
   int brute_cnt = 0;
+  pre_filter_produced_cnt_ = 0;
   if (is_primary_pre_with_rowkey_with_filter_) {
     if (OB_FAIL(process_adaptor_state_pre_filter_with_rowkey(ada_ctx, adaptor, brute_vids, brute_cnt, is_vectorized))) {
     }
@@ -1432,9 +1433,12 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   }
   // Record the work unconditionally, including an attempt that ends in an
   // adaptive retry: the abandoned pre-filter scan is exactly the cost that can
-  // explain a slow query, so it must not be dropped. brute_cnt is the number of
-  // candidate vectors the pre-filter actually produced.
-  record_vec_index_scan_stat(brute_cnt, 0);
+  // explain a slow query, so it must not be dropped.
+  // pre_filter_produced_cnt_ counts every candidate the pre-filter handed over,
+  // whether it was staged for brute force or overflowed into the bitmap. Unlike
+  // brute_cnt it keeps counting past MAX_HNSW_BRUTE_FORCE_SIZE, and it is not
+  // stuck at zero for IPIVF, where brute force is disabled up front.
+  record_vec_index_scan_stat(pre_filter_produced_cnt_, 0);
   return ret;
 }
 
@@ -1552,6 +1556,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
             } else if (go_brute_force_ && add_brute && brute_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
               vids[brute_cnt] = vid;
               ++brute_cnt;
+              ++pre_filter_produced_cnt_;
             } else if (ada_ctx->is_range_prefilter()) {
               is_pre_filter_end = true;
               go_brute_force_ = false;
@@ -1568,6 +1573,8 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
               }
               if (OB_FAIL(ret)) {
               } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
+              } else {
+                ++pre_filter_produced_cnt_;
               }
             }
           }
@@ -1595,6 +1602,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
                 int64_t vid = vid_datum[i].get_int();
                 vids[brute_cnt] = vid;
                 ++brute_cnt;
+                ++pre_filter_produced_cnt_;
               }
             } else if (ada_ctx->is_range_prefilter()) {
               is_pre_filter_end = true;
@@ -1614,6 +1622,8 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
               for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
                 int64_t vid = vid_datum[i].get_int();
                 if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vid))) {
+                } else {
+                  ++pre_filter_produced_cnt_;
                 }
               }
             }
@@ -1902,6 +1912,7 @@ int ObDASHNSWScanIter::get_vid_from_idx_filter(
         } else if (go_brute_force_ && brute_cnt + batch_row_count < MAX_HNSW_BRUTE_FORCE_SIZE) {
           vids[brute_cnt] = vid;
           brute_cnt++;
+          ++pre_filter_produced_cnt_;
         } else {
           // brute_cnt + batch_row_count already > MAX_HNSW_BRUTE_FORCE_SIZE
           // do not choose brue force, just add vids to bitmap
@@ -1916,6 +1927,8 @@ int ObDASHNSWScanIter::get_vid_from_idx_filter(
 
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
+          } else {
+            ++pre_filter_produced_cnt_;
           }
         }
       } // end for
@@ -1946,6 +1959,7 @@ int ObDASHNSWScanIter::get_vid_from_idx_filter(
             int64_t vid = vid_datum[i].get_int();
             vids[brute_cnt] = vid;
             brute_cnt++;
+            ++pre_filter_produced_cnt_;
             if (if_add_relevance && i >= relevance_record.count()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
@@ -1973,6 +1987,8 @@ int ObDASHNSWScanIter::get_vid_from_idx_filter(
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
             } else if (if_add_relevance && OB_FAIL(add_one_relevance(vid, relevance_record.at(i)))) {
+            } else {
+              ++pre_filter_produced_cnt_;
             }
           }
         }
@@ -2039,6 +2055,7 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
         } else if (go_brute_force_ && brute_cnt + 1 < MAX_HNSW_BRUTE_FORCE_SIZE) {
           vids[brute_cnt] = vid;
           brute_cnt++;
+          ++pre_filter_produced_cnt_;
           if (if_add_relevance && i >= relevance_record.count()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()));
@@ -2062,6 +2079,8 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()));
           } else if (if_add_relevance && OB_FAIL(add_one_relevance(vid, relevance_record.at(i)))) {
+          } else {
+            ++pre_filter_produced_cnt_;
           }
         }
       }
@@ -2089,6 +2108,7 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
           } else if (go_brute_force_ && brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
             vids[brute_cnt] = vid;
             brute_cnt++;
+            ++pre_filter_produced_cnt_;
             if (if_add_relevance && i >= relevance_record.count()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
@@ -2112,6 +2132,8 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
             } else if (if_add_relevance && OB_FAIL(add_one_relevance(vid, relevance_record.at(i)))) {
+            } else {
+              ++pre_filter_produced_cnt_;
             }
           }
         }

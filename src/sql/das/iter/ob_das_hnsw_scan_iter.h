@@ -298,6 +298,7 @@ public:
       distance_calc_(nullptr),
       is_primary_pre_with_rowkey_with_filter_(false),
       go_brute_force_(false),
+      pre_filter_produced_cnt_(0),
       extra_column_count_(0),
       simple_cmp_info_(),
       vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
@@ -582,6 +583,11 @@ private:
   ObExpr* distance_calc_;
   bool is_primary_pre_with_rowkey_with_filter_;
   bool go_brute_force_;
+  // Number of candidate vectors the current pre-filter attempt actually
+  // produced. Counted here instead of relying on brute_cnt, which stops
+  // growing once MAX_HNSW_BRUTE_FORCE_SIZE is reached and is not used at all
+  // when brute force is disabled (IPIVF, range pre-filter).
+  int64_t pre_filter_produced_cnt_;
   int64_t extra_column_count_;
   ObHnswSimpleCmpInfo simple_cmp_info_;
   // extra_info idx to rowkey idx, because of extra_info is sort by column id
