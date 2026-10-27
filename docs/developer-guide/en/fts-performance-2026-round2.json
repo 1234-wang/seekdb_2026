@@ -10,7 +10,27 @@
     "task_id_available": false,
     "sha_independently_confirmed_from_task": false
   },
-  "candidate_official_score": null,
+  "candidate_official_score": {
+    "source": "user_reported_evaluation_result",
+    "user_message": "现在的第二轮优化，得分为FTS raw score 41.794/100",
+    "recorded_at": "2026-10-27T02:10:36.225114+00:00",
+    "round": 2,
+    "questionId": 600080,
+    "raw_score": 41.794,
+    "raw_max_score": 100,
+    "weighted_score_computed": 20.897,
+    "weighted_score_displayed": null,
+    "weighted_max_score": 50,
+    "mean_improvement_implied_by_published_formula": 0.20897,
+    "previous_raw_score": 13.525,
+    "raw_score_point_increase": 28.269,
+    "task_id": null,
+    "per_metric_timings_available": false,
+    "submission_commit_context": "d719f55ec7b7507d3e726a0e665422f41566d30d",
+    "submission_sha_independently_confirmed_from_task": false,
+    "third_round_candidate_score": null,
+    "note": "Only the second-round raw score was provided. Weighted score and aggregate time reduction are calculated from the existing published scoring formula; platform task and per-metric details were not supplied."
+  },
   "execution_order": [
     "old_before: three full runs",
     "candidate: three full runs",

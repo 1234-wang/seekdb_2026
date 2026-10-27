@@ -1,6 +1,6 @@
 # FTS second optimization: unused scores and posting merges
 
-This round reduces query work after the first submitted version `e91a37e3cac0f92a329d40a2dc7b715ebf510e40`, for which the user reported FTS raw score 13.525/100 (6.762/50 weighted). The platform supplied no per-metric timings or new task ID, so that score cannot independently identify a task SHA. The candidate product commit is `79f77cbb24fd7aa7627c37f7716dc9202cd11686`; its official score is still pending. The [first-round report](fts-performance-2026.md) remains a separate historical comparison against upstream. Reductions from the two experiments are not added together.
+This round reduces query work after the first submitted version `e91a37e3cac0f92a329d40a2dc7b715ebf510e40`, for which the user reported FTS raw score 13.525/100 (6.762/50 weighted). The platform supplied no per-metric timings or new task ID, so that score cannot independently identify a task SHA. The candidate product commit is `79f77cbb24fd7aa7627c37f7716dc9202cd11686`; the user now reports a second-round official FTS raw score of **41.794/100**, equivalent to **20.897/50** under the task weight (computed, not a supplied platform display). The submission context is delivery `d719f55ec7b7507d3e726a0e665422f41566d30d`; no task ID, task SHA or per-metric timings were supplied for independent verification. The [first-round report](fts-performance-2026.md) remains a separate historical comparison against upstream. Reductions from the two experiments are not added together.
 
 ## Bottleneck and implementation
 
@@ -65,7 +65,7 @@ The new `membership_hotpath` expected results were generated on unchanged upstre
 
 Eight EXPLAIN blocks (four each in `simple_query.result` and `partitioned_simple_query.result`) now describe `calc_relevance=false` and removal of the unused score filter where applicable. Their SQL, row results and numeric results were not changed. The two existing mismatches were not edited away. Tests ran before the product patch was committed; its exact source patch was compared byte-for-byte with commit `79f77cbb24fd7aa7627c37f7716dc9202cd11686`. That commit then built from a clean working tree and completed all three candidate benchmarks.
 
-Both old and new test instances exceeded the harness SIGTERM deadline and were stopped by the harness after SQL completion. Normal shutdown and restart were not validated. The new candidate has not yet received a formal competition score.
+Both old and new test instances exceeded the harness SIGTERM deadline and were stopped by the harness after SQL completion. Normal shutdown and restart were not validated. The user subsequently reported second-round raw score 41.794/100; the original local measurements and their limitations remain unchanged.
 
 ## Reproduction and protected assets
 
