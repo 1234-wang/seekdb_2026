@@ -19,6 +19,8 @@
 #include "ob_optimizer.h"
 #include "share/rc/ob_server_runtime.h"
 #include "sql/optimizer/ob_explain_note.h"
+#include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/optimizer/ob_opt_cost_model_parameter.h"
 #include "sql/optimizer/stat/ob_opt_stat_manager.h"
@@ -130,6 +132,7 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
       OB_ISNULL(target_stmt)|| OB_ISNULL(task_exec_ctx)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(init_env_info(*target_stmt))) {
+  } else if (OB_FAIL(convert_vec_approx_or_to_in(*target_stmt, session))) {
   } else if (OB_FAIL(generate_plan_for_temp_table(*target_stmt))) {
   } else if (OB_ISNULL(plan = ctx_.get_log_plan_factory().create(ctx_, stmt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -680,6 +683,29 @@ int ObOptimizer::check_is_heap_table(const ObDMLStmt &stmt)
                                                     table_schema))) {
   } else if(OB_NOT_NULL(table_schema) && table_schema->is_table_without_pk()) {
     ctx_.set_is_pdml_heap_table(true);
+  }
+  return ret;
+}
+
+
+int ObOptimizer::convert_vec_approx_or_to_in(ObDMLStmt &stmt, const ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  bool trans_happened = false;
+  // 向量近似查询在 rewrite 阶段整体禁用了变换规则，这里补一次 OR -> IN 的改写，
+  // 避免大 OR 链在向量索引的 pre-filter 中逐行求值。
+  if (stmt.is_select_stmt() && static_cast<ObSelectStmt &>(stmt).has_vec_approx()) {
+    if (OB_ISNULL(session_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null session info", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::convert_or_to_in(ctx_.get_expr_factory(),
+                                                         session_info,
+                                                         stmt.get_condition_exprs(),
+                                                         trans_happened))) {
+      LOG_WARN("failed to convert or to in for vector approximate query", K(ret));
+    } else if (trans_happened) {
+      OPT_TRACE("convert or to in for vector approximate query:", trans_happened);
+    }
   }
   return ret;
 }
