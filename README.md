@@ -568,6 +568,7 @@ cd ~/seekdb
 ./bin/seekdb
 ```
 
+
 In this example, the working directory is $HOME/seekdb, please use a fresh directory for testing. Please see the [Developer Guide](docs/developer-guide/en/README.md) for detailed instructions.
 
 ### Contributing
@@ -593,3 +594,7 @@ If seekdb is useful to you, **a star helps others find it.** ⭐
 ## 📄 License
 
 seekdb is built by the [OceanBase](https://en.oceanbase.com/) team — the same database engine running in production at Alipay, Taobao, DiDi, Xiaomi, and more. Fully open-source under the [Apache License, Version 2.0](LICENSE).
+
+
+
+OB-P:LBRSKHkVLzQ2_JI-zs34pg
