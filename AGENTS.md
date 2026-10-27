@@ -1,5 +1,10 @@
 # Project Agent Guidance
 
+## License Headers
+
+- Add the repository's standard OceanBase copyright and Apache 2.0 license header to every new database source file, including C/C++ headers and Rust sources.
+- Scripts and build files, including Bazel files, do not require license headers.
+
 ## C++ Type Naming
 
 - New C++ classes, including interface classes, do not need the legacy `Ob` prefix.
