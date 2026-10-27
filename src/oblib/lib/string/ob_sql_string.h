@@ -55,6 +55,9 @@ public:
   int append(const char *str);
   int append(const char *str, const int64_t len);
   int append(const ObString &str);
+  // Append identifier contents, doubling the delimiter. The caller supplies
+  // the surrounding quotes; unlike SQL string literals, backslashes are kept.
+  int append_escaped_identifier(const ObString &identifier, const char quote_char = '`');
   int append_fmt(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
   int assign(const char *str);
