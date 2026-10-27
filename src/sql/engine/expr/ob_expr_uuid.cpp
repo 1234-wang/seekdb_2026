@@ -27,6 +27,8 @@
 #else
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <fcntl.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <ifaddrs.h>
 #include <net/if_dl.h>
@@ -238,7 +240,21 @@ int ObUUIDNode::init()
       }//end for
       if (OB_FAIL(ret)) {
       } else if (!mac_addr_found) {
-        ret = OB_ERR_UNEXPECTED;
+        // RFC 4122 section 4.5: when MAC address is unavailable (restricted
+        // Linux environment), use random bytes with the multicast bit set as
+        // the node ID so that startup can still succeed.
+        int fd = open("/dev/urandom", O_RDONLY);
+        if (fd >= 0 && read(fd, mac_addr_, 6) == 6) {
+          mac_addr_[0] |= 0x01;  // set multicast bit
+          mac_addr_found = true;
+          is_inited_ = true;
+          LOG_INFO("using random UUID node ID (no MAC available)");
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+        }
+        if (fd >= 0) {
+          close(fd);
+        }
       } else {
         is_inited_ = true;
       }
