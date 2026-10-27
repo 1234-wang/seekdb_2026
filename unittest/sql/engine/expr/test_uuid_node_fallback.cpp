@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iostream>
 using oceanbase::sql::make_random_uuid_node;
+using oceanbase::sql::read_uuid_entropy;
 int main()
 {
   unsigned char node[6] = {2, 2, 2, 2, 2, 2};
@@ -19,5 +20,28 @@ int main()
   assert(!ok && std::memcmp(node, previous, sizeof(node)) == 0);
   ok = make_random_uuid_node(node, [](unsigned char *out, size_t n) { std::memset(out, 0, n); return 1; });
   assert(ok && node[0] == 1 && node[5] == 0);
-  std::cout << "PASS UUID fallback: multicast bit, entropy preservation, atomic failure, zero entropy bytes\n";
+  unsigned char bytes[6] = {};
+  int reads = 0;
+  assert(read_uuid_entropy(bytes, sizeof(bytes), [&reads](unsigned char *out, size_t n) -> long {
+    ++reads;
+    if (reads == 1) { errno = EINTR; return -1; }
+    const size_t count = n > 2 ? 2 : n;
+    std::memset(out, reads, count);
+    return static_cast<long>(count);
+  }));
+  assert(reads == 4 && bytes[0] == 2 && bytes[2] == 3 && bytes[4] == 4);
+  unsigned char before_failure[6];
+  std::memcpy(before_failure, node, sizeof(node));
+  for (bool eof : {false, true}) {
+    reads = 0;
+    ok = make_random_uuid_node(node, [&](unsigned char *out, size_t length) {
+      return read_uuid_entropy(out, length, [&](unsigned char *buffer, size_t) -> long {
+        if (++reads == 1) { buffer[0] = 0xfe; return 1; }
+        errno = EIO;
+        return eof ? 0 : -1;
+      }) ? 1 : 0;
+    });
+    assert(!ok && reads == 2 && std::memcmp(node, before_failure, sizeof(node)) == 0);
+  }
+  std::cout << "PASS UUID fallback: marking, entropy preservation, atomic failure, zeros, short reads, EINTR, EOF, EIO\n";
 }

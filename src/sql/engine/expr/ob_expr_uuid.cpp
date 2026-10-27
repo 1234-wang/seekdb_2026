@@ -33,13 +33,14 @@
 #elif defined(__ANDROID__)
 #include <ifaddrs.h>
 #include <linux/if_packet.h>
+#endif
+#if defined(__linux__)
 #include <fcntl.h>
 #include <unistd.h>
 #endif
 #endif
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/engine/expr/uuid_node_fallback.h"
-#include <openssl/rand.h>
 #include "sql/engine/ob_exec_context.h"
 #include "lib/time/ob_time_utility.h"
 using namespace oceanbase::common;
@@ -253,7 +254,20 @@ int ObUUIDNode::init()
   // UUID generation must not require relaxing that sandbox's network policy.
   if (!is_inited_) {
     if (make_random_uuid_node(mac_addr_, [](unsigned char *out, size_t len) {
-          return RAND_bytes(out, static_cast<int>(len));
+          // System-variable static initialization calls this before main installs
+          // OpenSSL's allocator hooks. Do not initialize OpenSSL's RNG here.
+          int fd;
+          do {
+            fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+          } while (fd < 0 && errno == EINTR);
+          bool complete = false;
+          if (fd >= 0) {
+            complete = read_uuid_entropy(out, len, [fd](unsigned char *buffer, size_t count) {
+              return read(fd, buffer, count);
+            });
+            close(fd);
+          }
+          return complete ? 1 : 0;
         })) {
       is_inited_ = true;
       ret = OB_SUCCESS;
