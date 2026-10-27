@@ -1,0 +1,21 @@
+# Shared DDL SQL must quote identifiers without depending on the SQL layer.
+--disable_warnings
+DROP TABLE IF EXISTS ddl_quoted_identifiers;
+--enable_warnings
+
+CREATE TABLE ddl_quoted_identifiers (
+  id INT PRIMARY KEY,
+  `a``b` INT,
+  `enum``col` ENUM('x', 'y'),
+  `set``col` SET('x', 'y')
+);
+INSERT INTO ddl_quoted_identifiers VALUES (1, 7, 'y', 'x,y'), (2, NULL, NULL, NULL);
+
+# Unlike INT -> BIGINT, this change rebuilds rows using generated DDL SQL.
+# The SELECT projection includes ENUM/SET casts and the INSERT column list.
+ALTER TABLE ddl_quoted_identifiers MODIFY COLUMN `a``b` VARCHAR(20);
+SELECT id, `a``b`, `enum``col`, `set``col` FROM ddl_quoted_identifiers ORDER BY id;
+
+ALTER TABLE ddl_quoted_identifiers MODIFY COLUMN `a``b` INT;
+SELECT id, `a``b`, `enum``col`, `set``col` FROM ddl_quoted_identifiers ORDER BY id;
+DROP TABLE ddl_quoted_identifiers;

@@ -1,0 +1,19 @@
+DROP TABLE IF EXISTS ddl_quoted_identifiers;
+CREATE TABLE ddl_quoted_identifiers (
+id INT PRIMARY KEY,
+`a``b` INT,
+`enum``col` ENUM('x', 'y'),
+`set``col` SET('x', 'y')
+);
+INSERT INTO ddl_quoted_identifiers VALUES (1, 7, 'y', 'x,y'), (2, NULL, NULL, NULL);
+ALTER TABLE ddl_quoted_identifiers MODIFY COLUMN `a``b` VARCHAR(20);
+SELECT id, `a``b`, `enum``col`, `set``col` FROM ddl_quoted_identifiers ORDER BY id;
+id	a`b	enum`col	set`col
+1	7	y	x,y
+2	NULL	NULL	NULL
+ALTER TABLE ddl_quoted_identifiers MODIFY COLUMN `a``b` INT;
+SELECT id, `a``b`, `enum``col`, `set``col` FROM ddl_quoted_identifiers ORDER BY id;
+id	a`b	enum`col	set`col
+1	7	y	x,y
+2	NULL	NULL	NULL
+DROP TABLE ddl_quoted_identifiers;
