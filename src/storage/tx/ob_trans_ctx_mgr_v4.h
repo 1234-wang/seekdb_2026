@@ -364,8 +364,7 @@ public:
 
   // Print all transaction information in this ObLSTxCtxMgr to the log;
   // @param [in] max_print: The Max Count of TxCtx to Print
-  // @param [in] verbose: if it set to true, print the TxCtx's Detailed information
-  void print_all_tx_ctx(const int64_t max_print, const bool verbose);
+  void print_all_tx_ctx(const int64_t max_print);
 
   // Before Deleting the memtable, remove its associated callback from the callback list of all the
   // active transactions;
@@ -426,7 +425,7 @@ private:
 
 private:
   int process_callback_(ObTxCommitCallback *&cb_list) const;
-  void print_all_tx_ctx_(const int64_t max_print, const bool verbose);
+  void print_all_tx_ctx_(const int64_t max_print);
   int64_t get_tx_ctx_count_() const { return ATOMIC_LOAD(&total_tx_ctx_count_); }
   int create_tx_ctx_(const ObTxCreateArg &arg,
                      bool &existed,

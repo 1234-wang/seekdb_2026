@@ -769,8 +769,7 @@ int ObLSTxService::print_all_tx_ctx(const int64_t print_num)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret));
   } else {
-    const bool verbose = true;
-    mgr_->print_all_tx_ctx(print_num, verbose);
+    mgr_->print_all_tx_ctx(print_num);
   }
   return ret;
 }

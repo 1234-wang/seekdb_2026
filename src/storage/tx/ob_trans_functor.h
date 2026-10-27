@@ -427,8 +427,8 @@ public:
         has_decided = true;
       }
       if (tx_ctx->is_too_long_transaction()) {
-        // If the transaction has not completed in 600 seconds, print its trace log
-        tx_ctx->print_trace_log();
+        // Dump state if the transaction has not completed in 600 seconds.
+        TRANS_LOG(INFO, "long running transaction", KPC(tx_ctx));
       }
       if (OB_SUCC(ret)) {
         int tmp_ret = OB_SUCCESS;
@@ -634,8 +634,8 @@ private:
 class PrintFunctor
 {
 public:
-  PrintFunctor(const int64_t max_print_count, const bool verbose)
-      : max_print_count_(max_print_count), print_count_(0), verbose_(verbose)
+  explicit PrintFunctor(const int64_t max_print_count)
+      : max_print_count_(max_print_count), print_count_(0)
   {
   //  TRANS_LOG(INFO, "begin print hashmap item", K(max_print_count));
   }
@@ -649,9 +649,6 @@ public:
     } else if (print_count_++ < max_print_count_) {
       TRANS_LOG(INFO, "hashmap item", K(tx_id), "context", *tx_ctx);
       bool_ret = true;
-      if (verbose_) {
-        tx_ctx->print_trace_log();
-      }
     } else {
       // do nothing
     }
@@ -660,7 +657,6 @@ public:
 private:
   int64_t max_print_count_;
   int64_t print_count_;
-  bool verbose_;
 };
 
 class ObRemoveAllTxCtxFunctor
