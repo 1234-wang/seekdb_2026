@@ -19,6 +19,7 @@
 4. [在 iOS 上构建](ios.md) - 将 seekdb 交叉编译为供 iOS 真机和模拟器使用的 SeekDB.framework
 5. [构建 WebAssembly 版](webassembly.md) - 用 Emscripten 将 seekdb 编译为 WebAssembly 引擎和浏览器 SQL shell
 6. [Homebrew 优化](homebrew.md) - Homebrew 下载较慢时配置镜像
+7. [使用 Docker 快速体验](docker-quickstart.md) - 用官方镜像启动 seekdb，无需编译源码
 
 ### 第二部分：开发规范与实践
 
