@@ -1,0 +1,24 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//bazel:defs.bzl", "cc_library")
+
+package(default_testonly = True)
+
+cc_library(
+    name = "uuid_node_cases",
+    srcs = ["test_uuid_node.cpp"],
+    alwayslink = True,
+    deps = [
+        "//bazel/third_party:gtest",
+        "//src/sql:sql_expr_uuid_test_headers",
+    ],
+)
+
+cc_test(
+    name = "test_uuid_node",
+    linkstatic = True,
+    deps = [
+        ":uuid_node_cases",
+        "//src/observer:liboceanbase",
+    ],
+    target_compatible_with = ["@platforms//os:linux"],
+)
