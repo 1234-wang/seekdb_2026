@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//bazel:defs.bzl", "cc_library")
+load("//bazel:defs.bzl", "cc_archives", "cc_library")
 load("//bazel:cargo.bzl", "cargo_library", "cxxbridge_tool")
 load("//bazel:cxx.bzl", "config_generate", "cxx_bridge", "cxx_generate")
 
@@ -90,7 +90,7 @@ cargo_library(
     visibility = ["//visibility:public"],
 )
 
-cc_library(
+cc_archives(
     name = "bridges",
     deps = [":local_bridge", ":config_bridge", ":logger_bridge", ":sql_nio_bridge"],
     visibility = ["//visibility:public"],

@@ -67,7 +67,12 @@ jobs:
       - name: Rust workspace tests
         working-directory: rust
         run: |
-          export RUSTFLAGS="-C link-arg=$GITHUB_WORKSPACE/build/bin/rust/liblocal_bridge.a -C link-arg=$GITHUB_WORKSPACE/build/bin/rust/libconfig_bridge.a -C link-arg=$GITHUB_WORKSPACE/build/bin/rust/liblogger_bridge.a"
+          execution_root=$(../build.py info execution_root)
+          bridge_archives=$(../build.py cquery //rust:bridges --output=files)
+          for archive in $bridge_archives; do
+            RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=$execution_root/$archive"
+          done
+          export RUSTFLAGS
           cargo test --locked --workspace
 
       # Compile Windows code on Linux; this does not run Windows tests.
