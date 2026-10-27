@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import re
 
 
 def workspace_status():
@@ -32,9 +33,25 @@ def version_source(template, status_file, output):
         "BUILD_FLAGS": "RelWithDebInfo",
         "BUILD_INFO": "",
     }
+
     source = Path(template).read_text(encoding="utf-8")
-    for key, value in values.items():
-        source = source.replace("@" + key + "@", value)
+
+    def replace_placeholder(match):
+        value = values[match.group(1)]
+        return (
+            value.replace("\\", "\\\\")
+                 .replace('"', '\\"')
+                 .replace("\n", "\\n")
+                 .replace("\r", "\\r")
+        )
+    
+    source = re.sub(
+        r"@(BUILD_NUMBER|GIT_REVISION|GIT_BRANCH|BUILD_FLAGS|BUILD_INFO)@",
+        replace_placeholder,
+        source,
+    )
+
+    
     with open(output, "w", encoding="utf-8", newline="\n") as stream:
         stream.write(source)
 
