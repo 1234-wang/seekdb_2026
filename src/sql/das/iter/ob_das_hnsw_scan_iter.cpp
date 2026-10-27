@@ -857,6 +857,31 @@ int ObDASHNSWScanIter::inner_process_adaptor_state(bool is_vectorized)
   return ret;
 }
 
+// Record per-scan ANN diagnostics into the plan statistic. The ANN filter path
+// (pre-filter versus iterative-filter) is chosen from an estimated selectivity,
+// so when two equivalent predicates produce very different latencies there is
+// no way to tell afterwards how much work each path actually performed. These
+// counters keep that evidence: how many candidate vectors the pre-filter path
+// evaluated and how many vectors the iterative-filter path scanned.
+// This is best effort only: recording must never fail or change the query.
+void ObDASHNSWScanIter::record_vec_index_scan_stat(const int64_t candidate_cnt,
+                                                   const int64_t scanned_cnt)
+{
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx_);
+  if (OB_NOT_NULL(plan_ctx) && OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+    ObPlanStat *plan_stat = const_cast<ObPlanStat *>(&(plan_ctx->get_phy_plan()->stat_));
+    if (OB_NOT_NULL(plan_stat)) {
+      ATOMIC_INC(&(plan_stat->vec_index_exec_ctx_.search_cnt_));
+      ATOMIC_AAF(&(plan_stat->vec_index_exec_ctx_.pre_filter_candidate_cnt_), candidate_cnt);
+      ATOMIC_AAF(&(plan_stat->vec_index_exec_ctx_.iter_filter_scanned_cnt_), scanned_cnt);
+      LOG_TRACE("record vec index scan stat", K(candidate_cnt), K(scanned_cnt),
+                "total_search_cnt", plan_stat->vec_index_exec_ctx_.search_cnt_,
+                "total_pre_filter_candidate_cnt", plan_stat->vec_index_exec_ctx_.pre_filter_candidate_cnt_,
+                "total_iter_filter_scanned_cnt", plan_stat->vec_index_exec_ctx_.iter_filter_scanned_cnt_);
+    }
+  }
+}
+
 int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool is_vectorized)
 {
   int ret = OB_SUCCESS;
@@ -1351,6 +1376,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   int ret = OB_SUCCESS;
   int64_t *brute_vids = nullptr;
   int brute_cnt = 0;
+  const int64_t pre_scan_row_cnt_before = adaptive_ctx_.pre_scan_row_cnt_;
   if (is_primary_pre_with_rowkey_with_filter_) {
     if (OB_FAIL(process_adaptor_state_pre_filter_with_rowkey(ada_ctx, adaptor, brute_vids, brute_cnt, is_vectorized))) {
     }
@@ -1397,6 +1423,9 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
         }
       }
     }
+  }
+  if (OB_SUCC(ret) || OB_ITER_END == ret) {
+    record_vec_index_scan_stat(adaptive_ctx_.pre_scan_row_cnt_ - pre_scan_row_cnt_before, 0);
   }
   return ret;
 }
@@ -2237,6 +2266,9 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
     } else if (query_cond_.query_limit_ == 0) {
       end_search = true;
     }
+  }
+  if (OB_SUCC(ret) || OB_ITER_END == ret) {
+    record_vec_index_scan_stat(0, iter_scan_total_num);
   }
   return ret;
 }

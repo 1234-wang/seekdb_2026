@@ -479,6 +479,7 @@ private:
   int check_pre_filter_need_retry();
   int reset_filter_path();
   int updata_vec_exec_ctx(ObPlanStat* plan_stat);
+  void record_vec_index_scan_stat(const int64_t candidate_cnt, const int64_t scanned_cnt);
   int prepare_follower_query_cond(ObVectorQueryConditions &query_cond);
   int get_vid_from_idx_filter(ObVectorQueryAdaptorResultContext *ada_ctx,
                               ObPluginVectorIndexAdaptor* adaptor,
