@@ -44,7 +44,6 @@ _OBSERVER_NATIVE_DEPS = [
     "//src/data_plane:virtual_tx_data",
     "//src/logservice:logservice",
     "//src/share:log_protocol",
-    "//src/objit:objit_api_interface",
     "//src/pl:pl_interface",
     "//src/pl:pl_internal_headers",
     "//src/pl:_generated_pl_parser_headers",
